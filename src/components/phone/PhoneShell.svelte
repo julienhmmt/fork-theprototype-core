@@ -33,7 +33,25 @@
 		phoneShellActive,
 		phoneSheetMaxH
 	} from '$lib/ui/phoneShell.js';
-	import { phoneBarSlots, setBarSlots, toggleSlot, splitAroundPlay, BAR_CATALOG, DEFAULT_BAR, MAX_SLOTS } from '$lib/ui/phoneBar.js';
+	import {
+		phoneBarSlots,
+		setBarSlots,
+		toggleSlot,
+		splitAroundPlay,
+		phoneBarPlayAt,
+		setBarPlayAt,
+		movePlay,
+		playIndex,
+		BAR_CATALOG,
+		DEFAULT_BAR,
+		MAX_SLOTS,
+		MORE_HINT_KEY
+	} from '$lib/ui/phoneBar.js';
+	import ContextMenu from '../ContextMenu.svelte';
+	import { safeStorage } from '$lib/safeStorage';
+	import { showChoiceEx } from '$lib/confirmDialog';
+	import { hudIsGame } from '$lib/hudDocs';
+	import { testPlay } from '$lib/gamePresence';
 	import { snapDetent, stepDetent, phoneSheetMax } from '$lib/ui/sheetSnap.js';
 	import { sheetDrag } from '$lib/ui/sheetDrag.js';
 	import { followBottomEdge } from '$lib/ui/bottomEdge.js';
@@ -64,7 +82,7 @@
 	import { undo, redo, canUndo, canRedo } from '$lib/history';
 	import { setTransformMode, toggleEditorMode } from '$lib/objectActions';
 	import { togglePanel } from '$lib/panelToggles';
-	import { requestPlay, willEnterXR, willEnterAR } from '$lib/playMode';
+	import { requestPlay, willEnterXR, willEnterAR, playAsItems } from '$lib/playMode';
 	import { visibleDockKey, DOCK_TITLES, dockMinimized, dockHeight } from '$lib/bottomDock';
 	import { micActive, pttActive, toggleMic } from '$lib/voiceChat';
 	import { aiReady } from '$lib/ai/providers';
@@ -358,14 +376,45 @@
 		if (chatOpen) seenChat = $messages.length;
 	});
 	const chatUnread = $derived(chatOpen ? 0 : Math.max(0, $messages.length - seenChat));
-	// a long press (contextmenu) on Play opens the SAME "Play as / Test play" menu the
-	// toolbar's play button owns — forwarded to that button's own listener, not rebuilt
+	// 41b H6/H7: a long press (contextmenu) on Play opens PLAY'S OWN phone menu. It used to forward to
+	// the desktop toolbar's play button, whose menu is about that toolbar — Move left / Move right
+	// walked a bar that is not drawn on a phone, and "Always on top", "Move toolbar", "Collapse"
+	// and "Customize toolbar…" do nothing here. The phone rows: the same "Play as" rows the desktop
+	// opens with ($lib/playMode), Test play in a game, then this bar's own: Move left / Move right
+	// (Play walks along the bar) and Edit bar… (so a bar emptied down to Play is still editable).
+	let playMenuAt = $state(/** @type {{x: number, y: number} | null} */ (null));
 	/** @param {MouseEvent} e */
 	function playMenu(e) {
 		e.preventDefault();
-		document.getElementById('play-button')?.dispatchEvent(
-			new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY })
-		);
+		playMenuAt = { x: e.clientX, y: e.clientY };
+	}
+	/** @param {-1 | 1} dir */
+	function nudgePlay(dir) {
+		setBarPlayAt(movePlay($phoneBarSlots.length, $phoneBarPlayAt, dir));
+	}
+	function playMenuItems() {
+		const n = $phoneBarSlots.length;
+		const at = playIndex(n, $phoneBarPlayAt);
+		return [
+			...playAsItems(),
+			...($hudIsGame
+				? [
+						{ section: 'Game' },
+						{ label: 'Test play (start from the menu)', tooltip: 'Reset the game to its menu, enter Play, and start from the Start screen', action: () => testPlay() }
+					]
+				: []),
+			{ section: 'Bar' },
+			{ label: 'Move left', tooltip: 'Move Play one place left on the bar', disabled: at <= 0, action: () => nudgePlay(-1) },
+			{ label: 'Move right', tooltip: 'Move Play one place right on the bar', disabled: at >= n, action: () => nudgePlay(1) },
+			{
+				label: 'Edit bar…',
+				tooltip: 'Choose what the bar holds on this device',
+				action: () => {
+					phoneSheet.set('more');
+					tick().then(() => (editingBar = true));
+				}
+			}
+		];
 	}
 	function toggleMore() {
 		phoneSheet.set($phoneSheet === 'more' ? null : 'more');
@@ -452,7 +501,7 @@
 	};
 	/** the More sheet's Windows tiles: every destination except the bar's own verbs */
 	const TILES = ['chat', 'explorer', 'flow', 'animation', 'scene', 'ai', 'notes', 'flowcode', 'shader', 'uv', 'hud', 'profiler', 'code'];
-	const bar = $derived(splitAroundPlay($phoneBarSlots));
+	const bar = $derived(splitAroundPlay($phoneBarSlots, $phoneBarPlayAt));
 
 	// ---- Edit bar (NOTES-38 #7): inside the More sheet; a long press on a tab gets there too
 	let editingBar = $state(false);
@@ -469,8 +518,38 @@
 	function editTap(key) {
 		const before = $phoneBarSlots;
 		const next = toggleSlot(before, key);
-		if (next === before && !before.includes(key) && key !== 'more') showToast(`The bar holds ${MAX_SLOTS} — take one off first`);
-		else setBarSlots(next);
+		if (next === before && !before.includes(key)) {
+			showToast(`The bar holds ${MAX_SLOTS} — take one off first`);
+			return;
+		}
+		setBarSlots(next);
+		if (key === 'more' && before.includes('more') && !next.includes('more')) moreHint(before);
+	}
+	// 41b H6: More may leave the bar — the FIRST time it does, a modal says how to get it back (a long
+	// press on any bar item, the one door left). "Keep More" puts it back where it was.
+	/** @param {string[]} before */
+	function moreHint(before) {
+		let seen = false;
+		try {
+			seen = safeStorage.getItem(MORE_HINT_KEY) === '1';
+			safeStorage.setItem(MORE_HINT_KEY, '1');
+		} catch {
+			// private mode: the notice may come back next session
+		}
+		if (seen) return;
+		showChoiceEx({
+			id: 'more-hint',
+			title: 'More is off the bar',
+			message: 'To get More back, press and hold any item on the bottom bar.',
+			choices: [{ value: 'ok', label: 'Got it' }],
+			cancelLabel: 'Keep More'
+		}).then((answer) => {
+			if (!answer && !$phoneBarSlots.includes('more')) setBarSlots(before);
+		});
+	}
+	function resetBar() {
+		setBarSlots(DEFAULT_BAR);
+		setBarPlayAt(null);
 	}
 	function viewportTools() {
 		phoneSheet.set(null);
@@ -570,8 +649,19 @@
 			data-tour="play"
 			oncontextmenu={playMenu}
 			aria-label={$willEnterAR ? 'Enter AR' : $willEnterXR ? 'Enter VR' : 'Play'}
+			data-play-as={$willEnterAR ? 'ar' : $willEnterXR ? 'vr' : 'screen'}
 			onclick={() => requestPlay()}
-		><span class="ps-live"><Icon name="play" size={24} fill="currentColor" /></span></button>
+		><span class="ps-live" class:ps-live-xr={$willEnterXR}>
+			<!-- 41b H7: the glyph says what a press does, as on desktop: the triangle, a headset for VR,
+			     the headset with A and R in its lenses for AR -->
+			{#if $willEnterAR}
+				<span class="ps-play-ar"><Icon name="tool:vr" size={24} /><span class="hud-play-lens" style="left: 29%">A</span><span class="hud-play-lens" style="left: 71%">R</span></span>
+			{:else if $willEnterXR}
+				<Icon name="tool:vr" size={24} />
+			{:else}
+				<Icon name="play" size={24} fill="currentColor" />
+			{/if}
+		</span></button>
 		{#each bar.right as key (key)}{@render tab(key)}{/each}
 	</nav>
 
@@ -623,13 +713,22 @@
 			</div>
 			{#if titled}
 				<div class="ps-head">
-					<h2 class="ps-title">{HOSTS[top][1]}</h2>
+					{#if top === 'more' && editingBar}
+						<!-- 41b H6: the editor is a page OF More — its header says so, and "More" goes back -->
+						<h2 class="ps-title ps-crumbs">
+							<button type="button" class="ps-crumb" id="ps-more-crumb" title="Back to More" onclick={() => (editingBar = false)}>More</button>
+							<Icon name="chevron-right" size={16} />
+							<span class="ps-crumb-here">Edit bar…</span>
+						</h2>
+					{:else}
+						<h2 class="ps-title">{HOSTS[top][1]}</h2>
+					{/if}
 					<button type="button" class="ps-close" id="ps-sheet-close" aria-label={`Close ${HOSTS[top][1]}`} onclick={() => closeKind(top)}><Icon name="x" size={20} /></button>
 				</div>
 			{/if}
 			{#if top === 'more' && editingBar}
 				<div class="ps-body" id="ps-edit-bar" use:minimalScroll>
-					<p class="ps-hint">Pick up to {MAX_SLOTS} for the bar on this device. Play stays in the middle; More always stays.</p>
+					<p class="ps-hint">Pick up to {MAX_SLOTS} for the bar on this device. Press and hold any item on the bar — Play too — to come back here; Play's menu moves it along the bar.</p>
 					<div class="ps-preview" aria-label="Bar preview">
 						{#each bar.left as key (key)}<span class="ps-pv"><Icon name={ACTIONS[key].icon} size={20} />{ACTIONS[key].label}</span>{/each}
 						<span class="ps-pv ps-pv-play"><Icon name="play" size={20} />Play</span>
@@ -644,7 +743,7 @@
 								id="ps-pick-{key}"
 								role="checkbox"
 								aria-checked={on}
-								aria-disabled={key === 'more' || (!on && $phoneBarSlots.length >= MAX_SLOTS)}
+								aria-disabled={!on && $phoneBarSlots.length >= MAX_SLOTS}
 								onclick={() => editTap(key)}
 							>
 								<Icon name={ACTIONS[key].icon} size={20} /><span>{ACTIONS[key].label}</span>
@@ -653,7 +752,7 @@
 						{/each}
 					</div>
 					<div class="ps-edit-foot">
-						<button type="button" class="ps-btn" id="ps-bar-reset" disabled={$phoneBarSlots.join() === DEFAULT_BAR.join()} onclick={() => setBarSlots(DEFAULT_BAR)}>Reset to default</button>
+						<button type="button" class="ps-btn" id="ps-bar-reset" disabled={$phoneBarSlots.join() === DEFAULT_BAR.join() && $phoneBarPlayAt == null} onclick={resetBar}>Reset to default</button>
 						<button type="button" class="ps-btn ps-btn-primary" id="ps-bar-done" onclick={() => (editingBar = false)}>Done</button>
 					</div>
 				</div>
@@ -687,6 +786,10 @@
 				</div>
 			{/if}
 		</section>
+	{/if}
+
+	{#if playMenuAt}
+		<ContextMenu x={playMenuAt.x} y={playMenuAt.y} items={playMenuItems()} sizeKey="phoneplay" onclose={() => (playMenuAt = null)} />
 	{/if}
 </div>
 
@@ -959,6 +1062,39 @@
 		margin: 0;
 		font: 600 17px var(--font-ui);
 	}
+	/* 41b H6: "More ▸ Edit bar…" — the first crumb is a link back */
+	.ps-crumbs {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		color: var(--text-muted);
+	}
+	.ps-crumb {
+		min-height: 44px;
+		padding: 0 6px;
+		margin-left: -6px;
+		border: 0;
+		border-radius: var(--radius-button, 8px);
+		background: transparent;
+		color: var(--accent-text);
+		font: inherit;
+		cursor: pointer;
+	}
+	.ps-crumb-here {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--text);
+	}
+	.ps-play-ar {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.ps-live.ps-live-xr {
+		padding-left: 0; /* the triangle's optical nudge is for the triangle only */
+	}
 	.ps-close {
 		display: inline-flex;
 		align-items: center;
@@ -1131,6 +1267,7 @@
 	.ps-tile:hover,
 	.ps-row:hover,
 	.ps-close:hover,
+	.ps-crumb:hover,
 	.ps-chip-main:hover {
 		background: var(--surface-hover);
 	}

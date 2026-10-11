@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onLayoutRestore } from '$lib/uiLayoutsCore';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
-	import { objectsGroup, TControls, transformMode, editorMode, isLocked, lockedObjects, globalScene, vrPassthrough, vrOverride, selectedObject, selectedObjects } from '../../stores/sceneStore';
+	import { objectsGroup, TControls, transformMode, editorMode, isLocked, lockedObjects, globalScene, vrPassthrough, selectedObject, selectedObjects } from '../../stores/sceneStore';
 	import { chatUnread, chatMentioned } from '../../stores/appStore.js'; // 37 R15: the chat button's badge
 	import { chatHidden, flowGraphClose, flowCodeClose, animationClose, uvEditorClose, shaderEditorClose, hudEditorClose, explorerClose, profilerClose, codeWorkspaceClose, objectListClose, objectContextMenu, renamingObject, advancedMode, showEnvInList, showLocalObjects, floatingToolbar, toolbarAlwaysOnTop, showSimControls, expandedObjects } from '../../stores/appStore.js';
 	// 24-B2: keyboard navigation in the object list (the Explorer's gridKeydown shape)
@@ -51,7 +51,7 @@
 	import { dockable } from '$lib/docking';
 	import { visibleDockKey, dockOccupants, bottomInset, FLOW_FAMILY, armDockMode, DOCK_TITLES } from '$lib/bottomDock';
 	import { togglePanel } from '$lib/panelToggles';
-	import { requestPlay, willEnterXR, willEnterAR, vrSupported, arSupported, xrSessionFailed } from '$lib/playMode';
+	import { requestPlay, willEnterXR, willEnterAR, xrSessionFailed, playAsItems } from '$lib/playMode';
 	// 30 P2: Test play — the play button's right-click row beside the game chip's button
 	import { testPlay } from '$lib/gamePresence';
 	import { hudIsGame } from '$lib/hudDocs';
@@ -990,46 +990,9 @@
 
 	function playModeItems() {
 		return [
-			{ section: 'Play as' },
-			{
-				label: 'Play (desktop)',
-				checked: !$willEnterXR,
-				action: () => {
-					// vrOverride is the STRING mirror Settings writes; Scene seeds the store
-					// from localStorage on boot, so both halves have to move together.
-					vrOverride.set(true);
-					safeStorage.setItem('vrOverride', 'true');
-					requestPlay();
-				}
-			},
-			{
-				label: 'Enter VR',
-				checked: $willEnterXR && !$vrPassthrough,
-				disabled: !$vrSupported,
-				tooltip: $vrSupported ? 'Immersive VR — the scene replaces your view' : 'No immersive-vr support detected',
-				action: () => {
-					vrOverride.set(false);
-					safeStorage.removeItem('vrOverride');
-					vrPassthrough.set(false);
-					safeStorage.setItem('vrPassthrough', 'false');
-					requestPlay();
-				}
-			},
-			{
-				label: 'Enter AR passthrough',
-				checked: $willEnterAR,
-				disabled: !$arSupported,
-				tooltip: $arSupported
-					? 'Mixed reality — the scene composites over your room'
-					: 'No immersive-ar (passthrough) support detected',
-				action: () => {
-					vrOverride.set(false);
-					safeStorage.removeItem('vrOverride');
-					vrPassthrough.set(true);
-					safeStorage.setItem('vrPassthrough', 'true');
-					requestPlay();
-				}
-			},
+			// 41b H7: the "Play as" rows live in $lib/playMode (`playAsItems`) — the phone bar's Play
+			// opens the same ones, so the two buttons write the same choice the same way
+			...playAsItems(),
 			// 30 P2: TEST PLAY — back to the menu, into Play, the Start screen. Offered only
 			// where it means something: a scene with no game shell has no menu to start from.
 			...($hudIsGame

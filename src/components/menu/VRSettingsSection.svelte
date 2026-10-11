@@ -101,11 +101,11 @@
 	}
 	const cm = (/** @type {number} */ v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(Math.round(v * 100)) + ' cm';
 
-	/** "VR override": the store, plus the key written only while it is ON (as 1.25.0's checkbox did) @param {boolean} on */
+	/** "VR override": the store and its key. 41b H7: OFF is written too ('false'), because an absent
+	 *  key is the DEVICE default now and a phone's default is the screen @param {boolean} on */
 	function setOverride(on) {
 		vrOverride.set(on);
-		if (on) safeStorage.setItem('vrOverride', 'true');
-		else safeStorage.removeItem('vrOverride');
+		safeStorage.setItem('vrOverride', on ? 'true' : 'false');
 	}
 
 	// ---- the remap table (plan 55): LOCAL — each person maps their own controllers ----

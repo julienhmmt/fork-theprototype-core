@@ -76,8 +76,10 @@ h.run(async () => {
 		labels.slice(0, 3).join(' | ') === 'Play (desktop) | Enter VR | Enter AR passthrough',
 		`the three modes lead the menu (${labels.slice(0, 3).join(' | ')})`
 	);
+	// 41 G1 grew the tail (Edit positions, Always on top), so the count is the menu's own: 3 modes + the tail
+	const rowCount = rows.length;
 	h.check(
-		rows.length === 9 && !labels.includes('Hide button'),
+		labels.includes('Move left') && labels.includes('Customize toolbar…') && !labels.includes('Hide button'),
 		`the shared toolbar tail follows, minus Hide button (${labels.slice(3).join(' | ')})`
 	);
 	const section = await A.page.evaluate(
@@ -128,7 +130,7 @@ h.run(async () => {
 		passthrough: localStorage.getItem('vrPassthrough')
 	}));
 	h.check(
-		afterDisabled.rows === 9 && afterDisabled.override === null,
+		afterDisabled.rows === rowCount && afterDisabled.override === null,
 		'clicking a disabled mode neither closes the menu nor writes a preference'
 	);
 

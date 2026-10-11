@@ -9,7 +9,7 @@
 	import { peers, username, userdata, specatorMode, avatarConfig, viewportMenu, objectContextMenu, viewportMenuOpener, addMenu, addMenuOpener, showToast, multiSelectMode } from '../stores/appStore';
 	import { get } from 'svelte/store';
 	import { vrPostEnabled } from '$lib/viewportOverrides';
-	import { isLocked, editorMode, editorCam, isVRMode, globalScene, objectsGroup, showGrid, TControls, selectedObject, selectedObjects, lockedObjects, marqueeRect, worldRig, vrOverride, specators, globalCamera, globalRenderer, orbitControls, passthroughActive, sessionCompositesOverRoom, vrObjectsPanelOpen, vrPaletteOpen, vrPropsPanelOpen, vrPrefabsPanelOpen, vrChatPanelOpen, vrEditMenuOpen, vrSnapMenuOpen, vrSettingsPanelOpen, vrApprovePanelOpen, vrToolMode, viewMode, contextLost } from '../stores/sceneStore';
+	import { isLocked, editorMode, editorCam, isVRMode, globalScene, objectsGroup, showGrid, TControls, selectedObject, selectedObjects, lockedObjects, marqueeRect, worldRig, vrOverride, specators, globalCamera, globalRenderer, orbitControls, passthroughActive, sessionCompositesOverRoom, vrObjectsPanelOpen, vrPaletteOpen, vrPropsPanelOpen, vrPrefabsPanelOpen, vrChatPanelOpen, vrEditMenuOpen, vrSnapMenuOpen, vrSettingsPanelOpen, vrApprovePanelOpen, vrToolMode, viewMode, contextLost, readVrOverride } from '../stores/sceneStore';
 	import {
 		selectObject,
 		deselectObject,
@@ -189,7 +189,7 @@
 	$userdata = $userdata;
 
 	$showGrid = safeStorage.getItem('showGrid') === 'false' ? false : true;
-	$vrOverride = safeStorage.getItem('vrOverride');
+	$vrOverride = readVrOverride(); // 41b H7: a choice, or this device's default (a phone plays on its screen)
 	camera.current.position.set(10.5, 7.57, 11.4);
 	let fov = camera.current.fov
 	let resetSettings = false;
