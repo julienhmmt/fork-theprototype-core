@@ -294,16 +294,22 @@ export async function installZip(file) {
 	}
 }
 
-/** Install from a URL serving manifest.json (+ listed files) @param {string} url
+/** Install from a URL serving manifest.json (+ listed files)
+ * @param {string} url
+ * @param {{onStatus?: (kind: 'idle'|'busy'|'ok'|'error', text: string, detail?: string) => void}} [opts]
+ *   where progress and the outcome go (default: the shared `installStatus` line)
  *
  * 1.19.1: the manifest AND its files are revalidated (`no-cache`). A Browse install reads
  * `modules@format-1/<id>/` (`@main` before 1.27), a moving ref jsDelivr lets the browser keep for 7 days, and the
  * files change IN PLACE between versions — a cached manifest installed last week's
  * version, a cached entry under a fresh manifest a mix of two. */
-export async function installUrl(url) {
+export async function installUrl(url, opts = {}) {
+	// 41b H9: a Browse install reports to ITS card (moduleInstallJobs), never the one shared
+	// status line — several installs run at once and each must say how it ended
+	const report = opts.onStatus ?? setStatus;
 	const base = normalizeRepoUrl(url);
 	try {
-		setStatus('busy', 'Fetching manifest.json…', base);
+		report('busy', 'Fetching manifest.json…', base);
 		let manifestResponse;
 		try {
 			manifestResponse = await fetchIndex(base + '/manifest.json');
@@ -318,7 +324,7 @@ export async function installUrl(url) {
 		const rawManifest = await manifestResponse.json();
 		const manifest = validateManifest(rawManifest);
 		if (!(await confirmModuleFormat(manifest))) {
-			clearInstallStatus();
+			report('idle', '');
 			return false;
 		}
 		const list = Array.isArray(rawManifest.files) && rawManifest.files.length > 0
@@ -327,7 +333,7 @@ export async function installUrl(url) {
 		/** @type {Record<string, Uint8Array>} */
 		const files = {};
 		for (const path of list) {
-			setStatus('busy', 'Downloading ' + path + '…', manifest.name + ' v' + manifest.version);
+			report('busy', 'Downloading ' + path + '…', manifest.name + ' v' + manifest.version);
 			let response;
 			try {
 				response = await fetch(base + '/' + path, { cache: 'no-cache' });
@@ -342,18 +348,18 @@ export async function installUrl(url) {
 		const record = { ...manifest, files, source: base, installedAt: Date.now(), appVersion: APP_VERSION };
 		const ok = await storeAndActivate(record);
 		if (ok)
-			setStatus(
+			report(
 				'ok',
 				(previous ? 'Updated ' : 'Installed ') + manifest.name + ' v' + manifest.version +
 					(previous && previous.version !== manifest.version ? ' (was v' + previous.version + ')' : ''),
 				describeFiles(files) + ' · from ' + base
 			);
-		else setStatus('error', 'Install failed', 'The module was stored but did not register — see the console.');
+		else report('error', 'Install failed', 'The module was stored but did not register — see the console.');
 		return ok;
 	} catch (error) {
 		console.log('url install failed', error);
 		const message = error instanceof Error ? error.message : String(error);
-		setStatus('error', 'Could not install from that URL', message);
+		report('error', 'Could not install from that URL', message);
 		return false;
 	}
 }
