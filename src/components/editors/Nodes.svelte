@@ -1127,10 +1127,12 @@
 	// =================================================================================
 	// 36 U11 — THE NODE EDITOR'S COMMANDS (keys: shortcuts.js scope 'nodes'; menus below)
 	// =================================================================================
+	// 41 G15: the breadcrumb bar sits ABOVE the pane now (the old scope chip floated over the graph,
+	// hence a 56px top). Keeping 56 reserved it twice: a short docked pane framed at minZoom.
 	const FIT_PADDING = $derived(
 		showMinimap
-			? { top: '56px', right: '28px', bottom: '118px', left: '28px' }
-			: { top: '56px', right: '28px', bottom: '28px', left: '28px' }
+			? { top: '28px', right: '28px', bottom: '118px', left: '28px' }
+			: { top: '28px', right: '28px', bottom: '28px', left: '28px' }
 	);
 	function frameNodes(list: any[]) {
 		if (!list.length) return;
