@@ -81,15 +81,37 @@ Everything you flagged in 1.31 and in the 1.32 preview, fixed — plus an Image 
   presets show their defaults and your edits become a **Custom** entry.
 - 🪜 **Dialogs cover the whole screen** (the logo included) and What's new sits above every button. Questions about
   deleting, restoring or replacing things are **dialogs** instead of toasts (*Delete flow*, *Restore previous
-  session?*, …). **Settings rows rearrange** to fit a narrow window.
-- 🟢 **The connection pill is a coloured dot** (grey, pulsing yellow, green, red) with no text, so it fits beside the
-  other buttons — and **reconnecting after switching tabs no longer toasts**. Only a connection that gives up leaves
-  one notification.
+  session?*, …). **Settings rows fit their window**: a switch, a short
+  list, a colour, a button or a small set of choices stays beside its label, and only what cannot fit (wide choices,
+  text fields) moves underneath — on a phone, an unfolded phone and a narrow desktop window alike.
+- 🟢 **The connection pill shows a coloured dot** (grey, pulsing yellow, green, red) and says **Connecting… /
+  Connected / Offline** beside it whenever there is room; when the top bar is crowded it shrinks to the dot alone —
+  and **reconnecting after switching tabs no longer toasts**. Only a connection that gives up leaves one notification.
+- 👥 **The connected-people panel is wider**: one row per person (name, then where they are underneath, actions on the
+  right), nothing wraps or breaks; on a phone it is a drawer like the notifications.
 - 🧩 **Node editor**: a one-line breadcrumb bar — tap a crumb to jump to its siblings, hold for the full name.
 - 📈 **Profiler**: hideable sidebars, a **Details** + **Settings** sidebar on the right and a resizable split between
   the graph and the list.
 - 🗂️ On a phone the Explorer's press-and-hold menu stays open, and docked windows open with their sidebars hidden
   until you show them.
+- 📱 **On a phone, Properties, Objects, Notes, Layouts and Configure Scene are tabs of the bottom dock** (beside the
+  Explorer and the Node editor) instead of drawers behind it: **Inspect** brings Properties to the front, nothing
+  covers the Play button, and when you unfold the phone or switch to a desktop each panel goes back to its sidebar or
+  window — and returns when you fold it again. Menus, notifications, your profile and Add stay drawers. Tapping the
+  bottom-bar button of the view on screen minimizes it (with undocking on, it shows and hides that floating window),
+  and the main menu closes as Configure Scene opens on a phone (on a desktop it stays open).
+- 🎮 **Phone bottom bar**: **More** can be taken off the bar (a one-time note tells you to press and hold any bar item
+  to get it back), the press-and-hold menu's header reads **More ▸ Edit bar…** and opens More, and **Play can move**
+  along the bar. Play starts as plain **Play**, like on a desktop; pick VR or AR from its press-and-hold menu and its
+  icon follows. The selection toolbar now follows a drawer as you resize it, without lagging behind, and the profile
+  drawer no longer repeats your picture.
+- 📂 **Main menu ▸ Project** has a compact two-column layout — **New from template…**, **Load** | **Save ▾**,
+  **Import** | **Export…** — where **▾** opens one **Save options** dialog with every save setting. A phone keeps the
+  list; **Settings ▸ Interface ▸ Project actions** switches between Auto, Compact and List.
+- 🧩 **Modules on a phone**: Enable/Download/Remove sit to the right of each module, a long description expands when
+  you tap it (tap again to fold it), and the dev-URL row fits the screen. In Browse, **Install** several modules at
+  once: each card keeps **Installing…** until it is done, none cancels another, and a failed one says why with
+  **Retry**. Core no longer opens on a long empty scrollbar after a long Browse list.
 
 ## 1.31.0 — Drag to place: see the size and the spot before you let go 📦
 
