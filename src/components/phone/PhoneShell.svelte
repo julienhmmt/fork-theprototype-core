@@ -36,6 +36,7 @@
 	import { phoneBarSlots, setBarSlots, toggleSlot, splitAroundPlay, BAR_CATALOG, DEFAULT_BAR, MAX_SLOTS } from '$lib/ui/phoneBar.js';
 	import { snapDetent, stepDetent, phoneSheetMax } from '$lib/ui/sheetSnap.js';
 	import { sheetDrag } from '$lib/ui/sheetDrag.js';
+	import { followBottomEdge } from '$lib/ui/bottomEdge.js';
 	import {
 		peers,
 		userdata,
@@ -284,32 +285,20 @@
 	});
 
 	// NOTES-38 #32 (b): the selection strip rides on TOP of whatever is open along the bottom —
-	// a sheet, the Inspector, a docked view, the Add list — so Move / Undo work without closing
-	// it. Measured, not computed: those panels belong to other components.
-	let stripLift = $state(0);
+	// a sheet, the Inspector, a docked view, the Add list (41 G20: the notes sheet, its note card and
+	// a toolbox sheet too) — so Move / Undo work without closing it. Measured, not computed: those
+	// panels belong to other components ($lib/ui/bottomEdge's list, the bar itself included).
+	// 41b H3: it FOLLOWS a drawer being resized in the same frame — the edge is read once per
+	// animation frame and the strip moved by a TRANSFORM written right there (no layout), where a
+	// 120 ms poll moving `bottom` left it frames behind and then jumping ("inspect toolbar stutter").
+	/** @type {HTMLElement | undefined} */
+	let stripEl = $state();
 	$effect(() => {
-		if (!stripOn) return;
-		let raf = 0;
-		const measure = () => {
-			let occ = 0;
-			// 41 G20: EVERY tool sheet the strip rides on — the notes sheet, a toolbox sheet and the
-			// note card (a page of the notes sheet, G12) were missing, so the strip sat ON them
-			for (const el of document.querySelectorAll('.ps-sheet, #inspector, #notes-drawer, .note-card.note-sheet, .toolbox.tbx-sheet, .tp-dock-panel, .tp-dock-panel .dt-row, :root.ps-add-open .ctx-scroll')) {
-				const r = /** @type {HTMLElement} */ (el).getBoundingClientRect();
-				if (!r.height || getComputedStyle(el).display === 'none' || getComputedStyle(el).visibility === 'hidden') continue;
-				occ = Math.max(occ, window.innerHeight - r.top);
-			}
-			stripLift = occ;
-		};
-		const id = setInterval(() => {
-			cancelAnimationFrame(raf);
-			raf = requestAnimationFrame(measure);
-		}, 120);
-		measure();
-		return () => {
-			clearInterval(id);
-			cancelAnimationFrame(raf);
-		};
+		const el = stripEl;
+		if (!el) return;
+		return followBottomEdge((occ) => {
+			el.style.transform = `translateX(-50%) translateY(${-(occ + 8)}px)`;
+		});
 	});
 
 	// 40 F1: the DOCK (Explorer, Node editor, Animation … — one shared height) is a sheet too. Its
@@ -502,7 +491,7 @@
 	     closing it. 41 G11: Multi-select and Interact are toggles here (after Scale), and Inspect
 	     is an icon toggle; each shows its real on/off state. -->
 	{#if stripOn}
-		<div class="ps-strip tp-noscrollbar" role="toolbar" aria-label="Edit selection" id="ps-strip" style:bottom={stripLift ? `${stripLift + 8}px` : null} use:stripScroll>
+		<div class="ps-strip tp-noscrollbar" role="toolbar" aria-label="Edit selection" id="ps-strip" bind:this={stripEl} use:stripScroll>
 			<button type="button" class="ps-cell" id="ps-move" aria-label="Move (1)" disabled={!hasSel} aria-pressed={hasSel && $transformMode === 'translate'} onclick={() => setTransformMode('translate')}><Icon name="move" size={20} /></button>
 			<button type="button" class="ps-cell" id="ps-rotate" aria-label="Rotate (2)" disabled={!hasSel} aria-pressed={hasSel && $transformMode === 'rotate'} onclick={() => setTransformMode('rotate')}><Icon name="rotate-ccw" size={20} /></button>
 			<button type="button" class="ps-cell" id="ps-scale" aria-label="Scale (3)" disabled={!hasSel} aria-pressed={hasSel && $transformMode === 'scale'} onclick={() => setTransformMode('scale')}><Icon name="maximize-2" size={20} /></button>
@@ -730,8 +719,10 @@
 	.ps-strip {
 		position: fixed;
 		left: 50%;
-		transform: translateX(-50%);
-		bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+		/* 41b H3: lifted by a transform from the bottom edge (`followBottomEdge`); this is its resting
+		   place above the bar until the first frame writes the measured one */
+		bottom: 0;
+		transform: translateX(-50%) translateY(calc(-84px - env(safe-area-inset-bottom, 0px)));
 		z-index: var(--z-selection); /* 41 G20: under every dock and sheet — a drawer covers it */
 		display: flex;
 		align-items: center;
