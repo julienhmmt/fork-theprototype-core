@@ -90,6 +90,7 @@
 		versionNewer
 	} from '$lib/moduleGallery';
 	import { staleModuleList, updatingModules, updateStaleModule } from '$lib/staleModules';
+	import { installJobs, installModuleJob } from '$lib/moduleInstallJobs';
 	let tab = 'core';
 	// 34 R1: an installed module older than this build expects — opening the manager lands
 	// on the User tab, where the row with its Update button is (once per open)
@@ -100,8 +101,41 @@
 		tab = 'user';
 	}
 	let installUrlValue = '';
-	let galleryBusy = '';
 	let installBusy = false;
+	// 41b H9: Browse installs are per-module JOBS (moduleInstallJobs) — the old single
+	// `galleryBusy` id was overwritten by every next click
+
+	// 41b H8: a clamped description expands IN PLACE on tap (chevron, tap again collapses) —
+	// touch has no hover, so no tooltip. Keys are `<tab>:<id>`, LOCAL view state.
+	/** @type {Record<string, boolean>} */
+	let descOpen = {};
+	/** descriptions that do not fit their two lines @type {Record<string, boolean>} */
+	let descClamped = {};
+	/** @param {string} key */
+	function toggleDesc(key) {
+		descOpen = { ...descOpen, [key]: !descOpen[key] };
+	}
+	/** Measures whether a clamped description hides text. @param {HTMLElement} node @param {string} key */
+	function clampWatch(node, key) {
+		const measure = () => {
+			if (descOpen[key]) return; // open = not clamped, so it cannot be measured; keep the chevron
+			const over = node.scrollHeight > node.clientHeight + 1;
+			if (!!descClamped[key] !== over) descClamped = { ...descClamped, [key]: over };
+		};
+		const ro = new ResizeObserver(measure);
+		ro.observe(node);
+		measure();
+		return {
+			/** @param {string} next */
+			update(next) {
+				key = next;
+				measure();
+			},
+			destroy() {
+				ro.disconnect();
+			}
+		};
+	}
 
 	async function runUrlInstall() {
 		if (installBusy) return;
@@ -161,10 +195,8 @@
 	}, {});
 
 	/** @param {any} entry */
-	async function installFromGallery(entry) {
-		galleryBusy = entry.id;
-		await installUrl(galleryInstallUrl(entry));
-		galleryBusy = '';
+	function installFromGallery(entry) {
+		return installModuleJob(entry.id, galleryInstallUrl(entry));
 	}
 
 	// raw sources of every core module, bundled so users can download examples
@@ -202,8 +234,13 @@
 		{ id: 'user', label: 'User', count: $userModules.length || undefined },
 		{ id: 'browse', label: 'Browse' }
 	];
+	/** @type {HTMLElement | undefined} */
+	let mmBody;
 	/** @param {string} next */
 	function pickTab(next) {
+		// 41b H10: each tab opens at its top. The modal has ONE scroller, so a Browse list
+		// scrolled to its end left Core (a third of the height) drawn below the view.
+		if (next !== tab) mmBody?.closest('.md-body')?.scrollTo({ top: 0 });
 		tab = next;
 		if (next === 'browse') loadModuleGallery();
 	}
@@ -240,6 +277,38 @@
 	}}
 />
 
+<!-- 41b H8: ONE description cell for every tab — clamped to two lines; when the text does not fit,
+     a chevron (and a tap on the text itself) expands it in place, and a second tap collapses it.
+     Touch has no hover, so never a tooltip. -->
+{#snippet moduleDesc(/** @type {string} */ key, /** @type {string} */ text)}
+	<!-- clamped: the whole description is the tap target (a 44px button beside it would squeeze
+	     a phone's ~190px text column), with a chevron at its end that says which way it goes -->
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
+	<div
+		class="mm-desc-wrap"
+		class:mm-desc-tappable={descClamped[key]}
+		role={descClamped[key] ? 'button' : undefined}
+		tabindex={descClamped[key] ? 0 : undefined}
+		aria-expanded={descClamped[key] ? !!descOpen[key] : undefined}
+		title={descClamped[key] ? (descOpen[key] ? 'Show less' : 'Show the full description') : undefined}
+		data-desc-toggle={key}
+		on:click={() => descClamped[key] && toggleDesc(key)}
+		on:keydown={(e) => {
+			if (descClamped[key] && (e.key === 'Enter' || e.key === ' ')) {
+				e.preventDefault();
+				toggleDesc(key);
+			}
+		}}
+	>
+		<p class="mm-desc" class:mm-desc-open={descOpen[key]} data-desc-key={key} use:clampWatch={key}>{text}</p>
+		{#if descClamped[key]}
+			<span class="mm-desc-chevron" aria-hidden="true">
+				<Icon name={descOpen[key] ? 'chevron-up' : 'chevron-down'} size={16} />
+			</span>
+		{/if}
+	</div>
+{/snippet}
+
 <ModalDialog
 	title="Modules"
 	bind:open={$modulesOpen}
@@ -272,7 +341,7 @@
 		</Tabs>
 	{/snippet}
 
-	<div class="mm-body">
+	<div class="mm-body" bind:this={mmBody}>
 	{#if tab === 'browse'}
 		<div id="module-gallery-tab" class="mm-stack">
 			<p class="mm-trust">
@@ -327,10 +396,13 @@
 					<div class="mm-list">
 						{#each galleryVisible as entry (entry.id)}
 							{@const installed = installedById[entry.id]}
+							{@const job = $installJobs[entry.id]}
+							{@const newer = !!installed && versionNewer(entry.version, installed.version)}
 							<div
 								id={'gallery-card-' + entry.id}
 								class="mm-row"
-								class:mm-dim={installed && !versionNewer(entry.version, installed.version)}
+								class:mm-dim={installed && !newer && !job}
+								data-install-state={job?.state ?? (installed ? (newer ? 'update' : 'installed') : 'idle')}
 							>
 								<div class="mm-main">
 									<div class="mm-title">
@@ -338,46 +410,58 @@
 										<span class="mm-ver">v{entry.version}</span>
 										{#if entry.author}<span class="mm-by">by {entry.author}</span>{/if}
 									</div>
-									<p class="mm-desc">{entry.description}</p>
-									{#if entry.category === 'game' || entry.tags?.length}
-										<div class="mm-tags">
-											{#if entry.category === 'game'}
-												<Badge tone="scope" data-gal-badge={entry.id}>game</Badge>
-											{/if}
-											{#each entry.tags ?? [] as tag (tag)}
-												<Badge tone="neutral">{tag}</Badge>
-											{/each}
-											{#if entry.template}
-												<!-- a game ships a scene too: point at it rather than leaving the
-												     player to guess which template goes with the module -->
-												<Badge tone="neutral" title={'Scene: ' + entry.template}>+ scene</Badge>
-											{/if}
-										</div>
-									{/if}
+									{@render moduleDesc('browse:' + entry.id, entry.description)}
 								</div>
 								<div class="mm-actions">
-									{#if !installed}
-										<Button
-											variant="secondary"
-											size="sm"
-											disabled={galleryBusy === entry.id || !entry.source}
-											onclick={() => installFromGallery(entry)}
-										>
-											{galleryBusy === entry.id ? 'Installing…' : 'Install'}
+									{#if job?.state === 'installing'}
+										<!-- 41b H9: THIS card's own job — another card's click never resets it -->
+										<Button variant="secondary" size="sm" icon="loader-circle" disabled aria-busy="true" title={job.text}>
+											{installed ? 'Updating…' : 'Installing…'}
 										</Button>
-									{:else if versionNewer(entry.version, installed.version)}
-										<Button
-											variant="secondary"
-											size="sm"
-											disabled={galleryBusy === entry.id}
-											onclick={() => installFromGallery(entry)}
-										>
-											{galleryBusy === entry.id ? 'Updating…' : 'Update to v' + entry.version}
+									{:else if job?.state === 'error'}
+										<Button variant="secondary" size="sm" icon="rotate-cw" data-install-retry={entry.id} onclick={() => installFromGallery(entry)}>
+											Retry
+										</Button>
+									{:else if !installed}
+										<Button variant="secondary" size="sm" disabled={!entry.source} onclick={() => installFromGallery(entry)}>
+											Install
+										</Button>
+									{:else if newer}
+										<Button variant="secondary" size="sm" onclick={() => installFromGallery(entry)}>
+											{'Update to v' + entry.version}
 										</Button>
 									{:else}
 										<Badge tone="ok">Installed</Badge>
 									{/if}
 								</div>
+								{#if job?.state === 'error'}
+									<!-- the reason stays on THIS card until Retry; the raw message is one tap away -->
+									<div class="mm-extra mm-error" role="alert" data-install-error={entry.id}>
+										<span class="mm-error-line">
+											<Icon name="circle-alert" size={16} aria-hidden="true" />
+											<span>{job.reason}</span>
+										</span>
+										<details class="mm-error-details">
+											<summary>Details</summary>
+											<span class="mm-error-raw">{job.detail}</span>
+										</details>
+									</div>
+								{/if}
+								{#if entry.category === 'game' || entry.tags?.length}
+									<div class="mm-extra mm-tags">
+										{#if entry.category === 'game'}
+											<Badge tone="scope" data-gal-badge={entry.id}>game</Badge>
+										{/if}
+										{#each entry.tags ?? [] as tag (tag)}
+											<Badge tone="neutral">{tag}</Badge>
+										{/each}
+										{#if entry.template}
+											<!-- a game ships a scene too: point at it rather than leaving the
+											     player to guess which template goes with the module -->
+											<Badge tone="neutral" title={'Scene: ' + entry.template}>+ scene</Badge>
+										{/if}
+									</div>
+								{/if}
 							</div>
 						{/each}
 					</div>
@@ -393,6 +477,8 @@
 			{#key $loadedModulesChanged}
 				{#each coreVisible as mod (mod.id)}
 					{@const enabled = !$disabledModules.includes(mod.id)}
+					{@const menuItems = isModuleLoaded(mod.id) && enabled ? $moduleMenuItems.filter((item) => item.moduleId === mod.id) : []}
+					{@const prims = isModuleLoaded(mod.id) && enabled ? (primitivesByModule[mod.id] ?? []) : []}
 					<div id={'module-card-' + mod.id} class="mm-row">
 						<div class="mm-main">
 							<div class="mm-title">
@@ -402,19 +488,10 @@
 									<Badge tone="warn">reload to disable</Badge>
 								{/if}
 							</div>
-							<p class="mm-desc">{mod.description ?? ''}</p>
+							{@render moduleDesc('core:' + mod.id, mod.description ?? '')}
 						</div>
+						<!-- 41b H8: download + the switch on the RIGHT of the name/description -->
 						<div class="mm-actions">
-							{#if isModuleLoaded(mod.id) && enabled}
-								{#each $moduleMenuItems.filter((item) => item.moduleId === mod.id) as item}
-									<Button variant="secondary" size="sm" onclick={item.action}>{item.label}</Button>
-								{/each}
-								{#each primitivesByModule[mod.id] ?? [] as primitive}
-									<Button variant="secondary" size="sm" title={primitive.command} onclick={() => sceneCommand(primitive.command)}>
-										+ {primitive.label}
-									</Button>
-								{/each}
-							{/if}
 							<Button variant="icon" size="sm" icon="download" label="Download as example" title="Download as example" onclick={() => downloadModule(mod)} />
 							<span class="mm-sep" aria-hidden="true"></span>
 							<Toggle
@@ -424,6 +501,20 @@
 								onchange={(/** @type {boolean} */ on) => setModuleEnabled(mod, on)}
 							/>
 						</div>
+						{#if menuItems.length || prims.length}
+							<!-- the module's OWN actions (Button & door "+ Button", Pong spawn/remove) stay under the
+							     name and description -->
+							<div class="mm-extra">
+								{#each menuItems as item}
+									<Button variant="secondary" size="sm" onclick={item.action}>{item.label}</Button>
+								{/each}
+								{#each prims as primitive}
+									<Button variant="secondary" size="sm" title={primitive.command} onclick={() => sceneCommand(primitive.command)}>
+										+ {primitive.label}
+									</Button>
+								{/each}
+							</div>
+						{/if}
 					</div>
 				{/each}
 			{/key}
@@ -510,6 +601,7 @@
 			{#key $loadedModulesChanged}
 				{#each userVisible as record (record.id)}
 					{@const enabled = !$disabledModules.includes(record.id)}
+					{@const menuItems = isModuleLoaded(record.id) && enabled ? $moduleMenuItems.filter((item) => item.moduleId === record.id) : []}
 					<div id={'user-module-card-' + record.id} class="mm-row mm-row-user">
 						<div class="mm-main">
 							<div class="mm-title">
@@ -520,17 +612,10 @@
 									<Badge tone="warn">reload to disable</Badge>
 								{/if}
 							</div>
-							<p class="mm-desc">{record.description}</p>
+							{@render moduleDesc('user:' + record.id, record.description)}
 						</div>
+						<!-- 41b H8: Remove + the enable switch on the RIGHT of the name/description -->
 						<div class="mm-actions">
-							{#if isModuleLoaded(record.id) && enabled}
-								{#each $moduleMenuItems.filter((item) => item.moduleId === record.id) as item}
-									<Button variant="secondary" size="sm" onclick={item.action}>{item.label}</Button>
-								{/each}
-							{/if}
-							{#if record.source !== 'zip'}
-								<Button variant="outline" size="sm" onclick={() => updateUserModule(record)}>Update</Button>
-							{/if}
 							<Button variant="warn-text" size="sm" onclick={() => removeUserModule(record.id)}>Remove</Button>
 							<span class="mm-sep" aria-hidden="true"></span>
 							<Toggle
@@ -551,6 +636,17 @@
 								}}
 							/>
 						</div>
+						{#if menuItems.length || record.source !== 'zip'}
+							<!-- the module's own actions + Update, under the name and description -->
+							<div class="mm-extra">
+								{#each menuItems as item}
+									<Button variant="secondary" size="sm" onclick={item.action}>{item.label}</Button>
+								{/each}
+								{#if record.source !== 'zip'}
+									<Button variant="outline" size="sm" onclick={() => updateUserModule(record)}>Update</Button>
+								{/if}
+							</div>
+						{/if}
 						<!-- A2 dev mode: reload fresh code from a URL without a page reload -->
 						<div class="mm-dev">
 							<input
@@ -561,26 +657,28 @@
 								value={record.devUrl ?? (record.source !== 'zip' ? record.source : '')}
 								on:change={(e) => setDevUrl(record.id, e.currentTarget.value)}
 							/>
-							<Button
-								variant="outline"
-								size="sm"
-								id={'dev-reload-' + record.id}
-								disabled={!devSourceOf(record)}
-								onclick={() => reloadUserModule(record)}
-							>
-								Reload
-							</Button>
-							<!-- a CHECKBOX, not a Toggle: the row's other switch enables/disables the
-							     module, and two toggles side by side read as the same kind of control -->
-							<label class="mm-auto" title="Poll the dev URL (~2s) and reload when the code changes">
-								<Checkbox
-									id={'dev-poll-' + record.id}
-									checked={$devPolling.includes(record.id)}
-									onchange={(/** @type {boolean} */ on) => setDevPoll(record, on)}
-								/>
-								Auto
-							</label>
-						</div>
+							<div class="mm-dev-actions">
+								<Button
+									variant="outline"
+									size="sm"
+									id={'dev-reload-' + record.id}
+									disabled={!devSourceOf(record)}
+									onclick={() => reloadUserModule(record)}
+								>
+									Reload
+								</Button>
+								<!-- a CHECKBOX, not a Toggle: the row's other switch enables/disables the
+								     module, and two toggles side by side read as the same kind of control -->
+								<label class="mm-auto" title="Poll the dev URL (~2s) and reload when the code changes">
+									<Checkbox
+										id={'dev-poll-' + record.id}
+										checked={$devPolling.includes(record.id)}
+										onchange={(/** @type {boolean} */ on) => setDevPoll(record, on)}
+									/>
+									Auto
+								</label>
+							</div>
+							</div>
 					</div>
 				{/each}
 			{/key}
@@ -621,21 +719,22 @@
 		border-radius: var(--radius-card);
 		background: var(--surface-2);
 	}
+	/* 41b H8: a row is a GRID — the name/description column, the management controls on its
+	   RIGHT (enable switch, download / Remove, Install), and full-width lines under the text for
+	   a module's own actions, an install error, tags and the dev URL. The same on every width:
+	   the old flex-wrap dropped the controls under the text on a phone. */
 	.mm-row {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: start;
 		gap: var(--space-2) 14px;
 		padding: var(--setting-row-pad-y) 16px;
-	}
-	.mm-row + .mm-row {
-		border-top: 1px solid var(--border);
 	}
 	.mm-dim {
 		opacity: 0.6;
 	}
 	.mm-main {
-		flex: 1 1 240px;
+		grid-column: 1;
 		min-width: 0;
 	}
 	.mm-title {
@@ -658,41 +757,118 @@
 		font-size: var(--fs-desc);
 		color: var(--text-faint);
 	}
+	.mm-desc-wrap {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--space-1);
+		margin-top: 3px;
+		border-radius: var(--radius-input);
+	}
+	.mm-desc-tappable {
+		cursor: pointer;
+	}
+	.mm-desc-tappable:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
 	.mm-desc {
 		display: -webkit-box;
 		-webkit-line-clamp: 2;
 		line-clamp: 2;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
-		margin: 3px 0 0;
+		flex: 1 1 auto;
+		min-width: 0;
+		margin: 0;
 		font-size: var(--fs-desc);
 		line-height: 1.4;
 		color: var(--text-muted);
 	}
+	.mm-desc-open {
+		display: block;
+		-webkit-line-clamp: unset;
+		line-clamp: none;
+		overflow: visible;
+	}
+	.mm-desc-chevron {
+		display: inline-flex;
+		flex-shrink: 0;
+		padding-bottom: 1px;
+		color: var(--text-faint);
+	}
 	.mm-tags {
-		display: flex;
-		flex-wrap: wrap;
 		gap: var(--space-1);
-		margin-top: 6px;
 	}
 	.mm-actions {
+		grid-column: 2;
+		grid-row: 1;
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
 		justify-content: flex-end;
 		gap: var(--space-2);
-		margin-left: auto;
+	}
+	/* under the name/description: a module's own actions ("+ Button", "Pong: spawn / remove"),
+	   Update, an install error, the tags */
+	.mm-extra {
+		grid-column: 1 / -1;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+		min-width: 0;
+	}
+	.mm-error {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--space-1);
+		font-size: var(--fs-desc);
+	}
+	.mm-error-line {
+		display: inline-flex;
+		align-items: flex-start;
+		gap: 6px;
+		color: var(--ink-bad);
+	}
+	.mm-error-line :global(svg) {
+		flex-shrink: 0;
+		margin-top: 1px;
+	}
+	.mm-error-details {
+		padding-left: 22px;
+		color: var(--text-faint);
+	}
+	.mm-error-details summary {
+		cursor: pointer;
+		color: var(--text-muted);
+	}
+	.mm-error-raw {
+		display: block;
+		margin-top: 2px;
+		overflow-wrap: anywhere;
 	}
 	.mm-sep {
 		width: 1px;
 		height: 24px;
 		background: var(--border-input);
 	}
+	/* the dev URL row wraps: the field keeps a line of its own when Reload + Auto do not fit
+	   beside it (on a phone "Auto" was pushed off the card, modules-url-auto.jpg) */
 	.mm-dev {
+		grid-column: 1 / -1;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+		min-width: 0;
+	}
+	.mm-dev .mm-input {
+		flex: 1 1 12rem;
+	}
+	.mm-dev-actions {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		flex: 1 1 100%;
+		flex: 0 0 auto;
 	}
 	.mm-auto {
 		display: inline-flex;
@@ -869,10 +1045,6 @@
 			width: 100%;
 			max-width: none;
 			padding-bottom: var(--space-2);
-		}
-		.mm-actions {
-			margin-left: 0;
-			justify-content: flex-start;
 		}
 	}
 </style>

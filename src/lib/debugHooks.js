@@ -230,6 +230,7 @@ export const DEBUG_HOOKS = [
 	['multiTransform', () => import('./multiTransform')],
 	['objectOrigin', () => import('./objectOrigin')],
 	['moduleGallery', () => import('./moduleGallery')],
+	['moduleInstallJobs', () => import('./moduleInstallJobs')],
 	['uvEditor', () => import('./uvEditor')],
 	['uvUnwrap', () => import('./uvUnwrap')],
 	['meshTopology', () => import('./meshTopology')],
