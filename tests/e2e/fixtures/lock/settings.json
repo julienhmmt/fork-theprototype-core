@@ -9582,7 +9582,7 @@
 					{
 						"kind": "toggle",
 						"id": "vr-override",
-						"default": false
+						"default": true
 					}
 				]
 			},

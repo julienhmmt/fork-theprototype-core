@@ -1,5 +1,5 @@
 {
-	"recordedAt": "2026-10-10T18:17:41.898Z",
+	"recordedAt": "2026-10-11T14:04:47.021Z",
 	"settings": {
 		"Theme": {
 			"rows": [
@@ -426,6 +426,7 @@
 				"Haptic tick",
 				"Layout",
 				"Look speed",
+				"Project actions",
 				"Show in edit",
 				"Show touch controls",
 				"Workspace layouts"
@@ -2298,6 +2299,7 @@
 				"Music",
 				"Object search in the right-click menu",
 				"Offer Enter VR in a headset browser",
+				"Project actions",
 				"Reset tours",
 				"Show FPS and draw calls",
 				"Show others as classic heads",
@@ -2866,6 +2868,7 @@
 				"Music",
 				"Object search in the right-click menu",
 				"Offer Enter VR in a headset browser",
+				"Project actions",
 				"Reset tours",
 				"Show FPS and draw calls",
 				"Show others as classic heads",
@@ -2906,6 +2909,7 @@
 				"Music",
 				"Object search in the right-click menu",
 				"Offer Enter VR in a headset browser",
+				"Project actions",
 				"Reset panel positions",
 				"Reset tours",
 				"Shift+A opens the Add menu",
@@ -3121,6 +3125,7 @@
 				"Placeholder style",
 				"Placement preview",
 				"Preview triangle budget",
+				"Project actions",
 				"Reduce quality when the scene is heavy",
 				"Reset line colours",
 				"Selection outline colour",
@@ -3139,6 +3144,7 @@
 				"Wireframe colour"
 			],
 			"sections": [
+				"Interface",
 				"Scene"
 			]
 		},
@@ -3851,6 +3857,7 @@
 				"Compress textures",
 				"Custom theme",
 				"Include VR button",
+				"Project actions",
 				"Quality",
 				"Show FPS",
 				"Show the Made with ThePrototype badge",
@@ -4037,6 +4044,7 @@
 				"Loop select (faces: again = perpendicular; edges: the chain)",
 				"Mesh generation",
 				"Placeholder style",
+				"Project actions",
 				"Reverse trackpad pan",
 				"Stance",
 				"Storage used",
@@ -4045,6 +4053,7 @@
 				"Voice typing provider"
 			],
 			"sections": [
+				"Interface",
 				"Controls",
 				"Shortcuts",
 				"Scene",
