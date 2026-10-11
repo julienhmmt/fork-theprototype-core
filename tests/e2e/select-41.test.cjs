@@ -168,6 +168,8 @@ async function rest(page) {
 		s.objectActions.setEditorMode('edit');
 		s.multiSelectMode.set(false);
 		s.objectActions.deselectObject();
+		// 41b H1: on a phone the Inspector is two dock TABS (Properties, Configure Scene) — close both
+		s.phoneDock?.inspTabs.set({ properties: false, scene: false });
 		s.inspectorClose.set(true);
 		s.phoneShell?.phoneSheet?.set(null);
 		s.objectListClose.set(true);

@@ -18,11 +18,24 @@ import { safeStorage } from './safeStorage';
 export const FLOW_FAMILY = ['flow', 'flowcode', 'animation', 'uv', 'shader', 'hud'];
 /** every panel that can be a dock tab, in strip order (Node editor first) */
 export const DOCK_FAMILY = [...FLOW_FAMILY, 'explorer', 'profiler', 'code', 'imageEditor'];
+/**
+ * 41b H1 — the PHONE's content tabs. On a phone the content panels that are side drawers or
+ * floating windows on a wider screen (the Inspector as Properties / Configure Scene, the Objects
+ * list, the notes list, the workspace Layouts) are tabs in this same dock, so they stop being
+ * sheets stacked behind it. They are dock tabs ONLY in the phone posture: `$lib/phoneDock`
+ * reports them present there and nowhere else, so on a wider screen they never appear in the
+ * strip and keep their own homes. Kept apart from DOCK_FAMILY on purpose: that list is also
+ * "views with a floating dock window" (dockAllOf, dockTab, a floating group's Dock button), and
+ * `objects` is a floating window key there.
+ */
+export const PHONE_DOCK_TABS = ['properties', 'objects', 'notes', 'layouts', 'scene'];
+/** every key the strip can hold (the tab order may name any of them) */
+export const DOCK_KEYS = [...DOCK_FAMILY, ...PHONE_DOCK_TABS];
 /** @type {Record<string, string>} */
-export const DOCK_TITLES = { flow: 'Node editor', flowcode: 'Flow Code', animation: 'Animation', uv: 'UV editor', shader: 'Shader editor', hud: 'HUD editor', explorer: 'Explorer', profiler: 'Profiler', code: 'Code', imageEditor: 'Image editor' };
+export const DOCK_TITLES = { flow: 'Node editor', flowcode: 'Flow Code', animation: 'Animation', uv: 'UV editor', shader: 'Shader editor', hud: 'HUD editor', explorer: 'Explorer', profiler: 'Profiler', code: 'Code', imageEditor: 'Image editor', properties: 'Properties', objects: 'Objects', notes: 'Notes', layouts: 'Layouts', scene: 'Configure Scene' };
 /** 38 NOTES-38 #23: the view icon each dock tab shows before its name (ui/Icon names) */
 /** @type {Record<string, string>} */
-export const DOCK_ICONS = { flow: 'workflow', flowcode: 'code', animation: 'clapperboard', uv: 'grid-3x3', shader: 'sparkles', hud: 'app-window', explorer: 'folder-open', profiler: 'activity', code: 'code', imageEditor: 'image' };
+export const DOCK_ICONS = { flow: 'workflow', flowcode: 'code', animation: 'clapperboard', uv: 'grid-3x3', shader: 'sparkles', hud: 'app-window', explorer: 'folder-open', profiler: 'activity', code: 'code', imageEditor: 'image', properties: 'sliders-horizontal', objects: 'list', notes: 'sticky-note', layouts: 'panels-top-left', scene: 'sun' };
 
 const ls = typeof localStorage !== 'undefined' ? localStorage : null;
 
@@ -211,13 +224,13 @@ onLayoutRestore(() => {
  * @param {string[]} stored @returns {string[]}
  */
 export function resolveOrder(stored) {
-	return [...new Set((stored ?? []).filter((k) => DOCK_FAMILY.includes(k)))];
+	return [...new Set((stored ?? []).filter((k) => DOCK_KEYS.includes(k)))];
 }
 
 /** the keys currently docked+open */
 function presentKeys() {
 	const o = get(dockOccupants);
-	return DOCK_FAMILY.filter((k) => o[k]?.present);
+	return DOCK_KEYS.filter((k) => o[k]?.present);
 }
 
 /**
@@ -236,7 +249,7 @@ function inOrder(keys, order) {
  * in the user's own order */
 export const dockTabs = derived([dockOccupants, dockTabOrder], ([$o, $order]) =>
 	inOrder(
-		DOCK_FAMILY.filter((k) => $o[k]?.present),
+		DOCK_KEYS.filter((k) => $o[k]?.present),
 		$order
 	).map((k) => ({ key: k, title: DOCK_TITLES[k], icon: DOCK_ICONS[k] }))
 );
@@ -251,7 +264,7 @@ export const dockTabs = derived([dockOccupants, dockTabOrder], ([$o, $order]) =>
  * @param {string} key
  */
 export function noteDockOrder(key) {
-	if (!DOCK_FAMILY.includes(key)) return;
+	if (!DOCK_KEYS.includes(key)) return;
 	const cur = resolveOrder(get(dockTabOrder));
 	if (cur.includes(key)) return;
 	dockTabOrder.set([...cur, key]);

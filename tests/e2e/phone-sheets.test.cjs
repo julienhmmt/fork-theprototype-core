@@ -59,6 +59,7 @@ h.run(async () => {
 			s.characterModalOpen.set(false);
 			s.profileSettingsOpen.set(false);
 			s.selectedObjects.set([]);
+			s.bottomDock.dockMinimized.set(false);
 			// a toast (the phone quality notice) sits over the top of a tall sheet: not what is tested
 			s.toastStore.set([]);
 		});
@@ -99,18 +100,22 @@ h.run(async () => {
 
 	// ---- the sheets ------------------------------------------------------------------
 	/** [name, open(), sheet selector (height), grip selector, isOpen expr] */
+	// 41b H1: Configure Scene, the Inspector, Objects and the notes are DOCK TABS on the phone — their
+	// "sheet" is the dock frame (#phone-dock), their grab bar the dock's (#ps-dock-grip), and a swipe
+	// down to the end MINIMIZES the dock (the tab stays open, nothing shows)
+	const tabShown = (/** @type {string} */ key) => `!(${store('bottomDock.dockMinimized')}) && ${store('bottomDock.visibleDockKey')} === '${key}'`;
 	const SHEETS = [
 		['main menu', async () => touch.tap(34, 34), '#sidebar70', '#sidebar70 [data-sheet-grip]', `!!document.querySelector('#sidebar70')`],
 		['notifications', async () => P.evaluate(() => window.__stores.notificationCenterOpen.set(true)), '.ps-sheet', '#ps-sheet-handle', store('notificationCenterOpen')],
-		['Configure Scene', async () => P.evaluate(() => window.__stores.showSidebar('scene')), '#inspector', '#inspector [data-sheet-grip]', `!${store('inspectorClose')}`],
+		['Configure Scene', async () => P.evaluate(() => window.__stores.showSidebar('scene')), '#phone-dock', '#ps-dock-grip [data-sheet-grip]', tabShown('scene')],
 		['Add', async () => { const b = await rect('#ps-add'); await touch.tap(b.x + b.w / 2, b.y + b.h / 2); }, '.ctx-scroll[role=menu]', '.ctx-scroll[role=menu] [data-sheet-grip]', `!!document.querySelector('.ctx-scroll[role=menu]')`],
 		['Add with an object selected', async () => { await select(); const b = await rect('#ps-add'); await touch.tap(b.x + b.w / 2, b.y + b.h / 2); }, '.ctx-scroll[role=menu]', '.ctx-scroll[role=menu] [data-sheet-grip]', `!!document.querySelector('.ctx-scroll[role=menu]')`, true],
-		['Inspector', async () => { await select(); const b = await rect('#ps-inspect'); await touch.tap(b.x + b.w / 2, b.y + b.h / 2); }, '#inspector', '#inspector [data-sheet-grip]', `!${store('inspectorClose')}`, true],
-		['Objects', async () => { await select(); await P.evaluate(() => window.__stores.objectListClose.set(false)); }, '.ps-sheet', '#ps-sheet-handle', `!${store('objectListClose')}`, true],
+		['Inspector', async () => { await select(); const b = await rect('#ps-inspect'); await touch.tap(b.x + b.w / 2, b.y + b.h / 2); }, '#phone-dock', '#ps-dock-grip [data-sheet-grip]', tabShown('properties'), true],
+		['Objects', async () => { await select(); await P.evaluate(() => window.__stores.objectListClose.set(false)); }, '#phone-dock', '#ps-dock-grip [data-sheet-grip]', tabShown('objects'), true],
 		['Explorer (the dock)', async () => { const b = await rect('#ps-explorer'); await touch.tap(b.x + b.w / 2, b.y + b.h / 2); }, '#explorer-list', '#ps-dock-grip [data-sheet-grip]', `!(${store('bottomDock.dockMinimized')}) && !(${store('explorerClose')})`],
 		['More', async () => { const b = await rect('#ps-more'); await touch.tap(b.x + b.w / 2, b.y + b.h / 2); }, '.ps-sheet', '#ps-sheet-handle', `${store('phoneShell.phoneSheet')} === 'more'`],
 		['profile menu', async () => P.locator('#avatar-trigger').dispatchEvent('mousedown'), '#avatar-dropdown', '#avatar-dropdown [data-sheet-grip]', `!!document.querySelector('#avatar-dropdown')`],
-		['scene notes', async () => P.evaluate(() => window.__stores.notesDrawerOpen.set(true)), '#notes-drawer', '#notes-drawer [data-sheet-grip]', store('notesDrawerOpen')],
+		['scene notes', async () => P.evaluate(() => window.__stores.notesDrawerOpen.set(true)), '#phone-dock', '#ps-dock-grip [data-sheet-grip]', tabShown('notes')],
 		['Customize character', async () => P.evaluate(() => window.__stores.characterModalOpen.set(true)), '.cp', '#character-resize', store('characterModalOpen')]
 	];
 
@@ -145,36 +150,38 @@ h.run(async () => {
 		h.check(!(await read(isOpen)), `${name}: closes when swiped down to the end`);
 	}
 
-	// ---- the grab bar is STICKY: scrolling the Inspector never takes it away ---------------
+	// ---- the grab bar is STICKY: scrolling Configure Scene never takes it away ----------------
+	// 41b H1: Configure Scene is a dock tab — the bar is the DOCK's, over the frame's top edge
 	await rest();
 	await P.evaluate(() => window.__stores.showSidebar('scene'));
 	await P.waitForTimeout(900);
 	const sticky = await P.evaluate(async () => {
 		const ins = document.getElementById('inspector');
-		const grip = ins?.querySelector('[data-sheet-grip]');
-		if (!ins || !grip) return null;
+		const frame = document.getElementById('phone-dock');
+		const grip = document.querySelector('#ps-dock-grip [data-sheet-grip]');
+		if (!ins || !grip || !frame) return null;
 		ins.scrollTop = 600;
 		await new Promise((r) => setTimeout(r, 200));
-		const ir = ins.getBoundingClientRect();
+		const fr = frame.getBoundingClientRect();
 		const gr = grip.getBoundingClientRect();
 		const at = document.elementFromPoint(gr.left + gr.width / 2, gr.top + gr.height / 2);
-		return { scrolled: ins.scrollTop, gripTop: gr.top, insTop: ir.top, hit: !!at && grip.contains(at) };
+		return { scrolled: ins.scrollTop, gripTop: gr.top, frameTop: fr.top, hit: !!at && grip.contains(at) };
 	});
 	h.check(!!sticky && sticky.scrolled > 100, `premise: Configure Scene scrolls (${JSON.stringify(sticky)})`);
-	h.check(!!sticky && Math.abs(sticky.gripTop - sticky.insTop) < 4 && sticky.hit, `the grab bar stays at the top of a scrolled sheet and takes the finger (${JSON.stringify(sticky)})`);
+	h.check(!!sticky && Math.abs(sticky.gripTop - sticky.frameTop) < 30 && sticky.hit, `the grab bar stays at the top of the scrolled tab and takes the finger (${JSON.stringify(sticky)})`);
 
-	// ---- a sheet's height is REMEMBERED --------------------------------------------------
-	const g0 = await rect('#inspector [data-sheet-grip]');
+	// ---- a sheet's height is REMEMBERED (the dock's one height) --------------------------------
+	const g0 = await rect('#ps-dock-grip [data-sheet-grip]');
 	await touch.drag(g0.x + g0.w / 2, g0.y + g0.h / 2, g0.y + g0.h / 2 + 90);
 	await P.waitForTimeout(500);
-	const hBefore = (await rect('#inspector')).h;
+	const hBefore = (await rect('#phone-dock')).h;
 	await rest();
 	await P.evaluate(() => window.__stores.showSidebar('scene'));
 	await P.waitForTimeout(900);
-	const hAfter = (await rect('#inspector')).h;
+	const hAfter = (await rect('#phone-dock')).h;
 	h.check(Math.abs(hAfter - hBefore) < 3, `Configure Scene reopens at the height it was left at (${Math.round(hBefore)} -> ${Math.round(hAfter)})`);
-	const saved = await read(() => localStorage.getItem('inspectorSheetH'));
-	h.check(Math.abs(Number(saved) - hBefore) < 3, `...under its own storage key (inspectorSheetH=${saved})`);
+	const saved = await read(() => localStorage.getItem('flowDockHeight'));
+	h.check(Math.abs(Number(saved) - hBefore) < 3, `...the dock's own height (flowDockHeight=${saved})`);
 
 	// ---- the max leaves the strip clear (the reported cover-play-and-handle) -------------
 	await rest();

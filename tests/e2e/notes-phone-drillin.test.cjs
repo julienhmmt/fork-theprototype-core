@@ -111,8 +111,9 @@ h.run(async () => {
 	h.check(!!active1, 'tapping a note opens its card');
 	h.check(await read(store('notesDrawerOpen')), 'the Notes drawer stays OPEN while the note is open (drill-in, not a replacement)');
 	const card = await rect('.note-card');
-	const drawer1 = await rect('#notes-drawer');
-	h.check(!!card && !!drawer1 && Math.abs(card.top - drawer1.top) < 3 && Math.abs(card.bottom - drawer1.bottom) < 3, `the card covers the drawer exactly — a page of the same sheet (card ${Math.round(card?.top)}-${Math.round(card?.bottom)}, drawer ${Math.round(drawer1?.top)}-${Math.round(drawer1?.bottom)})`);
+	// 41b H1: the notes list is the dock's Notes TAB — the card covers the dock frame it sits in
+	const drawer1 = await rect('#phone-dock');
+	h.check(!!card && !!drawer1 && Math.abs(card.top - drawer1.top) < 3 && Math.abs(card.bottom - drawer1.bottom) < 3, `the card covers the Notes tab exactly — a page of the same sheet (card ${Math.round(card?.top)}-${Math.round(card?.bottom)}, drawer ${Math.round(drawer1?.top)}-${Math.round(drawer1?.bottom)})`);
 	if (SHOTS) {
 		await P.screenshot({ path: `${SHOTS}/g12-folded-2-note-dark.png` });
 		await P.evaluate(() => window.__stores.themes?.theme?.set('light'));
@@ -185,8 +186,9 @@ h.run(async () => {
 	h.check(c1 && c1.h - c0.h > 60, `the card's grab bar resizes it (${Math.round(c0.h)} -> ${Math.round(c1?.h ?? 0)})`);
 	await P.evaluate(() => window.__stores.annotationsHandler.activeAnnotation.set(null));
 	await P.waitForTimeout(500);
-	const d2 = await rect('#notes-drawer');
-	h.check(d2 && Math.abs(d2.h - c1.h) < 3, `...and the drawer under it is the same height — one sheet (${Math.round(c1?.h ?? 0)} vs ${Math.round(d2?.h ?? 0)})`);
+	// 41b H1: the notes list is the dock's Notes TAB on the phone — the card covers the dock frame, one height
+	const d2 = await rect('#phone-dock');
+	h.check(d2 && Math.abs(d2.h - c1.h) < 3, `...and the dock under it (the Notes tab) is the same height — one sheet (${Math.round(c1?.h ?? 0)} vs ${Math.round(d2?.h ?? 0)})`);
 	void d1;
 
 	// ---- OPENED FROM THE SCENE: tap a note's pin marker (the drawer closed) ---------------------

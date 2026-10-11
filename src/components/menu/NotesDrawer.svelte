@@ -12,7 +12,7 @@
 	import { saveSheetH } from '$lib/ui/sheetDrag.js';
 	import { phoneSheetMaxH, notesSheetH } from '$lib/ui/phoneShell.js';
 	import EmptyState from '../ui/EmptyState.svelte';
-	import { notesDrawerOpen, inspectorClose, noteDoubleClickToOpen, showToast } from '../../stores/appStore.js';
+	import { notesDrawerOpen, noteDoubleClickToOpen, showToast } from '../../stores/appStore.js';
 	import {
 		annotations,
 		activeAnnotation,
@@ -30,16 +30,8 @@
 	import { objectsGroup, selectedObjects } from '../../stores/sceneStore.js';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
 
-	// One bottom sheet at a time on narrow: opening scene notes closes the object/scene
-	// settings sheet (they'd otherwise stack at the bottom).
-	$effect(() => {
-		if (
-			$notesDrawerOpen &&
-			typeof window !== 'undefined' &&
-			window.matchMedia('(max-width: 640px)').matches
-		)
-			inspectorClose.set(true);
-	});
+	// 41b H1: on a phone the notes list and the Inspector are TABS of one dock ($lib/phoneDock), so
+	// opening the notes no longer closes the properties sheet (they were two sheets stacking).
 
 	// On a narrow/folded screen the notes drawer is a bottom SHEET (like the Flow/Explorer
 	// bottom dock) with a drag handle to adjust its height — the right-side drawer was

@@ -6,6 +6,8 @@
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
 	import { saveSheetH } from '$lib/ui/sheetDrag.js';
 	import { notesSheetH, phoneSheetMaxH } from '$lib/ui/phoneShell.js';
+	import { dockHeight } from '$lib/bottomDock';
+	import { phoneDockShown } from '$lib/phoneDock';
 	import {
 		annotations,
 		activeAnnotation,
@@ -31,7 +33,7 @@
 		noteWalk
 	} from '$lib/annotationsHandler';
 	import { globalCamera, globalRenderer, orbitControls } from '../../stores/sceneStore';
-	import { notesDrawerOpen, inspectorClose } from '../../stores/appStore.js';
+	import { notesDrawerOpen } from '../../stores/appStore.js';
 
 	// H5 (notes v2): ONE note card with a VIEW face and an EDIT face, anchored
 	// NEAR its pin by a continuous screen projection — the card rides the camera
@@ -122,10 +124,9 @@
 	// closing the note returns to where it was opened from: the list as it was ("when note closes
 	// i have to again open drawer for notes"), or — opened from a pin in the scene, an object's
 	// menu… — simply the scene (the drawer is never opened for you).
-	$effect(() => {
-		if (!open || !narrow) return;
-		untrack(() => inspectorClose.set(true));
-	});
+	// 41b H1: on the phone the properties are a DOCK TAB, and a note card no longer closes them:
+	// the card is a sheet over the dock (or a page of the Notes tab), and closing it shows the
+	// dock again exactly as it was.
 	/** the card is a page of the open notes sheet (phone) */
 	const inDrawer = $derived(narrow && $notesDrawerOpen);
 	// 41 G12: ‹ › walk ALL the notes in pin order, wrapping, from whatever opened the card
@@ -134,8 +135,18 @@
 		if (id) openAnnotation(id, 'view');
 	}
 	// the phone card shares the notes sheet's height and grab bar (swipe down = back to the list)
-	const sheetH = $derived(Math.min($notesSheetH, $phoneSheetMaxH || $notesSheetH));
+	// 41b H1: with the Notes TAB in front the card is a page of the DOCK — the dock frame's rect and the
+	// dock's one height, so its grab bar resizes the dock (the list under it follows)
+	const inNotesTab = $derived(narrow && $phoneDockShown === 'notes');
+	const sheetH = $derived(inNotesTab ? $dockHeight : Math.min($notesSheetH, $phoneSheetMaxH || $notesSheetH));
+	let dockDragFrom = 0;
 	function sheetResize(h: number, done: boolean) {
+		if (inNotesTab) {
+			if (!dockDragFrom) dockDragFrom = get(dockHeight);
+			dockHeight.set(Math.round(h));
+			if (done) dockDragFrom = 0;
+			return;
+		}
 		notesSheetH.set(Math.round(h));
 		if (done) saveSheetH('notesSheetH', Math.round(h));
 	}
@@ -252,7 +263,7 @@
 		aria-label={editing ? 'Edit note' : 'Note'}
 	>
 		{#if narrow}
-			<SheetGrip class="note-grip" label="note" height={sheetH} min={160} onresize={sheetResize} onclose={close} />
+			<SheetGrip class="note-grip" label="note" height={sheetH} min={160} onresize={sheetResize} onclose={() => { if (dockDragFrom) dockHeight.set(dockDragFrom); dockDragFrom = 0; close(); }} />
 		{/if}
 		<div class="note-head">
 			<span class="note-num" style="background:{note.color || DEFAULT_NOTE_COLOR}"
@@ -772,6 +783,17 @@
 		bottom: var(--ps-bar-h, 0px);
 		height: var(--note-sheet-h, 45vh);
 		max-height: var(--ps-sheet-max, 92vh);
+		/* 41b H1: in the phone sheets' band, UNDER the bottom bar — the raised Play circle rises over
+		   the card's top edge instead of being covered by it (the card sat on --z-popover) */
+		z-index: calc(var(--z-sheet) + 3);
+	}
+	/* 41b H1: the Notes TAB is in front — the card is a page of it: the dock body's rect, under the
+	   dock's own grab bar (which resizes both) */
+	:global(:root.phone-shell:has(#phone-dock[data-phone-tab='notes'])) .note-card.note-sheet {
+		top: var(--pd-frame-top, auto);
+		height: auto;
+		max-height: none;
+		border-radius: 0;
 	}
 	:global(:root.phone-shell) .note-card.note-sheet .note-body {
 		flex: 1;

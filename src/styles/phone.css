@@ -142,6 +142,41 @@
 	min-height: 48px;
 }
 
+/* ---- 2b. 41b H1: a content panel as a PHONE DOCK TAB ----------------------------------
+   The object list and the notes list placed into the dock frame's body (PhoneDockHost
+   publishes --pd-top, the body's top edge). Under the phone bar (--z-phone-bar), so the bar and
+   its raised Play circle stay on top of them like every other dock tab; a tab that is open but
+   not in front stays mounted and hidden. (The Inspector's rule is in ui.css: layered.) */
+:root.phone-shell [data-pd-host] {
+	position: fixed !important;
+	left: 0 !important;
+	right: 0 !important;
+	top: var(--pd-top) !important;
+	bottom: var(--ps-bar-h) !important;
+	width: auto !important;
+	height: auto !important;
+	min-width: 0 !important;
+	min-height: 0 !important;
+	max-width: none !important;
+	max-height: none !important;
+	margin: 0 !important;
+	padding-bottom: 0 !important;
+	transform: none !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+	z-index: calc(var(--z-dock) + 1) !important;
+	background: var(--surface-1);
+}
+:root.phone-shell [data-pd-host='hidden'] {
+	display: none !important;
+}
+/* the dock's grab bar resizes them: their own sheet grip / window grip stand down */
+:root.phone-shell [data-pd-host] .notes-resize,
+:root.phone-shell [data-pd-host] [data-window-grip] {
+	display: none !important;
+}
+
 /* ---- 3. a reused window inside the sheet frame -------------------------------------- */
 :root.phone-shell [data-ps-host] {
 	position: fixed !important;

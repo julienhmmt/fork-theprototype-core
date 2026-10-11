@@ -109,6 +109,7 @@ h.run(async () => {
 			s.explorerClose.set(true);
 			s.annotationsHandler.activeAnnotation.set(null);
 			s.selectedObjects.set([]);
+			s.bottomDock.dockMinimized.set(false);
 			s.toastStore.set([]);
 		});
 		await P.waitForTimeout(500);
@@ -129,17 +130,20 @@ h.run(async () => {
 
 	// [name, open, sheet (height) selector, scroller selector (the list), isOpen expr, opts]
 	// `scroller` = the element that scrolls inside the drawer (measured: scrollTop)
+	// 41b H1: Objects, Notes, the Inspector and Configure Scene are DOCK TABS on the phone: their sheet is the
+	// dock frame (#phone-dock), and a flick down at the list's top MINIMIZES the dock (the tab stays open)
+	const tabShown = (key) => `!(${store('bottomDock.dockMinimized')}) && ${store('bottomDock.visibleDockKey')} === '${key}'`;
 	const DRAWERS = [
-		['Objects', async () => P.evaluate(() => window.__stores.objectListClose.set(false)), '.ps-sheet', '#object-list .obj-scroller', `!${store('objectListClose')}`],
+		['Objects', async () => P.evaluate(() => window.__stores.objectListClose.set(false)), '#phone-dock', '#object-list .obj-scroller', tabShown('objects'), { body: '#object-list .obj-scroller' }],
 		['Explorer', async () => { await tapSel('#ps-explorer'); }, '#explorer-list', null, `!(${store('bottomDock.dockMinimized')}) && !(${store('explorerClose')})`, { body: '#explorer-grid' }],
-		['Notes', async () => P.evaluate(() => window.__stores.notesDrawerOpen.set(true)), '#notes-drawer', '#notes-drawer .notes-body', store('notesDrawerOpen')],
+		['Notes', async () => P.evaluate(() => window.__stores.notesDrawerOpen.set(true)), '#phone-dock', '#notes-drawer .notes-body', tabShown('notes'), { body: '#notes-drawer .notes-body' }],
 		['Add', async () => { await tapSel('#ps-add'); }, '.ctx-scroll[role=menu]', '.ctx-scroll[role=menu]', `!!document.querySelector('.ctx-scroll[role=menu]')`],
-		['Inspector', async () => { await select(); await tapSel('#ps-inspect'); }, '#inspector', '#inspector', `!${store('inspectorClose')}`],
+		['Inspector', async () => { await select(); await tapSel('#ps-inspect'); }, '#phone-dock', '#inspector', tabShown('properties')],
 		['main menu', async () => touch.tap(34, 34), '#sidebar70', '#sidebar70', `!!document.querySelector('#sidebar70')`],
 		['notifications', async () => P.evaluate(() => window.__stores.notificationCenterOpen.set(true)), '.ps-sheet', '#notif-panel [data-notif-list], #notif-panel .wc-body, #notif-panel', store('notificationCenterOpen')],
 		['profile menu', async () => P.locator('#avatar-trigger').dispatchEvent('mousedown'), '#avatar-dropdown', '#avatar-dropdown', `!!document.querySelector('#avatar-dropdown')`],
 		['More', async () => { await tapSel('#ps-more'); }, '.ps-sheet', '#ps-more-sheet', `${store('phoneShell.phoneSheet')} === 'more'`],
-		['Configure Scene', async () => P.evaluate(() => window.__stores.showSidebar('scene')), '#inspector', '#inspector', `!${store('inspectorClose')}`]
+		['Configure Scene', async () => P.evaluate(() => window.__stores.showSidebar('scene')), '#phone-dock', '#inspector', tabShown('scene')]
 	];
 
 	/** the scroller actually under a point (the first vertically scrollable ancestor) */
@@ -175,8 +179,9 @@ h.run(async () => {
 		const bodyR = opts.body ? await rect(opts.body) : null;
 		const bx = Math.round(bodyR ? bodyR.x + bodyR.w / 2 : s0.x + s0.w / 2);
 		const by = Math.round(bodyR ? bodyR.top + Math.min(bodyR.h * 0.4, 200) : s0.top + Math.min(s0.h * 0.45, 260));
-		/** keep a gesture's start inside the sheet's body */
-		const inY = (y) => Math.max(s0.top + 40, Math.min(s0.bottom - 12, y));
+		/** keep a gesture's start inside the sheet's body (41b: inside the named LIST when there is one —
+		 *  a dock tab's frame also holds the panel's header, which has nothing to scroll) */
+		const inY = (y) => Math.max(bodyR ? bodyR.top + 12 : s0.top + 40, Math.min(s0.bottom - 12, y));
 		const sc = await scrollerAt(bx, by);
 		const scrolls = !!sc && sc.max > 30;
 		// --- 1. drag UP on the list: the list scrolls, the sheet stays ---
@@ -251,9 +256,10 @@ h.run(async () => {
 		h.check(!(await read(isOpen)), `${name}: at the list's top a flick down CLOSES the drawer`);
 	}
 
-	// ---- rubber band past the max: Objects at full, pulled up on the grab bar -----------------
+	// ---- rubber band past the max: a framed sheet (Chat) at full, pulled up on the grab bar
+	// (41b H1: Objects is a dock tab now, and the dock frame never stretched past its max) -----------------
 	await rest();
-	await P.evaluate(() => window.__stores.objectListClose.set(false));
+	await P.evaluate(() => window.__stores.chatHidden.set(''));
 	await P.waitForTimeout(900);
 	{
 		const g = await rect('#ps-sheet-handle');
@@ -277,14 +283,20 @@ h.run(async () => {
 		h.check(sBack && Math.abs(sBack.h - sMax.h) < 4, `rubber band: released, it springs back to the max (${Math.round(sBack?.h ?? 0)})`);
 	}
 
+	await rest();
+	await P.evaluate(() => {
+		window.__stores.chatHidden.set('hidden');
+		window.__stores.objectListClose.set(false);
+	});
+	await P.waitForTimeout(900);
 	// ---- a sideways move on the body is left alone ---------------------------------------------
 	{
-		const s0 = await rect('.ps-sheet');
+		const s0 = await rect('#phone-dock');
 		const b = await rect('#object-list');
 		await touch.path([[b.x + 40, b.y + 120], [b.x + 300, b.y + 150]], { steps: 10, stepMs: 16 });
 		await P.waitForTimeout(500);
-		const s1 = await rect('.ps-sheet');
-		h.check(s1 && Math.abs(s1.h - s0.h) < 4 && (await read(`!${store('objectListClose')}`)), `a sideways drag on the body does not move the sheet (${Math.round(s0.h)} -> ${Math.round(s1?.h ?? 0)})`);
+		const s1 = await rect('#phone-dock');
+		h.check(s1 && Math.abs(s1.h - s0.h) < 4 && (await read(tabShown('objects'))), `a sideways drag on the body does not move the sheet (${Math.round(s0.h)} -> ${Math.round(s1?.h ?? 0)})`);
 	}
 
 	// ---- a dragged touch does not open the row it started on ------------------------------------
@@ -328,15 +340,19 @@ h.run(async () => {
 	await P.setViewportSize({ width: 390, height: 896 });
 	await P.waitForTimeout(1500);
 	await rest();
-	await P.evaluate(() => window.__stores.objectListClose.set(false));
+	// (the dock's ONE height was left at its minimum by the pulls above: give the list room again)
+	await P.evaluate(() => {
+		window.__stores.bottomDock.dockHeight.set(380);
+		window.__stores.objectListClose.set(false);
+	});
 	await P.waitForTimeout(900);
 	{
-		const s0 = await rect('.ps-sheet');
+		const s0 = await rect('#phone-dock');
 		const b = await rect('#object-list .obj-scroller');
 		await P.evaluate(() => { document.querySelector('#object-list .obj-scroller').scrollTop = 0; });
 		await touch.flick(b.x + b.w / 2, b.y + 60, 210);
 		await P.waitForTimeout(800);
-		h.check(!(await read(`!${store('objectListClose')}`)), `folded again: a flick down at the Objects list's top closes it (sheet was ${Math.round(s0?.h ?? 0)})`);
+		h.check(!(await read(tabShown('objects'))), `folded again: a flick down at the Objects list's top puts the dock away (sheet was ${Math.round(s0?.h ?? 0)})`);
 	}
 
 	await h.finish(browser);

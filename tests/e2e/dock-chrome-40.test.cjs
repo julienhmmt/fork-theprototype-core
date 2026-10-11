@@ -214,21 +214,22 @@ h.run(async () => {
 		h.check(tip === LONG, `F7.5 a touch long-press on the name shows the full name (${tip})`);
 		await page.waitForTimeout(300);
 
-		// ---- F11 — PHONE: the Layouts dialog ------------------------------------------------
+		// ---- F11 — PHONE: Layouts (41b H1: a DOCK TAB on the phone; the dialog is its desktop home) --------
 		await page.evaluate(() => window.__stores.uiLayouts.layoutsMenuOpen.set(true));
 		await page.waitForTimeout(800);
 		const lp = await page.evaluate(() => {
-			const el = document.querySelector('#layouts-menu');
-			if (!el) return null;
-			const cs = getComputedStyle(el);
-			const r = el.getBoundingClientRect();
-			return { tag: el.tagName, kit: el.classList.contains('md'), bg: cs.backgroundColor, w: Math.round(r.width) };
+			const body = document.querySelector('#phone-dock-layouts');
+			const frame = document.querySelector('#phone-dock');
+			if (!body || !frame) return null;
+			const cs = getComputedStyle(frame);
+			const r = frame.getBoundingClientRect();
+			return { dialog: !!document.querySelector('dialog#layouts-menu[open]'), bg: cs.backgroundColor, w: Math.round(r.width) };
 		});
-		h.check(!!lp && lp.tag === 'DIALOG' && lp.kit, `F11.1 the Layouts dialog is the kit modal on a phone (${JSON.stringify(lp)})`);
+		h.check(!!lp && !lp.dialog, `F11.1 Layouts opens as the dock's Layouts tab on a phone, not a dialog (${JSON.stringify(lp)})`);
 		h.check(!!lp && /^rgb\(/.test(lp.bg), `F11.2 ...painted with an OPAQUE surface — it rendered see-through (${lp && lp.bg})`);
-		await page.keyboard.press('Escape');
+		await page.locator('[data-dock-tab-close="layouts"]:visible').first().tap();
 		await page.waitForTimeout(400);
-		h.check(!(await page.locator('#layouts-menu').count()), 'F11.3 Escape closes it');
+		h.check(!(await page.locator('#phone-dock-layouts').count()), 'F11.3 its tab ✕ closes it');
 		h.check((h.pageErrors(P) || []).length === 0, 'phone: no page errors (' + (h.pageErrors(P) || []).join(' | ') + ')');
 		await P.ctx.close();
 	}

@@ -8,6 +8,9 @@
 	import ModalDialog from '../ui/ModalDialog.svelte';
 	import WorkspaceLayouts from './WorkspaceLayouts.svelte';
 	import { layoutsMenuOpen } from '$lib/uiLayouts';
+	// 41b H1: on a phone the Layouts list is a DOCK TAB (PhoneDockHost renders it), so the dialog
+	// is this list's home on wider screens only
+	import { phoneShell } from '$lib/ui/phoneShell.js';
 
 	const close = () => layoutsMenuOpen.set(false);
 </script>
@@ -19,7 +22,7 @@
      A rename field's own Escape (it cancels the rename) is left alone. -->
 <svelte:window
 	onkeydowncapture={(e) => {
-		if (!$layoutsMenuOpen || e.key !== 'Escape') return;
+		if (!$layoutsMenuOpen || $phoneShell || e.key !== 'Escape') return;
 		if (/** @type {HTMLElement} */ (e.target)?.classList?.contains('wl-rename')) return;
 		close();
 	}}
@@ -31,7 +34,7 @@
 	title="Workspace layouts"
 	width="sm"
 	outsideclose
-	bind:open={() => $layoutsMenuOpen, (v) => layoutsMenuOpen.set(v)}
+	bind:open={() => $layoutsMenuOpen && !$phoneShell, (v) => layoutsMenuOpen.set(v)}
 	aria-label="Workspace layouts"
 >
 	<WorkspaceLayouts idPrefix="layouts-menu" />

@@ -233,7 +233,7 @@
 		clearSnapAnchor,
 		saveSnapAnchorAsOrigin
 	} from '$lib/snapEngine';
-	import { peers, inspectorClose, inspectorKind, inspectorPinned, showToast, inspectorFilter, notesDrawerOpen } from '../../stores/appStore.js';
+	import { peers, inspectorClose, inspectorKind, inspectorPinned, showToast, inspectorFilter } from '../../stores/appStore.js';
 	import { safeStorage } from '$lib/safeStorage';
 	import {
 		isShaderDriven,
@@ -326,10 +326,9 @@
 		mq.addEventListener('change', on);
 		return () => mq.removeEventListener('change', on);
 	});
-	// One bottom sheet at a time: opening the settings sheet closes scene notes.
-	$effect(() => {
-		if (!$inspectorClose && sheetMode) notesDrawerOpen.set(false);
-	});
+	// 41b H1: on a phone (the only width the sheet layout is used at) the Inspector and the notes
+	// list are TABS of one dock, so opening one no longer closes the other ("one bottom sheet at a
+	// time" was the rule while each was a sheet of its own — $lib/phoneDock).
 	// SHEET = slide UP from below; side drawer = fly in from the right (horizontal).
 	const insTransition = $derived(
 		sheetMode ? { y: 500, duration: 240, easing: sineIn } : transitionParamsRight

@@ -192,7 +192,8 @@ h.run(async () => {
 	await tap('#ps-inspect');
 	await P.waitForTimeout(300);
 	row(32, (await read(store('inspectorClose'))) === false && (await read(store('inspectorKind'))) === 'selection', 'Inspector: Inspect in the strip opens the Inspector for the selection');
-	h.check(await visible('#inspector .ins-resize'), 'the Inspector opens as a sheet with its handle');
+	// 41b H1: on the phone the Inspector is the dock's Properties TAB, under the dock's own grab bar
+	h.check((await visible('#ps-dock-grip [data-sheet-grip]')) && (await read(store('bottomDock.visibleDockKey'))) === 'properties', 'the Inspector opens as the Properties dock tab with the dock grab bar');
 	// NOTES-38 #32: the Inspector sheet sits ABOVE the bar (Play stays tappable) and the selection
 	// strip rides on top of it
 	await P.waitForTimeout(500);
@@ -262,18 +263,17 @@ h.run(async () => {
 	const objBox = await read(() => document.querySelector('#object-list')?.getBoundingClientRect().toJSON());
 	const barTop2 = await read(() => document.querySelector('#ps-bar').getBoundingClientRect().top);
 	h.check(objBox && Math.abs(objBox.bottom - barTop2) < 2 && objBox.width >= 388, `the object list is placed into a bottom sheet above the bar (#32) (${JSON.stringify(objBox)})`);
-	// the sheet handle: tap steps a detent, drag down past peek closes
-	const d0 = await read(() => { let m; window.__stores.phoneShell.phoneDetents.subscribe((v) => (m = v))(); return m.objects ?? 'half'; });
-	await tap('#ps-sheet-handle');
-	const d1 = await read(() => { let m; window.__stores.phoneShell.phoneDetents.subscribe((v) => (m = v))(); return m.objects ?? 'half'; });
-	h.check(d0 === 'half' && d1 === 'full', `a tap on the handle steps the sheet up (${d0} -> ${d1})`);
-	const hb = await read(() => document.querySelector('#ps-sheet-handle').getBoundingClientRect().toJSON());
+	// 41b H1: Objects is the dock's Objects TAB on the phone — dragging the dock's grab bar to the bottom
+	// MINIMIZES the dock (the tab stays open, nothing shows)
+	const hb = await read(() => document.querySelector('#ps-dock-grip [data-sheet-grip]').getBoundingClientRect().toJSON());
 	await P.mouse.move(195, hb.y + 10);
 	await P.mouse.down();
 	for (let i = 1; i <= 12; i++) await P.mouse.move(195, hb.y + 10 + i * 60);
 	await P.mouse.up();
 	await P.waitForTimeout(400);
-	h.check((await read(store('objectListClose'))) === true, 'dragging the handle to the bottom closes the sheet (and the window)');
+	h.check((await read(store('bottomDock.dockMinimized'))) === true && (await read(store('objectListClose'))) === false, 'dragging the dock grab bar to the bottom puts the dock away (Objects stays open as a tab)');
+	await P.evaluate(() => window.__stores.bottomDock.dockMinimized.set(false));
+	// (a framed sheet's handle stepping a detent: NOTES-38 #15 below, on Chat)
 	await rest();
 	await tap('#ps-more');
 	await tap('#ps-tile-chat');

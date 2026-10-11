@@ -11,7 +11,8 @@ import {
 } from '../stores/appStore';
 import { imageEditorClose } from './image/imageEditorState';
 import { get } from 'svelte/store';
-import { activateDock, armDockMode, armDockModes, dockOccupants, dockTabs, moveDockTab, visibleDockKey, undockButtonMode, placeDockTabs, DOCK_FAMILY, DOCK_TITLES, DOCK_ICONS } from './bottomDock';
+import { activateDock, armDockMode, armDockModes, dockOccupants, dockTabs, moveDockTab, visibleDockKey, undockButtonMode, placeDockTabs, DOCK_FAMILY, DOCK_TITLES, DOCK_ICONS, PHONE_DOCK_TABS } from './bottomDock';
+import { phoneShell } from './ui/phoneShell.js';
 import { queueMerge } from './windowTabs';
 
 // The dock's "+" add-a-view menu, in ONE place. The docked tab strip
@@ -77,6 +78,40 @@ export const DOCK_EXTRA_VIEWS = [{ key: 'imageEditor', tooltip: 'Crop, rotate, r
 export const DOCK_WINDOWS = [{ key: 'flow', tooltip: 'Wire the scene’s behaviour as nodes' }, ...DOCK_VIEWS, ...DOCK_EXTRA_VIEWS];
 
 /**
+ * 41b H1 — the PHONE's content tabs, in the same registry: rows both "+" surfaces offer only
+ * while the phone posture is on (`phone: true`), because everywhere else these panels have a
+ * home of their own (a side drawer, a floating window, a dialog) and are not dock views at all.
+ * `$lib/phoneDock` registers how each one opens and closes (`registerDockOpener` /
+ * `registerDockCloser`), since none of them has a close store a dock row could flip.
+ * @type {{key: string, tooltip: string, phone: true}[]}
+ */
+export const PHONE_DOCK_WINDOWS = [
+	{ key: 'properties', tooltip: 'The selection’s properties (what Inspect opens)', phone: true },
+	{ key: 'objects', tooltip: 'Every object in the scene, as a tree', phone: true },
+	{ key: 'notes', tooltip: 'The scene’s notes, grouped by label', phone: true },
+	{ key: 'layouts', tooltip: 'Save and switch named workspace layouts', phone: true },
+	{ key: 'scene', tooltip: 'Sky, light, physics, grid and the rest of the scene’s settings', phone: true }
+];
+/** the registry rows for the posture we are in @returns {{key: string, tooltip: string}[]} */
+function windowsHere() {
+	return get(phoneShell) ? [...DOCK_WINDOWS, ...PHONE_DOCK_WINDOWS] : DOCK_WINDOWS;
+}
+
+/**
+ * 41b H1 — how a dock key OPENS when its close store cannot say (the phone content tabs). The
+ * opener puts the panel in the dock and shows it; `dockView` calls it instead of arming a mode.
+ * @type {Record<string, () => void>}
+ */
+const dockOpeners = {};
+/** @param {string} key @param {() => void} fn @returns {() => void} unregister */
+export function registerDockOpener(key, fn) {
+	dockOpeners[key] = fn;
+	return () => {
+		if (dockOpeners[key] === fn) delete dockOpeners[key];
+	};
+}
+
+/**
  * What a "+" row does: put that view IN THE DOCK and show it. Kept beside the list
  * rather than in it, because the toolbar's consumers do not want this — a roster button
  * goes through `togglePanel`, which can also hide the panel again.
@@ -97,6 +132,10 @@ export const DOCK_WINDOWS = [{ key: 'flow', tooltip: 'Wire the scene’s behavio
  * @param {string} key
  */
 function dockView(key) {
+	if (dockOpeners[key]) {
+		dockOpeners[key]();
+		return;
+	}
 	armDockMode(key, true);
 	closeStoreFor(key)?.set(false);
 	activateDock(key);
@@ -115,7 +154,7 @@ function dockView(key) {
  */
 export function dockAddItems({ exclude = [] } = {}) {
 	const occupied = get(dockOccupants);
-	return DOCK_WINDOWS.filter((view) => !exclude.includes(view.key)).map((view) => {
+	return windowsHere().filter((view) => !exclude.includes(view.key)).map((view) => {
 		const title = DOCK_TITLES[view.key] ?? view.key;
 		const docked = !!occupied[view.key]?.present;
 		const closer = closeStoreFor(view.key);
@@ -170,11 +209,14 @@ export function dockTabItems(key) {
 		disabled: at < 0 || at >= present.length - 1,
 		action: () => moveDockTab(key, 'right')
 	});
-	items.push({
-		label: 'Undock into a floating window',
-		tooltip: `Take ${title} out of the dock`,
-		action: () => armDockMode(key, false)
-	});
+	// 41b H1: a phone content tab has no floating window to undock into (it is a tab only on
+	// the phone, and its wider-screen home is a side drawer or a dialog)
+	if (!PHONE_DOCK_TABS.includes(key))
+		items.push({
+			label: 'Undock into a floating window',
+			tooltip: `Take ${title} out of the dock`,
+			action: () => armDockMode(key, false)
+		});
 	items.push({
 		label: 'Close',
 		tooltip: `Close ${title} (it leaves the dock; nothing else is touched)`,
@@ -214,14 +256,14 @@ export function closeDockView(key) {
 export function undockFromDock(mode) {
 	const how = mode ?? get(undockButtonMode);
 	if (how === 'group') {
-		const keys = get(dockTabs).map((t) => t.key);
+		const keys = get(dockTabs).map((t) => t.key).filter((k) => !PHONE_DOCK_TABS.includes(k));
 		if (!keys.length) return;
 		armDockModes(keys, false);
 		for (const key of keys.slice(1)) queueMerge(keys[0], key);
 		return;
 	}
 	const key = get(visibleDockKey);
-	if (key) armDockMode(key, false);
+	if (key && !PHONE_DOCK_TABS.includes(key)) armDockMode(key, false);
 }
 
 /**
@@ -284,7 +326,7 @@ export function undockInto(key, targetKey) {
  */
 export function dockSheetRows() {
 	const occupied = get(dockOccupants);
-	return DOCK_WINDOWS.map((view) => {
+	return windowsHere().map((view) => {
 		const closer = closeStoreFor(view.key);
 		return {
 			key: view.key,
