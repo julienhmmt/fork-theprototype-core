@@ -9,13 +9,12 @@
 //             the FALLBACK: only `json` used to fall back when it was hidden, so hiding
 //             GLTF while it was selected left the Save button aimed at a format with no
 //             visible control. Section 4 is that, in both directions.
-//   answer 1b every checkbox in that popup takes the themed treatment. THE TRAP is that
-//             flowbite paints `background-color: currentColor !important` on a checked
-//             box, so no background of ours can win and the fill has to ride `color`.
-//             Section 5 therefore reads the COMPUTED colour — the class string was
-//             right the whole time in the toolbox case — and carries its own
-//             counterfactual: an UNCLASSED checkbox built in the same popup, which is
-//             what every one of these looked like before.
+//   41b H14 the cog's popup became the "Save options" MODAL (shared with Compact's Save ▾):
+//             its rows are kit Toggles editing a DRAFT — nothing changes until its Save
+//             (which remembers the options and saves with them); Cancel forgets the draft.
+//             Section 5 is that contract. This suite pins the LIST layout (Settings ▸
+//             Interface ▸ Project actions), the one that draws the format row; the Compact
+//             grid is `burger-project-actions`.
 //   answers   the export refusal was wrong twice over. It refused a library of models
 //   5 + 6     with no scene in it (fork 11 made a .tp the WHOLE Explorer, so that is a
 //             real project), and it DESCRIBED what to do next instead of doing it.
@@ -61,12 +60,21 @@ const storedFormat = (peer) => peer.page.evaluate(() => localStorage.getItem('sa
 
 const openCog = async (peer) => {
 	await peer.page.locator('#export-settings-cog').click();
+	await peer.page.waitForSelector('#save-options-modal', { state: 'visible', timeout: 5000 });
+	await peer.page.waitForTimeout(150);
+};
+/** the modal's Save: remembers the draft AND saves with it */
+const saveCog = async (peer) => {
+	await peer.page.locator('#save-options-save').click();
+	await peer.page.waitForSelector('#save-options-modal', { state: 'detached', timeout: 5000 });
 	await peer.page.waitForTimeout(250);
 };
-const closeCog = async (peer) => {
-	await peer.page.locator('#export-settings-modal button', { hasText: 'Close' }).last().click();
-	await peer.page.waitForTimeout(250);
+const cancelCog = async (peer) => {
+	await peer.page.locator('#save-options-cancel').click();
+	await peer.page.waitForSelector('#save-options-modal', { state: 'detached', timeout: 5000 });
+	await peer.page.waitForTimeout(150);
 };
+const pressed = (peer, id) => peer.page.evaluate((i) => document.getElementById(i)?.getAttribute('aria-pressed') ?? null, id);
 
 const toastsOf = (peer) =>
 	peer.page.evaluate(() => {
@@ -91,7 +99,8 @@ const manifestUsed = (peer) =>
 
 h.run(async () => {
 	const browser = await h.launch();
-	const A = await h.setupPage(browser, 'A');
+	// 41b H14: the LIST layout draws the format row (Compact's default on a desktop has none)
+	const A = await h.setupPage(browser, 'A', { storage: { 'ui:projectActions': 'list' } });
 	await A.page.waitForFunction(() => !!window.__stores?.projectFile, { timeout: 30000 });
 
 	// =====================================================================
@@ -125,25 +134,20 @@ h.run(async () => {
 	);
 
 	// =====================================================================
-	// 2. THE COG OFFERS BOTH, BOTH OFF
+	// 2. THE COG OPENS "SAVE OPTIONS", OFFERING BOTH, BOTH OFF
 	// =====================================================================
 	await openCog(A);
 	const boxes = await A.page.evaluate(() => {
 		const read = (id) => {
 			const el = document.getElementById(id);
-			return el ? { present: true, checked: el.checked, label: el.closest('label')?.textContent?.trim() } : { present: false };
+			return el ? { present: true, on: el.getAttribute('aria-pressed'), label: el.closest('.setting-row')?.querySelector('.sr-name')?.textContent?.trim() } : { present: false };
 		};
-		return { gltf: read('show-gltf-format'), json: read('show-json-format') };
+		return { gltf: read('show-gltf-format'), json: read('show-json-format'), oldPopup: !!document.getElementById('export-settings-modal') };
 	});
-	h.check(boxes.gltf.present && boxes.json.present, 'the cog offers Show GLTF beside Show JSON');
-	h.check(
-		boxes.gltf.checked === false && boxes.json.checked === false,
-		`both default OFF (gltf ${boxes.gltf.checked}, json ${boxes.json.checked})`
-	);
-	h.check(
-		/show gltf/i.test(boxes.gltf.label ?? ''),
-		`the new one reads like its neighbour ("${boxes.gltf.label}")`
-	);
+	h.check(!boxes.oldPopup, 'the cog opens the Save options modal (the small export-settings popup is gone)');
+	h.check(boxes.gltf.present && boxes.json.present, 'Save options offers GLTF beside JSON');
+	h.check(boxes.gltf.on === 'false' && boxes.json.on === 'false', `both default OFF (gltf ${boxes.gltf.on}, json ${boxes.json.on})`);
+	h.check(/gltf/i.test(boxes.gltf.label ?? ''), `the new one reads like its neighbour ("${boxes.gltf.label}")`);
 	h.check(
 		(await A.page.evaluate(() => localStorage.getItem('showGltfFormat'))) === null,
 		'and it writes nothing until it is touched (an untouched default is not a stored preference)'
@@ -152,19 +156,29 @@ h.run(async () => {
 	// =====================================================================
 	// 3. AN ENABLED FORMAT APPEARS ON A SECOND ROW, NOT IN THE FIRST
 	// =====================================================================
+	// the modal edits a DRAFT: the row does not move until Save
 	await A.page.locator('#show-gltf-format').click();
-	await A.page.waitForTimeout(300);
+	await A.page.waitForTimeout(200);
+	h.check(!(await formatRows(A)).optionalPresent, 'a toggle in Save options changes nothing until its Save (a draft)');
+	h.check(
+		JSON.stringify(await A.page.evaluate(() => [...document.querySelectorAll('#save-format .seg-opt')].map((b) => b.textContent?.trim()))) ===
+			JSON.stringify(['Project', 'Scene', 'GLTF']),
+		'…while the modal’s own format choice already offers GLTF'
+	);
+	await saveCog(A);
 	const withGltf = await formatRows(A);
 	h.check(
 		withGltf.optionalPresent && JSON.stringify(withGltf.optional) === JSON.stringify(['GLTF']),
-		`enabling GLTF adds a SECOND row carrying it (${JSON.stringify(withGltf.optional)})`
+		`saving the options adds a SECOND row carrying GLTF (${JSON.stringify(withGltf.optional)})`
 	);
 	h.check(
 		JSON.stringify(withGltf.primary) === JSON.stringify(['Project', 'Scene']),
-		'…and the primary row is untouched — the pair never moves as the cog is toggled'
+		'…and the primary row is untouched — the pair never moves as the options change'
 	);
+	h.check((await A.page.evaluate(() => localStorage.getItem('showGltfFormat'))) === 'true', 'and the choice is remembered');
+	await openCog(A);
 	await A.page.locator('#show-json-format').click();
-	await A.page.waitForTimeout(300);
+	await saveCog(A);
 	const withBoth = await formatRows(A);
 	h.check(
 		JSON.stringify(withBoth.optional) === JSON.stringify(['GLTF', 'JSON']),
@@ -190,13 +204,18 @@ h.run(async () => {
 	// =====================================================================
 	// the guard is that a Save button can never point at a control the user cannot see.
 	// It is asserted on the STORED value too: that is what the next boot reads.
-	await closeCog(A);
 	await A.page.locator('#format-gltf').click();
 	await A.page.waitForTimeout(250);
 	h.check((await storedFormat(A)) === 'gltf', 'premise: GLTF can be picked while it is showing');
 	await openCog(A);
+	h.check((await A.page.getAttribute('#save-format-gltf', 'aria-checked')) === 'true', 'premise: the modal opens on the picked format (GLTF)');
 	await A.page.locator('#show-gltf-format').click();
-	await A.page.waitForTimeout(300);
+	await A.page.waitForTimeout(200);
+	h.check(
+		(await A.page.getAttribute('#save-format-tp', 'aria-checked')) === 'true',
+		'switching GLTF off in the modal moves its own format choice back to Project at once'
+	);
+	await saveCog(A);
 	const afterHideGltf = await formatRows(A);
 	h.check(
 		(await storedFormat(A)) === 'tp',
@@ -211,13 +230,12 @@ h.run(async () => {
 		'the second row keeps the format that is still enabled'
 	);
 	// the same rule, on the one that already had it — the generalization did not lose it
-	await closeCog(A);
 	await A.page.locator('#format-json').click();
 	await A.page.waitForTimeout(250);
 	h.check((await storedFormat(A)) === 'json', 'premise: JSON can be picked while it is showing');
 	await openCog(A);
 	await A.page.locator('#show-json-format').click();
-	await A.page.waitForTimeout(300);
+	await saveCog(A);
 	h.check(
 		(await storedFormat(A)) === 'tp',
 		`hiding JSON while it is selected falls back the same way (stored "${await storedFormat(A)}")`
@@ -228,71 +246,21 @@ h.run(async () => {
 	);
 
 	// =====================================================================
-	// 5. THE THEMED CHECKBOX — MEASURED, NOT READ OFF A CLASS
+	// 5. CANCEL FORGETS THE DRAFT
 	// =====================================================================
-	// flowbite's plugin sets `appearance: none` and paints the checked box with
-	// `background-color: currentColor !important`. The premise check below is that trap
-	// still being real; the assertion is that the paint lands on the theme accent
-	// BECAUSE the fill rides `color`. The counterfactual is an unclassed checkbox built
-	// in the same popup — what every one of these was before this phase.
-	const paint = await A.page.evaluate(() => {
-		const box = document.getElementById('show-gltf-format');
-		if (!box) return { ok: false };
-		box.checked = true;
-		const cs = getComputedStyle(box);
-		// what the theme says the accent is, resolved to a literal by the browser
-		const probe = document.createElement('span');
-		probe.style.color = 'var(--accent, var(--color-primary-600, #2563eb))';
-		document.documentElement.appendChild(probe);
-		const accent = getComputedStyle(probe).color;
-		probe.remove();
-		// the counterfactual: the same control WITHOUT the class, in the same popup
-		const bare = document.createElement('input');
-		bare.type = 'checkbox';
-		bare.checked = true;
-		box.parentElement.appendChild(bare);
-		const bareCs = getComputedStyle(bare);
-		const out = {
-			ok: true,
-			appearance: cs.appearance,
-			classed: cs.color,
-			classedBg: cs.backgroundColor,
-			accent,
-			bare: bareCs.color,
-			bareBg: bareCs.backgroundColor
-		};
-		bare.remove();
-		box.checked = false;
-		return out;
-	});
-	h.check(paint.ok, 'premise: the cog popup is open with a themed checkbox in it');
+	await openCog(A);
+	await A.page.locator('#show-gltf-format').click();
+	await A.page.locator('#tpscene-packs').click();
+	await A.page.locator('#save-format-tpscene').click();
+	await cancelCog(A);
+	h.check(!(await formatRows(A)).optionalPresent && (await storedFormat(A)) === 'tp', 'Cancel leaves the rows and the stored format as they were');
 	h.check(
-		paint.appearance === 'none',
-		`premise: flowbite really has stripped the native appearance (${paint.appearance}) — that is why the fill cannot be a background`
+		(await A.page.evaluate(() => [localStorage.getItem('showGltfFormat'), localStorage.getItem('tpscenePacks')])).join() === 'false,false',
+		'…and stores nothing it was shown'
 	);
-	h.check(
-		paint.classed === paint.accent,
-		`a .tp-check's COMPUTED colour is the theme accent (${paint.classed} vs ${paint.accent})`
-	);
-	h.check(
-		paint.classedBg === paint.classed,
-		`…and the checked fill really resolves to it, through currentColor (${paint.classedBg})`
-	);
-	h.check(
-		paint.bare !== paint.accent,
-		`counterfactual: an unclassed checkbox in the same popup does NOT (${paint.bare}) — the class is doing the work`
-	);
-	// every checkbox in the popup, not just the one measured
-	const allThemed = await A.page.evaluate(() =>
-		[...document.querySelectorAll('#export-settings-modal input[type="checkbox"]')].map((el) =>
-			el.classList.contains('tp-check')
-		)
-	);
-	h.check(
-		allThemed.length >= 5 && allThemed.every(Boolean),
-		`every checkbox in the export popup is themed (${allThemed.length} of them)`
-	);
-	await closeCog(A);
+	await openCog(A);
+	h.check((await pressed(A, 'show-gltf-format')) === 'false' && (await pressed(A, 'tpscene-packs')) === 'false', 'reopening starts from the remembered options, not the abandoned draft');
+	await cancelCog(A);
 	await closeMenu(A);
 
 	// =====================================================================

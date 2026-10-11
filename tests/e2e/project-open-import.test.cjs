@@ -88,7 +88,8 @@ const importFolderOnPage = (peer, b64, opts = {}) =>
 
 h.run(async () => {
 	const browser = await h.launch({ args: h.GPU_ARGS });
-	const A = await h.setupPage(browser, 'A');
+	// 41b H14: the LIST layout (Settings ▸ Interface ▸ Project actions) draws the format row
+	const A = await h.setupPage(browser, 'A', { storage: { 'ui:projectActions': 'list' } });
 	await A.page.waitForFunction(() => !!window.__stores?.projectFile, { timeout: 30000 });
 
 	// =====================================================================
@@ -127,11 +128,13 @@ h.run(async () => {
 			(await A.page.locator('#format-row-optional').count()) === 0,
 		'GLTF is not on it — optional and OFF by default, with no second row until it is enabled'
 	);
-	// enabling it through the cog puts it on the SECOND row, and only there
+	// enabling it through the cog (41b H14: the Save options modal — its Save remembers the options)
+	// puts it on the SECOND row, and only there
 	await A.page.locator('#export-settings-cog').click();
-	await A.page.waitForTimeout(250);
+	await A.page.waitForSelector('#save-options-modal', { state: 'visible', timeout: 5000 });
 	await A.page.locator('#show-gltf-format').click();
-	await A.page.waitForTimeout(300);
+	await A.page.locator('#save-options-save').click();
+	await A.page.waitForTimeout(400);
 	const optional = await A.page.evaluate(() =>
 		[...(document.getElementById('format-row-optional')?.querySelectorAll('button') ?? [])].map((b) =>
 			b.textContent?.trim()
@@ -141,10 +144,13 @@ h.run(async () => {
 		JSON.stringify(optional) === JSON.stringify(['GLTF']),
 		`enabling Show GLTF puts it on the optional row (${JSON.stringify(optional)})`
 	);
-	await A.page.locator('#show-gltf-format').click(); // back off — later sections expect the default
-	await A.page.waitForTimeout(250);
-	await A.page.locator('#export-settings-modal button', { hasText: 'Close' }).last().click();
-	await A.page.waitForTimeout(200);
+	// back off — later sections expect the default
+	await A.page.locator('#export-settings-cog').click();
+	await A.page.waitForSelector('#save-options-modal', { state: 'visible', timeout: 5000 });
+	await A.page.locator('#show-gltf-format').click();
+	await A.page.locator('#save-options-save').click();
+	await A.page.waitForTimeout(400);
+	await A.page.evaluate(() => window.__stores.toastStore.set([]));
 	// Save with Project and NOTHING AT ALL: the honest refusal, not an empty zip.
 	// 21-H1 widened that gate — a library holding anything is a real project now — so
 	// this refuses only because the profile is genuinely brand new.

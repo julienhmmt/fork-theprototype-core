@@ -317,6 +317,10 @@ export const DEBUG_HOOKS = [
 	// 36-export: the export builder, its stores, the export boot + runtime state
 	['exportBuilder', () => import('./export/exportBuilder.js')],
 	['exportStores', () => import('./export/exportStores.js')],
+	// 41b: the burger's Project actions setting + Save options (H14), the settings-row fit (H12)
+	['projectActions', () => import('./projectActions.js')],
+	['saveOptions', () => import('./saveOptions.js')],
+	['rowFit', () => import('./ui/rowFit.js')],
 	['exportBoot', () => import('./export/exportBoot.js')],
 	['exportRuntime', () => import('./export/exportRuntime.js')],
 	// 36-community (C4): the open scene's permanent game id

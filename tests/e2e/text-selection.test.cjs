@@ -63,7 +63,7 @@ h.run(async () => {
 	await page.evaluate(() => window.__stores.closeMenu.set(false));
 	await page.waitForSelector('#sidebar70', { timeout: 5000 });
 	await page.waitForTimeout(300);
-	const m1 = await at('#sidebar70 .side-row', 'Templates', 40);
+	const m1 = await at('#sidebar70 .side-row', 'emplate', 40); // List "Templates" | Compact "New from template…" (41b H14)
 	const m2 = await at('#sidebar70 .side-row', 'Settings', 60);
 	got = await drag(/** @type {any} */ (m1), /** @type {any} */ (m2));
 	h.check(got === '', `a drag across the burger menu selects nothing (${JSON.stringify(got.slice(0, 40))})`);

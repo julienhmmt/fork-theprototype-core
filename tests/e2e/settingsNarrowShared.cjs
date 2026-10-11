@@ -6,8 +6,10 @@
 //
 // Every page of the window at Settings widths 360 / 540 / 700 / 900 px (desktop browser windows of that
 // width) plus the Oppo N6 folded (390x896) and unfolded (770x850) with touch, and desktop 1440x900.
-// For each visible row: the text block is at least 180 px wide, OR it spans the whole row (the control is
-// on its own line below); the control never overflows the row. SHOTS=<dir> also writes one screenshot per
+// For each visible row: the text block is at least MIN_TEXT wide, OR it spans the whole row (the control is
+// on its own line below), OR the row has no description and its label sits on one line (About ▸ Version);
+// the control never overflows the row. 41b H12/H13: MIN_TEXT 180 -> 150 = rowFit.TEXT_MIN — the fit rule
+// now keeps compact controls on the row (the 1.31 phone look), and 150 px is still ~20 characters a line. SHOTS=<dir> also writes one screenshot per
 // page and width (the evidence for every section).
 // Counterfactual (feat/40-int): at 700/770 the AI "Voice typing provider" row keeps its segmented control
 // beside a ~100 px text column, and more rows at 540.
@@ -16,7 +18,7 @@ const path = require('path');
 
 const PAGES = ['interface', 'controls', 'input', 'touch', 'shortcuts', 'scene', 'explorer', 'nodetypes', 'export', 'vr', 'ai', 'connection', 'about'];
 
-const MIN_TEXT = 180;
+const MIN_TEXT = 150;
 const SHOTS = process.env.SHOTS || '';
 // THEME=light (etc.) runs the whole pass in that theme — the screenshots then cover it too
 const THEME = process.env.THEME || '';
@@ -49,8 +51,11 @@ const measure = (page) =>
 			const t = text.getBoundingClientRect();
 			const c = ctrl?.getBoundingClientRect();
 			const spans = t.width >= b.width - 2;
+			const name = el.querySelector('.sr-name');
+			const lh = name ? parseFloat(getComputedStyle(name).lineHeight) || 20 : 20;
+			const oneWord = !el.querySelector('.sr-desc') && !!name && name.getBoundingClientRect().height < lh * 1.5;
 			const label = (el.querySelector('.sr-name')?.textContent || '').trim().slice(0, 40);
-			if (!spans && t.width < MIN) bad.push(`${label}: text ${Math.round(t.width)}px beside a ${Math.round(c?.width ?? 0)}px control`);
+			if (!spans && !oneWord && t.width < MIN) bad.push(`${label}: text ${Math.round(t.width)}px beside a ${Math.round(c?.width ?? 0)}px control`);
 			if (c && c.width > 0 && c.right > b.right + 2) bad.push(`${label}: control overflows the row (${Math.round(c.right - b.right)}px)`);
 		}
 		return { n, bad };
