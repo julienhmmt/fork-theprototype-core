@@ -64,6 +64,7 @@ import { perfStatsShown } from '../fpsMeter';
 import { perfReportsOn } from '../perf/beacon';
 import { setViewPrefs, DEFAULT_VIEW_PREFS } from '../viewPrefs';
 import { uiDensity } from '../uiDensity';
+import { projectActions } from '../projectActions'; // 41b H14
 import { helpersInPlay } from '../helperLayer';
 import { trackpadMode, allowBrowserZoom, reversePan, panEnabled, pinchZoomEnabled } from '../trackpadNav';
 import { resetGamepadPrefs } from '../gamepadPrefs';
@@ -145,6 +146,7 @@ const RESETS = {
 		perfReportsOn.set(false);
 		setViewPrefs({ dockPushesViewport: DEFAULT_VIEW_PREFS.dockPushesViewport });
 		uiDensity.set('comfortable');
+		projectActions.set('auto');
 	},
 	controls() {
 		enableShiftAdd.set(false);

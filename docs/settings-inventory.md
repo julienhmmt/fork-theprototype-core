@@ -88,6 +88,7 @@ The sticky footer with three big buttons is removed.
 | 19 | Windows & chrome | Window positions | btn "Reset" | — | `resetWindowLayout()` | | btn "Reset" | |
 | 20 | Windows & chrome | Touch tools | toggle | D | `touchTools` → `touchTools` | | toggle | |
 | 21 | Windows & chrome | Allow undocking (touch) | toggle | D | `mobileUndockAllowed` → `mobileUndockAllowed` | Allow undocking on touch screens | toggle | |
+| 21b | Lists & menus | **NEW** (41b H14) | — | D | `projectActions` → `ui:projectActions` (absent = Auto) | Project actions | segmented Auto / Compact / List | badge *This device*. The burger menu's PROJECT section: Compact = a two-column grid (New from template… / Load · Save ▾ / Import · Export…), List = the 1.32 rows; Auto = List on the phone shell, Compact elsewhere. Keywords: burger, main menu, compact grid. |
 | 22 | Lists & menus | Advanced mode | check | D | `advancedMode` → `advancedMode` | Show system objects in the object list | **toggle** | old label kept as a keyword |
 | 23 | Lists & menus | Environment in list | check | D | `showEnvInList` → `showEnvInList` | Show the environment in the object list | **toggle** | |
 | 24 | Lists & menus | Object search in menu | check | D | `objectSearchEnabled` → `objectSearchEnabled` | Object search in the right-click menu | **toggle** | |
@@ -406,7 +407,7 @@ behind a store's back.
 
 | Category | Keys (localStorage, via safeStorage) |
 |---|---|
-| Interface | `allowTextSelection` `avatars:peersClassic` `theme` `customThemes`* `game:soundVolume` `game:musicVolume` `showWelcomeOnStart` `showWhatsNewNotice` `toastsInDrawerOnly` `toursAutoStart` `xrOfferSession` `showRoomsButton` `floatingToolbar` `toolbarOnTop` `touchTools` `mobileUndockAllowed` `advancedMode` `showEnvInList` `objectSearchEnabled` `perfStats:show` `perfReports:send` `viewPrefs.dockPushesViewport` `ui:density` (NEW) |
+| Interface | `allowTextSelection` `avatars:peersClassic` `theme` `customThemes`* `game:soundVolume` `game:musicVolume` `showWelcomeOnStart` `showWhatsNewNotice` `toastsInDrawerOnly` `toursAutoStart` `xrOfferSession` `showRoomsButton` `floatingToolbar` `toolbarOnTop` `touchTools` `mobileUndockAllowed` `advancedMode` `showEnvInList` `objectSearchEnabled` `perfStats:show` `perfReports:send` `viewPrefs.dockPushesViewport` `ui:density` (NEW) `ui:projectActions` (NEW, 41b) |
 | Controls | `enableShiftAdd` `helpersInPlay` `noteDoubleClickToOpen` `trackpadMode` `trackpadPanEnabled` `trackpadReversePan` `trackpadPinchZoom` `allowBrowserZoom` |
 | Input | `gamepadPrefs` `flow:mouseBindings` `flow:opens` |
 | Touch controls | `touchControlsPrefs` `touchLookSpeed` `touchControlsTextures` `touchControlsLayouts` |

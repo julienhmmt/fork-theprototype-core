@@ -69,7 +69,7 @@ const readStore = `(s) => { let v; s.subscribe((x) => (v = x))(); return v; }`;
 
 h.run(async () => {
 	const browser = await h.launch();
-	const A = await h.setupPage(browser, 'A');
+	const A = await h.setupPage(browser, 'A', { storage: { 'ui:projectActions': 'list' } }); // 41b H14: the List layout draws the format row the slot sits under
 
 	// A hermetic GitHub gallery, installed BEFORE the plugin phase (routes survive reloads).
 	// Counted, so "null makes it fetch gallery.json again" is measured, not inferred.

@@ -208,7 +208,7 @@ h.run(async () => {
 	// the browser half
 	// =====================================================================
 	const browser = await h.launch({ args: h.GPU_ARGS });
-	const A = await h.setupPage(browser, 'A');
+	const A = await h.setupPage(browser, 'A', { storage: { 'ui:projectActions': 'list' } }); // 41b H14: the List layout's cog
 	await A.page.waitForFunction(() => !!window.__stores?.saveName && !!window.__stores?.levels, {
 		timeout: 30000
 	});
@@ -279,16 +279,14 @@ h.run(async () => {
 	await A.page.evaluate(() => window.__stores.closeMenu.set(false));
 	await A.page.waitForTimeout(400);
 	await A.page.locator('#export-settings-cog').click();
-	await A.page.waitForTimeout(300);
+	await A.page.waitForSelector('#save-options-modal', { state: 'visible', timeout: 5000 });
 	const cog = await A.page.evaluate(() => ({
-		open: !!document.getElementById('export-settings-modal'),
+		open: !!document.getElementById('save-options-modal'),
 		scene: !!document.getElementById('tpscene-versions'),
 		project: !!document.getElementById('tp-project-versions'),
-		boxes: [...document.querySelectorAll('#export-settings-modal input[type="checkbox"]')].map(
-			(el) => el.id || '(unnamed)'
-		)
+		boxes: [...document.querySelectorAll('#save-options-modal .tg')].map((el) => el.id || '(unnamed)')
 	}));
-	h.check(cog.open, 'premise: the export-settings popup really opened');
+	h.check(cog.open, 'premise: the Save options modal really opened (41b H14: it replaced the cog popup)');
 	h.check(
 		!cog.scene,
 		`the SCENE "Version history" checkbox is gone from the cog (${JSON.stringify(cog.boxes)})`
@@ -297,7 +295,7 @@ h.run(async () => {
 		cog.project,
 		'…and the PROJECT (.tp) one remains — it gates machinery with its own proper import'
 	);
-	await A.page.locator('#export-settings-modal button', { hasText: 'Close' }).last().click();
+	await A.page.locator('#save-options-cancel').click();
 	await A.page.evaluate(() => window.__stores.closeMenu.set(true));
 	await A.page.waitForTimeout(250);
 

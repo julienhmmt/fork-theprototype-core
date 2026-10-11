@@ -34,10 +34,12 @@
 	// 36 I5: own lines (not the shared icon list) so a merge with the menu's other lanes stays a union
 	import { checkpointsOpen, checkpointSaveOpen } from '../../stores/appStore.js'; // 36 B14
 	import { startEditorTour } from '$lib/tours/builtin.js';
-	import { safeStorage } from '$lib/safeStorage';
 	import { statsOpen } from '$lib/sceneBudget';
 	import { layoutsMenuOpen } from '$lib/uiLayouts'; // 37 R14
 	import { globalRenderer } from '../../stores/sceneStore'; // 41 G3a
+	import { saveOptions, saveOptionsOpen, setSaveOptions, SAVE_FORMATS } from '$lib/saveOptions'; // 41b H14
+	import { projectActionsLayout } from '$lib/projectActions'; // 41b H14
+	import SaveOptionsModal from './SaveOptionsModal.svelte'; // 41b H14
 
 	// 203: redesigned as a compact floating panel — flat list (order preserved,
 	// no boxed group / section headers / vertical bar), a fast fade-in (was a
@@ -47,72 +49,18 @@
 	// fiddly). Themed for light + dark.
 
 	// B3: Scene (.tpscene) is the primary SCENE format; JSON is demoted behind the
-	// export-settings cog ("Show JSON") since it's rarely used. 21-G8 (fork 11): TP —
-	// the whole PROJECT as one .tp — is the new default for anyone without a stored
-	// preference; a user who picked a format keeps it.
-	//
-	// 21-H1 (locked answer 1): the primary row is `Project | Scene` — the two formats
-	// this app is actually about — and BOTH of the others are optional now. GLTF joined
-	// JSON behind the cog (default OFF): it is an interchange format, not a way to keep
-	// your work, and it was taking a permanent third of a row from the two that are.
-	// An enabled optional format renders on a SECOND ROW rather than widening the first,
-	// so the primary pair never moves as the cog is toggled.
-	const initShowJson = typeof localStorage !== 'undefined' && safeStorage.getItem('showJsonFormat') === 'true';
-	const initShowGltf = typeof localStorage !== 'undefined' && safeStorage.getItem('showGltfFormat') === 'true';
-	/**
-	 * A STORED format can name one that is no longer on screen — a Save button pointing
-	 * at a control the user cannot see, which is the bug the JSON rule already existed
-	 * to avoid. Generalized here because `gltf` acquired the same property the moment it
-	 * became optional: one function, consulted at boot AND every time a checkbox moves.
-	 */
-	function visibleFormat(f: string, json: boolean, gltf: boolean) {
-		if (f === 'json' && !json) return 'tp';
-		if (f === 'gltf' && !gltf) return 'tp';
-		return f;
-	}
-	const initFormat = typeof localStorage !== 'undefined' ? safeStorage.getItem('saveFormat') || 'tp' : 'tp';
-	let saveFormat = $state(visibleFormat(initFormat, initShowJson, initShowGltf));
-	let showJson = $state(initShowJson);
-	let showGltf = $state(initShowGltf);
-	let exportSettingsOpen = $state(false);
-	// export-settings popup is anchored BELOW-RIGHT of the cog (so its relation is
-	// clear), clamped to the viewport when there isn't room
-	let exportPos = $state({ top: 0, left: 0 });
-	function openExportSettings(e: MouseEvent) {
-		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-		const w = 256;
-		// 21-H1: one more row (Show GLTF) — the clamp has to know about it.
-		// 21-I5: +1 row, +1 group heading, +1 divider (the .tp version-history checkbox)
-		const h = 360;
-		let left = r.left; // top-left of the popup aligns under the cog, extending right
-		let top = r.bottom + 6;
-		left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
-		top = Math.max(8, Math.min(top, window.innerHeight - h - 8));
-		exportPos = { top, left };
-		exportSettingsOpen = true;
-	}
-	let tpAssets = $state(typeof localStorage !== 'undefined' && safeStorage.getItem('tpsceneAssets') !== 'false');
-	let tpPacks = $state(typeof localStorage !== 'undefined' && safeStorage.getItem('tpscenePacks') === 'true');
-	let tpFlow = $state(typeof localStorage !== 'undefined' && safeStorage.getItem('tpsceneFlow') !== 'false');
-	// 21-I5 (locked answer 2): the PROJECT box is ON by default, because a .tp has carried
-	// its scene history since 21-G3 and flipping that off silently would make an existing
-	// behaviour vanish — and it gates machinery with its own proper import.
-	//
-	// There is no SCENE counterpart, and the absence is deliberate. The Save button
-	// exports whatever is in the viewport, which cannot always answer "and its history":
-	// an unnamed or never-travelled scene has no manifest entry, so the box that used to
-	// sit here silently bundled nothing. The Explorer's scene card knows the name and the
-	// history unambiguously, so downloading versions lives on ITS menu instead.
-	let tpProjectVersions = $state(typeof localStorage === 'undefined' || safeStorage.getItem('tpProjectVersions') !== 'false');
+	// export-settings cog since it's rarely used. 21-G8 (fork 11): TP — the whole PROJECT as
+	// one .tp — is the default for anyone without a stored preference. 21-H1: the primary row
+	// is `Project | Scene`; GLTF and JSON are optional and render on a SECOND ROW when enabled.
+	// 41b H14: the options live in `$lib/saveOptions` (same keys) so the burger's two layouts and
+	// the "Save options" modal (Compact's Save ▾, List's ⚙ — it replaced the cog's popup) share them.
 	function pickFormat(f: string) {
-		saveFormat = f;
-		safeStorage.setItem('saveFormat', f);
+		setSaveOptions({ format: f });
 	}
-	/** Called after either cog checkbox moves: if what is selected just went off screen,
-	 * fall back (and PERSIST the fallback — the stored value is what the next boot reads). */
-	function syncFormatVisibility() {
-		const next = visibleFormat(saveFormat, showJson, showGltf);
-		if (next !== saveFormat) pickFormat(next);
+	const saveFormat = $derived($saveOptions.format);
+	const formatInfo = $derived(SAVE_FORMATS.find((f) => f.value === saveFormat) ?? SAVE_FORMATS[0]);
+	function openSaveOptions() {
+		saveOptionsOpen.set(true);
 	}
 	// Clearing value (instead of the old {#key} recreate) lets the same file be
 	// re-picked without detaching the input mid-dialog — a detached input's event
@@ -167,9 +115,9 @@
 	$effect(() => {
 		if ($closeMenu) return;
 		const outside = (e: PointerEvent) => {
-			if (exportSettingsOpen) return;
+			if ($saveOptionsOpen) return;
 			const t = e.target as Element | null;
-			if (!t || !t.isConnected || t.closest('#sidebar70, #logo-menu, #tour-card, #export-settings-modal')) return;
+			if (!t || !t.isConnected || t.closest('#sidebar70, #logo-menu, #tour-card, #save-options-modal')) return;
 			closeMenu.set(true);
 			const view = ($globalRenderer as any)?.domElement;
 			if (view && t === view) {
@@ -223,6 +171,39 @@
 		     Segmented save format. Every row, id and handler is unchanged; Modules stays under
 		     Scene (phase 126's order, sidebar-reorg) and Settings stays in App. -->
 		<div class="side-label">Project</div>
+		{#if $projectActionsLayout === 'compact'}
+			<!-- 41b H14 — COMPACT (the desktop / unfolded default): a strict two-column grid at list-row
+			     height, DCC order create -> open / save -> interchange. Save saves with the last-used
+			     options; ▾ opens "Save options" (format + everything that sat behind the old cog). The
+			     ids the list rows carry (#open-templates, #open-publish-export) move with their action. -->
+			<div id="project-actions" class="pa-grid" data-layout="compact">
+				<button id="open-templates" class="side-row pa-btn pa-wide" title="Start a new scene from a template" onclick={() => { templatesModalOpen.set(true); closeMenu.set(true); }}>
+					<span class="side-ico"><Icon name="layout-template" size={16} aria-hidden="true" /></span><span class="pa-label">New from template…</span>
+				</button>
+				<button id="project-load" class="side-row pa-btn" title="Open a .tp project, .tpscene scene or .json file" onclick={() => pickFile('load-file')}>
+					<span class="side-ico"><Icon name="folder-open" size={16} aria-hidden="true" /></span><span class="pa-label">Load</span>
+				</button>
+				<div class="pa-split">
+					<button id="project-save" class="side-row pa-btn pa-split-main" title={'Save as ' + formatInfo.label + ' (' + formatInfo.ext + ') with your last-used options'} onclick={() => save(saveFormat)}>
+						<span class="side-ico"><Icon name="save" size={16} aria-hidden="true" /></span><span class="pa-label">Save</span>
+					</button>
+					<button id="save-options-open" class="side-row pa-btn pa-split-more" title="Save options…" aria-label="Save options" aria-haspopup="dialog" onclick={openSaveOptions}>
+						<Icon name="chevron-down" size={16} aria-hidden="true" />
+					</button>
+				</div>
+				<button id="project-import" class="side-row pa-btn" title="Bring models, images or sounds into the scene" onclick={() => pickFile('import-file')}>
+					<span class="side-ico"><Icon name="file-input" size={16} aria-hidden="true" /></span><span class="pa-label">Import</span>
+				</button>
+				<button id="open-publish-export" class="side-row pa-btn" data-tour="publish-export" title="Publish or export the scene" onclick={() => { openPublishExport(); closeMenu.set(true); }}>
+					<span class="side-ico"><Icon name="upload" size={16} aria-hidden="true" /></span><span class="pa-label">Export…</span>
+				</button>
+			</div>
+			{#if $sidebarSlot}
+				<div id="sidebar-cloud-slot" class="side-cloud">
+					<CloudSlot mount={$sidebarSlot} />
+				</div>
+			{/if}
+		{:else}
 		<!-- New scene from a starting point (General / Examples / Community tabs) -->
 		<button id="open-templates" class="side-row" onclick={() => { templatesModalOpen.set(true); closeMenu.set(true); }}>
 			<span class="side-ico"><Icon name="layout-template" size={16} aria-hidden="true" /></span><span class="flex-1 whitespace-nowrap">Templates</span>
@@ -240,20 +221,20 @@
 		</button>
 		<!-- 21-H1: [ Project | Scene | cog ]. The KEY stays 'tp' and the id stays
 		     #format-tp — the id addresses the format, not the word — but the label reads
-		     "Project", because that is what the file is. -->
+		     "Project", because that is what the file is. 41b H14: the cog opens "Save options". -->
 		<div id="format-row" class="side-segs mb-0.5 mt-0.5 flex pl-9 pr-2">
 			<button id="format-tp" class="side-seg {saveFormat === 'tp' ? 'on' : ''}" title="Saves the whole project as .tp — the Explorer library, scene history and manifest" onclick={() => pickFormat('tp')}>Project</button>
 			<button id="format-tpscene" class="side-seg {saveFormat === 'tpscene' ? 'on' : ''}" title="Saves the open scene as .tpscene" onclick={() => pickFormat('tpscene')}>Scene</button>
-			<button id="export-settings-cog" class="side-seg" title="Export settings" onclick={openExportSettings}><Icon name="settings" size={16} aria-hidden="true" /></button>
+			<button id="export-settings-cog" class="side-seg" title="Save options…" aria-label="Save options" aria-haspopup="dialog" onclick={openSaveOptions}><Icon name="settings" size={16} aria-hidden="true" /></button>
 		</div>
-		<!-- the SECOND row: whichever optional formats the cog has enabled. Absent
+		<!-- the SECOND row: whichever optional formats Save options has enabled. Absent
 		     entirely when neither is, so nothing here costs a pixel by default. -->
-		{#if showGltf || showJson}
+		{#if $saveOptions.showGltf || $saveOptions.showJson}
 			<div id="format-row-optional" class="side-segs mb-0.5 flex pl-9 pr-2">
-				{#if showGltf}
+				{#if $saveOptions.showGltf}
 					<button id="format-gltf" class="side-seg {saveFormat === 'gltf' ? 'on' : ''}" title="Exports the scene as glTF — for other tools, not for keeping your work" onclick={() => pickFormat('gltf')}>GLTF</button>
 				{/if}
-				{#if showJson}
+				{#if $saveOptions.showJson}
 					<button id="format-json" class="side-seg {saveFormat === 'json' ? 'on' : ''}" title="Saves the scene as raw JSON" onclick={() => pickFormat('json')}>JSON</button>
 				{/if}
 			</div>
@@ -273,6 +254,7 @@
 		<button id="open-publish-export" class="side-row" data-tour="publish-export" onclick={() => { openPublishExport(); closeMenu.set(true); }}>
 			<span class="side-ico"><Icon name="upload" size={16} aria-hidden="true" /></span><span class="flex-1 whitespace-nowrap">Publish / Export</span>
 		</button>
+		{/if}
 
 		<div class="side-div"></div>
 		<div class="side-label">Scene</div>
@@ -369,56 +351,9 @@
 	</nav>
 {/if}
 
-{#if exportSettingsOpen}
-	<!-- B3 export settings. Rendered at the component ROOT (not inside .app-sidebar,
-	     whose backdrop-blur-sm would make this fixed panel center on the sidebar and
-	     spill off the left edge). Modal tier so it clears the avatar/Connect chrome. -->
-	<button
-		class="fixed inset-0 cursor-default bg-scrim"
-		style="z-index: calc(var(--z-popover) + 1)"
-		aria-label="Close export settings"
-		onclick={() => (exportSettingsOpen = false)}
-	></button>
-	<div
-		id="export-settings-modal"
-		class="fixed w-64 max-w-[92vw] rounded-lg border border-border bg-surface-1 p-4 text-sm text-text shadow-2xl"
-		style="z-index: calc(var(--z-popover) + 2); top: {exportPos.top}px; left: {exportPos.left}px;"
-	>
-		<p class="mb-2 font-semibold">Export settings</p>
-		<p class="mb-1 text-[11px] text-text-muted">Scene (.tpscene) includes:</p>
-		<label class="flex items-center gap-2 py-0.5">
-			<input class="tp-check" type="checkbox" checked={tpAssets} onchange={(e: any) => { tpAssets = e.target.checked; safeStorage.setItem('tpsceneAssets', String(tpAssets)); }} />
-			Assets (audio, textures, configs)
-		</label>
-		<label class="flex items-center gap-2 py-0.5">
-			<input id="tpscene-packs" class="tp-check" type="checkbox" checked={tpPacks} onchange={(e: any) => { tpPacks = e.target.checked; safeStorage.setItem('tpscenePacks', String(tpPacks)); }} />
-			Imported packs
-		</label>
-		<label class="flex items-center gap-2 py-0.5">
-			<input id="tpscene-flow" class="tp-check" type="checkbox" checked={tpFlow} onchange={(e: any) => { tpFlow = e.target.checked; safeStorage.setItem('tpsceneFlow', String(tpFlow)); }} />
-			Flow graph (nodes + edges)
-		</label>
-		<div class="my-2 border-t border-border"></div>
-		<p class="mb-1 text-[11px] text-text-muted">Project (.tp) includes:</p>
-		<label class="flex items-center gap-2 py-0.5">
-			<input id="tp-project-versions" class="tp-check" type="checkbox" checked={tpProjectVersions} onchange={(e: any) => { tpProjectVersions = e.target.checked; safeStorage.setItem('tpProjectVersions', String(tpProjectVersions)); }} />
-			<span title="Every kept version of every scene. Off exports each scene's current version only.">Scene version history</span>
-		</label>
-		<div class="my-2 border-t border-border"></div>
-		<!-- 21-H1: both optional formats, same shape, both OFF by default -->
-		<label class="flex items-center gap-2 py-0.5">
-			<input id="show-gltf-format" class="tp-check" type="checkbox" checked={showGltf} onchange={(e: any) => { showGltf = e.target.checked; safeStorage.setItem('showGltfFormat', String(showGltf)); syncFormatVisibility(); }} />
-			Show GLTF format
-		</label>
-		<label class="flex items-center gap-2 py-0.5">
-			<input id="show-json-format" class="tp-check" type="checkbox" checked={showJson} onchange={(e: any) => { showJson = e.target.checked; safeStorage.setItem('showJsonFormat', String(showJson)); syncFormatVisibility(); }} />
-			Show JSON format
-		</label>
-		<div class="mt-3 flex justify-end">
-			<button class="rounded-sm bg-surface-active px-2 py-1 text-xs text-text hover:bg-border-strong" onclick={() => (exportSettingsOpen = false)}>Close</button>
-		</div>
-	</div>
-{/if}
+<!-- 41b H14: "Save options" (Compact's Save ▾, List's ⚙) — rendered at the component ROOT, never
+     inside the blurred .app-sidebar (a backdrop-filter ancestor captures position:fixed) -->
+<SaveOptionsModal />
 
 <style>
 	/* (no background here: an undefined --color-form blanked the utility's surface fill — a
@@ -589,6 +524,49 @@
 		justify-content: center;
 		width: 30px;
 		padding: 0;
+	}
+	/* 41b H14 — the COMPACT project actions: a strict two-column grid, icon beside label, each cell
+	   the list row's own metrics (.side-row), Save split into the action and its ▾ options */
+	.pa-grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		gap: 2px 4px;
+		margin-bottom: 2px;
+	}
+	.pa-wide {
+		grid-column: 1 / -1;
+	}
+	.pa-btn {
+		min-width: 0;
+	}
+	.pa-label {
+		flex: 1 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.pa-split {
+		display: flex;
+		min-width: 0;
+	}
+	.pa-split > .pa-split-main {
+		flex: 1 1 auto;
+		border-top-right-radius: 0;
+		border-bottom-right-radius: 0;
+	}
+	.pa-split > .pa-split-more {
+		flex: 0 0 28px;
+		width: 28px;
+		justify-content: center;
+		padding: 0;
+		border-top-left-radius: 0;
+		border-bottom-left-radius: 0;
+		color: var(--text-muted);
+		box-shadow: inset 1px 0 0 var(--border);
+	}
+	.pa-split > .pa-split-more:hover {
+		color: var(--text);
 	}
 	/* the id: a click leaves the logo FOCUSED, and the forms plugin's :focus rule (box-shadow
 	   from empty ring vars, a black border) ties a plain class and wins on order */
