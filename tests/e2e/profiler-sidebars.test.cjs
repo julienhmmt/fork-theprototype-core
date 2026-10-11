@@ -80,6 +80,12 @@ async function seed(P) {
 		return { box: box.uuid, id, spikeT: frames[120].t, endT: frames[239].t };
 	});
 }
+/** 41 G16: the seeded objects leave an autosave, and "Restore previous session?" is a MODAL now (it was
+ *  a toast): after a reload answer it, or it takes every click that follows */
+const reload = async (D) => {
+	await h.freshReload(D);
+	await D.page.locator('#restore-session-dismiss').click({ timeout: 6000 }).catch(() => {});
+};
 const el = (P, sel) => P.evaluate((sel) => { const e = document.querySelector(sel); if (!e || !e.getClientRects().length) return null; const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; }, sel);
 const detail = (P, key) => P.evaluate((k) => document.querySelector(`#profiler-details [data-detail="${k}"]`)?.textContent?.replace(/\s+/g, ' ').trim() ?? null, key);
 const selected = (P) => P.evaluate(() => { let v; window.__stores.selectedObjects.subscribe((x) => (v = x))(); return v; });
@@ -141,7 +147,7 @@ h.run(async () => {
 			const gone = !(await el(P, '#profiler-side'));
 			const tl0 = await el(P, '#profiler-timeline');
 			h.check(gone, 'the recordings sidebar hides with the edge button');
-			await h.freshReload(D);
+			await reload(D);
 			await P.evaluate(() => window.__stores.profilerClose.set(false));
 			await P.waitForTimeout(1200);
 			h.check(!(await el(P, '#profiler-side')), '...and stays hidden after a reload');
@@ -178,7 +184,7 @@ h.run(async () => {
 			await P.waitForTimeout(200);
 			h.check((await P.evaluate(() => localStorage.getItem('perfStats:show'))) === 'true', 'the FPS and draw-call overlay toggle is the app\'s own pref');
 			await P.click('#profiler-perf-overlay');
-			await h.freshReload(D);
+			await reload(D);
 			await P.evaluate(() => window.__stores.profilerClose.set(false));
 			await P.waitForTimeout(1200);
 			await P.locator('#profiler-recordings li[data-id]').first().click();
@@ -206,7 +212,7 @@ h.run(async () => {
 			await P.waitForTimeout(300);
 			const tl1 = await el(P, '.pf-tl');
 			h.check(tl1.h - tl0.h > 30, `dragging the splitter down grows the graph (${Math.round(tl0.h)} -> ${Math.round(tl1.h)} px)`);
-			await h.freshReload(D);
+			await reload(D);
 			await P.evaluate(() => window.__stores.profilerClose.set(false));
 			await P.waitForTimeout(1200);
 			await P.locator('#profiler-recordings li[data-id]').first().click();
