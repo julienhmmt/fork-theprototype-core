@@ -7,7 +7,7 @@
 
 ## 1.32.0 — Your 1.31 review, fixed: sheets that swipe away, tidy docks and a reef that swims 🐠
 
-Everything you flagged in 1.31, fixed — plus an Image editor and a real reef in the Aquarium.
+Everything you flagged in 1.31 and in the 1.32 preview, fixed — plus an Image editor and a real reef in the Aquarium.
 
 ### 📱 On a phone
 
@@ -56,6 +56,40 @@ Everything you flagged in 1.31, fixed — plus an Image editor and a real reef i
   banking), **Wander**, **Orient to Velocity** and **Body Wave** — a wave travelling along a fish, snake, flag or tail.
 - ✨ **Fish scales material preset**: an iridescent thin film over a scale relief, drawn lighter on phones and headsets.
 - 🛠️ Fixed: LOD groups stuck on their first level in scenes with water.
+
+### 🔁 …and your review of the 1.32 preview
+
+- 🎛️ **Toolbar ▸ Edit positions** (right-click or press and hold any toolbar button): drag the toolbar and corner
+  buttons into place, remove one with the red **−**, add one with the green **+** (up to three in each corner, Play
+  always stays), then the green **✓** applies. A custom button order no longer shows the wrong icons after a reload.
+- ✋ **Selection toolbar**: **Inspect** is an icon that opens *and closes* the properties, and only looks pressed when
+  they are open; **Select multiple** and **Interact** sit after Scale. Interact clears the selection and gives it back
+  when you leave it. On touch, **tap a selected object to deselect it**. Adding an object no longer opens the
+  properties (an open panel follows the new object).
+- 🫳 **Carrying things in Interact** follows your finger or cursor from the point you grabbed — no more objects
+  flung at the camera — and lets go with a gentle throw.
+- 📱 **Phone drawers behave like a phone's sheets**: lists scroll, and at the top of the list a pull down (or a
+  flick) closes the drawer, with resistance and snap points. The main menu closes when you press outside it, the
+  selection toolbar no longer floats over menus or drawers, and an open note steps through **all** notes (‹ ›) and
+  returns to where you opened it.
+- 🪟 **Tabbed floating windows drag smoothly by touch** (tab names too); press and hold a tab for **Ungroup / Dock /
+  Close**. On desktop, **drop a window or tab onto the dock's tab bar** to dock it exactly where the marker shows. The
+  dock's **+** lists every window — **Node editor** and **Image editor** included — and the Image editor can be a
+  dock tab.
+- 🧑‍🎨 **Customize character opens a studio** around your character (**Show in scene** previews it in the world),
+  keeps it fully framed when you fold or unfold the phone, and **Surprise me** deals a new look on every press;
+  presets show their defaults and your edits become a **Custom** entry.
+- 🪜 **Dialogs cover the whole screen** (the logo included) and What's new sits above every button. Questions about
+  deleting, restoring or replacing things are **dialogs** instead of toasts (*Delete flow*, *Restore previous
+  session?*, …). **Settings rows rearrange** to fit a narrow window.
+- 🟢 **The connection pill is a coloured dot** (grey, pulsing yellow, green, red) with no text, so it fits beside the
+  other buttons — and **reconnecting after switching tabs no longer toasts**. Only a connection that gives up leaves
+  one notification.
+- 🧩 **Node editor**: a one-line breadcrumb bar — tap a crumb to jump to its siblings, hold for the full name.
+- 📈 **Profiler**: hideable sidebars, a **Details** + **Settings** sidebar on the right and a resizable split between
+  the graph and the list.
+- 🗂️ On a phone the Explorer's press-and-hold menu stays open, and docked windows open with their sidebars hidden
+  until you show them.
 
 ## 1.31.0 — Drag to place: see the size and the spot before you let go 📦
 
