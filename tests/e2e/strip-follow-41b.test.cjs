@@ -56,6 +56,7 @@ h.run(async () => {
 			s.objectListClose.set(true);
 			s.notificationCenterOpen.set(false);
 			s.notesDrawerOpen.set(false);
+			s.chatHidden.set('hidden');
 			s.inspectorClose.set(true);
 			s.closeMenu.set(true);
 			s.explorerClose.set(true);
@@ -129,11 +130,9 @@ h.run(async () => {
 			const b = await rect('#ps-explorer');
 			await touch.tap(b.x + b.w / 2, b.y + b.h / 2);
 		}, '.tp-dock-panel:not(.hidden)', '#ps-dock-grip [data-sheet-grip]'],
-		['a framed sheet (Objects)', async () => P.evaluate(() => window.__stores.objectListClose.set(false)), '.ps-sheet', '#ps-sheet-handle'],
-		['the Inspector sheet', async () => {
-			const b = await rect('#ps-inspect');
-			await touch.tap(b.x + b.w / 2, b.y + b.h / 2);
-		}, '#inspector', '#inspector [data-sheet-grip]']
+		// 41b-int: Objects is a dock tab since 41b H1, so the framed-sheet row drives Chat (still a framed sheet)
+		['a framed sheet (Chat)', async () => P.evaluate(() => window.__stores.chatHidden.set('')), '.ps-sheet', '#ps-sheet-handle']
+		// 41b-int: the Inspector is the Properties dock tab on a phone since 41b H1 (the dock row covers its grip)
 	];
 
 	for (const [name, open, sheetSel, gripSel] of DRAWERS) {
