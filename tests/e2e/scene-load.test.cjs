@@ -15,7 +15,7 @@
 //   5. AUTOSAVE writes pristine kit pieces as STUBS — the snapshot is a fraction of the 51 MB
 //      it was — and a frame drawn right after the save still shows every piece; an EDITED
 //      piece is written in full.
-//   6. RESTORE (the real button in the restore toast) after a reload: "Restoring …" with
+//   6. RESTORE (the real button in the restore modal, 41 G16) after a reload: "Restoring …" with
 //      progress, no long task > 200 ms, the castle is whole again (and the edited piece kept
 //      its edit).
 //   7. 1000 ORDINARY meshes (960 vertices each) (no kit references) build with no long task > 200 ms — the case where
@@ -298,7 +298,8 @@ h.run(async () => {
 	await fresh({ keepRestore: true });
 	// EXACTLY 'Restore': a phone also shows 33-games' quality toast beside it (its action is
 	// 'Use full quality' since the integrate; it said 'Restore full quality' and was clicked here)
-	const restoreBtn = page.locator('.tp-toast-action', { hasText: /^\s*Restore\s*$/ });
+	// 41 G16: the restore question is a modal now (SessionPrompts), not a toast
+	const restoreBtn = page.locator('#restore-session-restore');
 	await h.eventually(() => restoreBtn.count(), (n) => n > 0, '6.0 (premise) the restore prompt is up after the reload', 30000);
 	await arm(page);
 	await throttle(CPU);

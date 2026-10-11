@@ -197,7 +197,9 @@
 								"storage": {},
 								"stores": {
 									"avatars.avatarPreview": "<object>",
-									"cameraClaim": 1,
+									"avatars.studioIsolating": true,
+									"avatars.studioOpen": true,
+									"cameraClaim": 2,
 									"characterModalOpen": true,
 									"settingsOpen": false
 								},
@@ -8339,7 +8341,7 @@
 							"state": "Apply",
 							"effects": {
 								"storage": {
-									"notifications": "notified: [\"Lost the peer server - reconnecting...\",\"Reconnected to the peer server.\",\"Connected to self-hosted — your session id is unchanged.\"]"
+									"notifications": "notified: [\"Connected to self-hosted — your session id is unchanged.\"]"
 								},
 								"stores": {
 									"diagnostics.diagnosticsCount": "<changed>",

@@ -229,6 +229,10 @@ export function sheetHandoff(get) {
 	let startH = 0;
 	/** @type {Element|null} */
 	let scroller = null;
+	/** where the touch started, re-checked when the gesture is decided @type {Element|null} */
+	let target = null;
+	/** @type {Element|null} */
+	let surf = null;
 	let handBack = false;
 	let shownH = 0;
 	let draggedAt = -Infinity;
@@ -255,6 +259,8 @@ export function sheetHandoff(get) {
 		x0 = p.clientX;
 		y0 = p.clientY;
 		scroller = sc;
+		target = t;
+		surf = surface;
 		handBack = false;
 		samples = [];
 	};
@@ -268,6 +274,12 @@ export function sheetHandoff(get) {
 			const dx = p.clientX - x0;
 			const dy = p.clientY - y0;
 			if (Math.max(Math.abs(dx), Math.abs(dy)) < DRAG_SLOP) return;
+			// a press-and-hold that claimed the touch after it began (the Explorer / pack-card pick-up turns
+			// its row to touch-action:none and starts a place drag) keeps it: the sheet does not move
+			if (document.documentElement.classList.contains('tp-place-dragging') || (target && surf && bodyScroller(target, surf) === 'excluded')) {
+				mode = 'off';
+				return;
+			}
 			const who = handoffMode({ dx, dy, scrollTop: scroller ? scroller.scrollTop : null, cancelable: e.cancelable });
 			if (who !== 'sheet') {
 				mode = 'off';
