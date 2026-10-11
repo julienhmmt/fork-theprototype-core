@@ -999,19 +999,24 @@
 		<!-- the profile circle, seated in the 1.5rem notch this panel's top-right corner
 		     exists for (24px radius = half of a 48px avatar, so it is exactly inscribed and
 		     the panel's own overflow-hidden does not bite it). Clicking it closes the menu,
-		     the same as clicking the trigger again. -->
-		<button
-			type="button"
-			class="absolute right-0 top-0 z-10 cursor-pointer rounded-full leading-none"
-			aria-label="Close profile menu"
-			onclick={() => (openDropdown = false)}
-		>
-			{@render avatarImg(effAvatar || undefined, 'bg-surface-2 h-12 w-12 border-2 border-border-strong')}
-		</button>
+		     the same as clicking the trigger again.
+		     41b H11: NOT on the phone — there the menu is a bottom sheet, nowhere near the corner,
+		     and the avatar is already on screen top right; a second copy in the sheet's header
+		     only repeated it (the grab bar and a swipe close the sheet). -->
+		{#if !$phoneShellActive}
+			<button
+				type="button"
+				class="absolute right-0 top-0 z-10 cursor-pointer rounded-full leading-none"
+				aria-label="Close profile menu"
+				onclick={() => (openDropdown = false)}
+			>
+				{@render avatarImg(effAvatar || undefined, 'bg-surface-2 h-12 w-12 border-2 border-border-strong')}
+			</button>
+		{/if}
 		<!-- PM (roadmap #14): identity header — name, then the cloud email (or "You") under it.
 			 No avatar here (it's already the profile button, seated in the notch on the right).
 			 38 R8 (design page "Profile and peers"): the kit's NavRows below, one card. -->
-		<div class="pm-head">
+		<div class="pm-head" class:pm-head-phone={$phoneShellActive}>
 			<span class="pm-name">{effName}</span>
 			<span class="pm-sub">{cid?.email || 'You'}</span>
 		</div>
@@ -1182,6 +1187,10 @@
 		flex-direction: column;
 		min-width: 0;
 		padding: 14px 64px 10px 14px; /* clear of the circle seated in the top-right notch */
+	}
+	/* 41b H11: the phone sheet has no notch circle, so the name takes the whole row */
+	.pm-head-phone {
+		padding-right: 14px;
 	}
 	.pm-name {
 		overflow: hidden;

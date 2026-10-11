@@ -1,6 +1,6 @@
 // 41-modals G21: the ONE connection status the Connect pill and the phone chip draw as a dot
 import { describe, it, expect } from 'vitest';
-import { connectionStatusOf, GIVE_UP_ATTEMPTS } from '../../src/lib/connectionStatus.js';
+import { connectionStatusOf, connectionLabel, GIVE_UP_ATTEMPTS } from '../../src/lib/connectionStatus.js';
 
 const base = { open: 0, pending: null, signalingOpen: true, retrying: false, attempt: 0, hosting: true };
 
@@ -23,5 +23,16 @@ describe('connectionStatusOf', () => {
 		const s = connectionStatusOf({ ...base, open: 2, retrying: true, attempt: GIVE_UP_ATTEMPTS + 3 });
 		expect(s.tone).toBe('connected');
 		expect(s.words).toMatch(/can't reach the peer server/);
+	});
+});
+
+// 41b H4: the short word the phone chip shows when the top bar has room
+describe('connectionLabel', () => {
+	it('names each tone in one word', () => {
+		expect(connectionLabel(connectionStatusOf({ ...base, open: 1, hosting: false }).tone)).toBe('Connected');
+		expect(connectionLabel(connectionStatusOf({ ...base, pending: 'AB12C' }).tone)).toBe('Connecting…');
+		expect(connectionLabel(connectionStatusOf({ ...base, signalingOpen: false }).tone)).toBe('Connecting…');
+		expect(connectionLabel(connectionStatusOf(base).tone)).toBe('Offline');
+		expect(connectionLabel(connectionStatusOf({ ...base, retrying: true, attempt: GIVE_UP_ATTEMPTS }).tone)).toBe('Offline');
 	});
 });

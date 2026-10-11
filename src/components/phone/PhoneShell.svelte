@@ -18,9 +18,9 @@
 	// While mounted it puts `phone-shell` on <html>; phone.css hides the old phone chrome
 	// (toolbar pill, round HUD buttons, touch-tools column, docked Connect bar) only under
 	// that class, so CSS and markup always agree about which shell is on screen.
-	import { onDestroy, tick } from 'svelte';
+	import { onDestroy, tick, untrack } from 'svelte';
 	import Icon from '../ui/Icon.svelte';
-	import { connectionStatus } from '$lib/connectionStatus';
+	import { connectionStatus, connectionLabel } from '$lib/connectionStatus';
 	import SheetGrip from '../ui/SheetGrip.svelte';
 	import { stripScroll } from '$lib/ui/stripScroll.js';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
@@ -258,6 +258,43 @@
 		if (!$connectDrawerPinned) connectDrawerOpen.set(false);
 	}
 
+	// 41b H4 (refines G21): the chip SAYS its state ("Connected", "Connecting…", "Offline") when the
+	// top bar has room, and drops to the dot alone only when it is crowded (peers + a call). A
+	// CONTAINER-WIDTH rule, not a device one: the room is the chip's own slot between the logo and
+	// the right-hand chrome, measured by a ResizeObserver (the slot narrows when the peers button
+	// appears, the chip widens when the mic does). The label's natural width comes from a hidden copy
+	// that is always laid out — a hidden label measures 0, and zero is not a width.
+	const chipLabel = $derived(connectionLabel($connectionStatus.tone));
+	const CHIP_LABEL_GAP = 8; // .ps-chip-main's gap
+	let chipCompact = $state(false);
+	/** @type {HTMLElement | undefined} */
+	let chipWrapEl = $state();
+	/** @type {HTMLElement | undefined} */
+	let chipEl = $state();
+	/** @type {HTMLElement | undefined} */
+	let chipMeasureEl = $state();
+	$effect(() => {
+		const wrap = chipWrapEl;
+		const chip = chipEl;
+		const meas = chipMeasureEl;
+		if (!wrap || !chip || !meas) return;
+		let compact = untrack(() => chipCompact);
+		const fit = () => {
+			const room = wrap.clientWidth;
+			if (!room) return;
+			const shown = /** @type {HTMLElement | null} */ (chip.querySelector('.ps-chip-lbl'));
+			const base = chip.offsetWidth - (shown ? shown.offsetWidth + CHIP_LABEL_GAP : 0);
+			const next = base + CHIP_LABEL_GAP + meas.offsetWidth > room;
+			if (next !== compact) chipCompact = compact = next;
+		};
+		const ro = new ResizeObserver(fit);
+		ro.observe(wrap);
+		ro.observe(chip);
+		ro.observe(meas);
+		fit();
+		return () => ro.disconnect();
+	});
+
 	// ---- the strip -------------------------------------------------------------------
 	// (`hasSel` is declared with the sheet geometry above: the room a sheet may take depends on it)
 	// 41 G11: Inspect is a TOGGLE whose pressed state is the Inspector really showing the
@@ -451,8 +488,8 @@
 <div class="tp-ui ps" data-key-scope="keep">
 	<!-- TOP BAR: the logo, the bell and the avatar are the existing elements (phone.css
 	     seats them); the chip is the one new piece -->
-	<div class="ps-chipwrap">
-		<div class="ps-chip" data-state={connState} data-tour="connect">
+	<div class="ps-chipwrap" bind:this={chipWrapEl}>
+		<div class="ps-chip" data-state={connState} data-tour="connect" data-compact={chipCompact ? '' : undefined} bind:this={chipEl}>
 			<button
 				type="button"
 				id="ps-connect-chip"
@@ -463,10 +500,12 @@
 				data-tone={$connectionStatus.tone}
 				onclick={openConn}
 			>
-				<!-- 41 G21: NO text — a status dot + the chevron (+ the mic in a call), so the chip fits
-				     beside the bell and the peers; the words are the tooltip and the accessible name -->
+				<!-- 41 G21 + 41b H4: a status dot, the state word when there is room for it, the chevron
+				     (+ the mic in a call); the full sentence is the tooltip and the accessible name -->
 				<span class="ps-dot cx-status-dot" data-tone={$connectionStatus.tone} aria-hidden="true"></span>
+				{#if !chipCompact}<span class="ps-chip-lbl" id="ps-connect-label" aria-hidden="true">{chipLabel}</span>{/if}
 				<Icon name="chevron-down" size={16} />
+				<span class="ps-chip-measure" aria-hidden="true" bind:this={chipMeasureEl}>{chipLabel}</span>
 			</button>
 			{#if connState === 'connected'}
 				<button
@@ -692,6 +731,24 @@
 		color: inherit;
 		font: 500 var(--fs-body) var(--font-ui);
 		cursor: pointer;
+	}
+	.ps-chip-main {
+		position: relative;
+	}
+	.ps-chip-lbl {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	/* the label's natural width, always laid out and never seen (41b H4) */
+	.ps-chip-measure {
+		position: absolute;
+		left: 0;
+		top: 0;
+		visibility: hidden;
+		pointer-events: none;
+		white-space: nowrap;
 	}
 	.ps-dot {
 		width: 8px;
