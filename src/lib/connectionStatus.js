@@ -40,6 +40,18 @@ export function connectionStatusOf(s) {
 	return { tone: 'idle', words: 'Not connected' };
 }
 
+/**
+ * 41b H4 (refines G21): the SHORT state word the phone chip shows beside its dot when the top bar
+ * has room for it — the chip drops back to dot-only only when it is crowded (container width, not
+ * device). The full sentence stays the tooltip and the accessible name.
+ * @param {ConnTone} tone @returns {string}
+ */
+export function connectionLabel(tone) {
+	if (tone === 'connected') return 'Connected';
+	if (tone === 'connecting') return 'Connecting…';
+	return 'Offline';
+}
+
 /** the live status: {tone, words} */
 export const connectionStatus = derived([peers, waitingForApproval, signalingRetry, sessionHost, userdata], ([$peers, $waiting, $retry, $host]) => {
 	const pc = /** @type {any} */ ($peers);

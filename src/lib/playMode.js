@@ -11,6 +11,7 @@ import { showToast } from '../stores/appStore';
 import { pushState } from '$app/navigation';
 // 36-export: an exported game is an embed for its whole life too (a leaf, read once at eval)
 import { exportMode } from './export/exportBoot.js';
+import { safeStorage } from './safeStorage';
 
 // THE PLAY STATE MACHINE, lifted out of Controls.svelte so the play FAB, the FAB's
 // right-click mode menu and (next) a keyboard shortcut all press the same button.
@@ -367,6 +368,67 @@ export function requestPlay(/** @type {{flat?: boolean}} */ opts = {}) {
 	// the real fix is a JSDoc annotation on the store, which moves the baseline by a
 	// dozen and belongs in its own change.
 	if (get(isLocked) === null) isLocked.set(true);
+}
+
+/* ------------------------------------------------------------- play as… ---- */
+
+/**
+ * The play button's MODE choice, written in one place for both play buttons (the desktop FAB's
+ * right-click menu and the phone bar's Play long press). Each half moves its store and its key
+ * together. 41b H7: 'screen' and 'vr'/'ar' are both WRITTEN (`'true'` / `'false'`) — an absent key
+ * is the device's default (`readVrOverride`), and a phone's default is the screen.
+ * @param {'screen' | 'vr' | 'ar'} mode
+ */
+export function choosePlayAs(mode) {
+	vrOverride.set(mode === 'screen');
+	safeStorage.setItem('vrOverride', mode === 'screen' ? 'true' : 'false');
+	if (mode === 'screen') return;
+	vrPassthrough.set(mode === 'ar');
+	safeStorage.setItem('vrPassthrough', mode === 'ar' ? 'true' : 'false');
+}
+
+/**
+ * The "Play as" rows both play buttons' menus open with: each row writes the choice and enters
+ * it in the same gesture (the hidden XR buttons are mounted, so `requestPlay` can still ask for a
+ * session inside it). The checked row is what a plain press does now — which is also what the
+ * button's glyph shows (a triangle, a headset, the headset with A and R).
+ */
+export function playAsItems() {
+	const xr = get(willEnterXR);
+	const ar = get(willEnterAR);
+	const vrOk = get(vrSupported);
+	const arOk = get(arSupported);
+	return [
+		{ section: 'Play as' },
+		{
+			label: 'Play (desktop)',
+			checked: !xr,
+			action: () => {
+				choosePlayAs('screen');
+				requestPlay();
+			}
+		},
+		{
+			label: 'Enter VR',
+			checked: xr && !ar,
+			disabled: !vrOk,
+			tooltip: vrOk ? 'Immersive VR — the scene replaces your view' : 'No immersive-vr support detected',
+			action: () => {
+				choosePlayAs('vr');
+				requestPlay();
+			}
+		},
+		{
+			label: 'Enter AR passthrough',
+			checked: ar,
+			disabled: !arOk,
+			tooltip: arOk ? 'Mixed reality — the scene composites over your room' : 'No immersive-ar (passthrough) support detected',
+			action: () => {
+				choosePlayAs('ar');
+				requestPlay();
+			}
+		}
+	];
 }
 
 // The exit settle, formerly Controls' `$effect`. `isLocked === false` is what the exit

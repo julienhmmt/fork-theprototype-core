@@ -353,7 +353,7 @@ h.run(async () => {
 	await P.keyboard.press('Escape');
 	await P.mouse.click(5, 420).catch(() => {});
 
-	// ---- NOTES-38 #7: the bar is customisable (per device); More always stays -------------
+	// ---- NOTES-38 #7: the bar is customisable (per device) ------------------------------------
 	await rest();
 	const lsBar = () => read(() => localStorage.getItem('phoneBarSlots'));
 	const barIds = () => read(() => [...document.querySelectorAll('#ps-bar > button')].map((b) => b.id));
@@ -362,10 +362,8 @@ h.run(async () => {
 	await P.locator('#ps-objects').dispatchEvent('contextmenu');
 	await P.waitForTimeout(500);
 	h.check(await visible('#ps-edit-bar'), 'a long press on a bar tab opens Edit bar');
-	h.check((await read(() => document.querySelector('#ps-pick-more')?.getAttribute('aria-disabled'))) === 'true', 'More cannot be taken off the bar');
-	await P.locator('#ps-pick-more').tap({ force: true });
-	await P.waitForTimeout(300);
-	h.check((await barIds()).includes('ps-more'), 'tapping More in the editor leaves it on the bar');
+	// 41b H6: More may leave the bar now (phone-bar-41b covers the removal and its one-time notice)
+	h.check((await read(() => document.querySelector('#ps-pick-more')?.getAttribute('aria-disabled'))) !== 'true', 'More is a pick like any other (41b H6)');
 	await tap('#ps-pick-explorer');
 	await tap('#ps-pick-chat');
 	const custom = await barIds();

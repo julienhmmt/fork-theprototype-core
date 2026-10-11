@@ -36,6 +36,7 @@ import {
 import {
 	showGrid,
 	vrOverride,
+	readVrOverride,
 	vrSnapAngle,
 	vrMirrorSnapTurn,
 	vrTeleportEnabled,
@@ -230,8 +231,8 @@ const RESETS = {
 		setExportPrefs({ startFullscreen, showFps, quality, vrButton, useCdnForPacks });
 	},
 	vr() {
-		vrOverride.set(false);
 		safeStorage.removeItem('vrOverride');
+		vrOverride.set(readVrOverride()); // 41b H7: back to this device's default
 		put(vrSmoothTurn, 'vrSmoothTurn', false);
 		put(vrSnapAngle, 'vrSnapAngle', 45);
 		vrSnapAngleLast.set(45);

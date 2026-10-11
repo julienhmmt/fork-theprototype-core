@@ -18,9 +18,9 @@
 	// While mounted it puts `phone-shell` on <html>; phone.css hides the old phone chrome
 	// (toolbar pill, round HUD buttons, touch-tools column, docked Connect bar) only under
 	// that class, so CSS and markup always agree about which shell is on screen.
-	import { onDestroy, tick } from 'svelte';
+	import { onDestroy, tick, untrack } from 'svelte';
 	import Icon from '../ui/Icon.svelte';
-	import { connectionStatus } from '$lib/connectionStatus';
+	import { connectionStatus, connectionLabel } from '$lib/connectionStatus';
 	import SheetGrip from '../ui/SheetGrip.svelte';
 	import { stripScroll } from '$lib/ui/stripScroll.js';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
@@ -33,9 +33,28 @@
 		phoneShellActive,
 		phoneSheetMaxH
 	} from '$lib/ui/phoneShell.js';
-	import { phoneBarSlots, setBarSlots, toggleSlot, splitAroundPlay, BAR_CATALOG, DEFAULT_BAR, MAX_SLOTS } from '$lib/ui/phoneBar.js';
+	import {
+		phoneBarSlots,
+		setBarSlots,
+		toggleSlot,
+		splitAroundPlay,
+		phoneBarPlayAt,
+		setBarPlayAt,
+		movePlay,
+		playIndex,
+		BAR_CATALOG,
+		DEFAULT_BAR,
+		MAX_SLOTS,
+		MORE_HINT_KEY
+	} from '$lib/ui/phoneBar.js';
+	import ContextMenu from '../ContextMenu.svelte';
+	import { safeStorage } from '$lib/safeStorage';
+	import { showChoiceEx } from '$lib/confirmDialog';
+	import { hudIsGame } from '$lib/hudDocs';
+	import { testPlay } from '$lib/gamePresence';
 	import { snapDetent, stepDetent, phoneSheetMax } from '$lib/ui/sheetSnap.js';
 	import { sheetDrag } from '$lib/ui/sheetDrag.js';
+	import { followBottomEdge } from '$lib/ui/bottomEdge.js';
 	import {
 		peers,
 		userdata,
@@ -44,6 +63,7 @@
 		aiAssistantHidden,
 		objectListClose,
 		notificationCenterOpen,
+		peersPanelOpen,
 		notesDrawerOpen,
 		inspectorClose,
 		inspectorKind,
@@ -63,7 +83,7 @@
 	import { undo, redo, canUndo, canRedo } from '$lib/history';
 	import { setTransformMode, toggleEditorMode } from '$lib/objectActions';
 	import { togglePanel } from '$lib/panelToggles';
-	import { requestPlay, willEnterXR, willEnterAR } from '$lib/playMode';
+	import { requestPlay, willEnterXR, willEnterAR, playAsItems } from '$lib/playMode';
 	import { visibleDockKey, DOCK_TITLES, dockMinimized, dockHeight } from '$lib/bottomDock';
 	import { micActive, pttActive, toggleMic } from '$lib/voiceChat';
 	import { aiReady } from '$lib/ai/providers';
@@ -131,6 +151,8 @@
 		chat: ['#chat-window', null, false],
 		ai: ['#ai-assistant-window', null, false],
 		notif: ['#notif-panel', null, true],
+		// 41b H15: the connected-peers panel is a drawer like the notifications (it draws its own header)
+		peers: ['#peers-popover', null, true],
 		conn: ['.connect-wrap', 'Connection', true],
 		more: [null, 'More', true]
 	};
@@ -140,6 +162,7 @@
 		chat: $chatHidden === '',
 		ai: $aiAssistantHidden === '',
 		notif: $notificationCenterOpen,
+		peers: $peersPanelOpen,
 		conn: $phoneSheet === 'conn',
 		more: $phoneSheet === 'more'
 	}));
@@ -207,6 +230,7 @@
 		else if (k === 'chat') chatHidden.set('hidden');
 		else if (k === 'ai') aiAssistantHidden.set('hidden');
 		else if (k === 'notif') notificationCenterOpen.set(false);
+		else if (k === 'peers') peersPanelOpen.set(false);
 		else if (k === 'conn') closeConn();
 		else if (k === 'more') phoneSheet.set(null);
 	}
@@ -257,6 +281,43 @@
 		if (!$connectDrawerPinned) connectDrawerOpen.set(false);
 	}
 
+	// 41b H4 (refines G21): the chip SAYS its state ("Connected", "Connecting…", "Offline") when the
+	// top bar has room, and drops to the dot alone only when it is crowded (peers + a call). A
+	// CONTAINER-WIDTH rule, not a device one: the room is the chip's own slot between the logo and
+	// the right-hand chrome, measured by a ResizeObserver (the slot narrows when the peers button
+	// appears, the chip widens when the mic does). The label's natural width comes from a hidden copy
+	// that is always laid out — a hidden label measures 0, and zero is not a width.
+	const chipLabel = $derived(connectionLabel($connectionStatus.tone));
+	const CHIP_LABEL_GAP = 8; // .ps-chip-main's gap
+	let chipCompact = $state(false);
+	/** @type {HTMLElement | undefined} */
+	let chipWrapEl = $state();
+	/** @type {HTMLElement | undefined} */
+	let chipEl = $state();
+	/** @type {HTMLElement | undefined} */
+	let chipMeasureEl = $state();
+	$effect(() => {
+		const wrap = chipWrapEl;
+		const chip = chipEl;
+		const meas = chipMeasureEl;
+		if (!wrap || !chip || !meas) return;
+		let compact = untrack(() => chipCompact);
+		const fit = () => {
+			const room = wrap.clientWidth;
+			if (!room) return;
+			const shown = /** @type {HTMLElement | null} */ (chip.querySelector('.ps-chip-lbl'));
+			const base = chip.offsetWidth - (shown ? shown.offsetWidth + CHIP_LABEL_GAP : 0);
+			const next = base + CHIP_LABEL_GAP + meas.offsetWidth > room;
+			if (next !== compact) chipCompact = compact = next;
+		};
+		const ro = new ResizeObserver(fit);
+		ro.observe(wrap);
+		ro.observe(chip);
+		ro.observe(meas);
+		fit();
+		return () => ro.disconnect();
+	});
+
 	// ---- the strip -------------------------------------------------------------------
 	// (`hasSel` is declared with the sheet geometry above: the room a sheet may take depends on it)
 	// 41 G11: Inspect is a TOGGLE whose pressed state is the Inspector really showing the
@@ -284,32 +345,20 @@
 	});
 
 	// NOTES-38 #32 (b): the selection strip rides on TOP of whatever is open along the bottom —
-	// a sheet, the Inspector, a docked view, the Add list — so Move / Undo work without closing
-	// it. Measured, not computed: those panels belong to other components.
-	let stripLift = $state(0);
+	// a sheet, the Inspector, a docked view, the Add list (41 G20: the notes sheet, its note card and
+	// a toolbox sheet too) — so Move / Undo work without closing it. Measured, not computed: those
+	// panels belong to other components ($lib/ui/bottomEdge's list, the bar itself included).
+	// 41b H3: it FOLLOWS a drawer being resized in the same frame — the edge is read once per
+	// animation frame and the strip moved by a TRANSFORM written right there (no layout), where a
+	// 120 ms poll moving `bottom` left it frames behind and then jumping ("inspect toolbar stutter").
+	/** @type {HTMLElement | undefined} */
+	let stripEl = $state();
 	$effect(() => {
-		if (!stripOn) return;
-		let raf = 0;
-		const measure = () => {
-			let occ = 0;
-			// 41 G20: EVERY tool sheet the strip rides on — the notes sheet, a toolbox sheet and the
-			// note card (a page of the notes sheet, G12) were missing, so the strip sat ON them
-			for (const el of document.querySelectorAll('.ps-sheet, #inspector, #notes-drawer, .note-card.note-sheet, .toolbox.tbx-sheet, .tp-dock-panel, .tp-dock-panel .dt-row, :root.ps-add-open .ctx-scroll')) {
-				const r = /** @type {HTMLElement} */ (el).getBoundingClientRect();
-				if (!r.height || getComputedStyle(el).display === 'none' || getComputedStyle(el).visibility === 'hidden') continue;
-				occ = Math.max(occ, window.innerHeight - r.top);
-			}
-			stripLift = occ;
-		};
-		const id = setInterval(() => {
-			cancelAnimationFrame(raf);
-			raf = requestAnimationFrame(measure);
-		}, 120);
-		measure();
-		return () => {
-			clearInterval(id);
-			cancelAnimationFrame(raf);
-		};
+		const el = stripEl;
+		if (!el) return;
+		return followBottomEdge((occ) => {
+			el.style.transform = `translateX(-50%) translateY(${-(occ + 8)}px)`;
+		});
 	});
 
 	// 40 F1: the DOCK (Explorer, Node editor, Animation … — one shared height) is a sheet too. Its
@@ -332,14 +381,45 @@
 		if (chatOpen) seenChat = $messages.length;
 	});
 	const chatUnread = $derived(chatOpen ? 0 : Math.max(0, $messages.length - seenChat));
-	// a long press (contextmenu) on Play opens the SAME "Play as / Test play" menu the
-	// toolbar's play button owns — forwarded to that button's own listener, not rebuilt
+	// 41b H6/H7: a long press (contextmenu) on Play opens PLAY'S OWN phone menu. It used to forward to
+	// the desktop toolbar's play button, whose menu is about that toolbar — Move left / Move right
+	// walked a bar that is not drawn on a phone, and "Always on top", "Move toolbar", "Collapse"
+	// and "Customize toolbar…" do nothing here. The phone rows: the same "Play as" rows the desktop
+	// opens with ($lib/playMode), Test play in a game, then this bar's own: Move left / Move right
+	// (Play walks along the bar) and Edit bar… (so a bar emptied down to Play is still editable).
+	let playMenuAt = $state(/** @type {{x: number, y: number} | null} */ (null));
 	/** @param {MouseEvent} e */
 	function playMenu(e) {
 		e.preventDefault();
-		document.getElementById('play-button')?.dispatchEvent(
-			new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY })
-		);
+		playMenuAt = { x: e.clientX, y: e.clientY };
+	}
+	/** @param {-1 | 1} dir */
+	function nudgePlay(dir) {
+		setBarPlayAt(movePlay($phoneBarSlots.length, $phoneBarPlayAt, dir));
+	}
+	function playMenuItems() {
+		const n = $phoneBarSlots.length;
+		const at = playIndex(n, $phoneBarPlayAt);
+		return [
+			...playAsItems(),
+			...($hudIsGame
+				? [
+						{ section: 'Game' },
+						{ label: 'Test play (start from the menu)', tooltip: 'Reset the game to its menu, enter Play, and start from the Start screen', action: () => testPlay() }
+					]
+				: []),
+			{ section: 'Bar' },
+			{ label: 'Move left', tooltip: 'Move Play one place left on the bar', disabled: at <= 0, action: () => nudgePlay(-1) },
+			{ label: 'Move right', tooltip: 'Move Play one place right on the bar', disabled: at >= n, action: () => nudgePlay(1) },
+			{
+				label: 'Edit bar…',
+				tooltip: 'Choose what the bar holds on this device',
+				action: () => {
+					phoneSheet.set('more');
+					tick().then(() => (editingBar = true));
+				}
+			}
+		];
 	}
 	function toggleMore() {
 		phoneSheet.set($phoneSheet === 'more' ? null : 'more');
@@ -426,7 +506,7 @@
 	};
 	/** the More sheet's Windows tiles: every destination except the bar's own verbs */
 	const TILES = ['chat', 'explorer', 'flow', 'animation', 'scene', 'ai', 'notes', 'flowcode', 'shader', 'uv', 'hud', 'profiler', 'code'];
-	const bar = $derived(splitAroundPlay($phoneBarSlots));
+	const bar = $derived(splitAroundPlay($phoneBarSlots, $phoneBarPlayAt));
 
 	// ---- Edit bar (NOTES-38 #7): inside the More sheet; a long press on a tab gets there too
 	let editingBar = $state(false);
@@ -443,8 +523,38 @@
 	function editTap(key) {
 		const before = $phoneBarSlots;
 		const next = toggleSlot(before, key);
-		if (next === before && !before.includes(key) && key !== 'more') showToast(`The bar holds ${MAX_SLOTS} — take one off first`);
-		else setBarSlots(next);
+		if (next === before && !before.includes(key)) {
+			showToast(`The bar holds ${MAX_SLOTS} — take one off first`);
+			return;
+		}
+		setBarSlots(next);
+		if (key === 'more' && before.includes('more') && !next.includes('more')) moreHint(before);
+	}
+	// 41b H6: More may leave the bar — the FIRST time it does, a modal says how to get it back (a long
+	// press on any bar item, the one door left). "Keep More" puts it back where it was.
+	/** @param {string[]} before */
+	function moreHint(before) {
+		let seen = false;
+		try {
+			seen = safeStorage.getItem(MORE_HINT_KEY) === '1';
+			safeStorage.setItem(MORE_HINT_KEY, '1');
+		} catch {
+			// private mode: the notice may come back next session
+		}
+		if (seen) return;
+		showChoiceEx({
+			id: 'more-hint',
+			title: 'More is off the bar',
+			message: 'To get More back, press and hold any item on the bottom bar.',
+			choices: [{ value: 'ok', label: 'Got it' }],
+			cancelLabel: 'Keep More'
+		}).then((answer) => {
+			if (!answer && !$phoneBarSlots.includes('more')) setBarSlots(before);
+		});
+	}
+	function resetBar() {
+		setBarSlots(DEFAULT_BAR);
+		setBarPlayAt(null);
 	}
 	function viewportTools() {
 		phoneSheet.set(null);
@@ -462,8 +572,8 @@
 <div class="tp-ui ps" data-key-scope="keep">
 	<!-- TOP BAR: the logo, the bell and the avatar are the existing elements (phone.css
 	     seats them); the chip is the one new piece -->
-	<div class="ps-chipwrap">
-		<div class="ps-chip" data-state={connState} data-tour="connect">
+	<div class="ps-chipwrap" bind:this={chipWrapEl}>
+		<div class="ps-chip" data-state={connState} data-tour="connect" data-compact={chipCompact ? '' : undefined} bind:this={chipEl}>
 			<button
 				type="button"
 				id="ps-connect-chip"
@@ -474,10 +584,12 @@
 				data-tone={$connectionStatus.tone}
 				onclick={openConn}
 			>
-				<!-- 41 G21: NO text — a status dot + the chevron (+ the mic in a call), so the chip fits
-				     beside the bell and the peers; the words are the tooltip and the accessible name -->
+				<!-- 41 G21 + 41b H4: a status dot, the state word when there is room for it, the chevron
+				     (+ the mic in a call); the full sentence is the tooltip and the accessible name -->
 				<span class="ps-dot cx-status-dot" data-tone={$connectionStatus.tone} aria-hidden="true"></span>
+				{#if !chipCompact}<span class="ps-chip-lbl" id="ps-connect-label" aria-hidden="true">{chipLabel}</span>{/if}
 				<Icon name="chevron-down" size={16} />
+				<span class="ps-chip-measure" aria-hidden="true" bind:this={chipMeasureEl}>{chipLabel}</span>
 			</button>
 			{#if connState === 'connected'}
 				<button
@@ -502,7 +614,7 @@
 	     closing it. 41 G11: Multi-select and Interact are toggles here (after Scale), and Inspect
 	     is an icon toggle; each shows its real on/off state. -->
 	{#if stripOn}
-		<div class="ps-strip tp-noscrollbar" role="toolbar" aria-label="Edit selection" id="ps-strip" style:bottom={stripLift ? `${stripLift + 8}px` : null} use:stripScroll>
+		<div class="ps-strip tp-noscrollbar" role="toolbar" aria-label="Edit selection" id="ps-strip" bind:this={stripEl} use:stripScroll>
 			<button type="button" class="ps-cell" id="ps-move" aria-label="Move (1)" disabled={!hasSel} aria-pressed={hasSel && $transformMode === 'translate'} onclick={() => setTransformMode('translate')}><Icon name="move" size={20} /></button>
 			<button type="button" class="ps-cell" id="ps-rotate" aria-label="Rotate (2)" disabled={!hasSel} aria-pressed={hasSel && $transformMode === 'rotate'} onclick={() => setTransformMode('rotate')}><Icon name="rotate-ccw" size={20} /></button>
 			<button type="button" class="ps-cell" id="ps-scale" aria-label="Scale (3)" disabled={!hasSel} aria-pressed={hasSel && $transformMode === 'scale'} onclick={() => setTransformMode('scale')}><Icon name="maximize-2" size={20} /></button>
@@ -542,8 +654,19 @@
 			data-tour="play"
 			oncontextmenu={playMenu}
 			aria-label={$willEnterAR ? 'Enter AR' : $willEnterXR ? 'Enter VR' : 'Play'}
+			data-play-as={$willEnterAR ? 'ar' : $willEnterXR ? 'vr' : 'screen'}
 			onclick={() => requestPlay()}
-		><span class="ps-live"><Icon name="play" size={24} fill="currentColor" /></span></button>
+		><span class="ps-live" class:ps-live-xr={$willEnterXR}>
+			<!-- 41b H7: the glyph says what a press does, as on desktop: the triangle, a headset for VR,
+			     the headset with A and R in its lenses for AR -->
+			{#if $willEnterAR}
+				<span class="ps-play-ar"><Icon name="tool:vr" size={24} /><span class="hud-play-lens" style="left: 29%">A</span><span class="hud-play-lens" style="left: 71%">R</span></span>
+			{:else if $willEnterXR}
+				<Icon name="tool:vr" size={24} />
+			{:else}
+				<Icon name="play" size={24} fill="currentColor" />
+			{/if}
+		</span></button>
 		{#each bar.right as key (key)}{@render tab(key)}{/each}
 	</nav>
 
@@ -595,13 +718,22 @@
 			</div>
 			{#if titled}
 				<div class="ps-head">
-					<h2 class="ps-title">{HOSTS[top][1]}</h2>
+					{#if top === 'more' && editingBar}
+						<!-- 41b H6: the editor is a page OF More — its header says so, and "More" goes back -->
+						<h2 class="ps-title ps-crumbs">
+							<button type="button" class="ps-crumb" id="ps-more-crumb" title="Back to More" onclick={() => (editingBar = false)}>More</button>
+							<Icon name="chevron-right" size={16} />
+							<span class="ps-crumb-here">Edit bar…</span>
+						</h2>
+					{:else}
+						<h2 class="ps-title">{HOSTS[top][1]}</h2>
+					{/if}
 					<button type="button" class="ps-close" id="ps-sheet-close" aria-label={`Close ${HOSTS[top][1]}`} onclick={() => closeKind(top)}><Icon name="x" size={20} /></button>
 				</div>
 			{/if}
 			{#if top === 'more' && editingBar}
 				<div class="ps-body" id="ps-edit-bar" use:minimalScroll>
-					<p class="ps-hint">Pick up to {MAX_SLOTS} for the bar on this device. Play stays in the middle; More always stays.</p>
+					<p class="ps-hint">Pick up to {MAX_SLOTS} for the bar on this device. Press and hold any item on the bar — Play too — to come back here; Play's menu moves it along the bar.</p>
 					<div class="ps-preview" aria-label="Bar preview">
 						{#each bar.left as key (key)}<span class="ps-pv"><Icon name={ACTIONS[key].icon} size={20} />{ACTIONS[key].label}</span>{/each}
 						<span class="ps-pv ps-pv-play"><Icon name="play" size={20} />Play</span>
@@ -616,7 +748,7 @@
 								id="ps-pick-{key}"
 								role="checkbox"
 								aria-checked={on}
-								aria-disabled={key === 'more' || (!on && $phoneBarSlots.length >= MAX_SLOTS)}
+								aria-disabled={!on && $phoneBarSlots.length >= MAX_SLOTS}
 								onclick={() => editTap(key)}
 							>
 								<Icon name={ACTIONS[key].icon} size={20} /><span>{ACTIONS[key].label}</span>
@@ -625,7 +757,7 @@
 						{/each}
 					</div>
 					<div class="ps-edit-foot">
-						<button type="button" class="ps-btn" id="ps-bar-reset" disabled={$phoneBarSlots.join() === DEFAULT_BAR.join()} onclick={() => setBarSlots(DEFAULT_BAR)}>Reset to default</button>
+						<button type="button" class="ps-btn" id="ps-bar-reset" disabled={$phoneBarSlots.join() === DEFAULT_BAR.join() && $phoneBarPlayAt == null} onclick={resetBar}>Reset to default</button>
 						<button type="button" class="ps-btn ps-btn-primary" id="ps-bar-done" onclick={() => (editingBar = false)}>Done</button>
 					</div>
 				</div>
@@ -659,6 +791,10 @@
 				</div>
 			{/if}
 		</section>
+	{/if}
+
+	{#if playMenuAt}
+		<ContextMenu x={playMenuAt.x} y={playMenuAt.y} items={playMenuItems()} sizeKey="phoneplay" onclose={() => (playMenuAt = null)} />
 	{/if}
 </div>
 
@@ -704,6 +840,24 @@
 		font: 500 var(--fs-body) var(--font-ui);
 		cursor: pointer;
 	}
+	.ps-chip-main {
+		position: relative;
+	}
+	.ps-chip-lbl {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	/* the label's natural width, always laid out and never seen (41b H4) */
+	.ps-chip-measure {
+		position: absolute;
+		left: 0;
+		top: 0;
+		visibility: hidden;
+		pointer-events: none;
+		white-space: nowrap;
+	}
 	.ps-dot {
 		width: 8px;
 		height: 8px;
@@ -730,8 +884,10 @@
 	.ps-strip {
 		position: fixed;
 		left: 50%;
-		transform: translateX(-50%);
-		bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+		/* 41b H3: lifted by a transform from the bottom edge (`followBottomEdge`); this is its resting
+		   place above the bar until the first frame writes the measured one */
+		bottom: 0;
+		transform: translateX(-50%) translateY(calc(-84px - env(safe-area-inset-bottom, 0px)));
 		z-index: var(--z-selection); /* 41 G20: under every dock and sheet — a drawer covers it */
 		display: flex;
 		align-items: center;
@@ -911,6 +1067,39 @@
 		margin: 0;
 		font: 600 17px var(--font-ui);
 	}
+	/* 41b H6: "More ▸ Edit bar…" — the first crumb is a link back */
+	.ps-crumbs {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		color: var(--text-muted);
+	}
+	.ps-crumb {
+		min-height: 44px;
+		padding: 0 6px;
+		margin-left: -6px;
+		border: 0;
+		border-radius: var(--radius-button, 8px);
+		background: transparent;
+		color: var(--accent-text);
+		font: inherit;
+		cursor: pointer;
+	}
+	.ps-crumb-here {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--text);
+	}
+	.ps-play-ar {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.ps-live.ps-live-xr {
+		padding-left: 0; /* the triangle's optical nudge is for the triangle only */
+	}
 	.ps-close {
 		display: inline-flex;
 		align-items: center;
@@ -1083,6 +1272,7 @@
 	.ps-tile:hover,
 	.ps-row:hover,
 	.ps-close:hover,
+	.ps-crumb:hover,
 	.ps-chip-main:hover {
 		background: var(--surface-hover);
 	}

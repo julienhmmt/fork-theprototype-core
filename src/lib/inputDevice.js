@@ -16,6 +16,18 @@ export function coarsePointer() {
 }
 
 /**
+ * 41b H7: a phone or a tablet — a touch-first pointer that is NOT a headset's browser (a Quest or a
+ * Pico can report a coarse pointer too, and there "play" means the headset). Where the play button
+ * has made no choice yet, a handheld plays on its screen (desktop parity) rather than dropping into
+ * a cardboard VR session because the browser happens to support one.
+ */
+export function handheldDevice() {
+	if (!coarsePointer()) return false;
+	const ua = typeof navigator === 'undefined' ? '' : String(navigator.userAgent ?? '');
+	return !/OculusBrowser|Quest|Pico|VRShell|Wolvic|Vive/i.test(ua);
+}
+
+/**
  * May we focus a text field the user did not tap? True on pointer devices, false
  * where it would raise the on-screen keyboard unbidden.
  */

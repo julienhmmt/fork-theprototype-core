@@ -221,16 +221,18 @@ h.run(async () => {
 		const c = document.querySelector('#ps-connect-chip');
 		const d = c?.querySelector('.cx-status-dot');
 		return {
-			text: (c?.textContent || '').trim(),
+			// 41b H4 (refines G21): the state WORD shows when the chip's slot has room
+			text: document.getElementById('ps-connect-label')?.textContent?.trim() ?? '',
+			slot: Math.round(document.querySelector('.ps-chipwrap')?.getBoundingClientRect().width ?? 0),
 			label: c?.getAttribute('aria-label') ?? '',
 			title: c?.getAttribute('title') ?? '',
 			tone: d?.getAttribute('data-tone') ?? '',
 			width: Math.round(c?.getBoundingClientRect().width ?? 0)
 		};
 	});
-	h.check(chip.text === '', `phone: the Connect chip carries no text ("${chip.text}")`);
+	h.check(['Offline', 'Connecting…', 'Connected'].includes(chip.text), `phone: with room the Connect chip says its state in one word (41b H4) ("${chip.text}")`);
 	h.check(/Not connected|Connecting/.test(chip.label) && chip.title.length > 0, `phone: its words are the aria-label and tooltip ("${chip.label}")`);
-	h.check(chip.width <= 72, `phone: the chip is a dot + chevron wide (${chip.width}px)`);
+	h.check(chip.width <= chip.slot, `phone: the chip fits its slot beside the bell (${chip.width} of ${chip.slot} px)`);
 	await emitOnPeer(phone, 'disconnected');
 	await phone.waitForTimeout(300);
 	const phoneDrop = await phone.evaluate(() => document.querySelector('#ps-connect-chip .cx-status-dot')?.getAttribute('data-tone'));
