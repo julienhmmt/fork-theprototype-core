@@ -176,8 +176,15 @@ export default {
 
 	// the same rule in the primitive, on any scroller: content that shrinks under a scrolled
 	// view clamps at once (no 2 px-per-frame drain through the overlay thumb)
+	// a source import exists on a dev server only — on a built deploy (the preview proof) the
+	// primitive is covered by the Core-frame checks above, and this probe is skipped, not failed
 	const drain = await p.evaluate(async () => {
-		const { minimalScroll } = await import('/src/lib/ui/minimalScroll.js');
+		let minimalScroll;
+		try {
+			({ minimalScroll } = await import('/src/lib/ui/minimalScroll.js'));
+		} catch {
+			return null;
+		}
 		const box = document.createElement('div');
 		box.style.cssText = 'position:fixed;left:0;top:0;width:200px;height:200px;overflow-y:auto';
 		const tall = document.createElement('div');
@@ -194,7 +201,8 @@ export default {
 		box.remove();
 		return out;
 	});
-	h.check(drain.sh === 300 && drain.top === 100, `H10: minimalScroll clamps a shrunk scroller at once (scrollHeight ${drain.sh}, top ${drain.top})`);
+	if (drain) h.check(drain.sh === 300 && drain.top === 100, `H10: minimalScroll clamps a shrunk scroller at once (scrollHeight ${drain.sh}, top ${drain.top})`);
+	else console.log('SKIP H10: minimalScroll primitive probe (no /src on a built app)');
 
 	// ---- H8: the Core row layout on a folded phone ---------------------------------------------
 	const geo = (sel) =>
