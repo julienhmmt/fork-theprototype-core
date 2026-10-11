@@ -281,7 +281,9 @@
 		<!-- 15-O: the "●" text prefix is gone — it shifted the label as it appeared
 		     (read as a glitch) and duplicated what the open panel already shows.
 		     The row itself carries an `active` highlight instead, like any nav item. -->
-		<button class="side-row" class:active={!$inspectorClose && $inspectorKind === 'scene'} onclick={() => showSidebar('scene')}>
+		<!-- 41b H2: on a phone the menu closes as Configure Scene opens (it is a dock tab there, under
+		     the menu sheet); on a wider screen the menu stays open beside the drawer, as before -->
+		<button class="side-row" class:active={!$inspectorClose && $inspectorKind === 'scene'} onclick={() => { showSidebar('scene'); if ($phoneShellActive) closeMenu.set(true); }}>
 			<span class="side-ico"><Icon name="sliders-horizontal" size={16} aria-hidden="true" /></span>
 			<span class="flex-1 whitespace-nowrap">Configure Scene</span>
 		</button>
