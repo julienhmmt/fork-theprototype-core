@@ -400,7 +400,7 @@
    open — it used to rise OVER the main menu and the profile menu (the reported bug: "the
    toolbar which shows move/rotate/scale/inspect shows above the drawer"). It comes back as
    they close, the selection unchanged. */
-:root.phone-shell:has(#sidebar70, #avatar-dropdown, #character-panel, dialog[open], .ps-sheet[data-kind='notif'], .ps-sheet[data-kind='conn'], .ps-sheet[data-kind='more']) #ps-strip,
+:root.phone-shell:has(#sidebar70, #avatar-dropdown, #character-panel, dialog[open], .ps-sheet[data-kind='notif'], .ps-sheet[data-kind='peers'], .ps-sheet[data-kind='conn'], .ps-sheet[data-kind='more']) #ps-strip,
 :root.phone-shell:not(.ps-add-open):has(.ctx-scroll) #ps-strip {
 	display: none !important;
 }
@@ -413,8 +413,19 @@
 
 /* 40 F1: on the phone the notification centre is a framed sheet, whose own scrim (above the bar)
    closes it — the desktop click-catcher would cover the bar, Play and the sheet's grab bar */
-:root.phone-shell .notif-backdrop {
+:root.phone-shell .notif-backdrop,
+:root.phone-shell .peers-backdrop {
 	display: none !important;
+}
+/* 41b H15: the connected-peers panel is a framed drawer too — it scrolls as one list there, where the
+   desktop popover caps its list at a few rows */
+:root.phone-shell #peers-popover[data-ps-host] {
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+:root.phone-shell #peers-popover[data-ps-host] .peers-scroll {
+	max-height: none;
+	overflow: visible;
 }
 
 /* 40 F3: in the docked Explorer's sideways-scrolling toolbar the identity chip (project ▸ scene)

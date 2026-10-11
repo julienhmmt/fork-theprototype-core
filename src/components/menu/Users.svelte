@@ -25,8 +25,10 @@
 		cloudIdentity,
 		connectDocked,
 		connectBarHeight,
+		peersPanelOpen,
 		showToast
 	} from '../../stores/appStore.js';
+	import WindowChrome from '../ui/WindowChrome.svelte';
 	import { globalScene, globalCamera, camSave, peerHands, isLocked } from '../../stores/sceneStore.js';
 	// 21-F3: who is in play mode, and who may end the round
 	import { peerPlayModes, resetAllowed, requestResetGame } from '$lib/gamePresence';
@@ -115,7 +117,6 @@
 	let muteMenu = $state(null);
 	// 130: the peers overflow is a proper popover listing EVERY peer (none
 	// hidden by stacking) with a labeled Watch affordance
-	let peersOpen = $state(false);
 	/** @param {string} id */
 	function shortId(id) {
 		return String(id ?? '').slice(0, 6);
@@ -332,7 +333,7 @@
 	 * @param {string} peerId
 	 */
 	function goToScene(peerId: string) {
-		void travelToPeerScene(peerId, () => (peersOpen = false));
+		void travelToPeerScene(peerId, () => (peersPanelOpen.set(false)));
 	}
 
 	/** R22 round 35: ask a private peer to share. One press per peer — the store remembers,
@@ -346,14 +347,14 @@
 	 * guard is answered; only the destination is pinned, because this button names a place. */
 	function doJoinWorld() {
 		void joinSessionWorld().then((ok) => {
-			if (ok) peersOpen = false;
+			if (ok) peersPanelOpen.set(false);
 		});
 	}
 	/** Leave private mode and stand where the session is. The unsaved-changes guard runs
 	 * INSIDE `rejoinSession`, so the popover stays put until it is answered. */
 	function doRejoin() {
 		void rejoinSession().then((ok) => {
-			if (ok) peersOpen = false;
+			if (ok) peersPanelOpen.set(false);
 		});
 	}
 	/** …or stay here and let everybody in. The scene keeps its name and its file; what
@@ -380,7 +381,7 @@
 	function doResetGame() {
 		const result = requestResetGame();
 		if (!result.ok && result.reason) showToast(result.reason);
-		peersOpen = false;
+		peersPanelOpen.set(false);
 	}
 	/** peerId whose role dropdown is open (null = none) */
 	let roleMenuFor: string | null = $state(null);
@@ -596,36 +597,25 @@
 {/snippet}
 
 {#snippet peerRow(user: any, self: boolean, showScene: boolean)}
+	<!-- 41b H15: ONE row per peer — avatar · name over ONE muted line (where they are, their role, the
+	     small facts; the place ellipsizes first, so nothing wraps) · actions on the right. The name
+	     ellipsizes too and carries the full name as its tooltip. -->
 	<div
-		class="peers-row flex items-center gap-2 rounded px-1.5 py-1 {$specatorMode === user[0]
+		class="peers-row rounded {$specatorMode === user[0]
 			? 'bg-accent-soft'
 			: 'hover:bg-surface-hover'}"
 	>
 		{@render avatarImg(user[2], 'bg-surface-active h-8 w-8 shrink-0')}
-		<div class="min-w-0 flex-1">
-			<div class="flex items-center gap-1 truncate text-sm text-text">
+		<div class="peer-info">
+			<div class="peer-name">
 				<span class="truncate" title={user[1] || 'Peer'}>{user[1] || 'Peer'}</span>
-				{#if self}<span class="text-[10px] text-accent-text">(you)</span>{/if}
+				{#if self}<span class="peer-you">(you)</span>{/if}
 			</div>
-			<div class="flex items-center gap-1.5 text-[10px] text-text-muted">
-				<span class="truncate">{shortId(user[0])}</span>
-				{#if $mutedPeers.includes(user[0])}<span title="Muted"><Icon name="volume-x" size={16} aria-hidden="true" /></span>{/if}
-				{#if $peerHands[user[0]]?.active}<span title="In VR"><Icon name="glasses" size={16} aria-hidden="true" /></span>{/if}
-				<!-- 21-F3: play-mode presence. `{@const}` may only be the IMMEDIATE
-					 child of a block, so the mode is resolved in the `{#if}` and
-					 named inside it. -->
-				{#if modeOf($peerPlayModes, $isLocked, user[0], self) === 'playing' || roundRunning}
-					{@const pmode = modeOf($peerPlayModes, $isLocked, user[0], self)}
-					<span
-						class="mode-chip"
-						data-mode={pmode}
-						title={pmode === 'playing' ? 'In play mode' : 'In the editor, not playing'}>{pmode}</span
-					>
-				{/if}
+			<div class="peer-meta">
 				<!-- P2b: where this peer is. Absent means we have not been told — which is
 				     not the same as "nowhere", so it renders nothing rather than guessing.
 				     `{@const}` may only be the IMMEDIATE child of a block, so the expression is
-				     repeated in the `{#if}` and named inside it — the mode chip above does the
+				     repeated in the `{#if}` and named inside it — the mode chip below does the
 				     same, for the same reason. -->
 				{#if showScene && chipFor($peerScenes, $currentLevel, user[0], self)}
 					{@const sceneName = chipFor($peerScenes, $currentLevel, user[0], self)}
@@ -639,7 +629,23 @@
 								: 'In ' + sceneName}>{sceneName}</span
 					>
 				{/if}
+				{#if ri && (self || !ri.amAdmin)}
+					<span class="role-badge" data-role={self ? ri.myRole : ri.roleOf(user[0])} title={self ? 'Your role' : 'Their role'}>{self ? ri.myRole : ri.roleOf(user[0])}</span>
+				{/if}
+				<!-- 21-F3: play-mode presence. `{@const}` may only be the IMMEDIATE
+					 child of a block, so the mode is resolved in the `{#if}` and
+					 named inside it. -->
+				{#if modeOf($peerPlayModes, $isLocked, user[0], self) === 'playing' || roundRunning}
+					{@const pmode = modeOf($peerPlayModes, $isLocked, user[0], self)}
+					<span
+						class="mode-chip"
+						data-mode={pmode}
+						title={pmode === 'playing' ? 'In play mode' : 'In the editor, not playing'}>{pmode}</span
+					>
+				{/if}
 				{#if user[3]}<span class="text-ink-warn">▸ {shortId(user[3])}</span>{/if}
+				{#if $mutedPeers.includes(user[0])}<span title="Muted"><Icon name="volume-x" size={16} aria-hidden="true" /></span>{/if}
+				{#if $peerHands[user[0]]?.active}<span title="In VR"><Icon name="glasses" size={16} aria-hidden="true" /></span>{/if}
 				{#if !self && $peerQuality[user[0]]}
 					{@const q = $peerQuality[user[0]]}
 					<span
@@ -648,16 +654,12 @@
 					>
 					{#if q.relayed}<span class="text-ink-warn" title="Relayed through a TURN server">relayed</span>{/if}
 				{/if}
+				<span class="peer-id" title={user[0]}>{shortId(user[0])}</span>
 			</div>
 		</div>
-		{#if ri}
-			{#if self}
-				<span class="role-badge" data-role={ri.myRole} title="Your role">{ri.myRole}</span>
-			{:else if ri.amAdmin}
-				<button type="button" class="role-badge role-btn" data-role={ri.roleOf(user[0])} aria-haspopup="listbox" aria-expanded={roleMenuFor === user[0]} title="Change role" onclick={(e) => toggleRoleMenu(e, user[0])}>{ri.roleOf(user[0])}<Icon name="chevron-down" size={16} class="role-caret" aria-hidden="true" /></button>
-			{:else}
-				<span class="role-badge" data-role={ri.roleOf(user[0])}>{ri.roleOf(user[0])}</span>
-			{/if}
+		<div class="peer-actions">
+		{#if ri && ri.amAdmin && !self}
+			<button type="button" class="role-badge role-btn" data-role={ri.roleOf(user[0])} aria-haspopup="listbox" aria-expanded={roleMenuFor === user[0]} title="Change role" onclick={(e) => toggleRoleMenu(e, user[0])}>{ri.roleOf(user[0])}<Icon name="chevron-down" size={16} class="role-caret" aria-hidden="true" /></button>
 		{/if}
 		{#if !self && $cameraPreviews[user[0]] && !watchBlockedBy($peerScenes, $currentLevel?.name ?? '', user[0], $sessionHost)}
 			<!-- 16-P5: this peer is looking through a scene camera — you can join.
@@ -666,7 +668,7 @@
 			<button
 				class="peer-watch peer-preview shrink-0 rounded px-2 py-0.5 text-xs bg-surface-active text-text hover:bg-border-strong"
 				title={`Previewing ${previewLabel($cameraPreviews[user[0]])} — click to look through it too`}
-				onclick={() => { joinPeerPreview(user[0]); peersOpen = false; }}
+				onclick={() => { joinPeerPreview(user[0]); peersPanelOpen.set(false); }}
 			>
 				<Icon name="camera" size={16} class="mr-1" aria-hidden="true" />{previewLabel($cameraPreviews[user[0]])}
 			</button>
@@ -736,13 +738,14 @@
 						: $specatorMode === user[0]
 							? 'Watching (exit from the banner)'
 							: 'Watch this peer'}
-					onclick={() => { specate(user[0]); peersOpen = false; }}
+					onclick={() => { specate(user[0]); peersPanelOpen.set(false); }}
 					oncontextmenu={(e) => openMuteMenu(e, user[0])}
 				>
 					<Icon name="eye" size={16} class="mr-1" aria-hidden="true" />{$specatorMode === user[0] ? 'Watching' : 'Watch'}
 				</button>
 			{/if}
 		{/if}
+		</div>
 	</div>
 {/snippet}
 
@@ -777,9 +780,9 @@
 		<button
 			id="peers-trigger"
 			class="hud-cell hud-tr-peers"
-			class:on={peersOpen}
+			class:on={$peersPanelOpen}
 			title="Connected peers"
-			onclick={() => (peersOpen = !peersOpen)}
+			onclick={() => peersPanelOpen.update((v) => !v)}
 		>
 			<div class="flex -space-x-2">
 				{#each $userdata.slice(1, 4) as user (user[0])}
@@ -789,14 +792,28 @@
 			<span class="hud-tr-count">{$userdata.length}</span>
 		</button>
 
-		{#if peersOpen}
-			<div class="fixed inset-0" style="z-index: 1;" role="presentation" onclick={() => { peersOpen = false; roleMenuFor = null; }}></div>
-			<div id="peers-popover" data-key-scope="panel" class="ui-panel absolute right-0 top-11 w-72 p-2" style="z-index: 3; {$connectDocked ? `position: fixed; top: ${$connectBarHeight + 44}px; right: 8px; left: auto; max-width: calc(100vw - 16px);` : ''}">
-				<div class="mb-1 flex items-center justify-between gap-2">
-					<!-- SELF-INCLUSIVE, in both places. The trigger badge and this line count the
-						 same thing and disagreed by one: the badge said 4 while the list drew 5
-						 rows. "Connected" is the people in the session, and you are one of them. -->
-					<p class="ui-section-label">Connected ({$userdata.length})</p>
+		{#if $peersPanelOpen}
+			<div class="peers-backdrop fixed inset-0" style="z-index: 1;" role="presentation" onclick={() => { peersPanelOpen.set(false); roleMenuFor = null; }}></div>
+			<!-- 41b H15: the same tool window as the notification centre beside it (ui/WindowChrome:
+			     title + count + actions + close), and as wide as its rows need — 320 px at least,
+			     growing to fit a long name or place up to 420 px, where the rows ellipsize. On a
+			     phone the shell frames it as a DRAWER like the notifications (grab bar, swipe down). -->
+			<div id="peers-popover" data-key-scope="panel" class="peers-pop absolute right-0 top-11" style="z-index: 3; {$connectDocked ? `position: fixed; top: ${$connectBarHeight + 44}px; right: 8px; left: auto;` : ''}">
+				<WindowChrome
+					size="tool"
+					title="Connected"
+					count={$userdata.length}
+					elevated
+					padded={false}
+					onclose={() => {
+						peersPanelOpen.set(false);
+						roleMenuFor = null;
+					}}
+				>
+				<!-- SELF-INCLUSIVE, in both places. The trigger badge and the header count the
+					 same thing and disagreed by one: the badge said 4 while the list drew 5
+					 rows. "Connected" is the people in the session, and you are one of them. -->
+				{#snippet actions()}
 					<!-- R22 round 30 B2: ALL or ROOMS. One mesh can hold several scenes now, so
 						 "who is here" and "who is WHERE" became two questions; this answers the
 						 second. The armed half is `aria-pressed`, so the styling and the
@@ -817,7 +834,8 @@
 							onclick={() => setPeersView('rooms')}>Rooms</button
 						>
 					</div>
-				</div>
+				{/snippet}
+				<div class="peers-body">
 				<!-- R22 round 35: OUR OWN private state, said once at the top rather than as a
 					 badge on our row — it is a fact about this whole list (nobody in it can see
 					 what we are editing), and it is where the two ways out belong. Share keeps
@@ -931,6 +949,8 @@
 						<CloudSlot mount={$usersSlot} />
 					</div>
 				{/if}
+				</div>
+				</WindowChrome>
 			</div>
 			<!-- role dropdown — PORTALED to <body> (fixed position) so it isn't clipped by
 				 the peers list's overflow container -->
@@ -1142,6 +1162,18 @@
 	.role-badge[data-role='admin'] { background: var(--accent-fill); color: var(--on-accent); }
 	/* keep the peers list scrollable so it never spills off a short/narrow screen */
 	.peers-scroll { max-height: 264px; overflow-y: auto; }
+	/* 41b H15: the peers panel — 320 px at least, as wide as its rows up to 420 px (then they ellipsize) */
+	.peers-pop { width: max-content; min-width: min(320px, calc(100vw - 24px)); max-width: min(420px, calc(100vw - 24px)); }
+	.peers-body { padding: 6px; }
+	.peers-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 8px; }
+	.peer-info { min-width: 0; }
+	.peer-name { display: flex; align-items: baseline; gap: 4px; min-width: 0; font-size: var(--fs-body); color: var(--text); white-space: nowrap; }
+	.peer-you { flex: 0 0 auto; font-size: var(--fs-badge); color: var(--accent-text); }
+	.peer-meta { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 2px; overflow: hidden; white-space: nowrap; font-size: var(--fs-badge); color: var(--text-muted); }
+	.peer-meta > * { flex: 0 0 auto; }
+	.peer-meta > .scene-chip { flex: 0 1 auto; }
+	.peer-id { color: var(--text-faint); }
+	.peer-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap; }
 	/* 21-F3 play-mode chip. Deliberately quieter than the role badge beside it: a role
 	   is an authority and a mode is a passing fact. */
 	.mode-chip { flex: 0 0 auto; font-size: 9px; font-weight: 600; letter-spacing: 0.02em; padding: 0 6px; border-radius: 9999px; text-transform: capitalize; line-height: 1.5; border: 1px solid transparent; }

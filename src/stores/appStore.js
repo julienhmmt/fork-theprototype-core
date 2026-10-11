@@ -541,6 +541,9 @@ export const inspectorFilter = writable('');
 export const inspectorScrollTo = writable(null);
 /** the notification center panel open state */
 export const notificationCenterOpen = writable(false);
+/** 41b H15: the connected-peers panel (top bar, beside the bell) — a store, not component state, so the
+ * phone shell can frame it as a drawer the way it frames the notification centre */
+export const peersPanelOpen = writable(false);
 /** E2: the scene-notes drawer (lists every annotation) open state */
 export const notesDrawerOpen = writable(false);
 

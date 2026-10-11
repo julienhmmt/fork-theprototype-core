@@ -63,6 +63,7 @@
 		aiAssistantHidden,
 		objectListClose,
 		notificationCenterOpen,
+		peersPanelOpen,
 		notesDrawerOpen,
 		inspectorClose,
 		inspectorKind,
@@ -150,6 +151,8 @@
 		chat: ['#chat-window', null, false],
 		ai: ['#ai-assistant-window', null, false],
 		notif: ['#notif-panel', null, true],
+		// 41b H15: the connected-peers panel is a drawer like the notifications (it draws its own header)
+		peers: ['#peers-popover', null, true],
 		conn: ['.connect-wrap', 'Connection', true],
 		more: [null, 'More', true]
 	};
@@ -159,6 +162,7 @@
 		chat: $chatHidden === '',
 		ai: $aiAssistantHidden === '',
 		notif: $notificationCenterOpen,
+		peers: $peersPanelOpen,
 		conn: $phoneSheet === 'conn',
 		more: $phoneSheet === 'more'
 	}));
@@ -226,6 +230,7 @@
 		else if (k === 'chat') chatHidden.set('hidden');
 		else if (k === 'ai') aiAssistantHidden.set('hidden');
 		else if (k === 'notif') notificationCenterOpen.set(false);
+		else if (k === 'peers') peersPanelOpen.set(false);
 		else if (k === 'conn') closeConn();
 		else if (k === 'more') phoneSheet.set(null);
 	}
