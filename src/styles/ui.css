@@ -190,6 +190,29 @@ input.tp-check:disabled {
 	#inspector .ins-head {
 		top: 24px;
 	}
+	/* 41b H1: on the phone the Inspector is a DOCK TAB (Properties / Configure Scene), placed into
+	   the dock frame's body (PhoneDockHost publishes --pd-top). Same layer as the sheet rules above,
+	   which it overrides; the dock's grab bar (PhoneShell) replaces the sheet's own. */
+	:root.phone-shell #inspector[data-pd-host] {
+		top: var(--pd-top) !important;
+		bottom: var(--ps-bar-h) !important;
+		height: auto !important;
+		max-height: none !important;
+		padding-bottom: 12px !important;
+		border: 0 !important;
+		border-radius: 0 !important;
+		box-shadow: none !important;
+		z-index: calc(var(--z-dock) + 1) !important;
+	}
+	:root.phone-shell #inspector[data-pd-host='hidden'] {
+		display: none !important;
+	}
+	:root.phone-shell #inspector[data-pd-host] .ins-resize {
+		display: none !important;
+	}
+	:root.phone-shell #inspector[data-pd-host] .ins-head {
+		top: 0;
+	}
 	/* the notifications panel is anchored to the bell (top-right); on a narrow screen
 	   pin it to the viewport so its 20rem width can't spill off the left/top edge */
 	#notif-panel {

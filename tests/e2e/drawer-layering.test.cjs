@@ -192,7 +192,8 @@ h.run(async () => {
 
 	// ---- TOOL sheets: the strip rides ABOVE them ------------------------------------------
 	const TOOLS = [
-		['Objects', async () => P.evaluate(() => window.__stores.objectListClose.set(false)), ['.ps-sheet', '[data-ps-host="top"]']],
+		// 41b H1: Objects is a dock tab on the phone — the dock frame, the list placed into it, the dock's grab bar
+		['Objects', async () => P.evaluate(() => window.__stores.objectListClose.set(false)), ['#phone-dock', '#object-list', '#ps-dock-grip']],
 		['Chat', async () => P.evaluate(() => window.__stores.chatHidden.set('')), ['.ps-sheet', '[data-ps-host="top"]']],
 		['Inspector', async () => tapSel('#ps-inspect'), ['#inspector']],
 		['Configure Scene', async () => P.evaluate(() => window.__stores.showSidebar('scene')), ['#inspector']],

@@ -155,6 +155,7 @@ export const DEBUG_HOOKS = [
 	['explorer', () => import('./explorer')],
 	['bottomDock', () => import('./bottomDock')],
 	['dockMenu', () => import('./dockMenu')],
+	['phoneDock', () => import('./phoneDock')],
 	['explorerDrop', () => import('./explorerDrop')],
 	['assetShare', () => import('./assetShare')],
 	['soundRuntime', () => import('./soundRuntime')],

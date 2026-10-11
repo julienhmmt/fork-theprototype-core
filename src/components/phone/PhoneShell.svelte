@@ -42,10 +42,7 @@
 		messages,
 		chatHidden,
 		aiAssistantHidden,
-		objectListClose,
 		notificationCenterOpen,
-		notesDrawerOpen,
-		inspectorClose,
 		inspectorKind,
 		connectDrawerOpen,
 		connectDrawerPinned,
@@ -54,7 +51,6 @@
 		viewportMenu,
 		multiSelectMode,
 		touchTools,
-		showSidebar,
 		showToast,
 		settingsOpen,
 		settingsSection
@@ -62,7 +58,7 @@
 	import { selectedObjects, transformMode, editorMode } from '../../stores/sceneStore';
 	import { undo, redo, canUndo, canRedo } from '$lib/history';
 	import { setTransformMode, toggleEditorMode } from '$lib/objectActions';
-	import { togglePanel } from '$lib/panelToggles';
+	import { phoneBarTap, openPhoneTab, closePhoneTab, phoneDockShown } from '$lib/phoneDock';
 	import { requestPlay, willEnterXR, willEnterAR } from '$lib/playMode';
 	import { visibleDockKey, DOCK_TITLES, dockMinimized, dockHeight } from '$lib/bottomDock';
 	import { micActive, pttActive, toggleMic } from '$lib/voiceChat';
@@ -126,8 +122,8 @@
 	/** kind -> [selector of the reused element, title for the frame (null = the window
 	 *  draws its own header), menu-like (a scrim behind it)]
 	 * @type {Record<string, [string|null, string|null, boolean]>} */
+	// 41b H1: Objects is a DOCK TAB now (PhoneDockHost), not a framed sheet
 	const HOSTS = {
-		objects: ['#object-list', null, false],
 		chat: ['#chat-window', null, false],
 		ai: ['#ai-assistant-window', null, false],
 		notif: ['#notif-panel', null, true],
@@ -136,7 +132,6 @@
 	};
 
 	const openNow = $derived(/** @type {Record<string, boolean>} */ ({
-		objects: !$objectListClose,
 		chat: $chatHidden === '',
 		ai: $aiAssistantHidden === '',
 		notif: $notificationCenterOpen,
@@ -203,8 +198,7 @@
 
 	function closeKind(/** @type {string|null} */ k) {
 		dragH = null;
-		if (k === 'objects') objectListClose.set(true);
-		else if (k === 'chat') chatHidden.set('hidden');
+		if (k === 'chat') chatHidden.set('hidden');
 		else if (k === 'ai') aiAssistantHidden.set('hidden');
 		else if (k === 'notif') notificationCenterOpen.set(false);
 		else if (k === 'conn') closeConn();
@@ -261,10 +255,13 @@
 	// (`hasSel` is declared with the sheet geometry above: the room a sheet may take depends on it)
 	// 41 G11: Inspect is a TOGGLE whose pressed state is the Inspector really showing the
 	// selection (it used to be an always-tinted label button that could only open it)
-	const inspecting = $derived(!$inspectorClose && $inspectorKind === 'selection');
+	// 41b H1: the Inspector is the PROPERTIES dock tab on a phone — pressed while that tab is the one
+	// on screen, and a press while it is covered by another tab (or the dock is minimized) brings it
+	// to the front instead of opening a drawer behind the dock
+	const inspecting = $derived($phoneDockShown === 'properties' && $inspectorKind === 'selection');
 	function toggleInspect() {
-		if (inspecting) inspectorClose.set(true);
-		else showSidebar('properties');
+		if (inspecting) closePhoneTab('properties');
+		else openPhoneTab('properties');
 	}
 
 	// ---- the bar ---------------------------------------------------------------------
@@ -323,7 +320,26 @@
 	const dockShown = $derived(Math.min($dockHeight, dockMax));
 	/** 41 G5: the docked view on screen — its lists hand off to the dock's sheet gesture (a
 	 *  canvas or node graph inside keeps every touch: sheetDrag's touch-action rule) */
-	const dockPanels = () => [...document.querySelectorAll('.tp-dock-panel')].filter((el) => !el.classList.contains('hidden') && /** @type {HTMLElement} */ (el).offsetHeight > 0);
+	// 41b H1: a content tab's panel (the Inspector, the object list, the notes) is re-seated over the
+	// dock frame rather than inside it, so it is a surface of its own
+	const dockPanels = () =>
+		[...document.querySelectorAll('.tp-dock-panel, [data-pd-host="shown"]')].filter((el) => !el.classList.contains('hidden') && /** @type {HTMLElement} */ (el).offsetHeight > 0);
+
+	// 41b H1: a swipe-away MINIMIZES the dock, and the height it comes back at is the one the gesture
+	// started from — the live drag wrote every step into the shared height, so without this the next
+	// tab opened at the few pixels the swipe ended at (measured: flowDockHeight=0, every tab 27 px)
+	let dockDragFrom = 0;
+	/** @param {number} h @param {boolean} done */
+	function dockResize(h, done) {
+		if (!dockDragFrom) dockDragFrom = $dockHeight;
+		dockHeight.set(Math.round(h));
+		if (done) dockDragFrom = 0;
+	}
+	function dockClose() {
+		if (dockDragFrom) dockHeight.set(dockDragFrom);
+		dockDragFrom = 0;
+		dockMinimized.set(true);
+	}
 
 	// unread chat: messages that arrived while the chat sheet was closed
 	let seenChat = $state(0);
@@ -349,7 +365,7 @@
 	/** @param {string} key */
 	function openView(key) {
 		phoneSheet.set(null);
-		togglePanel(key);
+		phoneBarTap(key);
 	}
 	function openAi() {
 		phoneSheet.set(null);
@@ -369,7 +385,8 @@
 	/** @param {string} key */
 	const viewAction = (key) => ({
 		label: DOCK_TITLES[key] ?? key,
-		run: fromMore(() => togglePanel(key)),
+		// 41b H5: a tap on the view that is on screen minimizes the dock (phoneBarTap)
+		run: fromMore(() => phoneBarTap(key)),
 		pressed: () => $visibleDockKey === key && !$dockMinimized
 	});
 	/** ONE map the bar AND the More tiles render from, so a destination cannot behave
@@ -377,7 +394,8 @@
 	 * @type {Record<string, {label: string, icon: string, run: () => void, pressed: () => boolean, badge?: () => number}>} */
 	const ACTIONS = {
 		add: { label: 'Add', icon: 'plus', run: () => add(), pressed: () => false },
-		objects: { label: 'Objects', icon: 'list', run: fromMore(() => togglePanel('objects')), pressed: () => !$objectListClose },
+		// 41b H1/H5: Objects, Configure Scene and Notes are dock tabs — the bar shows / minimizes them
+		objects: { label: 'Objects', icon: 'list', run: fromMore(() => phoneBarTap('objects')), pressed: () => $visibleDockKey === 'objects' && !$dockMinimized },
 		chat: {
 			label: 'Chat',
 			icon: 'message-square',
@@ -392,19 +410,15 @@
 		scene: {
 			label: 'Scene',
 			icon: 'sun',
-			run: fromMore(() => showSidebar('scene')),
-			pressed: () => !$inspectorClose && $inspectorKind === 'scene'
+			run: fromMore(() => phoneBarTap('scene')),
+			pressed: () => $visibleDockKey === 'scene' && !$dockMinimized
 		},
 		ai: { label: 'AI assistant', icon: 'sparkles', run: () => openAi(), pressed: () => $aiAssistantHidden === '' },
 		notes: {
 			label: 'Notes',
 			icon: 'sticky-note',
-			run: () => {
-				const open = $notesDrawerOpen;
-				phoneSheet.set(null);
-				notesDrawerOpen.set(!open);
-			},
-			pressed: () => $notesDrawerOpen
+			run: fromMore(() => phoneBarTap('notes')),
+			pressed: () => $visibleDockKey === 'notes' && !$dockMinimized
 		},
 		more: {
 			label: 'More',
@@ -549,7 +563,7 @@
 
 	{#if dockOn}
 		<div class="ps-dockgrip" id="ps-dock-grip" style:bottom="calc(var(--ps-bar-h) + {dockShown - 24}px)">
-			<SheetGrip label="dock" height={dockShown} min={160} max={dockMax} surface={dockPanels} onresize={(h) => dockHeight.set(Math.round(h))} onclose={() => dockMinimized.set(true)} />
+			<SheetGrip label="dock" height={dockShown} min={160} max={dockMax} surface={dockPanels} onresize={dockResize} onclose={dockClose} />
 		</div>
 	{/if}
 

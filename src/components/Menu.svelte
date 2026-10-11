@@ -46,6 +46,7 @@
 	// 38 R9: below 640px the decluttered phone shell (top bar, context strip, bottom bar,
 	// sheets) is drawn over the same components — see PhoneShell.svelte
 	import PhoneShell from './phone/PhoneShell.svelte'
+	import PhoneDockHost from './phone/PhoneDockHost.svelte'
 	import { phoneShell } from '$lib/ui/phoneShell.js'
 </script>
 
@@ -82,6 +83,8 @@
 <AnnotationPopover />
 <NotesDrawer />
 <LayoutsMenu />
+<!-- 41b H1: on a phone the content panels are dock tabs; the frame they sit in (+ the posture memory) -->
+<PhoneDockHost />
 <Toasts />
 <SessionPrompts />
 <Users />
