@@ -25,12 +25,16 @@
 	// `frame` (default) keeps `.tp-modal-frame` — the fixed --z-modal tier, the dim, and the
 	// full-screen-under-640 treatment in styles/ui.css — so the layering contract is unchanged.
 	// `width` picks the desktop width: sm 480 · md 720 · lg 960 · xl 1200.
+	// `desktopWidth` (42 I13) is a CSS width for the dialog ABOVE the phone breakpoint only — the
+	// way to ask for a narrow desktop dialog. Never put a max-width in an inline `style`: an inline
+	// !important outranks the frame's layered phone rule, and the full-screen sheet stopped at
+	// that width on a folded phone (the H14 Save options gap on the right).
 	import { fade } from 'svelte/transition';
 	import { sineIn } from 'svelte/easing';
 	import WindowChrome from './WindowChrome.svelte';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
 
-	/** @type {{open?: boolean, title?: string, titleId?: string, modal?: boolean, outsideclose?: boolean, dismissable?: boolean, permanent?: boolean, frame?: boolean, width?: 'sm'|'md'|'lg'|'xl', padded?: boolean, bodyId?: string, bodyClass?: string, class?: string, oncancel?: (e: Event) => void, actions?: import('svelte').Snippet, bar?: import('svelte').Snippet, footer?: import('svelte').Snippet, children?: import('svelte').Snippet} & Record<string, any>} */
+	/** @type {{open?: boolean, title?: string, titleId?: string, modal?: boolean, outsideclose?: boolean, dismissable?: boolean, permanent?: boolean, frame?: boolean, width?: 'sm'|'md'|'lg'|'xl', desktopWidth?: string, padded?: boolean, bodyId?: string, bodyClass?: string, class?: string, oncancel?: (e: Event) => void, actions?: import('svelte').Snippet, bar?: import('svelte').Snippet, footer?: import('svelte').Snippet, children?: import('svelte').Snippet} & Record<string, any>} */
 	let {
 		open = $bindable(false),
 		title = '',
@@ -41,6 +45,7 @@
 		permanent = false,
 		frame = true,
 		width = 'lg',
+		desktopWidth = '',
 		padded = true,
 		bodyId = undefined,
 		bodyClass = '',
@@ -131,6 +136,8 @@
 		aria-labelledby={title ? headingId : undefined}
 		class="tp-ui md md-{width} {className}"
 		class:tp-modal-frame={frame}
+		class:md-dw={!!desktopWidth}
+		style:--md-desktop-w={desktopWidth || undefined}
 		oncancel={onCancel}
 		onclick={onClick}
 		ontoggle={onToggle}
@@ -235,6 +242,13 @@
 		padding: 14px 22px;
 		border-top: 1px solid var(--border);
 		background: color-mix(in srgb, var(--surface-1) 85%, var(--bg-app));
+	}
+
+	/* 42 I13: a caller's own desktop width, never on the phone (the frame's sheet owns that) */
+	@media (min-width: 641px) {
+		.md-dw {
+			width: var(--md-desktop-w);
+		}
 	}
 
 	@media (max-width: 640px) {
