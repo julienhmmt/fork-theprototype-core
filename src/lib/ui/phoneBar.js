@@ -16,6 +16,7 @@
 // never replicated, saved or undone. Pure helpers + stores; tests/unit/phoneBar.test.js.
 import { writable } from 'svelte/store';
 import { safeStorage } from '../safeStorage';
+import { onLayoutRestore } from '../uiLayoutsCore';
 
 /** every destination a slot may hold, in the order the editor lists them */
 export const BAR_CATALOG = [
@@ -158,3 +159,11 @@ export function setBarPlayAt(playAt) {
 		// private mode: Play still moves for this session
 	}
 }
+
+// 42 I8: a workspace layout carries the phone bar (its `phone` chrome profile: STORAGE_KEY +
+// PLAY_AT_KEY, listed in uiLayoutsCore's CHROME_KEYS) — re-read both when one is applied
+if (typeof localStorage !== 'undefined')
+	onLayoutRestore(() => {
+		phoneBarSlots.set(load());
+		phoneBarPlayAt.set(loadPlayAt());
+	});

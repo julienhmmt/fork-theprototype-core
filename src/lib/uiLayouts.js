@@ -10,10 +10,14 @@ import {
 	renameLayout,
 	cleanName,
 	runLayoutReloaders,
-	MAX_LAYOUTS
+	MAX_LAYOUTS,
+	LAYOUT_VERSION,
+	pickChrome,
+	chromeWrites
 } from './uiLayoutsCore';
 import { snapshotWorkspace, applyWorkspace, closeWorkspace } from './workspace';
-import { hudEditorClose, profilerClose, chatHidden, settingsOpen } from '../stores/appStore';
+import { hudEditorClose, profilerClose, chatHidden, settingsOpen, floatingToolbar, toolbarAlwaysOnTop, hudStackLift, showRoomsButton } from '../stores/appStore';
+import { phoneShell } from './ui/phoneShell';
 
 // 37 R14 — NAMED WORKSPACE LAYOUTS, the live half (the rules are in uiLayoutsCore).
 //
@@ -62,11 +66,19 @@ function newId() {
 	}
 }
 
+/** 42 I8: which chrome profile this screen is — the folded phone shell is `phone`, everything
+ *  else (desktop, the unfolded phone, a tablet) draws the desktop toolbar and is `desktop`
+ *  @returns {import('./uiLayoutsCore').ChromeProfile} */
+export function currentChromeProfile() {
+	return get(phoneShell) ? 'phone' : 'desktop';
+}
+
 /** The live UI as a layout record (not stored). @param {string} name */
 export function captureLayout(name) {
 	const ws = snapshotWorkspace({ always: true });
+	const profile = currentChromeProfile();
 	return {
-		v: 1,
+		v: LAYOUT_VERSION,
 		id: newId(),
 		name: cleanName(name),
 		savedAt: Date.now(),
@@ -79,7 +91,11 @@ export function captureLayout(name) {
 		},
 		dockTab: ws.dockTab,
 		inspector: ws.inspector,
-		storage: pickLayoutStorage(safeStorage.keys(), (key) => safeStorage.getItem(key))
+		storage: pickLayoutStorage(safeStorage.keys(), (key) => safeStorage.getItem(key)),
+		// 42 I8: the toolbar + corners + top-right group + touch tools (desktop), or the phone bar —
+		// ONLY the profile of the shell you are in; a save of the same name from the other shell
+		// keeps this one (upsertLayout merges the two)
+		chrome: { [profile]: pickChrome(profile, (key) => safeStorage.getItem(key)) }
 	};
 }
 
@@ -146,6 +162,16 @@ export async function applyLayout(id) {
 		const { set, remove } = layoutWrites(layout.storage, safeStorage.keys());
 		for (const key of remove) safeStorage.removeItem(key);
 		for (const [key, value] of set) safeStorage.setItem(key, value);
+		// 42 I8: every chrome profile the record carries (both, so an unfolded apply brings the
+		// folded bar back too); a v1 record carries none and leaves the chrome alone
+		for (const profile of /** @type {const} */ (['desktop', 'phone'])) {
+			const chrome = layout.chrome?.[profile];
+			if (!chrome) continue;
+			const writes = chromeWrites(profile, chrome);
+			for (const key of writes.remove) safeStorage.removeItem(key);
+			for (const [key, value] of writes.set) safeStorage.setItem(key, value);
+			if (profile === 'desktop') reloadDesktopChromePrefs();
+		}
 		runLayoutReloaders();
 		await tick();
 
@@ -157,6 +183,16 @@ export async function applyLayout(id) {
 	} finally {
 		applying = false;
 	}
+}
+
+/** 42 I8: the toolbar prefs that live in appStore stores, re-read from the keys a layout just
+ *  wrote (each store's own reading rule — absent = its default). The record itself
+ *  (`controlsLayout`) and the phone bar re-read through `onLayoutRestore`, from their owners. */
+function reloadDesktopChromePrefs() {
+	floatingToolbar.set(safeStorage.getItem('floatingToolbar') !== 'false');
+	toolbarAlwaysOnTop.set(safeStorage.getItem('toolbarOnTop') === 'true');
+	hudStackLift.set(safeStorage.getItem('hudStackLift') === 'true');
+	showRoomsButton.set(safeStorage.getItem('showRoomsButton') !== 'false');
 }
 
 /** the burger menu's Layouts popover */
