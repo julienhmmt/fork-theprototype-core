@@ -105,6 +105,9 @@
 	import { peerQuality } from '$lib/networkQuality';
 	import ContextMenu from '../ContextMenu.svelte';
 	import NotificationCenter from './NotificationCenter.svelte';
+	// 42 I9: which of the group's own buttons are placed here, in what order (Controls' layout)
+	import { toolbarSlots, slotOrder, TOP_DEFAULT } from '$lib/toolbarSlots';
+	import { phoneShell } from '$lib/ui/phoneShell.js';
 	import CloudSlot from '../CloudSlot.svelte';
 	import { usersSlot, profileSlot, rolesInfo, scenePresence } from '$lib/cloudHooks';
 	import { safeStorage } from '$lib/safeStorage';
@@ -567,6 +570,16 @@
 		void $connectBarHeight;
 		if (openDropdown) queueMicrotask(placeDropdown);
 	});
+
+	// 42 I9 — THE TOP-RIGHT GROUP IS A LAYOUT REGION. Notes, the bell and the peers trigger are
+	// drawn here (their panels hang off them) wherever the toolbar's layout record puts them in
+	// this group, in its order (CSS `order` — Controls portals any OTHER button placed here into
+	// the same flex row with the same numbers); one moved elsewhere or removed is not drawn, and
+	// while Edit positions runs Controls draws the whole group's placeholders instead. The folded
+	// phone shell keeps the default group (its chrome is the phone bar's).
+	const trSlots = $derived($phoneShell ? { top: TOP_DEFAULT, editing: false } : $toolbarSlots);
+	const trOrder = (id: string) => slotOrder(trSlots.top, id);
+	const trShown = (id: string) => !trSlots.editing && trOrder(id) != null;
 </script>
 
 <!--
@@ -754,28 +767,35 @@
 <div class="top-right-chrome" style="position: fixed; right: 0px; z-index: var(--z-chrome-top); top: {$connectDocked ? $connectBarHeight + 'px' : '0px'};">
 	<!-- 38 R8: one glass group (styles/hud.css) — notes, notifications, peers — sitting just
 	     left of the profile circle, which keeps its own place (its dropdown is anchored to it) -->
-	<div class="tp-ui hud-glass hud-tr" style="position: absolute; top: 10px; right: 76px; z-index: 2;">
+	<div id="hud-tr" class="tp-ui hud-glass hud-tr" style="position: absolute; top: 10px; right: 76px; z-index: 2;">
 	<!-- E2: scene-notes drawer toggle -->
+	{#if trShown('notes')}
 	<button
 		id="notes-toggle"
 		class="hud-cell"
 		class:on={$notesDrawerOpen}
+		style:order={trOrder('notes')}
 		title="Scene notes"
 		aria-label="Scene notes"
 		onclick={() => notesDrawerOpen.update((v) => !v)}
 	>
 		<Icon name="sticky-note" size={20} aria-hidden="true" />
 	</button>
+	{/if}
 	<!-- E1: notifications bell + history panel -->
-	<NotificationCenter />
+	{#if trShown('notifications')}
+	<div class="hud-tr-slot" style:order={trOrder('notifications')}>
+		<NotificationCenter />
+	</div>
+	{/if}
 <!-- CN: gate on LIVE connections (openedPeers), not the roster — userdata is
 	 populated optimistically at dial time, which showed a phantom peer while an
 	 outbound request was still pending.
 	 21-G5: OR on cross-scene presence — being alone in YOUR scene is exactly when
 	 "where is everyone" matters, and a popover that only exists once somebody is
 	 already in your mesh could never show you the people who are not. -->
-{#if ($userdata && $userdata.length > 1 && $peers && $peers.openedPeers?.size > 0) || crossRooms.length > 0}
-	<div class="relative">
+{#if trShown('peers') && (($userdata && $userdata.length > 1 && $peers && $peers.openedPeers?.size > 0) || crossRooms.length > 0)}
+	<div class="relative" style:order={trOrder('peers')}>
 		<!-- compact trigger: a few stacked avatars + the peer count -->
 		<button
 			id="peers-trigger"

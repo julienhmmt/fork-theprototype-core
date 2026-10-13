@@ -381,6 +381,14 @@
 #controls-pill .hud-edit-add {
 	border-radius: var(--radius-button);
 }
+/* 42 I9: the touch tools' round buttons carry their own fill (TouchTools' .tt-btn) — an empty
+   place there reads like every other one */
+#touch-tools .hud-edit-add {
+	background: transparent;
+	border: 1.5px dashed color-mix(in srgb, var(--ink-good) 70%, transparent);
+	box-shadow: none;
+	color: var(--ink-good);
+}
 .hud-edit-add:hover,
 .hud-edit-add:focus-visible {
 	background: color-mix(in srgb, var(--ink-good) 16%, transparent);

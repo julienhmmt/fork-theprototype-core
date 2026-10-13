@@ -40,6 +40,10 @@
 	import { createAttachmentKey, fromAction } from 'svelte/attachments';
 	// 41 G1: MobileAddButton / AiHudButton (and VoiceChat's mic button) became roster entries
 	import { aiAssistantHidden, settingsOpen, settingsSection, viewportMenuOpener } from '../../stores/appStore.js';
+	// 42 I9: the top-right group's and the touch tools' buttons join the roster
+	import { notesDrawerOpen, multiSelectMode, touchTools } from '../../stores/appStore.js';
+	import { undo, redo } from '$lib/history';
+	import { toolbarSlots, TOP_DEFAULT, TOUCH_DEFAULT, TOP_NATIVE, TOUCH_NATIVE } from '$lib/toolbarSlots';
 	import { aiReady } from '$lib/ai/providers';
 	import { canvasCenter } from '$lib/canvasRect';
 	import { micActive, pttActive, toggleMic } from '$lib/voiceChat';
@@ -77,7 +81,8 @@
 		isHole,
 		stepItem,
 		unplacedIds,
-		regionOf
+		regionOf,
+		canPlace
 	} from '$lib/toolbarLayout';
 	import type { ToolbarLayout, LayoutConfig, Placements, Region } from '$lib/toolbarLayout';
 	import { pivotMode, pivotParentAvailable } from '$lib/multiTransform'; // 37 R1: the toolbar Pivot cell
@@ -1249,6 +1254,59 @@
 			},
 			tint: () => ($micActive || $pttActive ? ICON_ON : ICON_OFF),
 			run: () => toggleMic()
+		},
+		// 42 I9: THE TOP-RIGHT GROUP AND THE TOUCH TOOLS JOIN THE ROSTER. Users.svelte and
+		// TouchTools.svelte still draw these six where they are at home (the notifications panel
+		// and the peers popover hang off their buttons); these entries are what every MENU and
+		// the edit placeholders read, and what Controls draws when one is placed somewhere else
+		// (Scene notes on the bar, Undo in a corner…). The bell and the peers trigger are
+		// HOME-ONLY (`HOME_ONLY` below), so they are never drawn from here — only edited.
+		notes: {
+			title: 'Scene notes',
+			slot: 'notes-toggle',
+			icon: 'sticky-note',
+			tint: () => ($notesDrawerOpen ? ICON_ON : ICON_OFF),
+			run: () => notesDrawerOpen.update((v) => !v)
+		},
+		notifications: {
+			title: 'Notifications',
+			icon: 'bell',
+			tint: () => ICON_OFF,
+			run: () => {}
+		},
+		peers: {
+			title: 'Connected peers — shown while someone is connected',
+			label: 'Connected peers',
+			icon: 'users',
+			tint: () => ICON_OFF,
+			run: () => {}
+		},
+		undo: {
+			title: 'Undo',
+			slot: 'touch-undo',
+			icon: 'undo-2',
+			tint: () => ICON_OFF,
+			run: () => undo()
+		},
+		redo: {
+			title: 'Redo',
+			slot: 'touch-redo',
+			icon: 'redo-2',
+			tint: () => ICON_OFF,
+			run: () => redo()
+		},
+		multiselect: {
+			get title() {
+				return $multiSelectMode
+					? 'Multi-select on — a tap adds to the selection, a drag on empty space boxes'
+					: 'Multi-select — tap to add objects, drag empty space to box-select';
+			},
+			label: 'Multi-select',
+			slot: 'touch-multiselect',
+			icon: 'box-select',
+			tint: () => ($multiSelectMode ? ICON_ON : ICON_OFF),
+			pressed: () => $multiSelectMode,
+			run: () => multiSelectMode.update((v) => !v)
 		}
 	};
 	/** 41 G1: the corner buttons and where a fresh profile puts them (bottom → top) — the
@@ -1256,7 +1314,10 @@
 	const CORNER_LEFT = ['ai', 'add'];
 	const CORNER_RIGHT = ['chat', 'mic'];
 	/** every id the layout can place, in the order the Customize / "+" lists show them */
-	const ROSTER_IDS = [...DEFAULT_ORDER, ...OPTIONAL_VIEWS, ...CORNER_LEFT, ...CORNER_RIGHT];
+	/** 42 I9: the bell and the peers trigger open their panels from the top-right corner, so they
+	 *  may only live in the top-right group (moved, removed, re-added there — never elsewhere) */
+	const HOME_ONLY: Record<string, Region> = { notifications: 'top', peers: 'top' };
+	const ROSTER_IDS = [...DEFAULT_ORDER, ...OPTIONAL_VIEWS, ...CORNER_LEFT, ...CORNER_RIGHT, ...TOP_DEFAULT, ...TOUCH_DEFAULT];
 	/** 42 I7: the name a MENU prints for a button (its short label, else its title) */
 	function labelOf(id: string) {
 		return id === SPACER ? 'Play' : (BUTTONS[id]?.label ?? BUTTONS[id]?.title ?? id);
@@ -1326,6 +1387,9 @@
 		spacer: DEFAULT_SPACER,
 		left: CORNER_LEFT,
 		right: CORNER_RIGHT,
+		top: TOP_DEFAULT,
+		touch: TOUCH_DEFAULT,
+		homeOnly: HOME_ONLY,
 		isKnown: (id: string) => !!BUTTONS[id],
 		legacyRows: LEGACY_DEFAULT_ROWS,
 		promoted: PROMOTED_DEFAULTS
@@ -1360,6 +1424,12 @@
 	let controlsLayout: ControlsLayout = $state(defaultLayout());
 	onMount(() => {
 		controlsLayout = loadLayout();
+		// 42 I8: a workspace layout carries this record (its desktop chrome profile) — re-read it
+		// when one is applied, and drop a draft the new record makes stale
+		return onLayoutRestore(() => {
+			if (editing) cancelEditPositions();
+			controlsLayout = loadLayout();
+		});
 	});
 
 	function saveLayout() {
@@ -1465,7 +1535,7 @@
 	 *  and then having to move things. */
 	function swapCell(fromId: string, toId: string) {
 		if (!BUTTONS[toId]) return;
-		setLayout(swapToolbarCell(controlsLayout, fromId, toId));
+		setLayout(swapToolbarCell(controlsLayout, fromId, toId, HOME_ONLY));
 	}
 
 	// ── 41 G1: EDIT POSITIONS ──────────────────────────────────────────────────────────
@@ -1494,7 +1564,7 @@
 		customizeMenu = null;
 		playMenu = null;
 		if (toolbarGrab.active()) toolbarGrab.cancel();
-		editing = placements(controlsLayout);
+		editing = placements(controlsLayout, HOME_ONLY);
 		editFocus = focusId && (focusId === SPACER || regionOf(controlsLayout, focusId)) ? focusId : null;
 		tick().then(() => focusEditItem(editFocus ?? visualIds()[0]));
 	}
@@ -1543,7 +1613,9 @@
 	function editAddItems() {
 		if (!editing || !editAddMenu) return [];
 		const target = editAddMenu;
-		const free = unplacedIds(editing, ROSTER_IDS);
+		const draft = editing;
+		// 42 I9: only what may go THERE (the bell and the peers trigger only in the top-right group)
+		const free = unplacedIds(draft, ROSTER_IDS).filter((id) => canPlace(draft, id, target.hole ? 'bar' : target.region));
 		if (!free.length)
 			return [{ label: 'Every button is placed', tooltip: 'Remove one with its red "−" first', disabled: true }];
 		return [
@@ -1589,7 +1661,7 @@
 	function onEditOutside(e: PointerEvent) {
 		if (!editing || editAddMenu) return;
 		const t = e.target as Element | null;
-		if (t?.closest?.('#controls-pill, .hud-stack, #toolbar-edit-ghost, [role="menu"]')) return;
+		if (t?.closest?.('#controls-pill, .hud-stack, #hud-tr, #touch-tools, #toolbar-edit-ghost, [role="menu"]')) return;
 		cancelEditPositions();
 	}
 
@@ -1612,9 +1684,21 @@
 			const r = el.getBoundingClientRect();
 			return x >= r.left - PAD && x <= r.right + PAD && y >= r.top - PAD && y <= r.bottom + PAD;
 		};
+		// 42 I9: the top-right group and the touch tools — rows (a stacked touch cluster is a column)
+		for (const region of ['top', 'touch'] as const) {
+			const group = document.getElementById(region === 'top' ? 'hud-tr' : 'touch-tools');
+			if (!group || !inside(group) || id === SPACER || !editing || !canPlace(editing, id, region)) continue;
+			const column = region === 'touch' && group.classList.contains('tt-stacked');
+			const others = [...group.querySelectorAll<HTMLElement>('[data-edit-wrap]')].filter((el) => el.dataset.editWrap !== id);
+			const index = others.filter((el) => {
+				const r = el.getBoundingClientRect();
+				return column ? r.top + r.height / 2 < y : r.left + r.width / 2 < x;
+			}).length;
+			return { region, index };
+		}
 		for (const region of ['left', 'right'] as const) {
 			const stack = document.getElementById(`hud-stack-${region}`);
-			if (!inside(stack) || id === SPACER) continue;
+			if (!inside(stack) || id === SPACER || (editing && !canPlace(editing, id, region))) continue;
 			const others = [...(stack?.querySelectorAll<HTMLElement>('[data-edit-wrap]') ?? [])].filter((el) => el.dataset.editWrap !== id);
 			// bottom → top: an item sits ABOVE every other whose centre is below the pointer
 			const index = others.filter((el) => {
@@ -1624,7 +1708,7 @@
 			return { region, index };
 		}
 		const row = document.querySelector('#controls-pill .hud-bar-row');
-		if (!inside(row)) return null;
+		if (!inside(row) || (editing && !canPlace(editing, id, 'bar'))) return null;
 		const others = [...(row?.querySelectorAll<HTMLElement>('[data-edit-slot]') ?? [])].filter((el) => el.dataset.editWrap !== id);
 		const index = others.filter((el) => {
 			const r = el.getBoundingClientRect();
@@ -1717,19 +1801,56 @@
 	function editLabel(id: string) {
 		return labelOf(id);
 	}
-	/** what a corner stack shows while editing: its items, then empty "+" places up to SIDE_MAX */
+	/** what a stack shows while editing: its items, then ONE "+" for the next place while it has
+	 *  room (42 I9, the user's "show + only for further buttons to place" — a fourth once three are
+	 *  placed, never a column of empty places) */
 	function stackSlots(list: string[]) {
-		return [...list, ...Array.from({ length: Math.max(0, SIDE_MAX - list.length) }, (_, i) => `__empty:${i}`)];
+		return list.length < SIDE_MAX ? [...list, '__empty:0'] : [...list];
 	}
 	/** the corner stacks as rendered: the draft while editing, the record otherwise */
 	const stackLeft = $derived.by(() => (editing ? editing.left : controlsLayout.left));
 	const stackRight = $derived.by(() => (editing ? editing.right : controlsLayout.right));
+	// 42 I9: the top-right group and the touch tools — drawn by Users / TouchTools (their natives)
+	// and by Controls (their placeholders while editing, and any other button placed there)
+	const stackTop = $derived.by(() => (editing ? editing.top : controlsLayout.top));
+	const stackTouch = $derived.by(() => (editing ? editing.touch : controlsLayout.touch));
+	$effect(() => {
+		toolbarSlots.set({ top: [...stackTop], touch: [...stackTouch], editing: editing !== null });
+	});
+	/** the buttons of a group Controls draws in it outside Edit positions (not the natives) */
+	const topExtras = $derived(stackTop.filter((id) => !TOP_NATIVE.includes(id)));
+	const touchExtras = $derived(stackTouch.filter((id) => !TOUCH_NATIVE.includes(id)));
+
+	/** 42 I9: move a node into another component's element (the top-right group, the touch tools)
+	 *  — a display:contents wrapper, so its children become that group's flex items and take their
+	 *  CSS `order` among the group's own buttons. The target may mount after this component, so
+	 *  the action retries for a few frames; the wrapper is the ONLY node of its `{#if}`, which is
+	 *  what lets svelte remove it wherever it now lives. */
+	function portalTo(node: HTMLElement, selector: string) {
+		let raf = 0;
+		let tries = 0;
+		const place = () => {
+			const target = document.querySelector(selector);
+			if (target) {
+				if (node.parentElement !== target) target.appendChild(node);
+				return;
+			}
+			if (tries++ < 240) raf = requestAnimationFrame(place);
+		};
+		place();
+		return {
+			destroy() {
+				cancelAnimationFrame(raf);
+				node.remove();
+			}
+		};
+	}
 
 	/** the pill no longer owns the corners' heights, so the opt-in sim transport rides above
 	 *  whatever the right stack holds (0..3 buttons) instead of a fixed 112px */
 	$effect(() => {
 		if (typeof document === 'undefined') return;
-		const n = stackRight.length + (editing ? Math.max(0, SIDE_MAX - stackRight.length) : 0);
+		const n = stackRight.length + (editing && stackRight.length < SIDE_MAX ? 1 : 0);
 		document.documentElement.style.setProperty('--hud-stack-right-n', String(n));
 	});
 
@@ -2015,7 +2136,9 @@
 	/** the swap targets: every roster button that is not currently a cell of the bar */
 	function swapItems(id: string) {
 		// 41 G1: everything not placed anywhere (the corners count as placed)
-		const offBar = ROSTER_IDS.filter((key) => BUTTONS[key] && !regionOf(controlsLayout, key));
+		const at = regionOf(controlsLayout, id);
+		// 42 I9: a home-only button can only be swapped in where it may live
+		const offBar = ROSTER_IDS.filter((key) => BUTTONS[key] && !regionOf(controlsLayout, key) && (!HOME_ONLY[key] || HOME_ONLY[key] === at));
 		if (!offBar.length)
 			return [
 				{
@@ -2065,6 +2188,23 @@
 		const seq = visualIds();
 		// 41 G1: "not on the bar" = placed NOWHERE (the corner stacks have their own sections)
 		const offBar = ROSTER_IDS.filter((id) => BUTTONS[id] && !regionOf(controlsLayout, id));
+		/** 42 I9: a top-right / touch-tools row — the group reads left → right, so ▲ is one place
+		 *  LEFT (earlier) and ▼ one place right, the bar's own up-is-left rule */
+		const groupRows = (side: 'top' | 'touch') => {
+			const list = controlsLayout[side];
+			return list.map((id, at) => ({
+				key: id,
+				label: labelOf(id),
+				checked: true,
+				keepOpen: true,
+				tooltip: side === 'top' ? 'Take it out of the top-right group' : 'Take it out of the touch tools',
+				action: () => hideButton(id),
+				rowActions: [
+					{ icon: 'chevron-up', label: `Move ${labelOf(id)} up`, tooltip: 'One place left', disabled: at <= 0, run: () => moveInStack(id, 'ArrowLeft') },
+					{ icon: 'chevron-down', label: `Move ${labelOf(id)} down`, tooltip: 'One place right', disabled: at >= list.length - 1, run: () => moveInStack(id, 'ArrowRight') }
+				]
+			}));
+		};
 		/** 41 G1: a corner row — ▲ moves it up the stack, ▼ down (the stack reads bottom → top) */
 		const cornerRows = (side: 'left' | 'right') => {
 			const list = controlsLayout[side];
@@ -2140,6 +2280,8 @@
 			// kinds of row.
 			...(controlsLayout.left.length ? [{ section: 'Left corner' }, ...cornerRows('left')] : []),
 			...(controlsLayout.right.length ? [{ section: 'Right corner' }, ...cornerRows('right')] : []),
+			...(controlsLayout.top.length ? [{ section: 'Top right' }, ...groupRows('top')] : []),
+			...(controlsLayout.touch.length ? [{ section: $touchTools ? 'Touch tools' : 'Touch tools (shown while Touch tools is on)' }, ...groupRows('touch')] : []),
 			...(offBar.length
 				? [
 						{ section: 'Not on the bar' },
@@ -2180,8 +2322,8 @@
 	}
 
 	/** 41 G1: one step up/down a corner stack, through the same placements the edit mode uses */
-	function moveInStack(id: string, key: 'ArrowUp' | 'ArrowDown') {
-		setLayout(fromPlacements(controlsLayout, stepItem(placements(controlsLayout), id, key)));
+	function moveInStack(id: string, key: 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight') {
+		setLayout(fromPlacements(controlsLayout, stepItem(placements(controlsLayout, HOME_ONLY), id, key)));
 	}
 
 	/** the reactive half of `keepOpen`: passing `customizeItems()` inline would already
@@ -2708,6 +2850,47 @@
 {/snippet}
 {@render stack('left', stackLeft)}
 {@render stack('right', stackRight)}
+
+<!-- 42 I9: THE TOP-RIGHT GROUP AND THE TOUCH TOOLS. Their own components draw the natives (notes,
+     the bell, the peers trigger; undo, redo, multi-select) where the record puts them; what is
+     drawn HERE is portaled into their flex row — a display:contents wrapper, so each child takes
+     its `order` among the natives: any OTHER roster button placed in the group, and, while Edit
+     positions runs, every placeholder of the group (the natives stand down for them). -->
+{#snippet group(region: 'top' | 'touch', list: string[], extras: string[], cell: string)}
+	{#if editing}
+		{#each stackSlots(list) as id, i (id)}
+			{#if id.startsWith('__empty:')}
+				<button type="button" class="{cell} hud-edit-add" style:order={i} title="Add a button here" aria-label={region === 'top' ? 'Add a button to the top-right group' : 'Add a button to the touch tools'} use:onPress={(e: MouseEvent) => editOpenAdd(e, region, list.length)}
+					><Icon name="plus" size={16} aria-hidden="true" /></button
+				>
+			{:else}
+				<div class="{cell} hud-edit-item" class:hud-edit-carried={editDrag?.id === id} style:order={i} data-edit-wrap={id}>
+					<button type="button" class="hud-edit-grip" data-edit-id={id} title={editLabel(id)} aria-label="{editLabel(id)} — arrow keys move it, Delete removes it" use:editItemGesture={id}
+						><Icon name={BUTTONS[id].iconName ?? BUTTONS[id].icon} size={20} aria-hidden="true" /></button
+					>
+					<button type="button" class="hud-edit-remove" tabindex="-1" title="Remove" aria-label="Remove {editLabel(id)}" use:onPress={() => editRemove(id)}><Icon name="minus" size={16} aria-hidden="true" /></button>
+				</div>
+			{/if}
+		{/each}
+	{:else}
+		{#each extras as id (id)}
+			{@const btn = BUTTONS[id]}
+			{@const tint = btn.tint()}
+			<button type="button" id={btn.slot} class={cell} class:on={tint === ICON_ON} class:tt-on={region === 'touch' && tint === ICON_ON} style:order={list.indexOf(id)} title={btn.title} aria-label={btn.title} aria-pressed={btn.pressed ? btn.pressed() : undefined} use:cellClick={id} use:cellMenu={id}>
+				<Icon name={btn.iconName ?? btn.icon} size={20} class={tint} aria-hidden="true" />
+				{#if id === 'chat' && $chatUnread > 0}
+					<span id="chat-unread" class="chat-unread-badge" class:mention={$chatMentioned}>{$chatUnread > 99 ? '99+' : $chatUnread}</span>
+				{/if}
+			</button>
+		{/each}
+	{/if}
+{/snippet}
+{#if !$phoneShell}
+	<div class="contents" data-toolbar-portal="top" use:portalTo={'#hud-tr'}>{@render group('top', stackTop, topExtras, 'hud-cell')}</div>
+{/if}
+{#if $touchTools && !$phoneShell}
+	<div class="contents" data-toolbar-portal="touch" use:portalTo={'#touch-tools'}>{@render group('touch', stackTouch, touchExtras, 'tt-btn')}</div>
+{/if}
 
 {#if editDrag}
 	<!-- the carried button, following the pointer (the draft already shows where it lands) -->

@@ -14,6 +14,17 @@
 	import Icon from '../ui/Icon.svelte';
 	import { touchTools, multiSelectMode, connectDocked, connectBarHeight } from '../../stores/appStore';
 	import { undo, redo, canUndo, canRedo } from '$lib/history';
+	// 42 I9: the cluster is a layout region of the toolbar's record — which of these three are
+	// placed here, in what order, and whether Edit positions is drawing placeholders instead
+	// (Controls portals any OTHER button placed here into this row, with the same `order` numbers)
+	import { toolbarSlots, slotOrder } from '$lib/toolbarSlots';
+	import { SIDE_MAX } from '$lib/toolbarLayout';
+	const ttOrder = (/** @type {string} */ id) => slotOrder($toolbarSlots.touch, id);
+	const ttShown = (/** @type {string} */ id) => !$toolbarSlots.editing && ttOrder(id) != null;
+	/** how many buttons the row holds (edit mode adds a "+" while there is room) */
+	const ttCount = $derived(
+		$toolbarSlots.touch.length + ($toolbarSlots.editing && $toolbarSlots.touch.length < SIDE_MAX ? 1 : 0)
+	);
 
 	// ---- row or column: MEASURED, not a breakpoint -----------------------------
 	// A width breakpoint got this wrong on a real device — an unfolded Oppo N8 has plenty
@@ -29,9 +40,10 @@
 	 *  button by 14px — technically fitting, visually touching it, which is what the user
 	 *  reported. 24px is the gap at which the two read as separate clusters. */
 	const GUTTER = 24;
-	/** the row's own width, from CONSTANTS — never from the element's own rect, or the
-	 *  measurement would feed the layout that produced it (the frozen-span rule) */
-	const ROW_RIGHT = ROW_LEFT + BTN * 3 + GAP * 2 + GUTTER;
+	/** the row's own width, from CONSTANTS and the COUNT of buttons the layout puts in it — never
+	 *  from the element's own rect, or the measurement would feed the layout that produced it
+	 *  (the frozen-span rule). 42 I9: the count is no longer always three. */
+	const rowRight = (/** @type {number} */ n) => ROW_LEFT + BTN * n + GAP * Math.max(0, n - 1) + GUTTER;
 
 	let stacked = $state(false);
 
@@ -63,7 +75,7 @@
 			if (rect.bottom <= top || rect.top >= bottom) continue;
 			if (rect.left > logo.right) limit = Math.min(limit, rect.left);
 		}
-		stacked = ROW_RIGHT > limit;
+		stacked = rowRight(ttCount) > limit;
 	}
 
 	// re-measure on the things that can change the answer: the window, and Connect
@@ -72,6 +84,7 @@
 		void $connectDocked;
 		void $connectBarHeight;
 		void $touchTools;
+		void ttCount;
 		measure();
 		// one more after layout settles — the pill is centred with a transform and its
 		// rect is not final on the same frame the bar's height changes
@@ -110,9 +123,11 @@
 		style="--tt-anchor: {$connectDocked ? $connectBarHeight + 8 : 20}px"
 		aria-label="Touch tools"
 	>
+		{#if ttShown('undo')}
 		<button
 			id="touch-undo"
 			class="tt-btn"
+			style:order={ttOrder('undo')}
 			disabled={!$canUndo}
 			title="Undo"
 			aria-label="Undo"
@@ -120,9 +135,12 @@
 		>
 			<Icon name="undo-2" size={20} aria-hidden="true" />
 		</button>
+		{/if}
+		{#if ttShown('redo')}
 		<button
 			id="touch-redo"
 			class="tt-btn"
+			style:order={ttOrder('redo')}
 			disabled={!$canRedo}
 			title="Redo"
 			aria-label="Redo"
@@ -130,10 +148,13 @@
 		>
 			<Icon name="redo-2" size={20} aria-hidden="true" />
 		</button>
+		{/if}
+		{#if ttShown('multiselect')}
 		<button
 			id="touch-multiselect"
 			class="tt-btn"
 			class:tt-on={$multiSelectMode}
+			style:order={ttOrder('multiselect')}
 			aria-pressed={$multiSelectMode}
 			title={$multiSelectMode
 				? 'Multi-select on — a tap adds to the selection, a drag on empty space boxes'
@@ -143,6 +164,7 @@
 		>
 			<Icon name="box-select" size={20} aria-hidden="true" />
 		</button>
+		{/if}
 	</div>
 {/if}
 
@@ -171,7 +193,9 @@
 		left: calc(16px + (44px - 48px) / 2);
 		flex-direction: column;
 	}
-	.tt-btn {
+	/* 42 I9: GLOBAL — Controls portals placeholders and other roster buttons into this row, and a
+	   scoped class would never match them */
+	:global(.tt-btn) {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -185,16 +209,16 @@
 		backdrop-filter: blur(4px);
 		transition: transform 0.12s ease;
 	}
-	.tt-btn:hover:not(:disabled) {
+	:global(.tt-btn:hover:not(:disabled)) {
 		transform: scale(1.05);
 	}
-	.tt-btn:disabled {
+	:global(.tt-btn:disabled) {
 		opacity: 0.4;
 	}
 	/* the armed toggle owns its fill from the shell, never from a Tailwind utility —
 	   a scoped style beats every utility, which is how the mesh toolbox lost its
 	   armed colour in the dark theme */
-	.tt-on {
+	:global(.tt-on) {
 		background: var(--accent-fill);
 		border-color: var(--accent-fill);
 		color: var(--on-accent);
