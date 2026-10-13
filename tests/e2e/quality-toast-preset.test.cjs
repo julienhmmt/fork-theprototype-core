@@ -82,7 +82,15 @@ h.run(async () => {
 	if (OUT) await page.screenshot({ path: path.join(OUT, 'i12-one-quality-card.png') });
 
 	// ── 2. Configure Scene ▸ Quality, the top section ────────────────────────────────────────────
-	await page.evaluate(() => window.__stores.qualityGovernor.governorForTest.reset());
+	// back to a light scene and full quality; the heavy premise above can also trip 26-G's freeze
+	// pause on a loaded box (its overlay would take the clicks below) — stand it down
+	await page.evaluate(() => {
+		const w = /** @type {any} */ (window).__stores;
+		w.sceneBudget.qualityBaseline.set(null);
+		w.qualityGovernor.governorForTest.reset();
+		w.overloadGuard?.resumeRendering?.();
+	});
+	await page.waitForTimeout(300);
 	await page.evaluate(() => window.__stores.openSceneSection('Quality'));
 	await page.waitForSelector('#scene-quality-preset', { state: 'visible', timeout: 10000 });
 	await page.waitForTimeout(500);
