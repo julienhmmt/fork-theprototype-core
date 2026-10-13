@@ -210,7 +210,10 @@ h.run(async () => {
 			const b = [...document.querySelectorAll('[role="menuitem"], .ctx-menu button, [role="menu"] button')].find((x) => x.textContent.trim() === 'Dock this tab');
 			return b ? b.classList.contains('ctx-disabled') : null;
 		});
-		h.check(dis === true, `${name} 3.5 Objects has no docked mode: its Dock row is disabled (${dis})`);
+		// 42 I6: on a wider screen (unfolded) the Objects list docks as a hosted tab, so its row is
+		// enabled; in the phone posture (folded) the dock hosts only phone content tabs, so it stays off
+		const phonePosture = await page.evaluate(() => document.documentElement.classList.contains('phone-shell'));
+		h.check(dis === phonePosture, `${name} 3.5 Objects' "Dock this tab" is ${phonePosture ? 'disabled in the phone posture' : 'enabled on a wider screen (42 I6)'} (${dis})`);
 		await tapRow(page, cdp, 'Close');
 		const cl = await page.evaluate(() => {
 			let c;

@@ -460,3 +460,40 @@
 	box-shadow: 0 0 0 1px var(--surface-1);
 	pointer-events: none;
 }
+
+/* 42 I6 ($lib/dockHost.js) — a floating window with no docked layout of its own (Objects,
+   Statistics, the Live profiler, Chat, the AI assistant) DOCKED on a wider screen: the dock
+   frame (PhoneDockHost, published as --pd-top = its body's top edge) hosts the element, the way
+   the phone hosts its content tabs (phone.css section 2b). It sits over the frame's body, under
+   floating windows; a hosted tab that is open but not in front stays mounted and hidden; its
+   own corner grip stands down (the dock's top edge resizes it). */
+:root:not(.phone-shell) [data-pd-host] {
+	position: fixed !important;
+	left: 0 !important;
+	right: 0 !important;
+	top: var(--pd-top) !important;
+	bottom: 0 !important;
+	width: auto !important;
+	height: auto !important;
+	min-width: 0 !important;
+	min-height: 0 !important;
+	max-width: none !important;
+	max-height: none !important;
+	margin: 0 !important;
+	transform: none !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+	outline: none !important;
+	z-index: calc(var(--z-dock) + 1) !important;
+	background: var(--surface-1);
+}
+:root:not(.phone-shell) [data-pd-host='hidden'] {
+	display: none !important;
+}
+:root:not(.phone-shell) [data-pd-host] .dw-resize,
+:root:not(.phone-shell) [data-pd-host] .resize-handle,
+:root:not(.phone-shell) [data-pd-host] [data-window-grip] {
+	display: none !important;
+}
+

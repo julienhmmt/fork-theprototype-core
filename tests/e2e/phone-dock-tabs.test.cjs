@@ -327,7 +327,8 @@ h.run(async () => {
 	});
 	h.check(dk.menuOpen && dk.insOpen && dk.kind === 'scene', 'desktop: Configure Scene opens the drawer and the burger STAYS open (H2 is phone-only)');
 	h.check(!dk.frame && !dk.tabs.some((/** @type {string} */ k) => ['properties', 'objects', 'notes', 'layouts', 'scene'].includes(k)), 'desktop: no phone dock frame, no content tab');
-	h.check(!dk.addRows.some((/** @type {string} */ k) => ['properties', 'objects', 'notes', 'layouts', 'scene'].includes(k)), `desktop: the dock "+" menu does not list the phone content tabs (${dk.addRows.join(',')})`);
+	// 42 I6: the Objects list is in the desktop "+" again — as a HOSTED floating window, not a phone tab
+	h.check(!dk.addRows.some((/** @type {string} */ k) => ['properties', 'notes', 'layouts', 'scene'].includes(k)), `desktop: the dock "+" menu does not list the phone-only content tabs (${dk.addRows.join(',')})`);
 
 	await h.finish(browser);
 });

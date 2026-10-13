@@ -9,6 +9,7 @@
 	// in perf/liveSink.js.
 	import Icon from '../ui/Icon.svelte';
 	import { dragWindow } from '$lib/dragWindow';
+	import { bottomDockable } from '$lib/bottomDockDrop';
 	import { focusStack } from '$lib/windowFocus';
 	import { peers, userdata } from '../../stores/appStore';
 	import { peerHands } from '../../stores/sceneStore';
@@ -116,6 +117,7 @@
 		class="ui-panel tp-ui tp-window tp-themed live-surface fixed flex flex-col overflow-hidden outline-hidden"
 		tabindex="-1"
 		use:dragWindow={{ key: 'profilerLiveWindow', defaultRect: { left: 140, top: 110 }, resizable: true }}
+		use:bottomDockable={{ key: 'profilerLive' }}
 		use:focusStack={'profilerLive'}
 		style="z-index: var(--z-window); width: 420px; height: 520px"
 	>

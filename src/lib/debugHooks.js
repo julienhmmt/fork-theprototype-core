@@ -156,6 +156,8 @@ export const DEBUG_HOOKS = [
 	['bottomDock', () => import('./bottomDock')],
 	['dockMenu', () => import('./dockMenu')],
 	['phoneDock', () => import('./phoneDock')],
+	// 42 I6: the hosted dock tabs
+	['dockHost', () => import('./dockHost')],
 	['explorerDrop', () => import('./explorerDrop')],
 	['assetShare', () => import('./assetShare')],
 	['soundRuntime', () => import('./soundRuntime')],

@@ -8,8 +8,8 @@
 	import { focusTick, raiseWindowNode } from '$lib/windowFocus';
 	import ContextMenu from '../ContextMenu.svelte';
 	import Icon from '../ui/Icon.svelte';
-	import { DOCK_ICONS, DOCK_FAMILY, activateDock } from '$lib/bottomDock';
-	import { dockAllOf, dockTab, dockAtStrip } from '$lib/dockMenu';
+	import { DOCK_ICONS, activateDock } from '$lib/bottomDock';
+	import { dockAllOf, dockTab, dockAtStrip, canDockHere } from '$lib/dockMenu';
 	import { dockStripTarget, showDockCaret, ghostWindows, clearStripFeedback } from '$lib/bottomDockDrop';
 
 	// 38 NOTES-38 #23: the view icon before each tab's name — the dock's icons plus the
@@ -91,7 +91,7 @@
 	/** 41 G6: the group tab's menu (long-press on touch, right-click with a mouse) */
 	function tabMenuItems(/** @type {string} */ key) {
 		const title = titleOf(key);
-		const canDock = DOCK_FAMILY.includes(key);
+		const canDock = canDockHere(key);
 		return [
 			{ label: 'Ungroup this tab', icon: 'app-window', tooltip: `Float ${title} as its own window`, action: () => ungroupTab(key) },
 			{
@@ -112,7 +112,7 @@
 	 * @param {any} drag @param {any} e */
 	function groupHit(drag, e) {
 		const group = groupOf(drag.groupId);
-		if (!group || !group.members.some((/** @type {string} */ k) => DOCK_FAMILY.includes(k))) return null;
+		if (!group || !group.members.some((/** @type {string} */ k) => canDockHere(k))) return null;
 		const hit = dockStripTarget(e.clientX, e.clientY);
 		showDockCaret(hit);
 		ghostWindows([drag.el, nodeOf(group.active)], !!hit);
@@ -124,7 +124,7 @@
 		const group = groupOf(groupId);
 		if (!group) return;
 		const n = dockAtStrip([...group.members], hit.before);
-		if (n && DOCK_FAMILY.includes(group.active)) activateDock(group.active);
+		if (n && canDockHere(group.active)) activateDock(group.active);
 	}
 	/** @param {any} e */
 	function onMove(e) {
@@ -160,7 +160,7 @@
 				node.style.left = Math.max(0, e.clientX - 100) + 'px';
 				node.style.top = Math.max(0, e.clientY - 12) + 'px';
 			}
-			const hit = DOCK_FAMILY.includes(tabDrag.key) ? dockStripTarget(e.clientX, e.clientY) : null;
+			const hit = canDockHere(tabDrag.key) ? dockStripTarget(e.clientX, e.clientY) : null;
 			showDockCaret(hit);
 			ghostWindows([node], !!hit);
 			tabDrag.hit = hit;
@@ -253,7 +253,7 @@
 		<span class="flex-1"></span>
 		<!-- 40 F8: dock ALL of this window's tabs, left of "close all tabs" (a lone tab docks by
 		     dragging it to the dock). Only views that have a docked mode are offered. -->
-		{#if group.members.some((/** @type {string} */ k) => DOCK_FAMILY.includes(k))}
+		{#if group.members.some((/** @type {string} */ k) => canDockHere(k))}
 			<button
 				class="ts-dock tp-dtab tp-dtab-icon shrink-0"
 				data-group-dock={group.id}

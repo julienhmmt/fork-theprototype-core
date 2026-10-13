@@ -34,6 +34,10 @@ export const INTERACTIVE_CHROME =
 export function isHeaderDrag(target) {
 	if (!target || typeof target.closest !== 'function') return false;
 	if (!target.closest('.move-handle')) return false;
+	// 42 I6: a window the dock HOSTS (the Objects list, Chat, … docked; a phone content tab) is a
+	// dock tab — it moves by its TAB (drag it off the strip to float it), never by its header,
+	// which would move an invisible floating rect and drop it on a header-merge target
+	if (target.closest('[data-pd-host]')) return false;
 	return !target.closest(INTERACTIVE_CHROME);
 }
 

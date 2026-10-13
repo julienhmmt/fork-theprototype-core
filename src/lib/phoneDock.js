@@ -9,8 +9,10 @@ import {
 	dockMinimized,
 	bottomDockActive,
 	dockOccupants,
-	PHONE_DOCK_TABS
+	PHONE_DOCK_TABS,
+	HOSTED_DOCK_TABS
 } from './bottomDock';
+import { hostedTabsOpen, dockHostedView } from './dockHost';
 import { registerDockOpener, registerDockCloser, closeStoreFor } from './dockMenu';
 import { togglePanel } from './panelToggles';
 import { phoneShell } from './ui/phoneShell.js';
@@ -353,7 +355,9 @@ export function startPhoneDock() {
 	/** @type {(() => void)[]} */
 	const offs = [];
 	for (const key of PHONE_DOCK_TABS) {
-		offs.push(registerDockOpener(key, () => openPhoneTab(key)));
+		// 42 I6: on a wider screen the Objects list is a HOSTED dock tab ($lib/dockHost) — a "+"
+		// row docks the floating window there instead of opening a phone tab
+		offs.push(registerDockOpener(key, () => (posture !== 'phone' && key === 'objects' ? dockHostedView(key) : openPhoneTab(key))));
 		offs.push(registerDockCloser(key, () => closePhoneTab(key)));
 	}
 	offs.push(phoneShell.subscribe((on) => enterPosture(on ? 'phone' : 'wide')));
@@ -385,10 +389,13 @@ export function startPhoneDock() {
 		}
 	});
 	offs.push(() => setPanelsHook(null));
-	// occupancy: every open content panel is a dock tab in the phone posture, at the dock's height
+	// occupancy: every open content panel is a dock tab in the phone posture, at the dock's height —
+	// 42 I6: and every DOCKED hosted window on a wider screen ($lib/dockHost). ONE writer for both
+	// sets: the Objects list is in each, and two writers of one key would race.
+	const occupancyKeys = [...new Set([...PHONE_DOCK_TABS, ...HOSTED_DOCK_TABS])];
 	offs.push(
-		derived([phoneTabsOpen, dockHeight], (x) => x).subscribe(([$open, $h]) => {
-			for (const key of PHONE_DOCK_TABS) setDockOccupant(key, !!(/** @type {any} */ ($open)[key]), $h);
+		derived([phoneTabsOpen, hostedTabsOpen, dockHeight], (x) => x).subscribe(([$open, $hosted, $h]) => {
+			for (const key of occupancyKeys) setDockOccupant(key, !!(/** @type {any} */ ($open)[key] || /** @type {any} */ ($hosted)[key]), $h);
 		})
 	);
 	offs.push(derived([inspectorClose, inspectorKind], (x) => x).subscribe(([c, k]) => onInspector(c, k)));
@@ -411,7 +418,7 @@ export function startPhoneDock() {
 	return () => {
 		started = false;
 		for (const off of offs) off();
-		for (const key of PHONE_DOCK_TABS) setDockOccupant(key, false);
+		for (const key of occupancyKeys) setDockOccupant(key, false);
 	};
 }
 

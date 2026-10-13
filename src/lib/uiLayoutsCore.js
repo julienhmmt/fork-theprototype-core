@@ -29,6 +29,12 @@ const EXACT = new Set([
 	'windowTabGroups',
 	'objectListRect',
 	'profilerDockSized',
+	// 42 I6: which floating windows the dock hosts as tabs ($lib/dockHost)
+	'objectListDocked',
+	'statsDocked',
+	'profilerLiveDocked',
+	'chatDocked',
+	'aiAssistantDocked',
 	...PANEL_PREFIXES.flatMap((p) => [p + 'Docked', p + 'WinW', p + 'WinH'])
 ]);
 /** key families that belong to the layout */

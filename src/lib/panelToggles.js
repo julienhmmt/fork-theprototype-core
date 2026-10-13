@@ -57,7 +57,7 @@ import { safeStorage } from './safeStorage';
 // markup branch with no floating window at all, so its `tabbable` action is
 // destroyed and `removeFromGroup` has already run (Flow.svelte / Explorer.svelte).
 
-/** @typedef {{ key: string, openStore: any, dragKey: string | null, dockedLs: string | null }} PanelConfig */
+/** @typedef {{ key: string, openStore: any, dragKey: string | null, dockedLs: string | null, floatsByDefault?: boolean }} PanelConfig */
 
 /**
  * EVERY panel a toolbar button or a shortcut can ask for. `openStore` is inverted
@@ -76,7 +76,8 @@ import { safeStorage } from './safeStorage';
  * TWO SHAPES:
  *   dockedLs set   remembers a mode, can be either (flow, flowcode, animation, uv,
  *                  shader, hud, explorer)
- *   dockedLs null  floating-only — there is no dock tab at all (objects)
+ *   dockedLs null  floating-only — there is no dock tab at all (none since 42 I6: the
+ *                  object list docks as a HOSTED tab, `$lib/dockHost`, and floats by default)
  *
  * There was a THIRD, `dockOnly`, for the Shader editor alone: it was the one view with
  * no `docked` flag, no dragWindow and no window chrome, so it registered its dock
@@ -95,7 +96,7 @@ const PANELS = {
 	explorer: { key: 'explorer', openStore: explorerClose, dragKey: 'explorerWin', dockedLs: 'explorerDocked' },
 	profiler: { key: 'profiler', openStore: profilerClose, dragKey: 'profilerWin', dockedLs: 'profilerDocked' },
 	code: { key: 'code', openStore: codeWorkspaceClose, dragKey: 'codeWin', dockedLs: 'codeDocked' },
-	objects: { key: 'objects', openStore: objectListClose, dragKey: null, dockedLs: null }
+	objects: { key: 'objects', openStore: objectListClose, dragKey: null, dockedLs: 'objectListDocked', floatsByDefault: true }
 };
 
 /** every key `togglePanel` understands, so a caller building a list of buttons cannot
@@ -110,7 +111,11 @@ function isDockedPresent(key) {
 /** Would opening this panel put it in the dock? @param {PanelConfig} cfg */
 function opensDocked(cfg) {
 	if (!cfg.dockedLs) return false; // floating-only panel
-	return typeof localStorage === 'undefined' || safeStorage.getItem(cfg.dockedLs) !== 'false';
+	if (typeof localStorage === 'undefined') return !cfg.floatsByDefault;
+	const v = safeStorage.getItem(cfg.dockedLs);
+	// a never-docked panel opens in its default mode: the editors docked, the object list floating
+	if (v === null) return !cfg.floatsByDefault;
+	return v !== 'false';
 }
 
 /** Is this panel the one the dock is actually SHOWING? @param {PanelConfig} cfg */

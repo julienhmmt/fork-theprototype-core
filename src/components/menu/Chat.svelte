@@ -13,6 +13,7 @@
 	import { isLocked } from '../../stores/sceneStore';
 	import { nameOf, peerColor } from '$lib/lockControl';
 	import { dragWindow } from '$lib/dragWindow';
+	import { bottomDockable } from '$lib/bottomDockDrop';
 	import { focusStack } from '$lib/windowFocus';
 	import { tabbable } from '$lib/windowTabs';
 
@@ -109,6 +110,7 @@
 	<div
 		id="chat-window"
 		use:dragWindow={{ key: 'chat', defaultRect: { right: 15, bottom: 15 } }}
+		use:bottomDockable={{ key: 'chat' }}
 		use:focusStack
 		use:tabbable={{ key: 'chat', title: 'Chat', openStore: chatHidden, isOpen: (v) => v === '', close: () => chatHidden.set('hidden') }}
 		class="ui-panel tp-ui tp-window flex h-[420px] w-[min(500px,90vw)] flex-col overflow-hidden"
