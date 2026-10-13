@@ -4,16 +4,26 @@
 	// only: pin/close/filter are the Inspector's own stores, unchanged (SPEC §0) — `#drawer-label`
 	// (the sticky block Section deep links measure), `#inspector-pin` and `#inspector-search`
 	// keep their ids for every caller and suite.
+	// 42 I1: `panel` ('scene' | 'properties') gives the header its LOCK button — the header sticks
+	// (the default) or scrolls away with the properties, remembered per panel ($lib/panelHeaderPrefs,
+	// Settings ▸ Interface ▸ "Sticky panel headers"). One component, so the phone's sheet / dock tab
+	// and the desktop sidebars all get it. `#inspector-sticky-head` is the button's id.
 	import WindowChrome from '../../ui/WindowChrome.svelte';
 	import SearchField from '../../ui/SearchField.svelte';
 	import Badge from '../../ui/Badge.svelte';
+	import Icon from '../../ui/Icon.svelte';
 	import { inspectorFilter } from '../../../stores/appStore';
+	import { stickyPanelHeads, toggleStickyHead } from '$lib/panelHeaderPrefs';
 
-	/** @type {{title?: string, badge?: string, icon?: string, pinned?: boolean, onpin?: (() => void) | null, onclose?: (() => void) | null, filter?: boolean}} */
-	let { title = '', badge = '', icon = '', pinned = false, onpin = null, onclose = null, filter = false } = $props();
+	/** @type {{title?: string, badge?: string, icon?: string, pinned?: boolean, onpin?: (() => void) | null, onclose?: (() => void) | null, filter?: boolean, panel?: 'scene'|'properties'|''}} */
+	let { title = '', badge = '', icon = '', pinned = false, onpin = null, onclose = null, filter = false, panel = '' } = $props();
+
+	/** 42 I1: does this panel's header stick (the default) or scroll away with the content */
+	const sticky = $derived(!panel || $stickyPanelHeads[panel] !== false);
+	const panelName = $derived(panel === 'scene' ? 'Configure Scene' : 'Properties');
 </script>
 
-<div id="drawer-label" class="tp-ui ins-head">
+<div id="drawer-label" class="tp-ui ins-head" class:ins-head-flow={!sticky} data-sticky={sticky ? 'true' : 'false'}>
 	<WindowChrome
 		size="panel"
 		{title}
@@ -34,6 +44,21 @@
 	>
 		{#snippet actions()}
 			{#if badge}<Badge tone="neutral" text={badge} data-inspector-badge />{/if}
+			{#if panel}
+				<button
+					type="button"
+					id="inspector-sticky-head"
+					class="wc-act ins-sticky-btn"
+					aria-pressed={sticky}
+					aria-label={sticky ? `Let the ${panelName} header scroll away` : `Keep the ${panelName} header on top`}
+					title={sticky
+						? 'Header stays on top — click to let it scroll away with the properties'
+						: 'Header scrolls away — click to keep it on top while you scroll'}
+					onclick={() => toggleStickyHead(/** @type {'scene'|'properties'} */ (panel))}
+				>
+					<Icon name={sticky ? 'lock' : 'lock-open'} size={20} />
+				</button>
+			{/if}
 		{/snippet}
 	</WindowChrome>
 	{#if filter}
@@ -60,6 +85,19 @@
 		margin: 0 -14px;
 		background: var(--surface-2);
 		border-bottom: 1px solid var(--border);
+	}
+	/* 42 I1: unstuck — the header is the first thing in the scroller and scrolls away with it */
+	.ins-head-flow {
+		position: relative;
+	}
+	/* the lock's state is its glyph (lock / lock-open); ON is the default, so no pressed tint */
+	.ins-head :global(.wc-head .ins-sticky-btn[aria-pressed='true']) {
+		background: transparent;
+		color: var(--text-muted);
+	}
+	.ins-head :global(.wc-head .ins-sticky-btn[aria-pressed='true']:hover) {
+		background: var(--surface-hover);
+		color: var(--text);
 	}
 	.ins-head :global(.wc-head) {
 		border-bottom: 0;

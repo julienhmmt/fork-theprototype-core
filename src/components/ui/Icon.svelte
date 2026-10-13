@@ -114,6 +114,7 @@
 		LoaderCircle,
 		LocateFixed,
 		Lock,
+		LockOpen, // 42 I1: an unstuck panel header
 		Magnet,
 		Map as MapIcon,
 		Maximize2,
@@ -327,6 +328,7 @@
 		'loader-circle': LoaderCircle,
 		'locate-fixed': LocateFixed,
 		lock: Lock,
+		'lock-open': LockOpen,
 		magnet: Magnet,
 		map: MapIcon,
 		'maximize-2': Maximize2,

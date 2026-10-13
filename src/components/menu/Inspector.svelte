@@ -1702,6 +1702,7 @@
 			icon="sun"
 			badge="Scene"
 			filter
+			panel="scene"
 			pinned={$inspectorPinned}
 			onpin={() => inspectorPinned.update((v) => !v)}
 			onclose={() => inspectorClose.set(true)}
@@ -2960,6 +2961,7 @@
 			title="Properties"
 			icon="package"
 			badge="Module content"
+			panel="properties"
 			pinned={$inspectorPinned}
 			onpin={() => inspectorPinned.update((v) => !v)}
 			onclose={() => inspectorClose.set(true)}
@@ -2979,6 +2981,7 @@
 			icon="box"
 			badge={multiCount ? `${multiCount} objects` : $selectedObject.type}
 			filter
+			panel="properties"
 			pinned={$inspectorPinned}
 			onpin={() => inspectorPinned.update((v) => !v)}
 			onclose={() => inspectorClose.set(true)}
