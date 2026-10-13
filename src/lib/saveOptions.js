@@ -13,7 +13,7 @@ import { safeStorage } from './safeStorage';
 export const SAVE_FORMATS = [
 	{ value: 'tp', label: 'Project', ext: '.tp', title: 'Saves the whole project as .tp — the Explorer library, scene history and manifest' },
 	{ value: 'tpscene', label: 'Scene', ext: '.tpscene', title: 'Saves the open scene as .tpscene' },
-	{ value: 'gltf', label: 'GLTF', ext: '.gltf', title: 'Exports the scene as glTF — for other tools, not for keeping your work' },
+	{ value: 'gltf', label: 'GLTF', ext: '.gltf', title: 'Exports the selected objects as glTF (nothing selected: offers the whole scene) — for other tools, not for keeping your work' },
 	{ value: 'json', label: 'JSON', ext: '.json', title: 'Saves the scene as raw JSON' }
 ];
 

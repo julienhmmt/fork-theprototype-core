@@ -232,7 +232,7 @@
 		{#if $saveOptions.showGltf || $saveOptions.showJson}
 			<div id="format-row-optional" class="side-segs mb-0.5 flex pl-9 pr-2">
 				{#if $saveOptions.showGltf}
-					<button id="format-gltf" class="side-seg {saveFormat === 'gltf' ? 'on' : ''}" title="Exports the scene as glTF — for other tools, not for keeping your work" onclick={() => pickFormat('gltf')}>GLTF</button>
+					<button id="format-gltf" class="side-seg {saveFormat === 'gltf' ? 'on' : ''}" title="Exports the selected objects as glTF (nothing selected: offers the whole scene) — for other tools, not for keeping your work" onclick={() => pickFormat('gltf')}>GLTF</button>
 				{/if}
 				{#if $saveOptions.showJson}
 					<button id="format-json" class="side-seg {saveFormat === 'json' ? 'on' : ''}" title="Saves the scene as raw JSON" onclick={() => pickFormat('json')}>JSON</button>
