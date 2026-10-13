@@ -3,7 +3,7 @@
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
 	import { objectsGroup, TControls, transformMode, editorMode, isLocked, lockedObjects, globalScene, vrPassthrough, selectedObject, selectedObjects } from '../../stores/sceneStore';
 	import { chatUnread, chatMentioned } from '../../stores/appStore.js'; // 37 R15: the chat button's badge
-	import { chatHidden, flowGraphClose, flowCodeClose, animationClose, uvEditorClose, shaderEditorClose, hudEditorClose, explorerClose, profilerClose, codeWorkspaceClose, objectListClose, objectContextMenu, renamingObject, advancedMode, showEnvInList, showLocalObjects, floatingToolbar, toolbarAlwaysOnTop, showSimControls, expandedObjects } from '../../stores/appStore.js';
+	import { chatHidden, flowGraphClose, flowCodeClose, animationClose, uvEditorClose, shaderEditorClose, hudEditorClose, explorerClose, profilerClose, codeWorkspaceClose, objectListClose, objectContextMenu, renamingObject, advancedMode, showEnvInList, showLocalObjects, floatingToolbar, toolbarAlwaysOnTop, hudStackLift, showSimControls, expandedObjects } from '../../stores/appStore.js';
 	// 24-B2: keyboard navigation in the object list (the Explorer's gridKeydown shape)
 	import { visibleObjectRows, withExpanded, typeAheadIndex } from '$lib/objectListNav';
 	import { sceneMetrics, statsOpen, worstTier, budgetRows } from '$lib/sceneBudget';
@@ -1049,7 +1049,10 @@
 		pivotMode.set(next);
 		showQualityToast('Pivot: ' + PIVOT_NAMES[next]);
 	}
-	type CellButton = { title: string; slot?: string; icon?: any; iconName?: string; tint: () => string; run: () => void; pressed?: () => boolean };
+	// 42 I7: `label` is the SHORT name the menus print (Customize toolbar…, Edit positions, the "+"
+	// popup, Swap with) — `title` stays the cell's tooltip, which may carry state and a hint
+	// ("Pivot: Median point (click to change)") and which suites select the bar's cells by
+	type CellButton = { title: string; label?: string; slot?: string; icon?: any; iconName?: string; tint: () => string; run: () => void; pressed?: () => boolean };
 
 	/** the one PSEUDO-cell: the transparent well the play FAB sits in. It is not a
 	 *  roster entry (play is never hideable) but it IS a cell of the row, which is
@@ -1143,6 +1146,7 @@
 			get title() {
 				return 'Pivot: ' + PIVOT_NAMES[$pivotMode] + ' (click to change)';
 			},
+			label: 'Pivot',
 			get iconName() {
 				return PIVOT_ICONS[$pivotMode] ?? 'crosshair';
 			},
@@ -1228,6 +1232,7 @@
 					? `Chat (C) — ${$chatUnread} unread${$chatMentioned ? ', you were mentioned' : ''}`
 					: 'Chat (C)';
 			},
+			label: 'Chat (C)',
 			slot: 'chat-button',
 			icon: 'message-square',
 			tint: () => ($chatHidden !== 'hidden' ? ICON_ON : ICON_OFF),
@@ -1237,6 +1242,7 @@
 			get title() {
 				return $micActive ? 'Microphone on — click to mute' : 'Microphone off — click to talk, or hold V for push-to-talk';
 			},
+			label: 'Microphone',
 			slot: 'mic-button',
 			get iconName() {
 				return $micActive || $pttActive ? 'mic' : 'mic-off';
@@ -1251,6 +1257,10 @@
 	const CORNER_RIGHT = ['chat', 'mic'];
 	/** every id the layout can place, in the order the Customize / "+" lists show them */
 	const ROSTER_IDS = [...DEFAULT_ORDER, ...OPTIONAL_VIEWS, ...CORNER_LEFT, ...CORNER_RIGHT];
+	/** 42 I7: the name a MENU prints for a button (its short label, else its title) */
+	function labelOf(id: string) {
+		return id === SPACER ? 'Play' : (BUTTONS[id]?.label ?? BUTTONS[id]?.title ?? id);
+	}
 
 	/** the AI button press — AiHudButton's own path (I3): unconfigured points at Settings ▸ AI */
 	function toggleAiAssistant() {
@@ -1539,7 +1549,7 @@
 		return [
 			{ section: 'Place a button' },
 			...free.map((id) => ({
-				label: BUTTONS[id].title,
+				label: labelOf(id),
 				icon: BUTTONS[id].iconName ?? BUTTONS[id].icon,
 				action: () => {
 					if (!editing) return;
@@ -1705,7 +1715,7 @@
 
 	/** the edit button's label, for the a11y tree and the tooltip */
 	function editLabel(id: string) {
-		return id === SPACER ? 'Play' : (BUTTONS[id]?.title ?? id);
+		return labelOf(id);
 	}
 	/** what a corner stack shows while editing: its items, then empty "+" places up to SIDE_MAX */
 	function stackSlots(list: string[]) {
@@ -1918,6 +1928,26 @@
 				checked: $toolbarAlwaysOnTop,
 				action: () => toolbarAlwaysOnTop.update((v) => !v)
 			},
+			// 42 I10: the two "lift above docked panels" prefs, beside Always on top (the user's
+			// place for them): the bar's (`floatingToolbar`, the Settings row of the same name) and
+			// the corner stacks' (`hudStackLift`, new, off by default). Both are the same stores as
+			// Settings ▸ Interface ▸ Windows & chrome, so the two places cannot disagree.
+			{
+				label: 'Lift toolbar above docked panels',
+				tooltip: $floatingToolbar
+					? 'The bar moves up when a panel is docked at the bottom — click to keep it on the floor'
+					: 'A docked panel covers the bar — click to make the bar move up above it',
+				checked: $floatingToolbar,
+				action: () => floatingToolbar.update((v) => !v)
+			},
+			{
+				label: 'Lift corner buttons above docked panels',
+				tooltip: $hudStackLift
+					? 'The round corner buttons move up when a panel is docked — click to keep them on the floor'
+					: 'A docked panel covers the round corner buttons (the default) — click to move them up above it',
+				checked: $hudStackLift,
+				action: () => hudStackLift.update((v) => !v)
+			},
 			// W1: the chevron cell is gone, so this row IS the way out of a collapsed
 			// bar — which is why it swaps rather than sitting beside a second entry
 			collapsed
@@ -1995,8 +2025,8 @@
 				}
 			];
 		return offBar.map((key) => ({
-			label: BUTTONS[key].title,
-			tooltip: `Put ${BUTTONS[key].title} in this slot and take ${BUTTONS[id].title} off the bar`,
+			label: labelOf(key),
+			tooltip: `Put ${labelOf(key)} in this slot and take ${labelOf(id)} off the bar`,
 			action: () => swapCell(id, key)
 		}));
 	}
@@ -2042,14 +2072,14 @@
 				const at = list.indexOf(id);
 				return {
 					key: id,
-					label: BUTTONS[id].title,
+					label: labelOf(id),
 					checked: true,
 					keepOpen: true,
 					tooltip: 'Take it off the corner',
 					action: () => hideButton(id),
 					rowActions: [
-						{ icon: 'chevron-up', label: `Move ${BUTTONS[id].title} up`, disabled: at >= list.length - 1, run: () => moveInStack(id, 'ArrowUp') },
-						{ icon: 'chevron-down', label: `Move ${BUTTONS[id].title} down`, disabled: at <= 0, run: () => moveInStack(id, 'ArrowDown') }
+						{ icon: 'chevron-up', label: `Move ${labelOf(id)} up`, disabled: at >= list.length - 1, run: () => moveInStack(id, 'ArrowUp') },
+						{ icon: 'chevron-down', label: `Move ${labelOf(id)} down`, disabled: at <= 0, run: () => moveInStack(id, 'ArrowDown') }
 					]
 				};
 			});
@@ -2094,12 +2124,12 @@
 					};
 				return {
 					key: id,
-					label: BUTTONS[id].title,
+					label: labelOf(id),
 					checked: true,
 					keepOpen: true,
 					tooltip: 'Take it off the bar',
 					action: () => hideButton(id),
-					rowActions: arrows(id, at, BUTTONS[id].title)
+					rowActions: arrows(id, at, labelOf(id))
 				};
 			}),
 			// Everything the roster knows that is not on the bar — the buttons hidden from
@@ -2115,7 +2145,7 @@
 						{ section: 'Not on the bar' },
 						...offBar.map((id) => ({
 							key: id,
-							label: BUTTONS[id].title,
+							label: labelOf(id),
 							checked: false,
 							keepOpen: true,
 							tooltip: 'Put it on the bar',
@@ -2123,13 +2153,13 @@
 							rowActions: [
 								{
 									icon: 'chevron-up',
-									label: `Move ${BUTTONS[id].title} up`,
+									label: `Move ${labelOf(id)} up`,
 									tooltip: 'Not on the bar — there is nowhere to move it',
 									disabled: true
 								},
 								{
 									icon: 'chevron-down',
-									label: `Move ${BUTTONS[id].title} down`,
+									label: `Move ${labelOf(id)} down`,
 									tooltip: 'Not on the bar — there is nowhere to move it',
 									disabled: true
 								}

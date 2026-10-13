@@ -16,6 +16,7 @@
 		'offer enter vr in a headset browser': ['offer enter vr', 'enter vr', 'headset browser', 'quest'],
 		'reset tours': ['tour', 'tours', 'tutorial'],
 		'lift the toolbar above docked panels': ['floating toolbar', 'toolbar'],
+		'lift the corner buttons above docked panels': ['corner buttons', 'corner', 'chat', 'microphone', 'ai', 'stack', 'dock', 'lift'],
 		'allow undocking on touch screens': ['allow undocking (touch)', 'undock', 'touch', 'phone'],
 		'show system objects in the object list': ['advanced mode', 'advanced', 'system'],
 		'show the environment in the object list': ['environment in list', 'environment'],
@@ -49,6 +50,7 @@
 		showRoomsButton,
 		floatingToolbar,
 		toolbarAlwaysOnTop,
+		hudStackLift,
 		touchTools,
 		mobileUndockAllowed,
 		advancedMode,
@@ -244,6 +246,9 @@
 		{/if}
 		<SettingRow id="row-floating-toolbar" label="Lift the toolbar above docked panels" description="The bottom toolbar moves up when the Node editor or Explorer is docked.">
 			<Toggle id="floating-toolbar" label="Lift the toolbar above docked panels" bind:checked={$floatingToolbar} />
+		</SettingRow>
+		<SettingRow id="row-corner-lift" label="Lift the corner buttons above docked panels" description="The round buttons in the bottom corners (chat, microphone, AI…) move up when a panel is docked.">
+			<Toggle id="corner-lift" label="Lift the corner buttons above docked panels" bind:checked={$hudStackLift} />
 		</SettingRow>
 		<SettingRow id="row-toolbar-top" label="Toolbar always on top" description="The toolbar draws over panels and windows, so it is always reachable.">
 			<Toggle id="toolbar-on-top" label="Toolbar always on top" bind:checked={$toolbarAlwaysOnTop} />
