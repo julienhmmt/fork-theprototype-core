@@ -134,6 +134,9 @@ export const DEBUG_HOOKS = [
 	['nodeEditorActions', () => import('./nodeEditorActions')],
 	['themes', () => import('./themes')],
 	['phoneShell', () => import('./ui/phoneShell.js')],
+	// 42 I8/I9: the phone chrome profile and the top-right / touch slots (toolbar-slots-42)
+	['phoneBar', () => import('./ui/phoneBar.js')],
+	['toolbarSlots', () => import('./toolbarSlots')],
 	['textSelection', () => import('./textSelection')],
 	['vrRadialMenu', () => import('./vrRadialMenu')],
 	['vrBindings', () => import('./vr/bindings.js')],

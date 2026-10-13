@@ -2290,7 +2290,8 @@
 							label: labelOf(id),
 							checked: false,
 							keepOpen: true,
-							tooltip: 'Put it on the bar',
+							// 42 I9: where a press puts it — its own group for the top-right / touch buttons
+							tooltip: HOME_ONLY[id] === 'top' || TOP_DEFAULT.includes(id) ? 'Put it back in the top-right group' : TOUCH_DEFAULT.includes(id) ? 'Put it back in the touch tools' : 'Put it on the bar',
 							action: () => showButton(id),
 							rowActions: [
 								{
