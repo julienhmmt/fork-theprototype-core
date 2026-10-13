@@ -354,35 +354,30 @@ h.run(async () => {
 	await P.mouse.click(5, 420).catch(() => {});
 
 	// ---- NOTES-38 #7: the bar is customisable (per device) ------------------------------------
+	// 42 I5: arranged in More by holding and dragging (phone-bar-42 drives the touch gestures); here the
+	// map's promise: a long press on a tab reaches More, a customised bar works and is remembered,
+	// Reset bar restores the default and forgets the key.
 	await rest();
-	const lsBar = () => read(() => localStorage.getItem('phoneBarSlots'));
+	const lsBar = () => read(() => localStorage.getItem('phoneBar'));
 	const barIds = () => read(() => [...document.querySelectorAll('#ps-bar > button')].map((b) => b.id));
 	h.check(JSON.stringify(await barIds()) === JSON.stringify(['ps-add', 'ps-objects', 'ps-play', 'ps-explorer', 'ps-more']), `default bar: Add, Objects, Play, Explorer, More (${JSON.stringify(await barIds())})`);
-	// a long press (contextmenu) on a tab opens the editor
+	// a long press (contextmenu) on a tab opens More, where the bar is arranged
 	await P.locator('#ps-objects').dispatchEvent('contextmenu');
 	await P.waitForTimeout(500);
-	h.check(await visible('#ps-edit-bar'), 'a long press on a bar tab opens Edit bar');
-	// 41b H6: More may leave the bar now (phone-bar-41b covers the removal and its one-time notice)
-	h.check((await read(() => document.querySelector('#ps-pick-more')?.getAttribute('aria-disabled'))) !== 'true', 'More is a pick like any other (41b H6)');
-	await tap('#ps-pick-explorer');
-	await tap('#ps-pick-chat');
-	const custom = await barIds();
-	h.check(JSON.stringify(custom) === JSON.stringify(['ps-add', 'ps-objects', 'ps-play', 'ps-chat', 'ps-more']), `the bar follows the picks (${JSON.stringify(custom)})`);
-	h.check((await lsBar()) === JSON.stringify(['add', 'objects', 'chat', 'more']), `the pick is saved on this device (${await lsBar()})`);
-	await P.locator('#ps-pick-flow').tap({ force: true });
+	h.check(await visible('#ps-more-sheet'), 'a long press on a bar tab opens More (where the bar is arranged)');
+	h.check(/hold and drag/i.test((await read(() => document.getElementById('ps-more-hint')?.textContent)) ?? ''), "More says how: hold and drag items to or from the bar");
+	await P.evaluate(() => window.__stores.phoneBar.setBar(['add', 'objects', 'play', 'chat', 'more']));
 	await P.waitForTimeout(300);
-	h.check(!(await barIds()).includes('ps-flow'), 'a full bar refuses a fifth');
-	await tap('#ps-bar-done');
-	h.check(!(await visible('#ps-edit-bar')) && (await visible('#ps-more-sheet')), 'Done returns to the More sheet');
+	const custom = await barIds();
+	h.check(JSON.stringify(custom) === JSON.stringify(['ps-add', 'ps-objects', 'ps-play', 'ps-chat', 'ps-more']), `the bar follows its list (${JSON.stringify(custom)})`);
+	h.check((await lsBar()) === JSON.stringify(['add', 'objects', 'play', 'chat', 'more']), `the bar is saved on this device (${await lsBar()})`);
 	await rest();
 	await tap('#ps-chat');
 	h.check((await read(store('chatHidden'))) === '', 'a customised Chat slot opens Chat');
 	await rest();
 	await tap('#ps-more');
-	await tap('#ps-edit-bar-open');
 	await tap('#ps-bar-reset');
-	h.check(JSON.stringify(await barIds()) === JSON.stringify(['ps-add', 'ps-objects', 'ps-play', 'ps-explorer', 'ps-more']) && (await lsBar()) === null, 'Reset to default restores the bar and forgets the key');
-	await tap('#ps-bar-done');
+	h.check(JSON.stringify(await barIds()) === JSON.stringify(['ps-add', 'ps-objects', 'ps-play', 'ps-explorer', 'ps-more']) && (await lsBar()) === null, 'Reset bar restores the bar and forgets the key');
 
 	// ---- NOTES-38 #15: each sheet remembers its own height, per device ----------------------
 	await rest();
