@@ -48,8 +48,13 @@ function topInset() {
  * The centred Controls pill on a wide desktop is a RECT, not a band; dragWindow tests it
  * per window so a window can still be parked in the bottom corners beside it.
  * `{dock: false}` (41 G7): a window's POSITION ignores the dock — windows sit above the
- * dock's tier, so one parked over it keeps a reachable header (like the Objects window);
- * the size cap (`viewportCap`) still counts it.
+ * dock's tier, so one parked over it keeps a reachable header (like the Objects window).
+ * 42 I6: its SIZE ignores the dock too (`viewportCap`, `clampResize`) — "should be possible
+ * to resize even when it is covering docked window drawer, now it stuck and disallow to resize
+ * height past this docker window". A window above the dock's tier that may sit over the dock
+ * may also GROW over it; the corner still stops above the Controls band and the browser's own
+ * overlay, which are drawn above windows. Nothing passes `{dock: true}` any more; the default
+ * stays for a caller that asks what the dock takes from the viewport.
  * @param {{dock?: boolean}} [options]
  */
 export function bottomReserve({ dock: withDock = true } = {}) {
@@ -73,7 +78,7 @@ export function viewportCap(margin = WIN_MARGIN) {
 	if (typeof window === 'undefined') return { w: Infinity, h: Infinity };
 	return {
 		w: Math.max(120, window.innerWidth - margin),
-		h: Math.max(120, window.innerHeight - margin - topInset() - bottomReserve())
+		h: Math.max(120, window.innerHeight - margin - topInset() - bottomReserve({ dock: false }))
 	};
 }
 
@@ -105,8 +110,8 @@ export function clampResize(w, h, left, top, { minW = 260, minH = 180, margin = 
 	// would shrink it twice
 	const maxW = Math.max(120, (typeof window === 'undefined' ? Infinity : window.innerWidth - margin) - Math.max(0, left || 0));
 	// 24-B3: the corner also stops above the bottom chrome, so a resize cannot put the
-	// grip under the Controls band either
-	const maxH = Math.max(120, (typeof window === 'undefined' ? Infinity : window.innerHeight - margin - bottomReserve()) - Math.max(0, top || 0));
+	// grip under the Controls band either (42 I6: but NOT above the dock — windows sit over it)
+	const maxH = Math.max(120, (typeof window === 'undefined' ? Infinity : window.innerHeight - margin - bottomReserve({ dock: false })) - Math.max(0, top || 0));
 	return {
 		w: Math.min(Math.max(Math.min(minW, maxW), w || 0), maxW),
 		h: Math.min(Math.max(Math.min(minH, maxH), h || 0), maxH)
