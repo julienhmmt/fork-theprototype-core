@@ -203,6 +203,14 @@ export function showSidebar(store) {
 		revealInspector?.(kind);
 		return; // already showing this target
 	}
+	// 42 I4: an OPEN panel swaps its content in place. Closing it and reopening 50 ms later
+	// replayed the fly-in on every select after a deselect (Scene -> Properties) — the pinned
+	// sidebar "shook". The slide belongs to a panel opening from CLOSED, never to a swap.
+	if (open) {
+		inspectorKind.set(kind);
+		revealInspector?.(kind);
+		return;
+	}
 	inspectorClose.set(true);
 	// The delay adds cool effect
 	setTimeout(() => {
