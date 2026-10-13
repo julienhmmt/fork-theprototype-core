@@ -124,11 +124,11 @@ h.run(async () => {
 		if (dev.name === 'desktop') {
 			// the deep link lands a section right at the top when the header scrolls away
 			await pressLock(page, false);
-			await page.evaluate(() => window.__stores.openSceneSection('Fog'));
+			await page.evaluate(() => window.__stores.openSceneSection('Grid'));
 			await page.waitForTimeout(900);
 			const land = await page.evaluate(() => {
 				// the deep link lands the SECTION element (Section.svelte's findTarget)
-				const sec = [...document.querySelectorAll('section.sec-panel')].find((e) => /^Fog\b/.test(e.textContent?.trim() ?? ''));
+				const sec = [...document.querySelectorAll('section.sec-panel')].find((e) => /^Grid\b/.test(e.textContent?.trim() ?? ''));
 				const head = document.querySelector('#drawer-label');
 				let sc = head?.parentElement ?? null;
 				while (sc && !(/(auto|scroll)/.test(getComputedStyle(sc).overflowY) && sc.scrollHeight > sc.clientHeight + 4)) sc = sc.parentElement;
