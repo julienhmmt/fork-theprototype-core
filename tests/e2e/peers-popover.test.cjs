@@ -53,7 +53,8 @@ h.run(async () => {
 		const names = rows.map((r) => r.textContent.replace(/\s+/g, ' ').trim());
 		return {
 			open: !!box,
-			header: box?.querySelector('.ui-section-label')?.textContent?.trim(),
+			// 41b H15: the header is the notification centre's tool-window header (title + count)
+			header: `${box?.querySelector('.wc-title')?.textContent?.trim()} (${box?.querySelector('.wc-count')?.textContent?.trim()})`,
 			flatArmed: box?.querySelector('#peers-view-flat')?.getAttribute('aria-pressed'),
 			rowCount: rows.length,
 			watchButtons: box ? box.querySelectorAll('.peer-watch').length : 0,

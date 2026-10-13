@@ -42,19 +42,34 @@ h.run(async () => {
 	await A.page.waitForTimeout(150);
 	h.check((await A.page.locator('#sim-play').count()) === 0, 'A3: disabling the setting hides it again');
 
-	// --- A6: opening the logo menu closes an open modal (app modals are NON-MODAL
-	// dialogs - the chrome above --z-modal stays clickable, so ONE click works) ----
+	// --- A6 (rewritten for 41 G3b): an open modal COVERS the logo now (the user's 1.32 review: "settings or
+	// other modals should cover burger menu logo"). The logo is not reachable under Settings; once Settings
+	// closes, the logo opens the menu as before. (Old A6: the logo sat above --z-modal and one click closed it.)
 	await A.page.evaluate(() => {
 		window.__stores.closeMenu.set(true); // menu closed
 		window.__stores.settingsOpen.set(true); // a modal is open
 	});
 	await A.page.waitForTimeout(300);
+	const logoCovered = await A.page.evaluate(() => {
+		const l = document.querySelector('#logo-menu');
+		if (!l) return 'no logo';
+		const r = l.getBoundingClientRect();
+		const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+		const top = document.elementFromPoint(cx, cy);
+		if (!(top && (top === l || l.contains(top)))) return 'covered';
+		// a desktop dialog without a scrim may simply not reach the logo (z-scale-layering's own premise)
+		const d = document.querySelector('dialog.tp-modal-frame[open]')?.getBoundingClientRect();
+		return d && cx >= d.left && cx <= d.right && cy >= d.top && cy <= d.bottom ? 'logo on top' : 'covered';
+	});
+	h.check(logoCovered === 'covered', `A6: the open Settings modal covers the logo (${logoCovered})`);
+	await A.page.evaluate(() => window.__stores.settingsOpen.set(false));
+	await A.page.waitForTimeout(250);
 	await A.page.locator('#logo-menu').click();
 	await A.page.waitForTimeout(250);
-	const settingsClosed = await A.page.evaluate(
-		() => new Promise((r) => window.__stores.settingsOpen.subscribe((v) => r(v))())
+	const menuOpen = await A.page.evaluate(
+		() => new Promise((r) => window.__stores.closeMenu.subscribe((v) => r(v === false))())
 	);
-	h.check(settingsClosed === false, 'A6: opening the menu closed the open Settings modal');
+	h.check(menuOpen, 'A6: with Settings closed the logo opens the menu');
 	// tidy up: close the menu again
 	await A.page.evaluate(() => window.__stores.closeMenu.set(true));
 
@@ -74,8 +89,11 @@ h.run(async () => {
 	h.check(!/\bbg-white\b/.test(aiClass), 'I1: AI button no longer white');
 
 	// --- I2: left stack geometry matches the right (AI=bottom-4, "+"=bottom-16) --
-	h.check(/\bbottom-4\b/.test(aiClass), 'I2: AI button at bottom-4 (chat parity)');
-	h.check(/\bbottom-16\b/.test(plusClass), 'I2: "+" button at bottom-16 (mic parity)');
+	// 41 G1: the corners are two stacks now (no per-button bottom-* class) — assert the geometry
+	const box = (q) => A.page.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; }, q);
+	const [aiB, plusB, chatB, micB] = [await box('#ai-hud-button'), await box('#mobile-add-button'), await box('#chat-button'), await box('#mic-button')];
+	h.check(Math.abs(aiB.bottom - chatB.bottom) < 1, `I2: AI button level with chat (${aiB.bottom} vs ${chatB.bottom})`);
+	h.check(Math.abs(plusB.bottom - micB.bottom) < 1 && plusB.bottom < aiB.top + 1, `I2: "+" above AI, level with mic (${plusB.bottom} vs ${micB.bottom})`);
 
 	// --- I3: unconfigured click opens Settings ▸ AI (the toggleAiPrompt branch) --
 	await A.page.evaluate(() => {

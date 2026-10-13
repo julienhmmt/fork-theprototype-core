@@ -6,7 +6,7 @@ const { unzipSync, strFromU8 } = require('fflate');
 
 h.run(async () => {
 	const browser = await h.launch();
-	const A = await h.setupPage(browser, 'A');
+	const A = await h.setupPage(browser, 'A', { storage: { 'ui:projectActions': 'list' } }); // 41b H14: the List layout's format row
 
 	// scene: one box + a flow node + an imported pack (box glb)
 	const glbArr = await A.page.evaluate(async () => {
@@ -74,9 +74,9 @@ h.run(async () => {
 	h.check((await A.page.locator('#format-tpscene').count()) === 1, 'Scene format segment present');
 	h.check((await A.page.getByText('JSON', { exact: true }).count()) === 0, 'JSON hidden by default');
 	await A.page.locator('#export-settings-cog').click();
-	await A.page.waitForTimeout(200);
-	h.check((await A.page.locator('#export-settings-modal').count()) === 1, 'cog opens the export settings');
-	h.check((await A.page.locator('#tpscene-packs').count()) === 1, 'include-packs checkbox present');
+	await A.page.waitForSelector('#save-options-modal', { state: 'visible', timeout: 5000 });
+	h.check((await A.page.locator('#save-options-modal').count()) === 1, 'cog opens Save options');
+	h.check((await A.page.locator('#tpscene-packs').count()) === 1, 'include-packs switch present');
 
 	await h.finish(browser);
 });

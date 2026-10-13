@@ -80,7 +80,8 @@ h.run(async () => {
 	await tap('#logo-menu');
 	row(1, (await visible('#sidebar70')) && (await read(store('closeMenu'))) === false, 'Logo (main menu) opens the main menu');
 	const menuBox = await read(() => document.querySelector('#sidebar70')?.getBoundingClientRect().toJSON());
-	h.check(menuBox && Math.abs(menuBox.bottom - 844) < 2 && menuBox.width > 380, `the main menu is a bottom sheet (${JSON.stringify(menuBox)})`);
+	// 40 F1: a bottom sheet that ends at the TOP of the bar (844 - 76), so Play stays uncovered
+	h.check(menuBox && Math.abs(menuBox.bottom - 768) < 2 && menuBox.width > 380, `the main menu is a bottom sheet above the bar (${JSON.stringify(menuBox)})`);
 	const menuBar = await read(() => {
 		const el = document.querySelector('#sidebar70');
 		if (!el) return -1;
@@ -94,7 +95,7 @@ h.run(async () => {
 	row(5, await visible('#ps-connect-chip'), 'Status pill: the Connect chip shows the state at rest');
 	await tap('#ps-connect-chip');
 	row(6, (await read(store('connectDrawerOpen'))) === true, 'Drawer toggle: tapping the chip opens the drawer');
-	row(2, await visible('.connect-wrap[data-ps-host] .connect-pill > button:first-child'), 'Copy invite link lives in the Connect sheet');
+	row(2, await visible('.connect-wrap[data-ps-host] .connect-pill > button:first-of-type'), 'Copy invite link lives in the Connect sheet');
 	row(3, await visible('.connect-wrap[data-ps-host] .cx-input'), 'Peer ID field lives in the Connect sheet');
 	row(4, await visible('.connect-wrap[data-ps-host] .cx-connect button'), 'Connect button lives in the Connect sheet');
 	const tabs = await read(() => [...document.querySelectorAll('.connect-wrap[data-ps-host] .cxd-tab')].filter((t) => t.offsetParent).map((t) => t.textContent.trim()));
@@ -191,7 +192,8 @@ h.run(async () => {
 	await tap('#ps-inspect');
 	await P.waitForTimeout(300);
 	row(32, (await read(store('inspectorClose'))) === false && (await read(store('inspectorKind'))) === 'selection', 'Inspector: Inspect in the strip opens the Inspector for the selection');
-	h.check(await visible('#inspector .ins-resize'), 'the Inspector opens as a sheet with its handle');
+	// 41b H1: on the phone the Inspector is the dock's Properties TAB, under the dock's own grab bar
+	h.check((await visible('#ps-dock-grip [data-sheet-grip]')) && (await read(store('bottomDock.visibleDockKey'))) === 'properties', 'the Inspector opens as the Properties dock tab with the dock grab bar');
 	// NOTES-38 #32: the Inspector sheet sits ABOVE the bar (Play stays tappable) and the selection
 	// strip rides on top of it
 	await P.waitForTimeout(500);
@@ -216,7 +218,7 @@ h.run(async () => {
 	row(16, await visible('#avatar-trigger'), 'Profile and peers: the avatar is in the top bar at rest');
 	await tap('#avatar-trigger');
 	const prof = await read(() => document.querySelector('#avatar-dropdown')?.getBoundingClientRect().toJSON());
-	h.check(prof && prof.height > 0 && Math.abs(prof.bottom - 844) < 2, `the avatar opens the profile menu as a bottom sheet (${JSON.stringify(prof)})`);
+	h.check(prof && prof.height > 0 && Math.abs(prof.bottom - 768) < 2, `the avatar opens the profile menu as a bottom sheet above the bar (${JSON.stringify(prof)})`);
 	await P.keyboard.press('Escape');
 	await P.evaluate(() => document.querySelector('#avatar-trigger')?.click());
 	await rest();
@@ -261,18 +263,17 @@ h.run(async () => {
 	const objBox = await read(() => document.querySelector('#object-list')?.getBoundingClientRect().toJSON());
 	const barTop2 = await read(() => document.querySelector('#ps-bar').getBoundingClientRect().top);
 	h.check(objBox && Math.abs(objBox.bottom - barTop2) < 2 && objBox.width >= 388, `the object list is placed into a bottom sheet above the bar (#32) (${JSON.stringify(objBox)})`);
-	// the sheet handle: tap steps a detent, drag down past peek closes
-	const d0 = await read(() => { let m; window.__stores.phoneShell.phoneDetents.subscribe((v) => (m = v))(); return m.objects ?? 'half'; });
-	await tap('#ps-sheet-handle');
-	const d1 = await read(() => { let m; window.__stores.phoneShell.phoneDetents.subscribe((v) => (m = v))(); return m.objects ?? 'half'; });
-	h.check(d0 === 'half' && d1 === 'full', `a tap on the handle steps the sheet up (${d0} -> ${d1})`);
-	const hb = await read(() => document.querySelector('#ps-sheet-handle').getBoundingClientRect().toJSON());
+	// 41b H1: Objects is the dock's Objects TAB on the phone — dragging the dock's grab bar to the bottom
+	// MINIMIZES the dock (the tab stays open, nothing shows)
+	const hb = await read(() => document.querySelector('#ps-dock-grip [data-sheet-grip]').getBoundingClientRect().toJSON());
 	await P.mouse.move(195, hb.y + 10);
 	await P.mouse.down();
 	for (let i = 1; i <= 12; i++) await P.mouse.move(195, hb.y + 10 + i * 60);
 	await P.mouse.up();
 	await P.waitForTimeout(400);
-	h.check((await read(store('objectListClose'))) === true, 'dragging the handle to the bottom closes the sheet (and the window)');
+	h.check((await read(store('bottomDock.dockMinimized'))) === true && (await read(store('objectListClose'))) === false, 'dragging the dock grab bar to the bottom puts the dock away (Objects stays open as a tab)');
+	await P.evaluate(() => window.__stores.bottomDock.dockMinimized.set(false));
+	// (a framed sheet's handle stepping a detent: NOTES-38 #15 below, on Chat)
 	await rest();
 	await tap('#ps-more');
 	await tap('#ps-tile-chat');
@@ -352,7 +353,7 @@ h.run(async () => {
 	await P.keyboard.press('Escape');
 	await P.mouse.click(5, 420).catch(() => {});
 
-	// ---- NOTES-38 #7: the bar is customisable (per device); More always stays -------------
+	// ---- NOTES-38 #7: the bar is customisable (per device) ------------------------------------
 	await rest();
 	const lsBar = () => read(() => localStorage.getItem('phoneBarSlots'));
 	const barIds = () => read(() => [...document.querySelectorAll('#ps-bar > button')].map((b) => b.id));
@@ -361,10 +362,8 @@ h.run(async () => {
 	await P.locator('#ps-objects').dispatchEvent('contextmenu');
 	await P.waitForTimeout(500);
 	h.check(await visible('#ps-edit-bar'), 'a long press on a bar tab opens Edit bar');
-	h.check((await read(() => document.querySelector('#ps-pick-more')?.getAttribute('aria-disabled'))) === 'true', 'More cannot be taken off the bar');
-	await P.locator('#ps-pick-more').tap({ force: true });
-	await P.waitForTimeout(300);
-	h.check((await barIds()).includes('ps-more'), 'tapping More in the editor leaves it on the bar');
+	// 41b H6: More may leave the bar now (phone-bar-41b covers the removal and its one-time notice)
+	h.check((await read(() => document.querySelector('#ps-pick-more')?.getAttribute('aria-disabled'))) !== 'true', 'More is a pick like any other (41b H6)');
 	await tap('#ps-pick-explorer');
 	await tap('#ps-pick-chat');
 	const custom = await barIds();

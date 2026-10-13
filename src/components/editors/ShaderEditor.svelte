@@ -693,12 +693,15 @@
 			<Icon name="trash-2" size={16} aria-hidden="true" />
 		</button>
 	{/if}
-	<button class="tp-dock-btn"
-		id="shader-close"
-		title="Close"
-		aria-label="Close the shader editor"
-		onclick={() => shaderEditorClose.set(true)}><Icon name="x" size={16} /></button
-	>
+	<!-- 40 F8: a DOCKED editor closes from its tab's ✕; only the floating window keeps one -->
+	{#if !docked}
+		<button class="tp-dock-btn"
+			id="shader-close"
+			title="Close"
+			aria-label="Close the shader editor"
+			onclick={() => shaderEditorClose.set(true)}><Icon name="x" size={16} /></button
+		>
+	{/if}
 {/snippet}
 
 {#snippet paletteContent(/** @type {number} */ paneH, /** @type {(key: string) => void} */ pick)}
@@ -1023,7 +1026,7 @@
 		     swallow the drag) -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="resize-cue absolute -top-1 left-0 right-0 z-30 h-2 cursor-ns-resize hover:bg-accent/30"
+			class="resize-cue absolute -top-1 left-0 right-0 z-28 h-2 cursor-ns-resize hover:bg-accent/30"
 			style="touch-action: none"
 			title="Drag to resize"
 			onpointerdown={startResize}
@@ -1039,12 +1042,6 @@
 				<span class="shader-scope" id="shader-scope">{scopeLabel}</span>
 			</ScrollStrip>
 			<div class="shader-actions">
-				<button class="tp-dock-btn"
-					id="shader-undock"
-					title="Undock into a floating window"
-					aria-label="Undock the shader editor"
-					onclick={() => setDocked(false)}><Icon name="app-window" size={16} /></button
-				>
 				{@render editorActions()}
 			</div>
 		</div>
@@ -1117,7 +1114,7 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		z-index: var(--z-bottom, 35);
+		z-index: var(--z-dock, 35);
 		display: flex;
 		flex-direction: column;
 		/* 38 R6: surface + top line from .tp-dock-panel (src/styles/windows.css); a docked

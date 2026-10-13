@@ -1,7 +1,8 @@
 // Roadmap #9 fixes: flowbite modals (settings/modules/sessions) sit on the modal
 // tier ABOVE the persistent avatar/Connect chrome (their X was covered), and the
 // export-settings panel renders viewport-centered (not off the left edge — it used
-// to be trapped by .app-sidebar's backdrop-filter containing block).
+// to be trapped by .app-sidebar's backdrop-filter containing block). 41b H14: that panel is the
+// Save options modal now.
 const h = require('./helpers.cjs');
 
 h.run(async () => {
@@ -43,19 +44,20 @@ h.run(async () => {
 	await A.page.evaluate(() => window.__stores.settingsOpen.set(false));
 	await A.page.waitForTimeout(200);
 
-	// export-settings panel opens viewport-centered + fully on-screen
+	// 41b H14: Save options (the burger's Save ▾ — it replaced the cog's anchored popup) opens as an
+	// app modal, fully on-screen — rendered at the Sidebar ROOT, never trapped by .app-sidebar's
+	// backdrop-filter containing block
 	await A.page.evaluate(() => window.__stores.closeMenu.set(false)); // open the sidebar
 	await A.page.waitForTimeout(400);
-	await A.page.locator('#export-settings-cog').click();
-	await A.page.waitForTimeout(300);
+	await A.page.locator('#save-options-open').click();
+	await A.page.waitForSelector('#save-options-modal', { state: 'visible', timeout: 5000 });
 	const rect = await A.page.evaluate(() => {
-		const cog = document.querySelector('#export-settings-cog').getBoundingClientRect();
-		const m = document.querySelector('#export-settings-modal').getBoundingClientRect();
-		return { cogBottom: cog.bottom, cogLeft: cog.left, top: m.top, left: m.left, right: m.right, bottom: m.bottom, vw: window.innerWidth, vh: window.innerHeight };
+		const m = document.querySelector('#save-options-modal .wc, #save-options-modal > *')?.getBoundingClientRect() ?? document.querySelector('#save-options-modal').getBoundingClientRect();
+		return { top: m.top, left: m.left, right: m.right, bottom: m.bottom, vw: window.innerWidth, vh: window.innerHeight, inSidebar: !!document.querySelector('#sidebar70 #save-options-modal') };
 	});
-	h.check(rect.left >= 0 && rect.right <= rect.vw && rect.bottom <= rect.vh, `export settings fully on-screen (left=${Math.round(rect.left)}, right=${Math.round(rect.right)}, bottom=${Math.round(rect.bottom)})`);
-	h.check(rect.top >= rect.cogBottom - 1, `export settings opens below the cog (top=${Math.round(rect.top)} >= cogBottom=${Math.round(rect.cogBottom)})`);
-	h.check(Math.abs(rect.left - rect.cogLeft) < 24, `export settings anchors to the cog, not centered (mLeft=${Math.round(rect.left)}, cogLeft=${Math.round(rect.cogLeft)})`);
+	h.check(rect.left >= 0 && rect.right <= rect.vw && rect.top >= 0 && rect.bottom <= rect.vh, `Save options fully on-screen (left=${Math.round(rect.left)}, right=${Math.round(rect.right)}, bottom=${Math.round(rect.bottom)})`);
+	h.check(!rect.inSidebar, 'Save options is not rendered inside the blurred sidebar');
+	await A.page.locator('#save-options-cancel').click();
 
 	await h.finish(browser);
 });

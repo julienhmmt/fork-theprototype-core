@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 // dependency-free helper, so importing it keeps this store a leaf
-import { coarsePointer } from '../lib/inputDevice';
+import { coarsePointer, handheldDevice } from '../lib/inputDevice';
 import { safeStorage } from '../lib/safeStorage';
 
 /** @type {import('svelte/store').Writable<any>} */
@@ -52,7 +52,19 @@ export const playPointerFree = writable(false);
  */
 export const editorMode = writable('edit');
 export const isVRMode = writable(false);
-export const vrOverride = writable(false);
+/**
+ * "Play on the screen" (true) or in the headset when one is supported (false). 41b H7: THREE stored
+ * states, because "nobody chose" differs by device — `'true'` / `'false'` are a choice (the play
+ * button's mode menu, Settings ▸ VR), absent is the device default: a handheld plays on its screen
+ * (desktop parity), anything else enters VR when it can (a headset, a desktop with a headset).
+ */
+export function readVrOverride() {
+	const raw = typeof localStorage === 'undefined' ? null : safeStorage.getItem('vrOverride');
+	if (raw === 'true') return true;
+	if (raw === 'false') return false;
+	return handheldDevice();
+}
+export const vrOverride = writable(readVrOverride());
 export const playerCam = writable(false);
 export const editorCam = writable(false);
 export const specators = writable([]);

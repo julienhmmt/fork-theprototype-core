@@ -7,7 +7,8 @@
 	//
 	// It replaces the single-script ScriptPanel: a Script node's typed-sockets editor rides
 	// here for the tab that edits ONE script node (same element ids, so its suites carry over).
-	import { untrack } from 'svelte';
+	import { untrack, onMount } from 'svelte';
+	import { registerDockCloser } from '$lib/dockMenu';
 	import { get } from 'svelte/store';
 	import Icon from '../ui/Icon.svelte';
 	import CodeEditor from './CodeEditor.svelte';
@@ -415,6 +416,9 @@
 		closeFailed = 0;
 		confirmCloseAll = true;
 	}
+	// 40 F8: a docked workspace closes from its TAB's ✕ — which takes this same path, so the
+	// unsaved-tabs question still comes first
+	onMount(() => registerDockCloser('code', requestCloseWorkspace));
 	async function closeSavingAll() {
 		const failed = await saveAllCodeTabs();
 		if (failed.length) {
@@ -710,7 +714,7 @@
 			/>
 		{/if}
 		{#if confirmCloseAll}
-			<div id="code-ws-confirm-all" class="absolute inset-0 z-50 flex items-center justify-center bg-scrim" role="dialog" aria-modal="true" aria-label="Unsaved changes">
+			<div id="code-ws-confirm-all" class="absolute inset-0 z-29 flex items-center justify-center bg-scrim" role="dialog" aria-modal="true" aria-label="Unsaved changes">
 				<div class="ui-panel w-96 rounded-lg p-4 text-sm shadow-2xl">
 					<p class="mb-2 font-semibold">{dirtyTabs().length === 1 ? '1 file has' : dirtyTabs().length + ' files have'} unsaved changes</p>
 					<ul class="code-muted mb-3 max-h-24 overflow-auto text-xs" use:minimalScroll>
@@ -740,7 +744,7 @@
 		id="code-ws-dock"
 		data-tour="code-workspace"
 		class="code-ws tp-ui tp-dock-panel fixed inset-x-0 bottom-0 flex flex-col p-2 {dockVisible ? '' : 'hidden'}"
-		style="z-index: var(--z-bottom); height: {$dockHeight}px"
+		style="z-index: var(--z-dock); height: {$dockHeight}px"
 		data-key-scope="panel"
 		role="region"
 		aria-label="Code (docked)"
@@ -748,7 +752,7 @@
 	>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="resize-cue absolute -top-1 left-0 right-0 z-30 h-2 cursor-ns-resize hover:bg-accent/30"
+			class="resize-cue absolute -top-1 left-0 right-0 z-28 h-2 cursor-ns-resize hover:bg-accent/30"
 			style="touch-action: none"
 			title="Drag to resize"
 			onpointerdown={startResize}
@@ -762,8 +766,6 @@
 			<span class="flex-1"></span>
 			{@render openGraph()}
 			{@render sideToggle('right')}
-			<button class="tp-dock-btn" title="Undock into a floating window" aria-label="Undock into a floating window" onclick={() => setDocked(false)}><Icon name="app-window" size={16} /></button>
-			<button id="code-ws-close" class="tp-dock-btn" title="Close the code workspace" aria-label="Close the code workspace" onclick={requestCloseWorkspace}><Icon name="x" size={16} /></button>
 		</div>
 		{@render main()}
 	</div>

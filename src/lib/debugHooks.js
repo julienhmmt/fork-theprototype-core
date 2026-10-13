@@ -54,6 +54,8 @@ export const DEBUG_HOOKS = [
 	['avatars', () => import('./avatars/avatarState.js')],
 	['avatarAssets', () => import('./avatars/assets.js')],
 	['avatarCatalog', () => import('./avatars/catalog.js')],
+	// 41 G9: the customise panel's presets / Custom / Surprise me (lookSignature for the e2e)
+	['characterLooks', () => import('./avatars/characterLooks.js')],
 	['perfLiveSource', () => import('./perf/liveSource')],
 	['perfLiveSink', () => import('./perf/liveSink')],
 	['perfLiveWire', () => import('./perf/liveWire')],
@@ -76,6 +78,10 @@ export const DEBUG_HOOKS = [
 	['materialsHandler', () => import('./materialsHandler')],
 	// 37 R5: material presets (materialPresets, peerMaterialPresets, applyMaterialPreset, materialPresetsDebug…)
 	['materialPresets', () => import('./materialPresets')],
+	// 40 F16: the look tier (materialTiersDebug, pinMaterialTier, applyMaterialTiers)
+	['materialTiers', () => import('./materialTiers.js')],
+	// 40 F15: the motion nodes (motionNodesDebug, resetMotionNodes)
+	['motionNodes', () => import('./motion/motionNodes.js')],
 	['objectActions', () => import('./objectActions')],
 	['commandsHandler', () => import('./commandsHandler.svelte')],
 	['moduleSDK', () => import('./moduleSDK')],
@@ -107,6 +113,9 @@ export const DEBUG_HOOKS = [
 	['animatedImports', () => import('./animatedImports')],
 	['fileHandler', () => import('./fileHandler.svelte')],
 	['fileWindows', () => import('./fileWindows')],
+	['imageEditor', () => import('./image/imageEditor')],
+	['imageOps', () => import('./image/imageOps')],
+	['imageVersions', () => import('./image/imageVersions')],
 	['sceneBounds', () => import('./sceneBounds')],
 	['cameraClip', () => import('./cameraClip')],
 	['ping', () => import('./ping')],
@@ -145,6 +154,8 @@ export const DEBUG_HOOKS = [
 	['avatarModel', () => import('./avatarModel')],
 	['explorer', () => import('./explorer')],
 	['bottomDock', () => import('./bottomDock')],
+	['dockMenu', () => import('./dockMenu')],
+	['phoneDock', () => import('./phoneDock')],
 	['explorerDrop', () => import('./explorerDrop')],
 	['assetShare', () => import('./assetShare')],
 	['soundRuntime', () => import('./soundRuntime')],
@@ -220,6 +231,7 @@ export const DEBUG_HOOKS = [
 	['multiTransform', () => import('./multiTransform')],
 	['objectOrigin', () => import('./objectOrigin')],
 	['moduleGallery', () => import('./moduleGallery')],
+	['moduleInstallJobs', () => import('./moduleInstallJobs')],
 	['uvEditor', () => import('./uvEditor')],
 	['uvUnwrap', () => import('./uvUnwrap')],
 	['meshTopology', () => import('./meshTopology')],
@@ -306,6 +318,10 @@ export const DEBUG_HOOKS = [
 	// 36-export: the export builder, its stores, the export boot + runtime state
 	['exportBuilder', () => import('./export/exportBuilder.js')],
 	['exportStores', () => import('./export/exportStores.js')],
+	// 41b: the burger's Project actions setting + Save options (H14), the settings-row fit (H12)
+	['projectActions', () => import('./projectActions.js')],
+	['saveOptions', () => import('./saveOptions.js')],
+	['rowFit', () => import('./ui/rowFit.js')],
 	['exportBoot', () => import('./export/exportBoot.js')],
 	['exportRuntime', () => import('./export/exportRuntime.js')],
 	// 36-community (C4): the open scene's permanent game id
@@ -342,6 +358,9 @@ export const DEBUG_HOOKS = [
 	['replaceModel', () => import('./replaceModel')],
 	['lod', () => import('./lod')],
 	['lodGroup', () => import('./lodGroup')],
+	['lodGroupCore', () => import('./lodGroupCore')],
+	// 40 F14: the substitutes a fallback group draws
+	['lodTrees', () => import('./lodTrees.js')],
 	['lodGroupActions', () => import('./lodGroupActions')],
 	['lodLevelEdit', () => import('./lodLevelEdit')],
 	['packBehavior', () => import('./packBehavior')],

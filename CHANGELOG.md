@@ -5,6 +5,114 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.32.0 — Your 1.31 review, fixed: sheets that swipe away, tidy docks and a reef that swims 🐠
+
+Everything you flagged in 1.31 and in the 1.32 preview, fixed — plus an Image editor and a real reef in the Aquarium.
+
+### 📱 On a phone
+
+- 👆 **Every sheet has one grab bar**: menus, the Inspector, Configure Scene, Add, the Explorer and every docked window,
+  the profile menu, notes and Customize character. Drag the bar to resize (each sheet remembers its height), swipe it
+  down to the bottom to close. The bar never scrolls away, and no sheet covers **Play** or the selection toolbar.
+- 👤 **Customize character and Profile settings open again** from the profile menu.
+- 🗂️ **Explorer: press and hold a file or folder** for its action sheet — no more browser image callout; hold and move
+  to pick it up. The rename field's selected text is readable, and the toolbar scrolls sideways so the project name
+  is always reachable.
+- ➕ **The dock's "+" lists every window** with a show/hide switch.
+- 🛠️ Fixed a "Something went wrong: ResizeObserver loop" message with the Explorer docked.
+
+### 🪟 Docked and floating windows
+
+- ✖️ **Close a docked window from its tab** — the window itself has no ✕ any more. **Undock** moves to the dock strip,
+  left of *Minimize the dock*, and undocks the window you are looking at (**Settings ▸ Interface ▸ Windows & chrome ▸
+  Undock button** → *All as one tabbed group* takes them all out together).
+- 📥 **A floating tab group has a "Dock all tabs" button**, and **dropping a docked tab onto a floating window adds it as
+  a tab** instead of opening another window. Tab groups no longer lose their header after switching tabs.
+- 🏷️ **Long object and file names stay on one line** with "…" (hover or press and hold for the full name) and never
+  push a window's controls out of place.
+- 🧭 The dock's tab strip stays painted behind every tab and **keeps its scroll** when you pick a tab.
+- 🗔 **Workspace layouts** is a proper dialog on desktop and phone.
+
+### 🖼️ Images
+
+- 📷 **A big photo becomes a texture** instead of being refused — it is scaled to 1024 px.
+- ✂️ **New Image editor** (Explorer ▸ Edit image…, the preview's pencil, or Edit beside a texture): crop, rotate, flip,
+  resize, brightness / contrast / saturation, **Save** or **Save as copy**, and a version history with **Restore
+  original**. Saving updates every texture made from the image, for everyone in the session.
+
+### 🌊 Smoother, and honest about it
+
+- 💧 **Water refraction (and every other automatic quality setting) no longer switches off and on by itself** on phones:
+  a setting that had to be lowered again right after coming back stays lowered for that scene.
+- 🔔 **One notice when quality is lowered for you** — *"Lowered water quality to keep it smooth · Keep full quality"* —
+  replacing the "Simplified water" strip and the object list's quality toast.
+
+### 🐠 The Aquarium is a reef
+
+- 🐟 **Templates ▸ Examples ▸ Aquarium**: clownfish, regal blue tangs and emperor angelfish swim around a reef arch,
+  staghorn coral, eelgrass and Amazon swords from the new **Aquarium Kit** pack. Simple stand-ins show at once and turn
+  into the real fish as they download.
+- 🧭 **Four new motion nodes for anything** (node editor ▸ Animation): **Follow Path** (speed, loop / ping-pong,
+  banking), **Wander**, **Orient to Velocity** and **Body Wave** — a wave travelling along a fish, snake, flag or tail.
+- ✨ **Fish scales material preset**: an iridescent thin film over a scale relief, drawn lighter on phones and headsets.
+- 🛠️ Fixed: LOD groups stuck on their first level in scenes with water.
+
+### 🔁 …and your review of the 1.32 preview
+
+- 🎛️ **Toolbar ▸ Edit positions** (right-click or press and hold any toolbar button): drag the toolbar and corner
+  buttons into place, remove one with the red **−**, add one with the green **+** (up to three in each corner, Play
+  always stays), then the green **✓** applies. A custom button order no longer shows the wrong icons after a reload.
+- ✋ **Selection toolbar**: **Inspect** is an icon that opens *and closes* the properties, and only looks pressed when
+  they are open; **Select multiple** and **Interact** sit after Scale. Interact clears the selection and gives it back
+  when you leave it. On touch, **tap a selected object to deselect it**. Adding an object no longer opens the
+  properties (an open panel follows the new object).
+- 🫳 **Carrying things in Interact** follows your finger or cursor from the point you grabbed — no more objects
+  flung at the camera — and lets go with a gentle throw.
+- 📱 **Phone drawers behave like a phone's sheets**: lists scroll, and at the top of the list a pull down (or a
+  flick) closes the drawer, with resistance and snap points. The main menu closes when you press outside it, the
+  selection toolbar no longer floats over menus or drawers, and an open note steps through **all** notes (‹ ›) and
+  returns to where you opened it.
+- 🪟 **Tabbed floating windows drag smoothly by touch** (tab names too); press and hold a tab for **Ungroup / Dock /
+  Close**. On desktop, **drop a window or tab onto the dock's tab bar** to dock it exactly where the marker shows. The
+  dock's **+** lists every window — **Node editor** and **Image editor** included — and the Image editor can be a
+  dock tab.
+- 🧑‍🎨 **Customize character opens a studio** around your character (**Show in scene** previews it in the world),
+  keeps it fully framed when you fold or unfold the phone, and **Surprise me** deals a new look on every press;
+  presets show their defaults and your edits become a **Custom** entry.
+- 🪜 **Dialogs cover the whole screen** (the logo included) and What's new sits above every button. Questions about
+  deleting, restoring or replacing things are **dialogs** instead of toasts (*Delete flow*, *Restore previous
+  session?*, …). **Settings rows fit their window**: a switch, a short
+  list, a colour, a button or a small set of choices stays beside its label, and only what cannot fit (wide choices,
+  text fields) moves underneath — on a phone, an unfolded phone and a narrow desktop window alike.
+- 🟢 **The connection pill shows a coloured dot** (grey, pulsing yellow, green, red) and says **Connecting… /
+  Connected / Offline** beside it whenever there is room; when the top bar is crowded it shrinks to the dot alone —
+  and **reconnecting after switching tabs no longer toasts**. Only a connection that gives up leaves one notification.
+- 👥 **The connected-people panel is wider**: one row per person (name, then where they are underneath, actions on the
+  right), nothing wraps or breaks; on a phone it is a drawer like the notifications.
+- 🧩 **Node editor**: a one-line breadcrumb bar — tap a crumb to jump to its siblings, hold for the full name.
+- 📈 **Profiler**: hideable sidebars, a **Details** + **Settings** sidebar on the right and a resizable split between
+  the graph and the list.
+- 🗂️ On a phone the Explorer's press-and-hold menu stays open, and docked windows open with their sidebars hidden
+  until you show them.
+- 📱 **On a phone, Properties, Objects, Notes, Layouts and Configure Scene are tabs of the bottom dock** (beside the
+  Explorer and the Node editor) instead of drawers behind it: **Inspect** brings Properties to the front, nothing
+  covers the Play button, and when you unfold the phone or switch to a desktop each panel goes back to its sidebar or
+  window — and returns when you fold it again. Menus, notifications, your profile and Add stay drawers. Tapping the
+  bottom-bar button of the view on screen minimizes it (with undocking on, it shows and hides that floating window),
+  and the main menu closes as Configure Scene opens on a phone (on a desktop it stays open).
+- 🎮 **Phone bottom bar**: **More** can be taken off the bar (a one-time note tells you to press and hold any bar item
+  to get it back), the press-and-hold menu's header reads **More ▸ Edit bar…** and opens More, and **Play can move**
+  along the bar. Play starts as plain **Play**, like on a desktop; pick VR or AR from its press-and-hold menu and its
+  icon follows. The selection toolbar now follows a drawer as you resize it, without lagging behind, and the profile
+  drawer no longer repeats your picture.
+- 📂 **Main menu ▸ Project** has a compact two-column layout — **New from template…**, **Load** | **Save ▾**,
+  **Import** | **Export…** — where **▾** opens one **Save options** dialog with every save setting. A phone keeps the
+  list; **Settings ▸ Interface ▸ Project actions** switches between Auto, Compact and List.
+- 🧩 **Modules on a phone**: Enable/Download/Remove sit to the right of each module, a long description expands when
+  you tap it (tap again to fold it), and the dev-URL row fits the screen. In Browse, **Install** several modules at
+  once: each card keeps **Installing…** until it is done, none cancels another, and a failed one says why with
+  **Retry**. Core no longer opens on a long empty scrollbar after a long Browse list.
+
 ## 1.31.0 — Drag to place: see the size and the spot before you let go 📦
 
 Drag any object from the Explorer onto the scene and see exactly where it will land and how big it is — the way a

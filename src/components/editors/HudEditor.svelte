@@ -1436,14 +1436,14 @@
 		<div
 			id="hud-dock"
 			class="fixed inset-x-0 bottom-0 tp-ui tp-dock-panel flex flex-col p-2 {dockVisible ? '' : 'hidden'}"
-			style="z-index: var(--z-bottom); height: {$dockHeight}px"
+			style="z-index: var(--z-dock); height: {$dockHeight}px"
 			data-key-scope="panel"
 			role="region"
 			aria-label="HUD editor (docked)"
 		>
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
-				class="resize-cue absolute -top-1 left-0 right-0 z-30 h-2 cursor-ns-resize hover:bg-accent/30"
+				class="resize-cue absolute -top-1 left-0 right-0 z-28 h-2 cursor-ns-resize hover:bg-accent/30"
 				style="touch-action: none"
 				title="Drag to resize"
 				onpointerdown={startResize}
@@ -1454,8 +1454,6 @@
 			<div class="flex shrink-0 items-center gap-2 pb-1">
 				<span class="tp-dock-title">HUD editor</span>
 				<span class="flex-1"></span>
-				<button class="tp-dock-btn" title="Undock into a floating window" onclick={() => setDocked(false)} aria-label="Undock into a floating window"><Icon name="app-window" size={16} /></button>
-				<button class="tp-dock-btn" title="Close" onclick={() => hudEditorClose.set(true)} aria-label="Close"><Icon name="x" size={16} /></button>
 			</div>
 			<div class="flex min-h-0 flex-1 flex-col">
 				{@render body()}

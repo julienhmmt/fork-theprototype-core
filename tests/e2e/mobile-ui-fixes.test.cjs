@@ -222,7 +222,8 @@ h.run(async () => {
 	await A.page.waitForTimeout(600);
 	const anchor = await A.page.evaluate(() => {
 		const t = document.querySelector('#avatar-trigger')?.getBoundingClientRect();
-		const p = document.querySelector('[popover]:popover-open')?.getBoundingClientRect();
+		// 40 F1: on the phone shell the panel is a plain sheet (no top layer) — find it by id
+		const p = (document.querySelector('[popover]:popover-open') ?? document.querySelector('#avatar-dropdown'))?.getBoundingClientRect();
 		if (!t || !p) return null;
 		return {
 			trigger: [Math.round(t.width), Math.round(t.height)],
@@ -238,10 +239,11 @@ h.run(async () => {
 	// 38 R9: below 640px the phone shell draws the profile menu as a BOTTOM SHEET (design
 	// map row 16, "opens a sheet") — the seat-on-the-circle rule is the desktop/tablet one
 	const phoneShell = await A.page.evaluate(() => document.documentElement.classList.contains('phone-shell'));
-	const sheet = phoneShell && (await A.page.evaluate(() => { const p = document.querySelector('[popover]:popover-open')?.getBoundingClientRect(); return p && { left: Math.round(p.left), right: Math.round(p.right), bottom: Math.round(p.bottom), vw: innerWidth, vh: innerHeight }; }));
+	// 40 F1: the sheet ends at the TOP of the bottom bar (Play is never covered), not the window edge
+	const sheet = phoneShell && (await A.page.evaluate(() => { const p = document.querySelector('#avatar-dropdown')?.getBoundingClientRect(); const b = document.querySelector('#ps-bar')?.getBoundingClientRect(); return p && b && { left: Math.round(p.left), right: Math.round(p.right), bottom: Math.round(p.bottom), barTop: Math.round(b.top), vw: innerWidth }; }));
 	h.check(
 		phoneShell
-			? !!sheet && sheet.left === 0 && sheet.right === sheet.vw && sheet.bottom === sheet.vh
+			? !!sheet && sheet.left === 0 && sheet.right === sheet.vw && Math.abs(sheet.bottom - sheet.barTop) <= 1
 			: !!anchor && Math.abs(anchor.rightGap) <= 2 && Math.abs(anchor.topGap) <= 2 && anchor.inset >= 12,
 		phoneShell
 			? `on a phone the profile menu is a bottom sheet (${JSON.stringify(sheet)})`
@@ -288,44 +290,26 @@ h.run(async () => {
 		'it does not slide to the window edge and clip the circle off the screen'
 	);
 
-	// ---- narrow: the sheet also outranks the LOGO, and only there -------------
-	await A.page.setViewportSize({ width: 420, height: 780 });
-	await A.page.evaluate(() => window.__stores.whatsNew.openWhatsNew());
-	await A.page.waitForTimeout(800);
-	const logoNarrow = await A.page.evaluate(() => {
-		const z = (/** @type {string} */ sel) => {
-			const el = document.querySelector(sel);
-			return el ? parseInt(getComputedStyle(el).zIndex) || 0 : -1;
-		};
-		return { sheet: z('#whats-new-window'), logo: z('.burger'), marked: document.documentElement.classList.contains('wn-sheet') };
-	});
-	h.check(
-		logoNarrow.marked && logoNarrow.sheet > logoNarrow.logo,
-		`the full-screen sheet outranks the logo (${logoNarrow.sheet} > ${logoNarrow.logo})`
-	);
-	await A.page.evaluate(() => window.__stores.whatsNew.closeWhatsNew());
-	await A.page.waitForTimeout(300);
-	const logoRestored = await A.page.evaluate(() => ({
-		logo: parseInt(getComputedStyle(document.querySelector('.burger')).zIndex) || 0,
-		marked: document.documentElement.classList.contains('wn-sheet')
-	}));
-	h.check(
-		!logoRestored.marked && logoRestored.logo > 1000,
-		`closing it gives the logo its layer back (${logoRestored.logo})`
-	);
-	// WIDE: the logo keeps its layer — this is an ordinary floating window there
+	// ---- the changelog outranks the LOGO at EVERY width (41 G3b) ------------------
+	// It used to drop the logo under a narrow sheet with a root class (wn-sheet) and leave it on top
+	// of the wide window; since 41 What's new lives on --z-onboarding, above the logo's
+	// --z-chrome-top, so no class and no width rule are left.
+	for (const [w, label] of [[420, 'narrow'], [1280, 'wide']]) {
+		await A.page.setViewportSize({ width: w, height: 800 });
+		await A.page.evaluate(() => window.__stores.whatsNew.openWhatsNew());
+		await A.page.waitForTimeout(700);
+		const zs = await A.page.evaluate(() => {
+			const z = (/** @type {string} */ sel) => {
+				const el = document.querySelector(sel);
+				return el ? parseInt(getComputedStyle(el).zIndex) || 0 : -1;
+			};
+			return { sheet: z('#whats-new-window'), logo: z('.burger'), marked: document.documentElement.classList.contains('wn-sheet') };
+		});
+		h.check(zs.sheet > zs.logo && zs.logo > 0 && !zs.marked, `${label}: the changelog outranks the logo (${zs.sheet} > ${zs.logo}), no root class`);
+		await A.page.evaluate(() => window.__stores.whatsNew.closeWhatsNew());
+		await A.page.waitForTimeout(300);
+	}
 	await A.page.setViewportSize({ width: 1280, height: 800 });
-	await A.page.evaluate(() => window.__stores.whatsNew.openWhatsNew());
-	await A.page.waitForTimeout(700);
-	const wide = await A.page.evaluate(() => ({
-		logo: parseInt(getComputedStyle(document.querySelector('.burger')).zIndex) || 0,
-		marked: document.documentElement.classList.contains('wn-sheet')
-	}));
-	h.check(
-		!wide.marked && wide.logo > 1000,
-		`on a wide screen the logo is untouched (${wide.logo}, marked=${wide.marked})`
-	);
-	await A.page.evaluate(() => window.__stores.whatsNew.closeWhatsNew());
 
 	// ---- a window shoved off the RIGHT edge must not drag the chrome with it ----
 	// The object-list window was the last `position: absolute` floating window. An

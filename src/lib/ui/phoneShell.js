@@ -91,3 +91,20 @@ export function phoneDetentHeights(viewportH) {
  *  stop publishing a docked bar's height: on the phone shell the bar is a sheet, so nothing
  *  should be pushed down by it. */
 export const phoneShellActive = writable(false);
+
+/** 40 F1: the room every phone sheet may take, published by PhoneShell (px) — between the top
+ *  bar and the bottom bar, less the selection strip while one rides on top (`phoneSheetMax` in
+ *  sheetSnap.js). Also on <html> as `--ps-sheet-max` for the CSS-placed sheets. 0 = no shell. */
+export const phoneSheetMaxH = writable(0);
+/** the smallest a resizable phone sheet gets before a release closes it (px) */
+export const PHONE_SHEET_MIN = 180;
+
+/** 41 G12: the NOTES SHEET's height (px), shared by the notes drawer and the note card it opens
+ *  on a phone — the card is a page of that sheet (drill-in), so both are one height and one grab
+ *  bar resizes both. Remembered under the drawer's own key (`notesSheetH`, the behaviour lock). */
+export const notesSheetH = writable(
+	(() => {
+		const v = typeof localStorage === 'undefined' ? NaN : parseInt(safeStorage.getItem('notesSheetH') || '');
+		return Number.isFinite(v) && v > 0 ? v : Math.round((typeof window === 'undefined' ? 800 : window.innerHeight) * 0.45);
+	})()
+);

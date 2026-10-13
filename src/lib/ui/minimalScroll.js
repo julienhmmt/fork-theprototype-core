@@ -68,6 +68,12 @@ export function minimalScroll(node, opts) {
 	let geo = { visible: false, top: 0, height: 0 };
 
 	function place() {
+		// 41b H10: the thumb is a CHILD of the scroller, so while it is laid out it is part of the
+		// scrollable overflow. A list that shrank under a scrolled view (Modules: Browse scrolled
+		// down, then Core) kept its old height through the thumb, and every scroll event moved
+		// the thumb up by its inset — the view drained 2 px a frame for seconds, items out of
+		// sight above. Measure with the thumb out of layout: the offset clamps at once.
+		thumb.style.display = 'none';
 		geo = thumbGeometry(node);
 		thumb.style.display = geo.visible ? '' : 'none';
 		if (!geo.visible) return;

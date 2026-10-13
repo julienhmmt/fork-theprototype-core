@@ -154,9 +154,10 @@ h.run(async () => {
 	await p.keyboard.press('a');
 	await p.waitForTimeout(400);
 	const bb = await box(p, 'b');
-	await p.mouse.move(bb.x + 40, bb.y + 12);
+	// by the node's own middle, not a fixed +40 px: at a framed zoom a node can be narrower than that
+	await p.mouse.move(bb.x + bb.width / 2, bb.y + 12);
 	await p.mouse.down();
-	await p.mouse.move(bb.x + 120, bb.y + 60, { steps: 10 });
+	await p.mouse.move(bb.x + bb.width / 2 + 80, bb.y + 60, { steps: 10 });
 	await p.mouse.up();
 	await p.waitForTimeout(500);
 	g = await graph(p);
@@ -230,14 +231,14 @@ h.run(async () => {
 	});
 	h.check(opened.panel === 'sc' || opened.ws, `Open code opens the script node's code (${JSON.stringify(opened)})`);
 	await p.evaluate(() => window.__stores.scriptEditorOpen.set(null));
-	if (opened.ws) await p.locator('#code-ws-close').click().catch(() => {});
+	if (opened.ws) await p.locator('#code-ws-close:visible, [data-dock-tab-close="code"]:visible').first().click().catch(() => {});
 	await p.waitForTimeout(300);
 
 	await select(p, ['a', 'b', 'c']);
 	await p.waitForTimeout(200);
 	const cb = await box(p, 'c');
 	await closeMenu(p);
-	await p.mouse.click(cb.x + 30, cb.y + 12, { button: 'right' });
+	await p.mouse.click(cb.x + cb.width / 2, cb.y + Math.min(12, cb.height / 2), { button: 'right' });
 	await p.waitForTimeout(300);
 	labels = await menuLabels(p);
 	h.check(labels.some((l) => l.startsWith('Group 3 nodes')) && labels.some((l) => l.startsWith('Delete 3 nodes')), 'the multi-selection menu acts on the whole set');
@@ -251,7 +252,9 @@ h.run(async () => {
 	const ys = ['a', 'b', 'c'].map((id) => g.nodes.find((n) => n.id === id).y);
 	h.check(ys.every((y) => y === ys[0]), `Align ▸ Row lines the selection up (${ys})`);
 	await closeMenu(p);
-	await p.mouse.click(cb.x + 30, cb.y + 12, { button: 'right' });
+	// Align moved c: aim at where it is NOW (the old box only hit by landing on another member)
+	const cb2 = await box(p, 'c');
+	await p.mouse.click(cb2.x + cb2.width / 2, cb2.y + Math.min(12, cb2.height / 2), { button: 'right' });
 	await p.waitForTimeout(300);
 	await p.locator('[role="menu"] [role="menuitem"]', { hasText: /^\s*Group\ 3\ nodes/ }).first().click();
 	await p.waitForTimeout(500);

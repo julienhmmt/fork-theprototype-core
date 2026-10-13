@@ -22,6 +22,8 @@
 		'object search in the right-click menu': ['object search in menu', 'search objects', 'context menu'],
 		'show fps and draw calls': ['show fps + draw calls', 'fps', 'performance', 'frame rate', 'framerate'],
 		'knocked-off idle': ['idle', 'away', 'afk', 'dizzy', 'knocked', 'stars', 'avatar', 'character'],
+		'undock button': ['undock', 'dock', 'float', 'floating', 'window', 'tabs', 'tabbed', 'group'],
+		'project actions': ['burger', 'main menu', 'project', 'templates', 'import', 'load', 'save', 'export', 'compact', 'grid', 'list'],
 		'workspace layouts': ['layout', 'layouts', 'workspace', 'windows', 'dock', 'docked', 'panels', 'arrangement', 'save layout', 'restore layout', 'sizes']
 	};
 	for (const [row, words] of Object.entries(ROW_WORDS)) registerSettingsKeywords(row, words);
@@ -58,6 +60,7 @@
 	import { allowTextSelection } from '$lib/textSelection';
 	import { peersAsClassic, knockedAfterSeconds, KNOCKED_AFTER_CHOICES } from '$lib/avatars/avatarState';
 	import WorkspaceLayoutsSettings from './WorkspaceLayoutsSettings.svelte'; // 37 R14
+	import UndockButtonSettings from './UndockButtonSettings.svelte'; // 40 F8
 	import { gameSoundVolume } from '$lib/gameSfx';
 	import { gameMusicVolume } from '$lib/gameMusic';
 	import { showWelcomeOnStart, showWhatsNewNotice, openWelcome } from '$lib/whatsNew';
@@ -70,6 +73,7 @@
 	import { perfReportsOn, perfReportsAvailable } from '$lib/perf/beacon';
 	import { viewPrefs, setViewPrefs } from '$lib/viewPrefs';
 	import { uiDensity, DENSITIES } from '$lib/uiDensity';
+	import { projectActions, PROJECT_ACTIONS } from '$lib/projectActions'; // 41b H14
 
 	const pct = (/** @type {number} */ v) => Math.round(v * 100) + '%';
 	const themeItems = $derived([...THEMES, ...$customThemes].map((t) => ({ value: t.id, name: t.name })));
@@ -256,6 +260,7 @@
 			>
 		</SettingRow>
 		<WorkspaceLayoutsSettings />
+		<UndockButtonSettings />
 		<SettingRow id="row-touch-tools" label="Touch tools" description="Undo, Redo and Multi-select buttons beside the logo. On by default on phones.">
 			<Toggle id="setting-touch-tools" label="Touch tools" bind:checked={$touchTools} />
 		</SettingRow>
@@ -265,6 +270,11 @@
 	</Section>
 
 	<Section variant="card" label="Lists & menus">
+		<!-- 41b H14: the burger menu's PROJECT section — Compact (a two-column grid) or List (a row each);
+		     Auto = List on the phone, Compact on desktop and an unfolded phone. Instant rollback. -->
+		<SettingRow id="row-project-actions" label="Project actions" badge="This device" description="How the main menu lays out New from template, Load, Save, Import and Export. Auto: a list on a phone, a compact grid elsewhere." keywords="burger main menu logo menu project templates template import load open save export publish layout compact grid list rows">
+			<Segmented id="project-actions" label="Project actions" options={PROJECT_ACTIONS} value={$projectActions} onchange={(v) => projectActions.set(v)} />
+		</SettingRow>
 		<SettingRow id="row-advanced-mode" label="Show system objects in the object list" description="Adds a System filter for module content and the environment rig.">
 			<Toggle id="advanced-mode" label="Show system objects in the object list" bind:checked={$advancedMode} />
 		</SettingRow>

@@ -1,0 +1,75 @@
+// 41b H14 — THE SAVE OPTIONS, one store for the burger's Save button and the "Save options" modal
+// (both layouts: Compact's Save ▾, List's ⚙). A LEAF (svelte/store + safeStorage). The values and their
+// localStorage keys are exactly the ones Sidebar.svelte kept in local state since B3 / 21-H1 / 21-I5, so
+// a device keeps its choices: `saveFormat` (tp | tpscene | gltf | json), `showGltfFormat` /
+// `showJsonFormat` (the two optional formats, OFF by default), and what a .tpscene / .tp carries
+// (`tpsceneAssets` ON, `tpscenePacks` OFF, `tpsceneFlow` ON, `tpProjectVersions` ON — fileHandler's
+// tpsceneOptions() and projectFile read these keys at save time).
+import { writable, get } from 'svelte/store';
+import { safeStorage } from './safeStorage';
+
+/** @typedef {{format: string, showGltf: boolean, showJson: boolean, tpAssets: boolean, tpPacks: boolean, tpFlow: boolean, tpProjectVersions: boolean}} SaveOptions */
+
+export const SAVE_FORMATS = [
+	{ value: 'tp', label: 'Project', ext: '.tp', title: 'Saves the whole project as .tp — the Explorer library, scene history and manifest' },
+	{ value: 'tpscene', label: 'Scene', ext: '.tpscene', title: 'Saves the open scene as .tpscene' },
+	{ value: 'gltf', label: 'GLTF', ext: '.gltf', title: 'Exports the selected objects as glTF (nothing selected: offers the whole scene) — for other tools, not for keeping your work' },
+	{ value: 'json', label: 'JSON', ext: '.json', title: 'Saves the scene as raw JSON' }
+];
+
+/**
+ * A STORED format can name one that is no longer offered (its "Show" switch went off) — a Save
+ * button pointing at a format the user cannot see. Falls back to the project format.
+ * @param {string} f @param {boolean} json @param {boolean} gltf
+ */
+export function visibleFormat(f, json, gltf) {
+	if (f === 'json' && !json) return 'tp';
+	if (f === 'gltf' && !gltf) return 'tp';
+	return SAVE_FORMATS.some((s) => s.value === f) ? f : 'tp';
+}
+
+/** @param {string} key @param {boolean} dflt */
+function readBool(key, dflt) {
+	const v = typeof localStorage !== 'undefined' ? safeStorage.getItem(key) : null;
+	return v === null ? dflt : v === 'true';
+}
+
+/** @returns {SaveOptions} */
+export function readSaveOptions() {
+	const showJson = readBool('showJsonFormat', false);
+	const showGltf = readBool('showGltfFormat', false);
+	const stored = typeof localStorage !== 'undefined' ? safeStorage.getItem('saveFormat') || 'tp' : 'tp';
+	return {
+		format: visibleFormat(stored, showJson, showGltf),
+		showGltf,
+		showJson,
+		tpAssets: readBool('tpsceneAssets', true),
+		tpPacks: readBool('tpscenePacks', false),
+		tpFlow: readBool('tpsceneFlow', true),
+		tpProjectVersions: readBool('tpProjectVersions', true)
+	};
+}
+
+export const saveOptions = writable(readSaveOptions());
+
+/** the "Save options" modal (Compact's ▾, List's ⚙) */
+export const saveOptionsOpen = writable(false);
+
+/**
+ * Write options (a partial patch) — normalised (the format stays a visible one) and PERSISTED, the
+ * fallback format included: the stored value is what the next boot reads.
+ * @param {Partial<SaveOptions>} patch
+ */
+export function setSaveOptions(patch) {
+	const next = { ...get(saveOptions), ...patch };
+	next.format = visibleFormat(next.format, next.showJson, next.showGltf);
+	safeStorage.setItem('saveFormat', next.format);
+	safeStorage.setItem('showGltfFormat', String(next.showGltf));
+	safeStorage.setItem('showJsonFormat', String(next.showJson));
+	safeStorage.setItem('tpsceneAssets', String(next.tpAssets));
+	safeStorage.setItem('tpscenePacks', String(next.tpPacks));
+	safeStorage.setItem('tpsceneFlow', String(next.tpFlow));
+	safeStorage.setItem('tpProjectVersions', String(next.tpProjectVersions));
+	saveOptions.set(next);
+	return next;
+}

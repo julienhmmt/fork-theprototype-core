@@ -6,6 +6,9 @@
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
 	import { autofocusOk, typeToFocus } from '$lib/inputDevice';
 	import { safeStorage } from '$lib/safeStorage';
+	import SheetGrip from './ui/SheetGrip.svelte';
+	import { readSheetH, saveSheetH } from '$lib/ui/sheetDrag.js';
+	import { phoneShellActive, phoneSheetMaxH } from '$lib/ui/phoneShell.js';
 
 	// Generic context menu. items: [{ label, action?, disabled?, tooltip?, danger?,
 	// icon?, hint?, checked?, keepOpen?, rowActions?, children?: items[] } |
@@ -58,6 +61,18 @@
 	/** 36 U11: open already SEARCHING (the node editor's Shift+A / Space "add at cursor").
 	 *  Absent = byte-identical to before. */
 	export let startSearch: boolean = false;
+
+	// 40 F1: on the phone every menu is a bottom sheet (phone.css), and the Add list is the
+	// one opened from the bar — so it wears the shared grab bar: drag to resize (remembered,
+	// `menuSheetH`), swipe down to the end to close. The height is ONE root CSS var, so a
+	// submenu laid over its parent (drill in place) takes the same height.
+	let menuSheetH = readSheetH('menuSheetH', 0);
+	$: menuShownH = Math.min(menuSheetH || Math.round((typeof window === 'undefined' ? 800 : window.innerHeight) * 0.6), $phoneSheetMaxH || 9999);
+	$: if ($phoneShellActive && typeof document !== 'undefined') document.documentElement.style.setProperty('--ctx-sheet-h', menuShownH + 'px');
+	function menuSheetResize(h: number, done: boolean) {
+		menuSheetH = Math.round(h);
+		if (done) saveSheetH('menuSheetH', menuSheetH);
+	}
 
 	const rawDispatch = createEventDispatcher();
 	const dispatch = (name: string) => {
@@ -392,15 +407,19 @@
      landed on the backdrop: a long-press opens this menu while the finger is still
      down, so the backdrop mounts underneath it and the finger's own lift used to
      land here and shut the menu instantly. Requiring the pointerdown too means the
-     opening gesture cannot close what it just opened, with no timers involved. -->
+     opening gesture cannot close what it just opened, with no timers involved.
+     41 G18: the same rule for `contextmenu`. Android fires its OWN contextmenu for a long press
+     at the finger; when that lands after our hold opened this menu (touchHold, 450 ms) its
+     target is this backdrop, and it shut the Explorer long-press menu the moment it showed.
+     A right-click outside still closes: its pointerdown lands here first. -->
 <div
 	use:portal
 	class="fixed inset-0"
-	style="z-index: var(--z-menu);"
+	style="z-index: var(--z-portal);"
 	role="presentation"
 	on:pointerdown={() => (backdropPressed = true)}
 	on:click={() => backdropPressed && dispatch('close')}
-	on:contextmenu|preventDefault={() => dispatch('close')}
+	on:contextmenu|preventDefault={() => backdropPressed && dispatch('close')}
 ></div>
 
 <!-- the menu container takes a mousedown handler only to KEEP focus in the filter
@@ -418,13 +437,16 @@
 	use:place
 	use:minimalScroll
 	class="ctx-scroll tp-ui tp-menu fixed min-w-36 overflow-y-auto overflow-x-hidden"
-	style="left: 0; top: 0; z-index: calc(var(--z-menu) + 1);"
+	style="left: 0; top: 0; z-index: calc(var(--z-portal) + 1);"
 	role="menu"
 	on:mousedown={keepFocus}
 	on:pointerdown|capture={() => (menuPressed = true)}
 	on:click|capture={guardLift}
 	on:contextmenu|preventDefault
 >
+	{#if $phoneShellActive}
+		<SheetGrip class="ctx-grip-bar" label="menu" height={menuShownH} onresize={menuSheetResize} onclose={() => dispatch('close')} />
+	{/if}
 	{#if headerItem}
 		<ContextMenuItems items={[headerItem]} onrun={run} />
 	{/if}

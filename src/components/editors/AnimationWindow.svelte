@@ -40,6 +40,7 @@
 	import DockTabs from '../DockTabs.svelte';
 	import WindowChrome from '../ui/WindowChrome.svelte';
 	import ScrollStrip from '../ui/ScrollStrip.svelte';
+	import { fullName } from '$lib/ui/fullName.js';
 	import Segmented from '../ui/Segmented.svelte';
 	import { createGesture } from '$lib/modalGrab';
 	// W5: the BINDING for this pane's grab key lives in the shortcut registry (an
@@ -1011,6 +1012,31 @@
 	// the viewport; 0 means "hidden behind another dock tab", which is not narrow.
 	let bodyW = $state(0);
 	const compact = $derived(bodyW > 0 && bodyW < 640);
+	/**
+	 * 40-int (F5 on the preview): `compact` reshapes the HEADER above the body (40 F7 puts the
+	 * name on its own row), which changes the body's own size — measured with bind:clientWidth
+	 * that re-size landed inside the same ResizeObserver pass ("ResizeObserver loop completed
+	 * with undelivered notifications" when every docked view mounts at once on a phone). The
+	 * width is read here instead and applied on the next frame, so the header's change is a
+	 * new notification of the next frame (where the width is unchanged and nothing moves).
+	 * @param {HTMLElement} node
+	 */
+	function bodyWidth(node) {
+		let raf = 0;
+		const ro = new ResizeObserver(() => {
+			cancelAnimationFrame(raf);
+			raf = requestAnimationFrame(() => {
+				if (node.clientWidth !== bodyW) bodyW = node.clientWidth;
+			});
+		});
+		ro.observe(node);
+		return {
+			destroy() {
+				cancelAnimationFrame(raf);
+				ro.disconnect();
+			}
+		};
+	}
 	/** which pane a compact editor shows @type {'list'|'plot'|'key'|'clip'} */
 	let phonePane = $state('plot');
 	// a coarse pointer (a finger) gets invisible hit areas around keys and easing handles: an
@@ -1996,7 +2022,7 @@
 			{/if}
 		</div>
 
-		<div class="flex min-h-0 flex-1" bind:clientWidth={bodyW} data-phone-pane={compact ? phonePane : undefined}>
+		<div class="flex min-h-0 flex-1" use:bodyWidth data-phone-pane={compact ? phonePane : undefined}>
 			<!-- LEFT: the object's OWN clips, then authored clips + movement tracks -->
 			<!-- clientHeight is the clip list's resize CEILING: the grip used to clamp at
 			     a flat 360px whatever the pane's own height, so on a short dock it went
@@ -2655,13 +2681,13 @@
 			id="animation-dock"
 			use:noNativeMenu
 			class="fixed inset-x-0 bottom-0 tp-ui tp-dock-panel flex flex-col p-2 {dockVisible ? '' : 'hidden'}"
-			style="z-index: var(--z-bottom); height: {$dockHeight}px"
+			style="z-index: var(--z-dock); height: {$dockHeight}px"
 			data-key-scope="panel"
 			role="region"
 			aria-label="Animation (docked)"
 		>
 			<div
-				class="resize-cue absolute -top-1 left-0 right-0 z-30 h-2 cursor-ns-resize hover:bg-accent/30"
+				class="resize-cue absolute -top-1 left-0 right-0 z-28 h-2 cursor-ns-resize hover:bg-accent/30"
 				style="touch-action: none"
 				title="Drag to resize"
 				onpointerdown={startResize}
@@ -2669,14 +2695,22 @@
 				onpointerup={endResize}
 			></div>
 			<DockTabs />
-			<div class="flex shrink-0 items-center gap-2 pb-1">
-				<span class="tp-dock-title">Animation</span>
-				<span class="tp-dock-sub">{target ? target.name || 'object' : 'no selection'}</span>
-				{#if compact && target}{@render paneSwitch()}{/if}
-				<span class="flex-1"></span>
-				<button class="tp-dock-btn" title="Undock into a floating window" aria-label="Undock" onclick={() => setDocked(false)}><Icon name="app-window" size={16} /></button>
-				<button class="tp-dock-btn" title="Close" aria-label="Close" onclick={() => animationClose.set(true)}><Icon name="x" size={16} /></button>
-			</div>
+			<!-- 40 F7/F8: no ✕ and no undock here any more (the tab carries ✕, the dock's own
+			     chrome carries undock), and the object's NAME is one ellipsized line: on a
+			     phone-narrow editor it moves to its own row above the pane switch, so a long
+			     name can never push the controls apart (B2ack-wall-super). -->
+			{#if compact && target}
+				<div class="tp-dock-crumb" id="animation-name-row">
+					<span class="tp-dock-title">Animation</span>
+					<span class="tp-dock-sub" id="animation-target-name" use:fullName>{target.name || 'object'}</span>
+				</div>
+				<div class="flex shrink-0 items-center gap-2 pb-1">{@render paneSwitch()}</div>
+			{:else}
+				<div class="flex min-w-0 shrink-0 items-center gap-2 pb-1">
+					<span class="tp-dock-title">Animation</span>
+					<span class="tp-dock-sub" id="animation-target-name" use:fullName>{target ? target.name || 'object' : 'no selection'}</span>
+				</div>
+			{/if}
 			<div class="flex min-h-0 flex-1 flex-col">
 				{@render body()}
 			</div>
@@ -2707,14 +2741,14 @@
 			>
 				{#snippet heading()}
 					<span class="wc-label">Animation</span>
-					<span class="wc-sub">{target ? target.name || 'object' : 'no selection'}</span>
-					{#if compact && target}{@render paneSwitch()}{/if}
+					<span class="wc-sub" id="animation-target-name" use:fullName>{target ? target.name || 'object' : 'no selection'}</span>
 					<span class="flex-1"></span>
 				{/snippet}
 				{#snippet actions()}
 					<button class="wc-act-text" title="Dock to the bottom" onclick={() => setDocked(true)}><Icon name="panel-bottom" size={16} />Dock</button>
 				{/snippet}
 			</WindowChrome>
+			{#if compact && target}<div class="flex shrink-0 items-center gap-2 px-2 py-1">{@render paneSwitch()}</div>{/if}
 			{@render body()}
 			<div
 				class="resize-cue absolute bottom-0 right-0 z-10 h-3.5 w-3.5 cursor-se-resize rounded-tl bg-border-strong/40"

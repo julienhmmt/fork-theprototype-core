@@ -35,6 +35,7 @@
   import Explorer from './components/editors/Explorer.svelte'
   import TextEditorWindow from './components/editors/TextEditorWindow.svelte'
   import FilePreviewWindow from './components/editors/FilePreviewWindow.svelte'
+  import ImageEditorWindow from './components/editors/ImageEditorWindow.svelte'
   import { previewWindows } from './lib/fileWindows'
   import ModelPreviewWindow from './components/editors/ModelPreviewWindow.svelte'
   import DungeonMinimap from './components/play/DungeonMinimap.svelte'
@@ -125,6 +126,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
   import { startCloudPlugin } from '$lib/cloudPlugin'
   import { startShaderGraphs } from '$lib/shaderGraph'
   import { startMaterialSharing } from '$lib/materialSharing'
+  import { startMaterialTiers } from '$lib/materialTiers.js'
   import { startShaderSync } from '$lib/shaderSync'
   import { startHudSync } from '$lib/hudSync'
   import { startHudImages } from '$lib/hudImages'
@@ -139,7 +141,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
   import { startSharedLibrary } from '$lib/sharedLibrary'
   import { startSceneIdentity } from '$lib/sceneIdentity'
   import GameChip from './components/hud/GameChip.svelte'
-  import SimplifiedWaterNotice from './components/water/SimplifiedWaterNotice.svelte' // 36-fb-water F27
+  import AutoQualityNotice from './components/AutoQualityNotice.svelte' // 40 F12 (was SimplifiedWaterNotice)
   import ShortcutSheet from './components/menu/ShortcutSheet.svelte' // 36 I3
   import HudLayer from './components/hud/HudLayer.svelte'
   import PickCycleHint from './components/menu/PickCycleHint.svelte' // 36 F22 / S6 / S12
@@ -298,6 +300,8 @@ import { startMusicToolbox } from './lib/musicToolbox'
     // (GLTF, a peer's per-object messages, undo) rebuilds materials, and the id survives
     // where the instance does not
     startMaterialSharing()
+    // 40 F16: draw physical materials at this device's look tier (transmission / thin film)
+    startMaterialTiers()
     startShaderSync()
     startHudSync()
     startHudImages()
@@ -387,6 +391,8 @@ import { startMusicToolbox } from './lib/musicToolbox'
 {#await import('./components/editors/CodeWorkspace.svelte') then m}<m.default />{/await}
 {/if}
 <TextEditorWindow />
+<!-- 40-image (F13): the Image editor; renders nothing until an image is opened in it -->
+<ImageEditorWindow />
 <!-- R22 round 12: ONE INSTANCE PER OPEN PREVIEW. With the multi-window pref off the list
      never holds more than one, so this renders exactly what it always did. -->
 {#each $previewWindows as w, i (w.id)}
@@ -452,7 +458,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
      editor's stand-in for a game's screens, which HudLayer no longer draws outside Play.
      Editor-only (it hides itself in Play, in VR and in embed mode). -->
 <GameChip />
-<SimplifiedWaterNotice />
+<AutoQualityNotice />
 <ShortcutSheet />
 <!-- 38 R8 (NOTES-38 #14): Ctrl+K -->
 <CommandPalette />
@@ -468,7 +474,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
      `bottom` is the open dock's height, which is what makes the dock a REGION (the
      DCC behaviour: the canvas ends where the panel begins) instead of an overlay
      drawn on top of a full-window canvas. No `z-index` — a stacking context here
-     would trap the PiP frame and the framing guide; the dock's --z-bottom (35)
+     would trap the PiP frame and the framing guide; the dock's --z-dock (35)
      already sits above the canvas at the default 0. No `transition` either: each
      step reallocates the composer's render targets, so animating the inset turns one
      realloc into one per frame. -->

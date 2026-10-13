@@ -1,5 +1,5 @@
 {
-	"recordedAt": "2026-10-08T05:35:45.501Z",
+	"recordedAt": "2026-10-11T14:04:47.021Z",
 	"settings": {
 		"Theme": {
 			"rows": [
@@ -426,6 +426,7 @@
 				"Haptic tick",
 				"Layout",
 				"Look speed",
+				"Project actions",
 				"Show in edit",
 				"Show touch controls",
 				"Workspace layouts"
@@ -783,7 +784,8 @@
 				"Allow undocking on touch screens",
 				"Enable assistant",
 				"Touch tools",
-				"Undo"
+				"Undo",
+				"Undock button"
 			],
 			"sections": [
 				"Interface",
@@ -2297,6 +2299,7 @@
 				"Music",
 				"Object search in the right-click menu",
 				"Offer Enter VR in a headset browser",
+				"Project actions",
 				"Reset tours",
 				"Show FPS and draw calls",
 				"Show others as classic heads",
@@ -2307,6 +2310,7 @@
 				"Theme",
 				"Toolbar always on top",
 				"Touch tools",
+				"Undock button",
 				"VR welcome tour",
 				"Welcome card on start",
 				"Window positions",
@@ -2864,6 +2868,7 @@
 				"Music",
 				"Object search in the right-click menu",
 				"Offer Enter VR in a headset browser",
+				"Project actions",
 				"Reset tours",
 				"Show FPS and draw calls",
 				"Show others as classic heads",
@@ -2874,6 +2879,7 @@
 				"Theme",
 				"Toolbar always on top",
 				"Touch tools",
+				"Undock button",
 				"VR welcome tour",
 				"Welcome card on start",
 				"Window positions",
@@ -2903,6 +2909,7 @@
 				"Music",
 				"Object search in the right-click menu",
 				"Offer Enter VR in a headset browser",
+				"Project actions",
 				"Reset panel positions",
 				"Reset tours",
 				"Shift+A opens the Add menu",
@@ -2916,6 +2923,7 @@
 				"Theme",
 				"Toolbar always on top",
 				"Touch tools",
+				"Undock button",
 				"Use a connected gamepad",
 				"VR welcome tour",
 				"Welcome card on start",
@@ -3117,6 +3125,7 @@
 				"Placeholder style",
 				"Placement preview",
 				"Preview triangle budget",
+				"Project actions",
 				"Reduce quality when the scene is heavy",
 				"Reset line colours",
 				"Selection outline colour",
@@ -3135,6 +3144,7 @@
 				"Wireframe colour"
 			],
 			"sections": [
+				"Interface",
 				"Scene"
 			]
 		},
@@ -3847,6 +3857,7 @@
 				"Compress textures",
 				"Custom theme",
 				"Include VR button",
+				"Project actions",
 				"Quality",
 				"Show FPS",
 				"Show the Made with ThePrototype badge",
@@ -4033,6 +4044,7 @@
 				"Loop select (faces: again = perpendicular; edges: the chain)",
 				"Mesh generation",
 				"Placeholder style",
+				"Project actions",
 				"Reverse trackpad pan",
 				"Stance",
 				"Storage used",
@@ -4041,6 +4053,7 @@
 				"Voice typing provider"
 			],
 			"sections": [
+				"Interface",
 				"Controls",
 				"Shortcuts",
 				"Scene",
@@ -4127,6 +4140,10 @@
 				"Transform"
 			],
 			"scale": [
+				"Emission",
+				"Material",
+				"Shadow",
+				"Texture",
 				"Transform"
 			],
 			"color": [

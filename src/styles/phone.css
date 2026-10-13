@@ -16,6 +16,7 @@
 
 /* ---- 1. old phone chrome off ------------------------------------------------------- */
 :root.phone-shell #controls-pill,
+:root.phone-shell .hud-stack, /* 41 G1: the corner stacks, whatever they hold */
 :root.phone-shell #chat-button,
 :root.phone-shell #mobile-add-button,
 :root.phone-shell #ai-hud-button,
@@ -78,7 +79,11 @@
 }
 :root.phone-shell .top-right-chrome > .hud-tr,
 :root.phone-shell #peers-popover,
-:root.phone-shell #notif-panel {
+:root.phone-shell #notif-panel,
+:root.phone-shell #avatar-dropdown {
+	/* 40 F2: the profile menu lives inside the corner wrapper too — without this it inherited
+	   `pointer-events: none` and every tap on Customize character / Profile settings fell
+	   through to the canvas */
 	pointer-events: auto;
 }
 :root.phone-shell #avatar-trigger {
@@ -91,49 +96,85 @@
 	width: 44px !important;
 	height: 44px !important;
 }
-/* the profile menu opens as a sheet from the bottom edge, where the thumb is */
+/* the profile menu opens as a sheet from the bottom edge, where the thumb is — 40 F1: ABOVE the
+   bottom bar (Play stays visible), resizable and swiped away by its grab bar */
 :root.phone-shell #avatar-dropdown {
 	position: fixed !important;
 	top: auto !important;
-	bottom: 0 !important;
+	bottom: var(--ps-bar-h) !important;
 	left: 0 !important;
 	right: 0 !important;
 	width: auto !important;
 	max-width: none !important;
-	max-height: 92vh;
+	height: var(--profile-sheet-h, auto);
+	max-height: var(--ps-sheet-max, 92vh);
 	overflow-y: auto;
 	margin: 0 !important;
 	border-radius: 18px 18px 0 0 !important;
-	padding-bottom: env(safe-area-inset-bottom, 0px);
+	padding-bottom: 8px;
 }
-/* the main menu is ONE sheet (the logo still toggles it) */
+:root.phone-shell #avatar-dropdown .pm-grip {
+	margin-bottom: 2px;
+	border-radius: 18px 18px 0 0;
+}
+/* the main menu is ONE sheet (the logo still toggles it). 40 F1: it sits ABOVE the bottom bar
+   (Play stays visible), takes the remembered height inside the shell's sheet room, and its
+   grab bar (ui/SheetGrip, sticky) resizes it and swipes it away */
 :root.phone-shell #sidebar70 {
 	position: fixed !important;
 	top: auto !important;
 	left: 0 !important;
 	right: 0 !important;
-	bottom: 0 !important;
+	bottom: var(--ps-bar-h) !important;
 	width: auto !important;
 	min-width: 0 !important;
 	max-width: none !important;
-	max-height: 92vh !important;
-	padding: 26px 8px calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+	height: var(--menu-sheet-h, var(--ps-sheet-max, 70vh)) !important;
+	max-height: var(--ps-sheet-max, 92vh) !important;
+	padding: 0 8px 12px !important;
 	border-radius: 18px 18px 0 0 !important;
 	font-size: var(--fs-body);
 }
-:root.phone-shell #sidebar70::before {
-	content: '';
-	position: absolute;
-	top: 9px;
-	left: 50%;
-	width: 40px;
-	height: 5px;
-	margin-left: -20px;
-	border-radius: 3px;
-	background: var(--border-strong);
+:root.phone-shell #sidebar70 .side-grip {
+	margin: 0 -8px 2px;
 }
 :root.phone-shell #sidebar70 .side-row {
 	min-height: 48px;
+}
+
+/* ---- 2b. 41b H1: a content panel as a PHONE DOCK TAB ----------------------------------
+   The object list and the notes list placed into the dock frame's body (PhoneDockHost
+   publishes --pd-top, the body's top edge). Under the phone bar (--z-phone-bar), so the bar and
+   its raised Play circle stay on top of them like every other dock tab; a tab that is open but
+   not in front stays mounted and hidden. (The Inspector's rule is in ui.css: layered.) */
+:root.phone-shell [data-pd-host] {
+	position: fixed !important;
+	left: 0 !important;
+	right: 0 !important;
+	top: var(--pd-top) !important;
+	bottom: var(--ps-bar-h) !important;
+	width: auto !important;
+	height: auto !important;
+	min-width: 0 !important;
+	min-height: 0 !important;
+	max-width: none !important;
+	max-height: none !important;
+	margin: 0 !important;
+	padding-bottom: 0 !important;
+	transform: none !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+	z-index: calc(var(--z-dock) + 1) !important;
+	background: var(--surface-1);
+}
+:root.phone-shell [data-pd-host='hidden'] {
+	display: none !important;
+}
+/* the dock's grab bar resizes them: their own sheet grip / window grip stand down */
+:root.phone-shell [data-pd-host] .notes-resize,
+:root.phone-shell [data-pd-host] [data-window-grip] {
+	display: none !important;
 }
 
 /* ---- 3. a reused window inside the sheet frame -------------------------------------- */
@@ -154,11 +195,11 @@
 	border: 0 !important;
 	border-radius: 0 !important;
 	box-shadow: none !important;
-	z-index: 40 !important;
+	z-index: calc(var(--z-sheet) + 2) !important;
 	background: var(--surface-1);
 }
 :root.phone-shell [data-ps-host='top'] {
-	z-index: 41 !important;
+	z-index: calc(var(--z-sheet) + 3) !important;
 }
 /* the Connect bar's pill + drawer as the Connect sheet's body */
 :root.phone-shell .connect-wrap[data-ps-host] {
@@ -231,26 +272,21 @@
 	bottom: 0 !important;
 	width: auto !important;
 	min-width: 0 !important;
-	height: min(68vh, 600px);
-	max-height: min(68vh, 600px) !important;
+	/* 40 F1: the height the grab bar left it at (ContextMenu publishes --ctx-sheet-h), inside
+	   the shell's sheet room — so the Add list never pushes the selection strip under the top
+	   bar (cover-play-and-handle) */
+	height: min(var(--ctx-sheet-h, 68vh), var(--ps-sheet-max, 600px));
+	max-height: var(--ps-sheet-max, min(68vh, 600px)) !important;
 	box-sizing: border-box;
-	padding: 18px 6px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+	padding: 0 6px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
 	border-radius: 18px 18px 0 0 !important;
 	border-width: 1px 0 0 !important;
 	font-size: 15px !important;
 	box-shadow: 0 -12px 32px color-mix(in srgb, var(--bg-app) 35%, transparent) !important;
 }
-/* the sheet's grabber: a visual cue that this is a sheet (the backdrop closes it) */
-:root.phone-shell .ctx-scroll[role='menu']::before {
-	content: '';
-	position: absolute;
-	top: 7px;
-	left: 50%;
-	width: 36px;
-	height: 4px;
-	margin-left: -18px;
-	border-radius: 2px;
-	background: var(--text-faint);
+/* the sheet's grab bar is ui/SheetGrip (40 F1); it bleeds over the 6px side padding */
+:root.phone-shell .ctx-scroll .ctx-grip-bar {
+	margin: 0 -6px 4px;
 }
 :root.phone-shell .ctx-scroll .ctx-row {
 	display: flex;
@@ -269,7 +305,7 @@
 	gap: 6px;
 	width: 100%;
 	min-height: 44px;
-	margin: -8px 0 4px;
+	margin: 10px 0 4px;
 	padding: 0 8px;
 	border: 0;
 	border-bottom: 1px solid var(--border);
@@ -347,7 +383,10 @@
 /* (the Inspector's phone-shell rule lives in ui.css — its base rule there is a layered !important) */
 :root.phone-shell .tp-dock-panel {
 	bottom: var(--ps-bar-h) !important;
-	max-height: calc(100vh - var(--ps-bar-h) - 64px) !important;
+	/* 40 F1: the shell's sheet room, less DockTabs' strip riding above the panel */
+	max-height: calc(var(--ps-sheet-max, calc(100vh - var(--ps-bar-h) - 64px)) - 28px) !important;
+	/* room for the dock's grab bar (PhoneShell #ps-dock-grip, drawn over this edge) */
+	padding-top: 26px !important;
 }
 :root.phone-shell #notes-drawer {
 	bottom: var(--ps-bar-h) !important;
@@ -359,4 +398,77 @@
 
 :root.phone-shell #notes-drawer {
 	padding-bottom: 12px !important;
+}
+
+/* 40 F1 — NOTHING COVERS PLAY. The main menu, the profile menu and the Add list sit on
+   --z-popover, so while one of them is open the bar rises over it: the sheet ends at the bar's
+   top and the raised Play circle is drawn on top of its edge (cover-play-and-handle).
+   41 G20 reversed the other half: the SELECTION strip (--z-selection) no longer rises — an open
+   drawer, menu or settings sheet covers it, like every other sheet does. */
+:root.phone-shell:has(#sidebar70) #ps-bar,
+:root.phone-shell:has(#avatar-dropdown) #ps-bar {
+	z-index: calc(var(--z-popover) + 2) !important;
+}
+/* 41-sheets (on the 41-modals scale): the Add list is a ContextMenu, which paints on --z-portal
+   (its submenus at +2) — so while it is open the bar AND the strip rise over the portal: Play
+   stays uncovered and the strip, riding above the list (#32 b), stays usable over the menu's
+   backdrop. */
+:root.phone-shell.ps-add-open #ps-bar,
+:root.phone-shell.ps-add-open #ps-strip {
+	z-index: calc(var(--z-portal) + 3) !important;
+}
+/* …and over a framed TOOL sheet at full height (Objects, Chat, AI) the strip rides above the
+   sheet's scrim (--z-sheet - 1), not under it: --z-selection keeps it under every sheet's BODY,
+   which it never overlaps anyway (PhoneShell lifts it above the sheet's top edge). The menu-like
+   framed sheets hide it (41 G20, below). */
+:root.phone-shell.ps-sheet-open #ps-strip {
+	z-index: var(--z-phone-bar);
+}
+
+/* 41 G20 — NO SELECTION STRIP OVER AN OPEN MENU. The strip is the TOOL row of a selection: it
+   rides on top of the tool sheets that work on that selection (Objects, Chat, AI, the Inspector,
+   Configure Scene, the notes sheet, the Add list, a docked view, a toolbox — PhoneShell measures
+   each one, #32 b, so it sits ABOVE their top edge and never on them). A MENU is not a tool for
+   the selection: the main menu, the profile menu, the notification centre, the Connection and
+   More sheets, an object's / the viewport's action sheet (a ContextMenu that is not the Add
+   list), the character studio and every dialog (Settings, the modals) hide it while they are
+   open — it used to rise OVER the main menu and the profile menu (the reported bug: "the
+   toolbar which shows move/rotate/scale/inspect shows above the drawer"). It comes back as
+   they close, the selection unchanged. */
+:root.phone-shell:has(#sidebar70, #avatar-dropdown, #character-panel, dialog[open], .ps-sheet[data-kind='notif'], .ps-sheet[data-kind='peers'], .ps-sheet[data-kind='conn'], .ps-sheet[data-kind='more']) #ps-strip,
+:root.phone-shell:not(.ps-add-open):has(.ctx-scroll) #ps-strip {
+	display: none !important;
+}
+/* a framed window that lives inside another stacking context (the notification centre is in the
+   top-right corner chrome, --z-chrome-top) paints at THAT level, so the bar rises over it too —
+   still under the full-screen modals (--z-modal), which cover everything (#32 e) */
+:root.phone-shell:has(.top-right-chrome [data-ps-host]) #ps-bar {
+	z-index: calc(var(--z-chrome-top) + 1) !important;
+}
+
+/* 40 F1: on the phone the notification centre is a framed sheet, whose own scrim (above the bar)
+   closes it — the desktop click-catcher would cover the bar, Play and the sheet's grab bar */
+:root.phone-shell .notif-backdrop,
+:root.phone-shell .peers-backdrop {
+	display: none !important;
+}
+/* 41b H15: the connected-peers panel is a framed drawer too — it scrolls as one list there, where the
+   desktop popover caps its list at a few rows */
+:root.phone-shell #peers-popover[data-ps-host] {
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+:root.phone-shell #peers-popover[data-ps-host] .peers-scroll {
+	max-height: none;
+	overflow: visible;
+}
+
+/* 40 F3: in the docked Explorer's sideways-scrolling toolbar the identity chip (project ▸ scene)
+   takes its full width — the strip scrolls rather than squeezing the project name to "Unt…" */
+:root.phone-shell #explorer-dock-strip #explorer-identity {
+	flex: 0 0 auto !important;
+}
+:root.phone-shell #explorer-dock-strip #explorer-identity .truncate {
+	overflow: visible;
+	text-overflow: clip;
 }

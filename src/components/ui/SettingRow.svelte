@@ -9,10 +9,18 @@
 	//   wide       a WIDE control (segmented 3+, slider, button pair, text field, list): it
 	//              drops to a full-width line under the label on mobile (< 640px)
 	//   stack      …and on desktop too (a control wider than ~260px)
+	// 41 G19 -> 41b H12/H13: the row reflows by ITS OWN width, never the viewport, and by REAL FIT
+	// ($lib/ui/rowFit.js): the control's max-content against the row, leaving the label a text column of
+	// at least rowFit.TEXT_MIN (no one-word-per-line columns). A compact control (switch, swatch, key box,
+	// short dropdown, single button, number, a segmented control that fits) stays on the label's row;
+	// one that cannot fit drops under it (`sr-fit-stack`) — segmented, slider and text fields at full
+	// width, the rest at their own width. A stacked segmented control wider than the row wraps to two
+	// columns (`sr-seg-wrap`). `wide` = stretch the control when it stacks; `stack` = always stack.
 	// SEARCH: the root keeps `.setting-row` and the label `.sr-name`, the two hooks Settings'
 	// filter reads (Settings.svelte "apply"), so a migrated row is still found by its name.
 	// `id` names the row; the description gets `${id}-desc` for the control's describedby.
 	import Badge from './Badge.svelte';
+	import { rowFit } from '$lib/ui/rowFit.js';
 
 	/** @type {{label?: string, description?: string, badge?: string, labelFor?: string, id?: string, wide?: boolean, stack?: boolean, disabled?: boolean, keywords?: string, desc?: import('svelte').Snippet, extra?: import('svelte').Snippet, children?: import('svelte').Snippet} & Record<string, any>} */
 	let {
@@ -42,8 +50,10 @@
 	class:sr-disabled={disabled}
 	class:sr-no-control={!children}
 	data-keywords={keywords}
+	use:rowFit
 	{...rest}
 >
+	<div class="sr-body">
 	<div class="sr-text">
 		<div class="sr-head">
 			{#if labelFor}
@@ -65,21 +75,28 @@
 	{#if extra}
 		<div class="sr-extra">{@render extra()}</div>
 	{/if}
+	</div>
 </div>
 
 <style>
-	/* grid, not flex: legacy ui.css flips `.setting-row` to a flex COLUMN under 600px, and a
-	   grid ignores flex-direction (this scoped rule also outranks it: unlayered) */
+	/* the row; its body is the grid (41b: no container query any more — rowFit measures the fit) */
 	.sr {
+		padding: var(--setting-row-pad-y) 18px;
+		color: var(--text);
+		font-size: var(--fs-body);
+	}
+	/* grid, not flex: legacy ui.css flips `.setting-row` to a flex COLUMN under 600px — that now
+	   reaches only the root, whose one child is this grid */
+	.sr-body {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
 		grid-template-areas: 'text control' 'extra extra';
 		align-items: center;
 		column-gap: var(--space-6);
 		row-gap: 0;
-		padding: var(--setting-row-pad-y) 18px;
-		color: var(--text);
-		font-size: var(--fs-body);
+		min-width: 0;
+		/* the containing block of rowFit's absolutely-positioned measuring probe */
+		position: relative;
 	}
 	.sr-text {
 		grid-area: text;
@@ -112,6 +129,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: flex-end;
+		flex-wrap: wrap;
 		gap: var(--space-2);
 		min-width: 0;
 	}
@@ -120,12 +138,12 @@
 		min-width: 0;
 		margin-top: var(--space-3);
 	}
-	.sr-no-control {
+	.sr-no-control .sr-body {
 		grid-template-columns: minmax(0, 1fr);
 		grid-template-areas: 'text' 'extra';
 	}
-	/* a WIDE control on its own full-width line under the label */
-	.sr-stack {
+	/* a WIDE control on its own full-width line under the label (any width) */
+	.sr-stack .sr-body {
 		grid-template-columns: minmax(0, 1fr);
 		grid-template-areas: 'text' 'control' 'extra';
 		row-gap: var(--space-3);
@@ -141,31 +159,45 @@
 	}
 	@media (max-width: 639.98px) {
 		.sr {
-			column-gap: var(--space-4);
 			padding: var(--setting-row-pad-y) var(--space-4);
 		}
-		/* on a phone these are always wide: a segmented control, a slider, or a control of two
-		   or more pieces (two buttons, a field and its unit). Beside the label they squeezed the
-		   description into a narrow column (37-settings: Density, the volume sliders, Apply) */
-		.sr-wide,
-		.sr:has(.sr-control :global(:is(.seg, .sl))),
-		.sr:has(.sr-control > :global(:nth-child(2))) {
-			grid-template-columns: minmax(0, 1fr);
-			grid-template-areas: 'text' 'control' 'extra';
-			row-gap: var(--space-3);
-		}
-		.sr-wide .sr-control,
-		.sr:has(.sr-control :global(:is(.seg, .sl))) .sr-control,
-		.sr:has(.sr-control > :global(:nth-child(2))) .sr-control {
-			justify-content: stretch;
-		}
-		.sr-wide .sr-control > :global(*),
-		.sr:has(.sr-control :global(:is(.seg, .sl))) .sr-control > :global(*),
-		.sr:has(.sr-control > :global(:nth-child(2))) .sr-control > :global(*) {
-			flex: 1 1 auto;
+		.sr-body {
+			column-gap: var(--space-4);
 		}
 		.sr-desc {
 			line-height: 1.4;
 		}
+	}
+	/* 41b H12/H13: the measured verdict (rowFit.js) — a control that cannot fit beside the label goes
+	   under it. A segmented control, a slider, a text field or a `wide` row stretches across; anything
+	   else (a select, a button, a number with its unit, a select + preview pair) keeps its own width. */
+	.sr:global(.sr-fit-stack) > .sr-body {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-areas: 'text' 'control' 'extra';
+		row-gap: var(--space-3);
+	}
+	.sr:global(.sr-fit-stack) > .sr-body > .sr-control {
+		justify-content: flex-start;
+	}
+	.sr:global(.sr-fit-stack):is(.sr-wide, :has(> .sr-body > .sr-control :global(:is(.seg, .sl, .settings-text, textarea)))) > .sr-body > .sr-control {
+		justify-content: stretch;
+	}
+	.sr:global(.sr-fit-stack):is(.sr-wide, :has(> .sr-body > .sr-control :global(:is(.seg, .sl, .settings-text, textarea)))) > .sr-body > .sr-control > :global(*) {
+		flex: 1 1 auto;
+	}
+	/* a stacked segmented control shares the row between its options (Shadow quality in 1.31) */
+	.sr:global(.sr-fit-stack) > .sr-body > .sr-control :global(.seg > .seg-opt) {
+		flex: 1 1 0;
+	}
+	/* a segmented control too wide even for the whole row: its options in two columns, never one
+	   word spilling out of its slot (the phone's "Double-click action") */
+	.sr:global(.sr-seg-wrap) > .sr-body > .sr-control:not(:global(.sr-probe)) :global(.seg) {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		width: 100%;
+	}
+	/* an `extra` snippet that rendered nothing (a shortcut row with no conflict) takes no room */
+	.sr-extra:not(:has(*)) {
+		display: none;
 	}
 </style>

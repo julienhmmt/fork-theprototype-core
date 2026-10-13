@@ -153,6 +153,27 @@ export const expandedObjects = writable(new Set());
 export const closeMenu = writable(true);
 export const specatorMode = writable(false);
 
+/**
+ * 41b H1 — on a phone the Inspector is two DOCK TABS (Properties, Configure Scene), and an open
+ * one can be covered by another tab. `$lib/phoneDock` registers this: asked for a kind that is
+ * already open, it brings that tab to the front and answers true (it was covered), so the ask is
+ * a reveal rather than a no-op — or, for Configure Scene's toggle, rather than a close.
+ * @type {((kind: string) => boolean) | null}
+ */
+let revealInspector = null;
+/** @param {((kind: string) => boolean) | null} fn */
+export function setInspectorRevealer(fn) {
+	revealInspector = fn;
+}
+/** 41b H1 — told when hidePanels()/restorePanels() hide and bring back the panels (the phone dock
+ *  puts back the tab that was in front, not whichever reopened last)
+ * @type {((phase: 'hide' | 'restore') => void) | null} */
+let panelsHook = null;
+/** @param {((phase: 'hide' | 'restore') => void) | null} fn */
+export function setPanelsHook(fn) {
+	panelsHook = fn;
+}
+
 // update the sidebar visibility
 /** @param {'properties'|'lightProperties'|'scene'|'library'} store */
 export function showSidebar(store) {
@@ -173,11 +194,15 @@ export function showSidebar(store) {
 	const open = !get(inspectorClose);
 	// Configure Scene TOGGLES; selection stays open-only (clicks must never close it)
 	if (store === 'scene' && open && get(inspectorKind) === 'scene') {
+		if (revealInspector?.('scene')) return; // a covered phone tab comes to the front instead
 		inspectorClose.set(true);
 		return;
 	}
 	libraryClose.set(true);
-	if (open && get(inspectorKind) === kind) return; // already showing this target
+	if (open && get(inspectorKind) === kind) {
+		revealInspector?.(kind);
+		return; // already showing this target
+	}
 	inspectorClose.set(true);
 	// The delay adds cool effect
 	setTimeout(() => {
@@ -197,6 +222,7 @@ export function showSidebar(store) {
 export function openSceneSection(label) {
 	libraryClose.set(true);
 	const wasOpen = !get(inspectorClose) && get(inspectorKind) === 'scene';
+	if (wasOpen) revealInspector?.('scene');
 	inspectorKind.set('scene');
 	inspectorClose.set(false);
 	// let the panel mount before asking a section to scroll (it may not exist yet)
@@ -227,6 +253,7 @@ let panelSnapshot = null;
 /** @param {string[]} keep - panel keys to leave untouched: 'menu' | 'library' | 'inspector' | 'flow' | 'objectList' | 'chat' */
 export function hidePanels(keep = []) {
 	if (panelSnapshot) return;
+	panelsHook?.('hide');
 	panelSnapshot = {
 		menu: get(closeMenu),
 		library: get(libraryClose),
@@ -254,6 +281,7 @@ export function restorePanels() {
 	objectListClose.set(panelSnapshot.objectList);
 	chatHidden.set(panelSnapshot.chat);
 	panelSnapshot = null;
+	panelsHook?.('restore');
 }
 
 // context menu state for the object list: { x, y, uuid, locked } | null
@@ -541,6 +569,9 @@ export const inspectorFilter = writable('');
 export const inspectorScrollTo = writable(null);
 /** the notification center panel open state */
 export const notificationCenterOpen = writable(false);
+/** 41b H15: the connected-peers panel (top bar, beside the bell) — a store, not component state, so the
+ * phone shell can frame it as a drawer the way it frames the notification centre */
+export const peersPanelOpen = writable(false);
 /** E2: the scene-notes drawer (lists every annotation) open state */
 export const notesDrawerOpen = writable(false);
 
@@ -603,7 +634,7 @@ if (typeof localStorage !== 'undefined') {
  * until the on-device pass, which is why a user who wanted the bar to lift also had to
  * accept it painting over every floating window.
  *   ON           — `--z-hud` (45): above the dock (35) AND above floating windows (40).
- *   OFF (default) — `--z-drawer` (30): windows and the dock cover it.
+ *   OFF (default) — `--z-chrome` (30): windows and the dock cover it.
  * They compose. The DEFAULT combination is floating ON + this OFF: the bar lifts clear
  * of an opening dock (so the two rarely overlap at all), but a floating window dragged
  * over it covers it — the bar moves out of the way rather than fighting. Turning this

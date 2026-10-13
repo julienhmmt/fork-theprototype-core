@@ -1,5 +1,6 @@
 <script>
 	import Icon from '../ui/Icon.svelte';
+	import { showConfirm } from '$lib/confirmDialog.js';
 	// Unified inspector (phase 64): one drawer serves every target — mesh, group,
 	// light (from the selection) and the scene itself ($inspectorKind = 'scene').
 	// Replication messages are byte-identical to the old three panels.
@@ -29,6 +30,9 @@
 	import FlowPathSection from '../sim/FlowPathSection.svelte'; // 36-fb F24
 	import FluidTankSection from '../sim/FluidTankSection.svelte'; // 36-sim U2b
 	import DragRow from '../ui/DragRow.svelte';
+	import SheetGrip from '../ui/SheetGrip.svelte';
+	import { saveSheetH } from '$lib/ui/sheetDrag.js';
+	import { phoneSheetMaxH } from '$lib/ui/phoneShell.js';
 	import Segmented from '../ui/Segmented.svelte';
 	import ParticleMotionRows from '../fx/ParticleMotionRows.svelte';
 	import ColorPicker, { ChromeVariant } from 'svelte-awesome-color-picker';
@@ -229,7 +233,7 @@
 		clearSnapAnchor,
 		saveSnapAnchorAsOrigin
 	} from '$lib/snapEngine';
-	import { peers, inspectorClose, inspectorKind, inspectorPinned, showToast, inspectorFilter, notesDrawerOpen } from '../../stores/appStore.js';
+	import { peers, inspectorClose, inspectorKind, inspectorPinned, showToast, inspectorFilter } from '../../stores/appStore.js';
 	import { safeStorage } from '$lib/safeStorage';
 	import {
 		isShaderDriven,
@@ -284,18 +288,18 @@
 
 	let transitionParamsRight = { x: 320, duration: 200, easing: sineIn };
 
-	// side drawers live on the --z-drawer tier (68); chat floats on its own now.
+	// side drawers live on the --z-chrome tier (68); chat floats on its own now.
 	// bottom rises above the docked Flow/Explorer height (105) AND the Controls pill/
 	// HUD footprint on narrow screens (--controls-inset) so neither covers the drawer.
 	// The two are SUMMED, not max()'d: the Controls pill no longer sits on the viewport
 	// bottom — it rides ABOVE the dock, occupying the band [bottom-inset .. +66px] — so
 	// the taller of the two no longer clears both. The sum is identical to the old
 	// max() whenever either term is 0, which is every case that existed before.
-	// z sits just above the bottom HUD buttons (mic/chat/+ are at --z-drawer=30) so the
+	// z sits just above the bottom HUD buttons (mic/chat/+ are at --z-chrome=30) so the
 	// settings drawer is never covered by the mic on the bottom-right, but stays BELOW
-	// the dock (--z-bottom=35) and floating windows.
+	// the dock (--z-dock=35) and floating windows.
 	const drawerStyle =
-		'bottom: calc(var(--bottom-inset, 0px) + var(--controls-inset, 0px)); z-index: calc(var(--z-bottom) - 1); height: auto';
+		'bottom: calc(var(--bottom-inset, 0px) + var(--controls-inset, 0px)); z-index: calc(var(--z-dock) - 1); height: auto';
 
 	// Round the drawer's bottom-LEFT corner when it floats ABOVE the bottom (a docked
 	// Flow/Explorer, or the narrow Controls inset, leave a gap below it). When it sits
@@ -322,10 +326,9 @@
 		mq.addEventListener('change', on);
 		return () => mq.removeEventListener('change', on);
 	});
-	// One bottom sheet at a time: opening the settings sheet closes scene notes.
-	$effect(() => {
-		if (!$inspectorClose && sheetMode) notesDrawerOpen.set(false);
-	});
+	// 41b H1: on a phone (the only width the sheet layout is used at) the Inspector and the notes
+	// list are TABS of one dock, so opening one no longer closes the other ("one bottom sheet at a
+	// time" was the rule while each was a sheet of its own — $lib/phoneDock).
 	// SHEET = slide UP from below; side drawer = fly in from the right (horizontal).
 	const insTransition = $derived(
 		sheetMode ? { y: 500, duration: 240, easing: sineIn } : transitionParamsRight
@@ -339,30 +342,12 @@
 		const saved = parseInt(safeStorage.getItem('inspectorSheetH') || '');
 		inspectorH = !saved || Number.isNaN(saved) ? Math.round(window.innerHeight * 0.45) : saved;
 	});
-	let insResizing = $state(false);
-	/** @param {PointerEvent} e */
-	function insStartResize(e) {
-		insResizing = true;
-		/** @type {HTMLElement} */ (e.currentTarget).setPointerCapture?.(e.pointerId);
-		e.preventDefault();
-	}
-	/** @param {PointerEvent} e */
-	function insDoResize(e) {
-		if (!insResizing) return;
-		// sheet is bottom:0, so height = viewport height - finger y; cap the top below
-		// the Connect bar + top-right chrome (same limit as the Flow/Explorer dock)
-		const cb = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--connect-bottom')) || 54;
-		const maxH = Math.max(200, window.innerHeight - cb - 56);
-		inspectorH = Math.min(Math.max(160, window.innerHeight - e.clientY), maxH);
-	}
-	/** @param {PointerEvent} e */
-	function insEndResize(e) {
-		if (!insResizing) return;
-		insResizing = false;
-		/** @type {HTMLElement} */ (e.currentTarget).releasePointerCapture?.(e.pointerId);
-		try {
-			safeStorage.setItem('inspectorSheetH', String(inspectorH));
-		} catch {}
+	// 40 F1: the grab bar is ui/SheetGrip (sticky, swipe down to the end closes). The height
+	// stays this drawer's own, under the same key.
+	/** @param {number} h @param {boolean} done */
+	function insResize(h, done) {
+		inspectorH = Math.round(h);
+		if (done) saveSheetH('inspectorSheetH', inspectorH);
 	}
 
 	// C1 (roadmap #13): scene-mode physics-objects list. Recomputes on scene/graph
@@ -892,10 +877,13 @@
 			geoTick++;
 		};
 		if ($selectedObject.userData?.vertexEdited) {
-			showToast('This mesh has vertex edits — rebuilding the geometry discards them.', [
-				{ label: 'Rebuild', action: run },
-				{ label: 'Keep edits', action: () => geoTick++ }
-			]);
+			// 41 G16: discarding edits is a modal question, not a toast
+			void showConfirm({
+				title: 'Discard the vertex edits?',
+				message: 'This mesh has vertex edits — rebuilding the geometry discards them.',
+				confirmLabel: 'Rebuild',
+				cancelLabel: 'Keep edits'
+			}).then((ok) => (ok ? run() : geoTick++));
 			return;
 		}
 		run();
@@ -911,16 +899,16 @@
 		const uuid = $selectedObject?.uuid;
 		const params = geoParams?.params;
 		if (!uuid || !params) return;
-		showToast('Rebuild this terrain from its parameters? The sculpted shape is discarded.', [
-			{
-				label: 'Rebuild',
-				action: () => {
-					applyGeometry(uuid, { ...params });
-					geoTick++;
-				}
-			},
-			{ label: 'Keep sculpt', action: () => {} }
-		]);
+		void showConfirm({
+			title: 'Rebuild this terrain?',
+			message: 'It is rebuilt from its parameters — the sculpted shape is discarded.',
+			confirmLabel: 'Rebuild',
+			cancelLabel: 'Keep sculpt'
+		}).then((ok) => {
+			if (!ok) return;
+			applyGeometry(uuid, { ...params });
+			geoTick++;
+		});
 	}
 
 	/**
@@ -1631,23 +1619,24 @@
 <div
 	style={drawerStyle + '; --inspector-h: ' + inspectorH + 'px'}
 	transition:fly={insTransition}
-	class={'tp-ui ins-shell fixed inset-e-0 top-16 z-50 w-80 overflow-y-auto p-4 pt-0' + (bottomRounded ? ' ins-rounded-bl' : '')}
+	class={'tp-ui ins-shell fixed inset-e-0 top-16 z-(--z-side-panel) w-80 overflow-y-auto p-4 pt-0' + (bottomRounded ? ' ins-rounded-bl' : '')}
 	use:minimalScroll
 	id="inspector"
 	data-key-scope="panel"
 	role="region"
 	aria-label="Properties"
 >
-	<!-- bottom-sheet drag handle (shown only in the narrow bottom-sheet layout) -->
-	<div
+	<!-- bottom-sheet grab bar (shown only in the narrow bottom-sheet layout): STICKY, so
+	     scrolling the properties never takes it away (40 F1) -->
+	<SheetGrip
 		class="ins-resize"
-		title="Drag to resize"
-		onpointerdown={insStartResize}
-		onpointermove={insDoResize}
-		onpointerup={insEndResize}
-	>
-		<span class="ins-grabber"></span>
-	</div>
+		label={$inspectorKind === 'scene' ? 'Configure Scene' : 'Properties'}
+		height={Math.min(inspectorH, $phoneSheetMaxH || inspectorH)}
+		min={160}
+		inset={16}
+		onresize={insResize}
+		onclose={() => inspectorClose.set(true)}
+	/>
 	{#if $inspectorKind === 'file'}
 		<!-- Explorer file properties (107) -->
 		<InspectorHead title={inspectedItem?.name ?? 'File'} icon="file-text" badge="File" onclose={() => inspectorClose.set(true)} />
@@ -3968,6 +3957,19 @@
 									role="presentation"
 									onclick={() => document.getElementById('texture-file')?.click()}
 								/>
+								<!-- 40-image (F13): edit the texture's image; saving it re-textures every
+								     material made from it, for every peer -->
+								<UiButton
+									id="texture-edit"
+									size="sm"
+									variant="outline"
+									icon="square-pen"
+									title="Edit this texture in the Image editor — crop, rotate, resize, adjust"
+									onclick={() => {
+										const uuid = matTargets[0]?.uuid;
+										if (uuid) import('$lib/image/imageEditor').then((m) => m.editMaterialTexture(uuid, 0));
+									}}>Edit</UiButton
+								>
 								<UiButton
 									size="sm"
 									variant="outline"

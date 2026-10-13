@@ -25,6 +25,7 @@
 	import { dockAddItems } from '$lib/dockMenu';
 	import { fly } from 'svelte/transition';
 	import { safeStorage } from '$lib/safeStorage';
+	import { readPanelOpen } from '$lib/ui/handheldPanels.js';
 
 	const clampH = (h: number) => Math.min(Math.max(h || 320, 200), Math.round(window.innerHeight * 0.8));
 	// 18-B: floating-window size limits, shared with the clamp helpers
@@ -33,9 +34,8 @@
 	let docked = $state(true);
 	// mirrors Nodes' palette-open (bound below) so the docked content only insets above
 	// the Controls HUD when the node palette is actually shown (overlapping the HUD)
-	let paletteOpen = $state(
-		typeof localStorage !== 'undefined' ? safeStorage.getItem('flowPaletteOpen') !== 'false' : true
-	);
+	// 41 G18: the same per-device rule as the palette itself (hidden on a phone until opened)
+	let paletteOpen = $state(readPanelOpen('flowPaletteOpen', true));
 	let winW = $state(760);
 	let winH = $state(480);
 	// keep the floating window within the viewport (a persisted wide rect used to push
@@ -110,9 +110,11 @@
 	// another dock view. They start docked, so they appear as dock tabs. Same list the
 	// strip's "+" renders ($lib/dockMenu) — they used to be two copies that drifted.
 	let addMenu: { x: number; y: number } | null = $state(null);
-	const addItems = dockAddItems();
+	// 41 G22: built per open (it reads what is docked right now) and without this window's own row
+	let addItems: any[] = $state([]);
 	function openAddMenu(e: MouseEvent) {
 		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		addItems = dockAddItems({ exclude: ['flow'] });
 		addMenu = { x: r.left, y: r.bottom + 4 };
 	}
 
@@ -186,14 +188,14 @@
 			id="flow-list"
 			transition:fly={{ y: 320, duration: 200 }}
 			class="tp-ui tp-dock-panel fixed inset-x-0 bottom-0 p-2 {dockVisible ? '' : 'hidden'}"
-			style="z-index: var(--z-bottom); height: {$dockHeight}px"
+			style="z-index: var(--z-dock); height: {$dockHeight}px"
 			data-key-scope="panel"
 			role="region"
 			aria-label="Node editor (docked)"
 		>
 			<!-- top-edge resize hot zone -->
 			<div
-				class="resize-cue absolute -top-1 left-0 right-0 z-30 h-2 cursor-ns-resize hover:bg-accent/30"
+				class="resize-cue absolute -top-1 left-0 right-0 z-28 h-2 cursor-ns-resize hover:bg-accent/30"
 				style="touch-action: none"
 				title="Drag to resize"
 				onpointerdown={startResize}
@@ -201,13 +203,6 @@
 				onpointerup={endResize}
 			></div>
 			<DockTabs />
-			<button
-				id="flow-undock"
-				class="tp-dock-btn absolute right-2 top-2 z-10"
-				title="Undock into a floating window"
-				aria-label="Undock into a floating window"
-				onclick={() => setDocked(false)}><Icon name="app-window" size={16} /></button
-			>
 			<div class="relative" style="height: {$dockHeight - 16}px">
 				<SvelteFlowProvider>
 					<Nodes bind:paletteOpen />
