@@ -1,61 +1,102 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeBar, toggleSlot, splitAroundPlay, playIndex, movePlay, DEFAULT_BAR, MAX_SLOTS } from '../../src/lib/ui/phoneBar.js';
+import {
+	normalizeBar,
+	migrateLegacy,
+	placeItem,
+	removeItem,
+	moveItem,
+	labelled,
+	DEFAULT_BAR,
+	MAX_ITEMS,
+	BAR_CATALOG,
+	WINDOW_ITEMS,
+	EDIT_ITEMS,
+	VIEW_ITEMS
+} from '../../src/lib/ui/phoneBar.js';
 
-// 38 R9 / NOTES-38 #7: the phone bar's four slots around Play. 41b H6: More may leave the bar
-// (a long press on any item, Play included, reaches Edit bar) and Play moves along it.
+// 38 R9 / NOTES-38 #7: the phone bar, per device. 42 I5: ONE list with Play in it, up to seven
+// items, arranged by dragging in More; the 41b four-slots-around-Play records migrate into it.
 describe('phoneBar', () => {
-	it('defaults to Add, Objects, Explorer, More', () => {
-		expect(DEFAULT_BAR).toEqual(['add', 'objects', 'explorer', 'more']);
+	it('defaults to Add, Objects, Play, Explorer, More', () => {
+		expect(DEFAULT_BAR).toEqual(['add', 'objects', 'play', 'explorer', 'more']);
 		expect(normalizeBar(null)).toEqual(DEFAULT_BAR);
 		expect(normalizeBar('nope')).toEqual(DEFAULT_BAR);
+		// an empty bar cannot be got back from (nothing to hold): it reads as the default
+		expect(normalizeBar([])).toEqual(DEFAULT_BAR);
 	});
 
-	it('drops unknown keys and repeats, caps at four', () => {
+	it('the catalog: More ▸ Windows / Edit / Tools & View, every one placeable', () => {
+		expect(WINDOW_ITEMS.slice(0, 5)).toEqual(['play', 'add', 'more', 'objects', 'stats']);
+		expect(EDIT_ITEMS).toEqual(['inspect', 'move', 'rotate', 'scale', 'undo', 'redo', 'multiselect', 'interact']);
+		expect(VIEW_ITEMS).toEqual(['tools']);
+		expect(new Set(BAR_CATALOG).size).toBe(BAR_CATALOG.length);
+	});
+
+	it('drops unknown keys and repeats, caps at seven', () => {
+		expect(MAX_ITEMS).toBe(7);
 		expect(normalizeBar(['add', 'bogus', 'add', 'chat', 'more'])).toEqual(['add', 'chat', 'more']);
-		expect(normalizeBar(['add', 'objects', 'explorer', 'chat', 'flow', 'more']).length).toBe(MAX_SLOTS);
+		expect(normalizeBar(['add', 'objects', 'play', 'explorer', 'more', 'move', 'rotate', 'scale', 'undo']).length).toBe(7);
+		// Play is an item like any other — it may be anywhere, or absent
+		expect(normalizeBar(['play', 'add'])).toEqual(['play', 'add']);
+		expect(normalizeBar(['add', 'more'])).toEqual(['add', 'more']);
 	});
 
-	it('More can leave the bar and comes back at the end (41b H6)', () => {
-		expect(normalizeBar(['add', 'chat'])).toEqual(['add', 'chat']);
-		expect(normalizeBar(['add', 'chat', 'flow', 'objects'])).toEqual(['add', 'chat', 'flow', 'objects']);
-		expect(normalizeBar([])).toEqual([]);
-		const noMore = toggleSlot(DEFAULT_BAR, 'more');
-		expect(noMore).toEqual(['add', 'objects', 'explorer']);
-		expect(toggleSlot(noMore, 'chat')).toEqual(['add', 'objects', 'explorer', 'chat']);
-		expect(toggleSlot(['add'], 'more')).toEqual(['add', 'more']);
-		// a full bar refuses More like any other fifth
-		expect(toggleSlot(['add', 'objects', 'explorer', 'chat'], 'more')).toEqual(['add', 'objects', 'explorer', 'chat']);
+	it('migrates the 41b records: four slots + where Play sat', () => {
+		// nothing stored but a moved Play: the old default with Play one place left
+		expect(migrateLegacy(undefined, 1)).toEqual(['add', 'play', 'objects', 'explorer', 'more']);
+		// the old default, Play in the middle (absent)
+		expect(migrateLegacy(['add', 'objects', 'explorer', 'more'], null)).toEqual(DEFAULT_BAR);
+		// a customised bar (More off, Chat on) keeps its order; Play back in the middle
+		expect(migrateLegacy(['add', 'objects', 'chat'], null)).toEqual(['add', 'objects', 'play', 'chat']);
+		// Play at either end
+		expect(migrateLegacy(['add', 'objects', 'explorer', 'more'], 0)).toEqual(['play', 'add', 'objects', 'explorer', 'more']);
+		expect(migrateLegacy(['add', 'objects', 'explorer', 'more'], 4)).toEqual(['add', 'objects', 'explorer', 'more', 'play']);
+		// a remembered place past a shrunk bar clamps to its end; junk is dropped
+		expect(migrateLegacy(['more', 'bogus'], 9)).toEqual(['more', 'play']);
+		expect(migrateLegacy('junk', null)).toEqual(DEFAULT_BAR);
+		// an empty old bar was "Play alone"
+		expect(migrateLegacy([], null)).toEqual(['play']);
 	});
 
-	it('a tap removes a slot, or adds one before More while there is room', () => {
-		const three = toggleSlot(DEFAULT_BAR, 'explorer');
-		expect(three).toEqual(['add', 'objects', 'more']);
-		expect(toggleSlot(three, 'chat')).toEqual(['add', 'objects', 'chat', 'more']);
-		// a full bar refuses a fifth
-		expect(toggleSlot(DEFAULT_BAR, 'chat')).toEqual(DEFAULT_BAR);
-		// an unknown key changes nothing
-		expect(toggleSlot(DEFAULT_BAR, 'bogus')).toEqual(DEFAULT_BAR);
+	it('a drop places an item: along the bar, or in from More', () => {
+		// along: `at` counts the OTHER items, so dragging Play to the far left is at 0
+		expect(placeItem(DEFAULT_BAR, 'play', 0).list).toEqual(['play', 'add', 'objects', 'explorer', 'more']);
+		expect(placeItem(DEFAULT_BAR, 'add', 4).list).toEqual(['objects', 'play', 'explorer', 'more', 'add']);
+		// dropped where it already was: unchanged
+		expect(placeItem(DEFAULT_BAR, 'play', 2).list).toEqual(DEFAULT_BAR);
+		// in from More: a new item lands where it was dropped
+		expect(placeItem(DEFAULT_BAR, 'move', 1).list).toEqual(['add', 'move', 'objects', 'play', 'explorer', 'more']);
+		// past the end clamps
+		expect(placeItem(['add'], 'chat', 99).list).toEqual(['add', 'chat']);
+		// a full bar refuses a new one, but still reorders its own
+		const full = ['add', 'objects', 'play', 'explorer', 'more', 'move', 'rotate'];
+		expect(placeItem(full, 'scale', 0)).toEqual({ list: full, refused: 'full' });
+		expect(placeItem(full, 'rotate', 0).list[0]).toBe('rotate');
+		expect(placeItem(DEFAULT_BAR, 'bogus', 0)).toEqual({ list: DEFAULT_BAR, refused: 'unknown' });
 	});
 
-	it('Play sits in the middle; the left half takes the odd one', () => {
-		expect(splitAroundPlay(DEFAULT_BAR)).toEqual({ left: ['add', 'objects'], right: ['explorer', 'more'] });
-		expect(splitAroundPlay(['add', 'chat', 'more'])).toEqual({ left: ['add', 'chat'], right: ['more'] });
-		expect(splitAroundPlay(['more'])).toEqual({ left: ['more'], right: [] });
-		expect(splitAroundPlay([])).toEqual({ left: [], right: [] });
+	it('a drag out removes an item — but never the last one', () => {
+		expect(removeItem(DEFAULT_BAR, 'more').list).toEqual(['add', 'objects', 'play', 'explorer']);
+		expect(removeItem(DEFAULT_BAR, 'play').list).toEqual(['add', 'objects', 'explorer', 'more']);
+		expect(removeItem(DEFAULT_BAR, 'chat').list).toEqual(DEFAULT_BAR);
+		expect(removeItem(['play'], 'play')).toEqual({ list: ['play'], refused: 'last' });
 	});
 
-	it('Play moves along the bar and forgets the middle (41b H6)', () => {
-		expect(splitAroundPlay(DEFAULT_BAR, 0)).toEqual({ left: [], right: DEFAULT_BAR });
-		expect(splitAroundPlay(DEFAULT_BAR, 4)).toEqual({ left: DEFAULT_BAR, right: [] });
-		// a remembered place past a shrunk bar clamps to its end
-		expect(playIndex(2, 4)).toBe(2);
-		// from the middle (2 of 4): left to 1, right to 3; back to the middle reads null
-		expect(movePlay(4, null, -1)).toBe(1);
-		expect(movePlay(4, null, 1)).toBe(3);
-		expect(movePlay(4, 1, 1)).toBe(null);
-		expect(movePlay(4, 3, -1)).toBe(null);
-		// at an end nothing changes
-		expect(movePlay(4, 0, -1)).toBe(0);
-		expect(movePlay(4, 4, 1)).toBe(4);
+	it("Play's Move left / Move right walk it along the bar (41b H6)", () => {
+		expect(moveItem(DEFAULT_BAR, 'play', -1)).toEqual(['add', 'play', 'objects', 'explorer', 'more']);
+		expect(moveItem(DEFAULT_BAR, 'play', 1)).toEqual(['add', 'objects', 'explorer', 'play', 'more']);
+		// at an end, or off the bar, nothing changes
+		expect(moveItem(['play', 'add'], 'play', -1)).toEqual(['play', 'add']);
+		expect(moveItem(['add', 'play'], 'play', 1)).toEqual(['add', 'play']);
+		expect(moveItem(['add', 'more'], 'play', 1)).toEqual(['add', 'more']);
+	});
+
+	it('labels at five or fewer; icons-only past five on a narrow bar, labelled on a wide one', () => {
+		expect(labelled(5, 390)).toBe(true);
+		expect(labelled(6, 378)).toBe(false); // the folded N6: 63 px each
+		expect(labelled(7, 378)).toBe(false);
+		expect(labelled(7, 620)).toBe(true); // a wider phone shell: 88 px each
+		// seven on the folded phone are still thumb-sized
+		expect(378 / 7).toBeGreaterThanOrEqual(44);
 	});
 });

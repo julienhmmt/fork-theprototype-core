@@ -61,6 +61,7 @@
 	import { peersAsClassic, knockedAfterSeconds, KNOCKED_AFTER_CHOICES } from '$lib/avatars/avatarState';
 	import WorkspaceLayoutsSettings from './WorkspaceLayoutsSettings.svelte'; // 37 R14
 	import UndockButtonSettings from './UndockButtonSettings.svelte'; // 40 F8
+	import PhoneBarSettings from './PhoneBarSettings.svelte'; // 42 I5
 	import { gameSoundVolume } from '$lib/gameSfx';
 	import { gameMusicVolume } from '$lib/gameMusic';
 	import { showWelcomeOnStart, showWhatsNewNotice, openWelcome } from '$lib/whatsNew';
@@ -267,6 +268,7 @@
 		<SettingRow id="row-undock-touch" label="Allow undocking on touch screens" description="Lets the Node editor and Explorer float as windows on a phone.">
 			<Toggle id="mobile-undock" label="Allow undocking on touch screens" bind:checked={$mobileUndockAllowed} />
 		</SettingRow>
+		<PhoneBarSettings />
 	</Section>
 
 	<Section variant="card" label="Lists & menus">
