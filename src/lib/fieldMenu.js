@@ -258,13 +258,16 @@ async function pasteWith(run) {
 
 // ---- menus ---------------------------------------------------------------------------------
 const MOD = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '') ? '⌘' : 'Ctrl+';
+/** the shortcut beside a row — none on a touch screen, where there is no keyboard to press it on
+ *  @param {string} key */
+const keyHint = (key) => (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches ? undefined : MOD + key);
 
 /** Per value: Copy, Paste, Reset to default. @param {FieldSpec} f */
 function valueItems(f) {
 	return [
 		{ section: f.name },
-		{ label: 'Copy', icon: 'copy', hint: MOD + 'C', action: () => copyOut(fieldCopyText(f), f.name) },
-		{ label: 'Paste', icon: 'clipboard-paste', hint: MOD + 'V', disabled: f.disabled, action: () => pasteWith(async () => pasteFieldText(f, await readClip())) },
+		{ label: 'Copy', icon: 'copy', hint: keyHint('C'), action: () => copyOut(fieldCopyText(f), f.name) },
+		{ label: 'Paste', icon: 'clipboard-paste', hint: keyHint('V'), disabled: f.disabled, action: () => pasteWith(async () => pasteFieldText(f, await readClip())) },
 		{ label: 'Reset to default', icon: 'rotate-ccw', disabled: f.disabled || !hasReset(f), action: () => asOneStep(() => resetField(f)) }
 	];
 }
@@ -274,8 +277,8 @@ function axisItems(f, i) {
 	const axis = 'XYZ'[i];
 	return [
 		{ section: `${f.name} ${axis}` },
-		{ label: 'Copy', icon: 'copy', hint: MOD + 'C', action: () => copyOut(axisCopyText(f, i), `${f.name} ${axis}`) },
-		{ label: 'Paste', icon: 'clipboard-paste', hint: MOD + 'V', disabled: f.disabled, action: () => pasteWith(async () => pasteAxisText(f, i, await readClip())) },
+		{ label: 'Copy', icon: 'copy', hint: keyHint('C'), action: () => copyOut(axisCopyText(f, i), `${f.name} ${axis}`) },
+		{ label: 'Paste', icon: 'clipboard-paste', hint: keyHint('V'), disabled: f.disabled, action: () => pasteWith(async () => pasteAxisText(f, i, await readClip())) },
 		{
 			label: 'Reset to default',
 			icon: 'rotate-ccw',
@@ -294,8 +297,8 @@ function axisItems(f, i) {
 function vectorItems(f) {
 	return [
 		{ section: f.name },
-		{ label: 'Copy vector', icon: 'copy', hint: MOD + 'C', action: () => copyOut(fieldCopyText(f), f.name) },
-		{ label: 'Paste vector', icon: 'clipboard-paste', hint: MOD + 'V', disabled: f.disabled, action: () => pasteWith(async () => pasteFieldText(f, await readClip())) },
+		{ label: 'Copy vector', icon: 'copy', hint: keyHint('C'), action: () => copyOut(fieldCopyText(f), f.name) },
+		{ label: 'Paste vector', icon: 'clipboard-paste', hint: keyHint('V'), disabled: f.disabled, action: () => pasteWith(async () => pasteFieldText(f, await readClip())) },
 		{ label: 'Reset', icon: 'rotate-ccw', disabled: f.disabled || !hasReset(f), action: () => asOneStep(() => resetField(f)) },
 		{ section: 'One axis' },
 		...[0, 1, 2].map((i) => ({
@@ -327,9 +330,9 @@ function sectionItems(s) {
 	/** @type {any[]} */
 	const items = [
 		{ section: s.name },
-		{ label: 'Copy section', icon: 'copy', hint: MOD + 'C', action: copy(false) },
+		{ label: 'Copy section', icon: 'copy', hint: keyHint('C'), action: copy(false) },
 		{ label: 'Copy as JSON', icon: 'clipboard-copy', action: copy(true) },
-		{ label: 'Paste section', icon: 'clipboard-paste', hint: MOD + 'V', action: () => pasteSection(false) }
+		{ label: 'Paste section', icon: 'clipboard-paste', hint: keyHint('V'), action: () => pasteSection(false) }
 	];
 	if (multi && s.pasteAll) items.push({ label: `Paste to all selected (${count})`, icon: 'clipboard-paste', action: () => pasteSection(true) });
 	else if (multi) items[3].label = `Paste to all selected (${count})`;
