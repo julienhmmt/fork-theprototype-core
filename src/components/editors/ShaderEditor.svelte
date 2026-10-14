@@ -1069,6 +1069,7 @@
 		<WindowChrome
 			size="tool"
 			bare
+			dockedHead="tools"
 			body={false}
 			title="Shader editor"
 			headerClass="ui-panel-header move-handle cursor-move select-none"
@@ -1080,7 +1081,7 @@
 				<span class="flex-1"></span>
 			{/snippet}
 			{#snippet actions()}
-				<button class="wc-act-text" id="shader-dock" title="Dock to the bottom" aria-label="Dock the shader editor" onclick={() => setDocked(true)}><Icon name="panel-bottom" size={16} />Dock</button>
+				<button data-wc-chrome class="wc-act-text" id="shader-dock" title="Dock to the bottom" aria-label="Dock the shader editor" onclick={() => setDocked(true)}><Icon name="panel-bottom" size={16} />Dock</button>
 				{@render editorActions()}
 			{/snippet}
 		</WindowChrome>

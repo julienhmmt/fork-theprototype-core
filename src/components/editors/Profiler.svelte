@@ -956,6 +956,7 @@
 			<WindowChrome
 				size="tool"
 				bare
+				dockedHead="tools"
 				body={false}
 				title="Profiler"
 				headerClass="ui-panel-header move-handle cursor-move select-none"
@@ -968,7 +969,7 @@
 					{#if !myGroup}<ScrollStrip class="pf-strip" label="Profiler tools" id="profiler-toolbar">{@render controls()}</ScrollStrip>{:else}<span class="flex-1"></span>{/if}
 				{/snippet}
 				{#snippet actions()}
-					<button class="wc-act-text" title="Dock to the bottom" onclick={() => setDocked(true)}><Icon name="panel-bottom" size={16} />Dock</button>
+					<button data-wc-chrome class="wc-act-text" title="Dock to the bottom" onclick={() => setDocked(true)}><Icon name="panel-bottom" size={16} />Dock</button>
 				{/snippet}
 			</WindowChrome>
 			{#if myGroup}

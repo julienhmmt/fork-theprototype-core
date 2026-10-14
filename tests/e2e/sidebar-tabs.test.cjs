@@ -8,6 +8,8 @@
 // persisted. This suite drives it with a REAL pointer: the edge dock, the tab strip, the drag to
 // the other side, a floating window dropped on a column, the resize grip, a reload.
 //
+// 43: section 11 drags the TAB (J7 — a docked window has no header in a sidebar; J4 — a tab dropped in
+// the viewport floats there).
 // Counterfactual (base = 1.32.0): the right-docked list is pushed inward as a SECOND COLUMN when the
 // Inspector opens (section 2 goes red: two panels on screen), there is no tab strip, no drag.
 const h = require('./helpers.cjs');
@@ -270,11 +272,13 @@ h.run(async () => {
 	h.check(!(await strip(page, 'right')), '...and nothing came back on the right');
 
 	// ---------- 11. drag-away undocks one tab; the others keep the column ----------
+	// 43 J7: in a sidebar the window has no header of its own — its TAB is the handle (43 J4: a tab
+	// dropped in the viewport floats the window there)
 	c = await tabCentre(page, 'left', 'flow');
 	await page.mouse.click(c[0], c[1]);
 	await page.waitForTimeout(300);
 	const flowD = await probe(page, '#flow-window');
-	await drag(page, [flowD.x + 60, flowD.y + 14], [flowD.x + 520, flowD.y + 220], 12);
+	await drag(page, c, [flowD.x + flowD.w + 300, flowD.y + 220], 12);
 	await page.mouse.up();
 	await page.waitForTimeout(400);
 	const flowF = await probe(page, '#flow-window');

@@ -465,15 +465,67 @@
 	pointer-events: none;
 }
 
+/* 43 J7 — A WINDOW DOCKED INTO A SIDEBAR shows no header of its own: the column's TAB is its header
+   (name, ×, menu — SidebarStrips.svelte). WindowChrome's `dockedHead` says which: 'hide' drops the
+   row, 'tools' keeps a row of real tools (search, toolbar) without the chrome — icon, title, label,
+   ✕ and the caller's `data-wc-chrome` pieces ("Dock", "+"). A hand-made header marks itself
+   `data-sb-headless` (whole row) or its pieces `data-wc-chrome`. Its corner resize grip stands down
+   too: the column's own grip sizes every tab. The phone has no sidebars (docking.js stands down on a
+   coarse pointer), so nothing here reaches a phone. */
+[data-docked] .wc-head[data-docked-head='hide'],
+[data-docked] [data-sb-headless],
+[data-docked] .wc-head[data-docked-head='tools'] :is(.wc-icon, .wc-title, .wc-label, .wc-close),
+[data-docked] [data-wc-chrome],
+[data-docked] > .resize-cue,
+[data-docked] > [data-window-grip] {
+	display: none !important;
+}
+/* the column's geometry wins over a window's own width/height bindings (a `style:width` re-applied
+   on a viewport resize would otherwise pull a docked editor out of its column) — docking.js writes
+   the same values inline; these keep them */
+[data-docked='left'],
+[data-docked='right'] {
+	max-width: none !important;
+	max-height: none !important;
+	/* a column member is chrome, under the dock's tab strip and every floating window — the focus
+	   stack re-stamps every window it knows into the 40..44 band on each raise, docked ones too */
+	z-index: var(--z-chrome) !important;
+}
+[data-docked='left'] {
+	top: calc(var(--sb-left-top, 64px) + var(--sb-strip-h, 30px)) !important;
+	left: var(--sb-left-x, 0px) !important;
+	right: auto !important;
+	width: var(--sb-left-w, 320px) !important;
+	height: calc(100vh - var(--sb-left-top, 64px) - var(--sb-strip-h, 30px) - var(--sb-left-bottom, 0px)) !important;
+}
+[data-docked='right'] {
+	top: calc(var(--sb-right-top, 64px) + var(--sb-strip-h, 30px)) !important;
+	left: auto !important;
+	right: 0px !important;
+	width: var(--sb-right-w, 320px) !important;
+	height: calc(100vh - var(--sb-right-top, 64px) - var(--sb-strip-h, 30px) - var(--sb-right-bottom, 0px)) !important;
+}
+
+/* 43 K1 — while a sidebar's grip is held ($lib/sidebars `sidebarResizing`), nothing that follows the column's
+   edge animates: the logo, the profile corner, the dock's ends and the corner stacks land on the edge in the
+   SAME frame as the column (they ease over 0.2 s otherwise, which read as the buttons trailing the drag). */
+:root.sb-resizing *,
+:root.sb-resizing *::before,
+:root.sb-resizing *::after {
+	transition: none !important;
+}
+
 /* 42 I3 — ONE SIDEBAR PER SIDE ($lib/sidebars): only the tab in front of a side's column renders */
 [data-sidebar-hidden] {
 	display: none !important;
 }
-/* the drop highlight while a window or a sidebar tab is dragged to a side: the whole column when
-   the drop adds a tab to it, the edge band when it opens the column */
+/* the drop highlight while a window or a sidebar tab is dragged ($lib/sidebarDrop): a side's whole
+   column ("Add as tab" / "Move to the left side"), the bottom dock ("Move to dock") or the window a
+   tab will float as ("Float here"). 43 J4: on the portal tier — it used to sit at --z-chrome + 2,
+   UNDER an open column's tab strip and every floating window, so a drop there looked silent. */
 .sb-drop-zone {
 	position: fixed;
-	z-index: calc(var(--z-chrome) + 2);
+	z-index: var(--z-portal);
 	pointer-events: none;
 	display: flex;
 	align-items: center;
@@ -484,6 +536,9 @@
 	color: var(--text);
 	font-size: var(--fs-desc);
 	font-weight: 600;
+}
+.sb-drop-zone[data-drop-target='dock'] {
+	border-radius: 0;
 }
 
 /* 42 I6 ($lib/dockHost.js) — a floating window with no docked layout of its own (Objects,

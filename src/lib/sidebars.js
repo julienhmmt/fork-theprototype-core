@@ -89,6 +89,17 @@ export function toggleSidebarFull(side, on) {
 	sidebarFull.update((v) => ({ ...v, [side]: on ?? !v[side] }));
 }
 
+/**
+ * 43 K1 — the side whose column is being RESIZED right now (its grip held), else null. PUBLIC (with
+ * the rest of this module's stores — 43-controls and 43-focus read them): while it is set, <html>
+ * carries `sb-resizing` and nothing that follows the column edge animates (windows.css), so the logo,
+ * the profile corner and the dock land on the edge in the same frame as the column.
+ * @type {import('svelte/store').Writable<Side|null>}
+ */
+export const sidebarResizing = writable(/** @type {Side|null} */ (null));
+if (typeof document !== 'undefined')
+	sidebarResizing.subscribe((v) => document.documentElement.classList.toggle('sb-resizing', !!v));
+
 /** the column width, per side (LOCAL, persisted) */
 export const sidebarWidth = writable({ left: readWidth('left'), right: readWidth('right') });
 /** @param {Side} side @param {number} w @param {boolean=} persist */

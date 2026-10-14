@@ -70,8 +70,15 @@ h.run(async () => {
 	}));
 	h.check(state.flow === 'right' && !state.listShown && flowBox.height > vh * 0.75, `an occupied edge takes a second window as a tab (${JSON.stringify(state)})`);
 
-	// dragging the tab member's header away undocks it; the list is the column again
-	await A.page.mouse.move(flowBox.x + 60, flowBox.y + 14);
+	// 43 J7: a window in a sidebar has no header of its own — its sidebar TAB is the handle
+	const tabAt = (side, key) =>
+		A.page.evaluate(([side, key]) => {
+			const r = document.querySelector(`#sidebar-strip-${side} [data-sidebar-tab="${key}"]`)?.getBoundingClientRect();
+			return r ? { x: r.x + Math.min(30, r.width / 2), y: r.y + r.height / 2 } : null;
+		}, [side, key]);
+	// dragging the tab member's TAB away undocks it (43 J4: dropped in the viewport it floats there); the list is the column again
+	const flowTab = await tabAt('right', 'flow');
+	await A.page.mouse.move(flowTab.x, flowTab.y);
 	await A.page.mouse.down();
 	await A.page.mouse.move(flowBox.x - 300, flowBox.y + 200, { steps: 10 });
 	await A.page.mouse.up();
@@ -89,8 +96,9 @@ h.run(async () => {
 	const flowLeft = await A.page.locator('#flow-window').boundingBox();
 	h.check(flowLeft.x < 4 && flowLeft.height > vh * 0.75, 'flow docks to the left edge');
 
-	// dragging a docked header away undocks
-	await A.page.mouse.move(flowLeft.x + 60, flowLeft.y + 14);
+	// dragging a docked window's TAB away undocks (43 J7: no header in a sidebar)
+	const flowTabL = await tabAt('left', 'flow');
+	await A.page.mouse.move(flowTabL.x, flowTabL.y);
 	await A.page.mouse.down();
 	await A.page.mouse.move(flowLeft.x + 400, flowLeft.y + 200, { steps: 10 });
 	await A.page.mouse.up();

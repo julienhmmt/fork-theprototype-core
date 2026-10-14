@@ -975,6 +975,7 @@
 		<WindowChrome
 			size="tool"
 			bare
+			dockedHead="tools"
 			body={false}
 			title="Image editor"
 			headerClass="ui-panel-header move-handle cursor-move select-none"
@@ -987,7 +988,7 @@
 				<span class="flex-1"></span>
 			{/snippet}
 			{#snippet actions()}
-				<button class="wc-act-text" id="image-editor-dock-btn" title="Dock to the bottom" onclick={() => setDocked(true)}><Icon name="panel-bottom" size={16} />Dock</button>
+				<button data-wc-chrome class="wc-act-text" id="image-editor-dock-btn" title="Dock to the bottom" onclick={() => setDocked(true)}><Icon name="panel-bottom" size={16} />Dock</button>
 			{/snippet}
 		</WindowChrome>
 		{@render editorBody()}
