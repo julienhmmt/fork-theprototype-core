@@ -89,8 +89,11 @@ h.run(async () => {
 			await page.evaluate((side) => {
 				window.__k1 = [];
 				window.__k1On = true;
+				// one sampler per side: the previous side's loop still has a frame queued when __k1On flips back on,
+				// and without its own generation it kept pushing the OTHER column into this side's samples (43-int)
+				const gen = (window.__k1Gen = (window.__k1Gen || 0) + 1);
 				const t = () => {
-					if (!window.__k1On) return;
+					if (!window.__k1On || window.__k1Gen !== gen) return;
 					const col = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(`--sb-${side}-w`));
 					const logo = document.querySelector('.burger')?.getBoundingClientRect();
 					const tr = document.querySelector('.top-right-chrome')?.getBoundingClientRect();
