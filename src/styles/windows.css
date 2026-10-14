@@ -565,6 +565,11 @@
 :root[data-focus='dock']:not(.phone-shell) .tp-dock-panel:not(.hidden) {
 	box-shadow: 0 -24px 0 0 var(--surface-deep);
 }
+/* ...and the tab row stops short of the Exit-focus pill that shares its row (FocusModeExit: right 96 px,
+   ~104 px wide), so a long row of tabs scrolls instead of sliding under it */
+:root[data-focus='dock']:not(.phone-shell) .dt-row {
+	right: 208px;
+}
 /* (html:root outranks phone.css's `:root.phone-shell [data-pd-host]` bottom, which stops at the bar) */
 html:root[data-focus='dock'] [data-pd-host='shown'] {
 	bottom: 0 !important;
