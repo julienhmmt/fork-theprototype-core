@@ -330,8 +330,11 @@ h.run(async () => {
 					const t = await topRow();
 					seq.push(`${name}:${t.docked ? 'own row' : 'centre'}`);
 					h.check(t.hits.length === 0, T + `K4 ${width}px ${name}: the pill (${t.docked ? 'on its own row' : 'centred'}) overlaps nothing on the top row (${t.hits.join(',') || 'clear'}; fits ${Math.round(t.dock?.naturalWidth)} in ${Math.round(t.dock?.available)})`);
-					h.check(t.docked === !!t.dock?.docked && (t.docked || Math.abs((t.pill.left + t.pill.right) / 2 - width / 2) <= 2), T + `K4 ${width}px ${name}: ${t.docked ? 'docked full width' : 'centred on the window'} — the measurement and the page agree`);
-					h.check(t.docked === (t.dock.naturalWidth > t.dock.available || width <= 640), T + `K4 ${width}px ${name}: it docks exactly when it would not fit between the walls (${Math.round(t.dock.left)}..${Math.round(t.dock.right)})`);
+					// the measurement's own reading exists from 43 on (the base has none: its counterfactual is the overlap above)
+					if (t.dock) {
+						h.check(t.docked === !!t.dock.docked && (t.docked || Math.abs((t.pill.left + t.pill.right) / 2 - width / 2) <= 2), T + `K4 ${width}px ${name}: ${t.docked ? 'docked full width' : 'centred on the window'} — the measurement and the page agree`);
+						h.check(t.docked === (t.dock.naturalWidth > t.dock.available || width <= 640), T + `K4 ${width}px ${name}: it docks exactly when it would not fit between the walls (${Math.round(t.dock.left)}..${Math.round(t.dock.right)})`);
+					}
 					if (width === 900) await shot(P, `k4-${width}-${name.replace(' ', '-')}-${theme}`);
 				}
 				if (seq[1].endsWith('own row') && seq[2].endsWith('centre') && seq[3].endsWith('own row')) flipped++;
