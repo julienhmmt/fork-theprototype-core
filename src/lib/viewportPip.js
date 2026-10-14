@@ -1,6 +1,7 @@
 import { writable, get } from 'svelte/store';
 import * as THREE from 'three';
 import { objectsGroup, selectedObjects } from '../stores/sceneStore';
+import { safeStorage } from './safeStorage';
 
 // 43 K5 — THE VIEWPORT PiP. While a docked window is maximized to the FULL window (focus mode
 // 'dock' at full height, $lib/focusMode) the 3D view is covered, so it comes back as a
@@ -20,7 +21,7 @@ const DEFAULT = { w: 400, h: 225 };
 /** @returns {{w: number, h: number}} */
 function readSize() {
 	try {
-		const v = JSON.parse((typeof localStorage !== 'undefined' && localStorage.getItem(KEY)) || 'null');
+		const v = JSON.parse(safeStorage.getItem(KEY) || 'null');
 		if (v && Number.isFinite(v.w) && Number.isFinite(v.h) && v.h >= VIEWPORT_PIP_MIN_H) return { w: v.w, h: v.h };
 	} catch {
 		/* a bad record is the default */
@@ -31,11 +32,8 @@ function readSize() {
 /** the window's size, CSS px (LOCAL, persisted) */
 export const viewportPipSize = writable(readSize());
 viewportPipSize.subscribe((v) => {
-	try {
-		if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, JSON.stringify({ w: Math.round(v.w), h: Math.round(v.h) }));
-	} catch {
-		/* private mode: the size lives for the session */
-	}
+	// safeStorage never throws: in private mode the size lives for the session
+	safeStorage.setItem(KEY, JSON.stringify({ w: Math.round(v.w), h: Math.round(v.h) }));
 });
 
 /** back to the default size (the grip's double-click) */

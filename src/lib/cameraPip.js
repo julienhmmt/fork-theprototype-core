@@ -2,6 +2,7 @@ import { writable, derived, get } from 'svelte/store';
 import { selectedObjects, objectsGroup, isVRMode } from '../stores/sceneStore';
 import { isCameraObject, cameraSpec, aspectRatio } from './cameraObjects';
 import { cameraPreview } from './cameraPreview';
+import { safeStorage } from './safeStorage';
 
 // 16-Q4: the little live PREVIEW WINDOW that appears when you select a camera
 // object — bottom-right, draggable, per-camera opt-out.
@@ -59,21 +60,14 @@ export const PIP_MIN_HEIGHT = 90;
  * @type {import('svelte/store').Writable<number | null>} */
 export const pipHeight = writable(readPipHeight());
 function readPipHeight() {
-	try {
-		const v = Number(typeof localStorage !== 'undefined' ? localStorage.getItem('cameraPip:height') : NaN);
-		return Number.isFinite(v) && v >= PIP_MIN_HEIGHT ? v : null;
-	} catch {
-		return null;
-	}
+	const raw = safeStorage.getItem('cameraPip:height');
+	const v = raw == null ? NaN : Number(raw);
+	return Number.isFinite(v) && v >= PIP_MIN_HEIGHT ? v : null;
 }
 pipHeight.subscribe((v) => {
-	try {
-		if (typeof localStorage === 'undefined') return;
-		if (v == null) localStorage.removeItem('cameraPip:height');
-		else localStorage.setItem('cameraPip:height', String(Math.round(v)));
-	} catch {
-		/* private mode: the size lives for the session */
-	}
+	// safeStorage never throws: in private mode the size lives for the session
+	if (v == null) safeStorage.removeItem('cameraPip:height');
+	else safeStorage.setItem('cameraPip:height', String(Math.round(v)));
 });
 
 /** Window size for a camera's framing (16:9 unless it declares otherwise).
