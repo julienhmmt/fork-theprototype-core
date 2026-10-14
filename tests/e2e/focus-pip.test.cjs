@@ -24,6 +24,8 @@
 //  10  the PiP is a second VIEWPORT: F frames the selection with the PiP camera, clicks select / deselect,
 //      W/E/R (and the viewport's G) arm the gizmo modes without flying the editor camera, W then a drag on
 //      the gizmo IN the PiP moves the selected object (one undo step), Delete deletes
+//  11  unfolded N6 (touch, desktop layout, real CDP touch): the tab menu's Maximize fills the window with the
+//      PiP up; a one-finger drag in the PiP orbits its camera; a tap selects
 //
 // Counterfactual: on origin/feat/42-int the dock stops 72 px below the top and 320 px short of the right
 // edge (the pinned column's room), there is no PiP, and the camera preview has no grip.
@@ -428,6 +430,57 @@ h.run(async () => {
 	const camViews = (await S(page, () => window.__stores.pipViews.pipViewsDebug())).views;
 	h.check(camViews.camera && camViews.camera.frames > 0, `9.5 ...drawn by the same PiP renderer (camera view, ${camViews.camera?.frames} frames)`);
 	await page.screenshot({ path: `${out}/k5-camera-pip-${THEME}.png` });
+
+	// ---- 11. unfolded N6 (touch, desktop layout): the same, with fingers -----------------------------
+	const T = await h.setupPage(browser, 'T', {
+		context: { viewport: { width: 770, height: 850 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2.9 },
+		storage: { flowCodeDocked: 'true', flowDockHeight: '300', theme: THEME }
+	});
+	const tp = T.page;
+	const cdp = await tp.context().newCDPSession(tp);
+	const touch = async (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }] });
+	const tBox = await S(tp, async () => {
+		const s = window.__stores;
+		s.commandsHandler.sceneCommand('/create Box 2 2 2');
+		await new Promise((r) => setTimeout(r, 400));
+		let g;
+		s.objectsGroup.subscribe((v) => (g = v))();
+		const box = g.children[g.children.length - 1];
+		s.objectActions.deselectObject();
+		s.flowCodeClose.set(false);
+		await new Promise((r) => setTimeout(r, 700));
+		s.bottomDock.activateDock('flowcode');
+		await new Promise((r) => setTimeout(r, 900));
+		// the touch way in: the dock tab menu's Maximize
+		s.focusMode.maximizeDockTab('flowcode');
+		return box.uuid;
+	});
+	await tp.waitForTimeout(1200);
+	const tl = await look(tp);
+	await tp.screenshot({ path: `${out}/k5-unfolded-${THEME}.png` });
+	h.check(tl.focus === 'dock' && tl.dock && tl.dock.l === 0 && tl.dock.r === tl.W && tl.dock.b === tl.H && !!tl.pip, `11.1 unfolded N6 (touch): Maximize fills the window and the viewport PiP is up (${JSON.stringify({ dock: tl.dock, pip: tl.pip })})`);
+	const t0 = (await S(tp, () => window.__stores.viewportPip.viewportPipDebug())).camera;
+	const tc = { x: Math.round((tl.pip.l + tl.pip.r) / 2), y: Math.round((tl.pip.t + tl.pip.b) / 2) + 15 };
+	await touch('touchStart', tc.x, tc.y);
+	for (let i = 1; i <= 10; i++) await touch('touchMove', tc.x + i * 9, tc.y + i * 2);
+	await touch('touchEnd', 0, 0);
+	await tp.waitForTimeout(600);
+	const t1 = (await S(tp, () => window.__stores.viewportPip.viewportPipDebug())).camera;
+	h.check(t1.position.some((v, i) => Math.abs(v - t0.position[i]) > 0.05), `11.2 a one-finger drag in the PiP orbits its camera (${JSON.stringify(t0.position.map((n) => +n.toFixed(2)))} -> ${JSON.stringify(t1.position.map((n) => +n.toFixed(2)))})`);
+	const tb = await S(tp, (u) => {
+		let g, view;
+		window.__stores.objectsGroup.subscribe((v) => (g = v))();
+		window.__stores.viewportPip.viewportPipView.subscribe((v) => (view = v))();
+		const o = g.getObjectByProperty('uuid', u);
+		const c = document.querySelector('#viewport-pip canvas').getBoundingClientRect();
+		const p = o.getWorldPosition(o.position.clone()).project(view.camera);
+		return { x: Math.round(c.left + ((p.x + 1) / 2) * c.width), y: Math.round(c.top + ((1 - p.y) / 2) * c.height) };
+	}, tBox);
+	await touch('touchStart', tb.x, tb.y);
+	await touch('touchEnd', 0, 0);
+	await tp.waitForTimeout(500);
+	const tsel = await store(tp, 'selectedObjects');
+	h.check(tsel.length === 1 && tsel[0] === tBox, `11.3 a tap on the box in the PiP selects it (${JSON.stringify(tsel)})`);
 
 	await h.finish(browser);
 });
