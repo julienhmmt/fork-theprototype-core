@@ -80,8 +80,8 @@ h.run(async () => {
 	await page.waitForTimeout(600);
 	const pillW = await rect(page, '.connect-pill');
 	const dockedW = await page.evaluate(() => new Promise((r) => window.__stores.connectDocked.subscribe(r)()));
-	const freeMid = ins.x / 2;
-	h.check(dockedW === false && pillW.w >= 478 && Math.abs(pillW.x + pillW.w / 2 - freeMid) < 4 && pillW.right < cluster.x, `a 480 px Connect pill stays a pill, centred between the edge and the pinned column (docked ${dockedW}, pill ${pillW.x}..${pillW.right}, centre of the free span ${freeMid}, corner buttons from ${cluster.x})`);
+	const freeMid = (logo1.right + cluster.x) / 2;
+	h.check(dockedW === false && pillW.w >= 478 && Math.abs(pillW.x + pillW.w / 2 - freeMid) < 4 && pillW.right < cluster.x, `a 480 px Connect pill stays a pill, centred between the logo and the slid corner buttons (docked ${dockedW}, pill ${pillW.x}..${pillW.right}, gap centre ${freeMid}, corner buttons from ${cluster.x})`);
 	await wide.evaluate((el) => el.remove());
 	await page.evaluate(() => window.dispatchEvent(new Event('resize')));
 	await page.waitForTimeout(400);
@@ -107,6 +107,22 @@ h.run(async () => {
 	h.check(stripL.y === 0 && list.bottom === VH && list.x === 0, `pinned left: top edge to bottom edge (${stripL.y}..${list.bottom})`);
 	h.check(logo.x >= list.right && logo.x - list.right < 20, `the logo slid inward past the left sidebar (logo ${logo.x}, sidebar ..${list.right})`);
 	h.check(Math.abs(dock.x - list.right) < 2 && Math.abs(dock.right - ins.x) < 2, `the dock sits between the two full-height sidebars (${dock.x}..${dock.right})`);
+	// 42-int: BOTH columns pinned with the cloud build's 480 px pill — still a pill, in the gap between the
+	// slid logo and the slid corner buttons, and both columns still start at the top edge
+	{
+		const wide2 = await page.addStyleTag({ content: '.connect-pill { min-width: 480px !important; }' });
+		await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+		await page.waitForTimeout(600);
+		const p2 = await rect(page, '.connect-pill');
+		const c2 = await rect(page, '#notes-toggle');
+		const d2 = await page.evaluate(() => new Promise((r) => window.__stores.connectDocked.subscribe(r)()));
+		const sL = await rect(page, '#sidebar-strip-left');
+		const sR = await rect(page, '#sidebar-strip-right');
+		h.check(d2 === false && p2.x > logo.right && p2.right < c2.x && sL.y === 0 && sR.y === 0, `both pinned: a 480 px pill fits between the logo and the corner buttons and both columns start at the top (docked ${d2}, pill ${p2.x}..${p2.right}, logo ..${logo.right}, buttons ${c2.x}, strips ${sL.y}/${sR.y})`);
+		await wide2.evaluate((el) => el.remove());
+		await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+		await page.waitForTimeout(400);
+	}
 	// the burger menu opens from the logo, above every sidebar
 	await page.locator('#logo-menu').click();
 	await page.waitForTimeout(400);
