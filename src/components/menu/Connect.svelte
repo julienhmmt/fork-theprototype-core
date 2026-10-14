@@ -231,6 +231,25 @@
 		const t = setTimeout(measureDock, 260);
 		return () => clearTimeout(t);
 	});
+	// 43-int: ...and where it REALLY ends. Under load the slide outlasts that 260 ms timer (a frame can take
+	// 250 ms on a busy box), the timer reads the walls mid-slide, and nothing re-measures afterwards — a
+	// ResizeObserver never fires for a box that only MOVES — so the pill stayed centred on the old walls,
+	// over the top-right group. The slide's own end re-measures: a `left`/`right` transition on a wall or
+	// on the corner chrome that carries one (.burger, .top-right-chrome).
+	$effect(() => {
+		const onEnd = (e: TransitionEvent) => {
+			if (e.propertyName !== 'left' && e.propertyName !== 'right') return;
+			const t = e.target;
+			if (!(t instanceof Element)) return;
+			const wall = ['logo-menu', 'touch-tools', 'hud-tr', 'avatar-trigger'].some((id) => {
+				const el = document.getElementById(id);
+				return !!el && (t.contains(el) || el.contains(t));
+			});
+			if (wall) measureDock();
+		};
+		document.addEventListener('transitionend', onEnd, true);
+		return () => document.removeEventListener('transitionend', onEnd, true);
+	});
 	// re-measure after any layout-affecting change (state, drawer, viewport)
 	$effect(() => {
 		connState; // track content-width changes
