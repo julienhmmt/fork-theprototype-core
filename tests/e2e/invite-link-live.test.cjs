@@ -131,16 +131,18 @@ h.run(async () => {
 	await h.eventually(() => lastToasts(D), (t) => t.some((x) => /Could not reach nonexistent\.invalid:4443/.test(x)), 'an unreachable pinned server is reported by name', 30000);
 	await h.eventually(() => serverKind(D), (k) => k === 'public', 'D is back on the server it had (public)', 20000);
 	h.check((await pendingOut(D)).length === 0, 'and nothing was dialled');
-	// the rebuild re-registers on the PUBLIC cloud (an internet round trip, plus an id-collision
-	// retry when the cloud still holds D's registration from section 6) — 20 s was not always
-	// enough on a loaded box. The state is read whole so a red says where it stopped.
+	// the state is read whole so a red says where it stopped (45 s: well past the 8 s switch
+	// timeout plus one capped backoff)
 	await h.eventually(
 		() => D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return { open: !!p.peer?.open, id: p.peer?.id ?? null, disconnected: !!p.peer?.disconnected, destroyed: !!p.peer?.destroyed, idRetries: p.idRetries ?? null }; }),
 		(o) => o.open,
 		'the rebuilt link on the previous server opened',
 		45000
 	);
-	// a red here is load-dependent (2 of 4 runs on a busy box) — print the net log so the next one says why
+	// RED BY AN APP BUG, not by the test (43-tests STATUS "Real bugs" #2, ~half the runs on either server):
+	// the rebuild collides with this peer's own still-held registration ("ID … is taken"), the
+	// collision retry mints a new id, and the link then never opens and never errors. The net log
+	// printed here is the evidence.
 	if (!(await D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return !!p.peer?.open; })))
 		console.log('  net log: ' + JSON.stringify(await D.page.evaluate(() => window.__stores.diagnostics.lines().filter((l) => /net|peer|signal/i.test(JSON.stringify(l))).slice(-15))));
 
