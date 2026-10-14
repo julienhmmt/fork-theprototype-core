@@ -8,9 +8,10 @@
 //                      (and its tap-to-full / back), while the invisible edge drag still resizes.
 // All three default ON (today's phone). LOCAL per-device prefs in safeStorage, absent = on, never
 // replicated or saved into a scene. A leaf (svelte/store + safeStorage) so the kit's SheetGrip can
-// read the grab-handle switch without importing the shell.
+// read the grab-handle switch without importing the shell (uiLayoutsCore is a leaf too).
 import { writable } from 'svelte/store';
 import { safeStorage } from '../safeStorage';
+import { onLayoutRestore } from '../uiLayoutsCore';
 
 /** @param {string} key */
 function onByDefault(key) {
@@ -22,6 +23,8 @@ function onByDefault(key) {
 		// private mode: on
 	}
 	const store = writable(initial);
+	// 42 I8: the switches ride a workspace layout's phone profile (uiLayoutsCore CHROME_KEYS)
+	if (typeof localStorage !== 'undefined') onLayoutRestore(() => store.set(safeStorage.getItem(key) !== '0'));
 	store.subscribe((on) => {
 		try {
 			if (on) safeStorage.removeItem(key);

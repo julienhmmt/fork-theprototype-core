@@ -684,6 +684,22 @@ if (typeof localStorage !== 'undefined') {
   });
 }
 
+/** 42 I10: LIFT THE CORNER BUTTONS ABOVE DOCKED PANELS — `floatingToolbar`'s question asked of
+ * the two round-button STACKS (bottom-left / bottom-right, Controls.svelte). ON, each stack sits
+ * on `--bottom-inset` (the open bottom dock's height) so a docked Node editor / Explorer no
+ * longer covers it; OFF (the DEFAULT, the user's ask) they stay on the viewport floor under the
+ * dock tier, exactly as before. Root class `hud-stacks-lifted` (hud.css) carries it, so the opt-in
+ * sim transport above the right stack rides up with it. LOCAL, persisted, absent = OFF. */
+export const hudStackLift = writable(
+  typeof localStorage !== 'undefined' ? safeStorage.getItem('hudStackLift') === 'true' : false
+);
+if (typeof localStorage !== 'undefined') {
+  hudStackLift.subscribe((v) => {
+    try { safeStorage.setItem('hudStackLift', v ? 'true' : 'false'); } catch { /* */ }
+    if (typeof document !== 'undefined') document.documentElement.classList.toggle('hud-stacks-lifted', !!v);
+  });
+}
+
 /** PINNED: keep the drawer's tab bar (+ status) visible even when the body is
  * collapsed, so it acts as a persistent mini-bar under the pill. Persisted. */
 export const connectDrawerPinned = writable(

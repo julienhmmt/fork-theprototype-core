@@ -137,6 +137,8 @@ export const DEBUG_HOOKS = [
 	// 42 I5: the phone bar list (phoneBar / setBar) and More's three chrome switches
 	['phoneBar', () => import('./ui/phoneBar.js')],
 	['phonePrefs', () => import('./ui/phonePrefs.js')],
+	// 42 I8/I9: the top-right / touch slots (toolbar-slots-42)
+	['toolbarSlots', () => import('./toolbarSlots')],
 	['textSelection', () => import('./textSelection')],
 	['vrRadialMenu', () => import('./vrRadialMenu')],
 	['vrBindings', () => import('./vr/bindings.js')],

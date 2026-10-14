@@ -231,9 +231,15 @@
  * the buttons they replace. Edit positions outlines every placeholder (and jiggles it, unless
  * the user asked for less motion), puts a small red "−" on each removable one, a small green
  * "+" on every empty place, and a round green ✓ at the bar's top right. */
+/* 42 I10: "Lift corner buttons above docked panels" (`hudStackLift`, default off) sets the root
+   class below, and the stacks — and the sim transport riding the right one — add the open dock's
+   height to their bottom. Off, --hud-stack-lift is 0 and every number is what it was. */
+:root.hud-stacks-lifted {
+	--hud-stack-lift: var(--bottom-inset, 0px);
+}
 .hud-stack {
 	position: fixed;
-	bottom: 16px;
+	bottom: calc(var(--hud-stack-lift, 0px) + 16px);
 	z-index: var(--z-chrome);
 	display: flex;
 	flex-direction: column-reverse;
@@ -255,11 +261,11 @@
 /* the opt-in sim transport rides above whatever the right stack holds (Controls publishes the
    count); an id + this file beat SimControls' bottom-[112px] utility */
 #sim-controls {
-	bottom: calc(16px + var(--hud-stack-right-n, 2) * (var(--hud-fab) + 4px) + 4px);
+	bottom: calc(var(--hud-stack-lift, 0px) + 16px + var(--hud-stack-right-n, 2) * (var(--hud-fab) + 4px) + 4px);
 }
 @media (max-width: 600px) {
 	#sim-controls {
-		bottom: calc(74px + var(--hud-stack-right-n, 2) * (var(--hud-fab) + 4px) + 4px);
+		bottom: calc(var(--hud-stack-lift, 0px) + 74px + var(--hud-stack-right-n, 2) * (var(--hud-fab) + 4px) + 4px);
 	}
 }
 .hud-edit-item {
@@ -374,6 +380,14 @@
 }
 #controls-pill .hud-edit-add {
 	border-radius: var(--radius-button);
+}
+/* 42 I9: the touch tools' round buttons carry their own fill (TouchTools' .tt-btn) — an empty
+   place there reads like every other one */
+#touch-tools .hud-edit-add {
+	background: transparent;
+	border: 1.5px dashed color-mix(in srgb, var(--ink-good) 70%, transparent);
+	box-shadow: none;
+	color: var(--ink-good);
 }
 .hud-edit-add:hover,
 .hud-edit-add:focus-visible {

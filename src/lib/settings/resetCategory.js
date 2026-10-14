@@ -31,6 +31,7 @@ import {
 	touchTools,
 	floatingToolbar,
 	toolbarAlwaysOnTop,
+	hudStackLift,
 	showToast
 } from '../../stores/appStore.js';
 import {
@@ -138,6 +139,7 @@ const RESETS = {
 		showRoomsButton.set(true);
 		floatingToolbar.set(true);
 		toolbarAlwaysOnTop.set(false);
+		hudStackLift.set(false);
 		touchTools.set(touchToolsDefault());
 		mobileUndockAllowed.set(false);
 		advancedMode.set(false);

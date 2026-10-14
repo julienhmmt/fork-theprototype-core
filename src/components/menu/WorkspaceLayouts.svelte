@@ -90,6 +90,10 @@
 						>
 							<span class="wl-check" aria-hidden="true">{#if $activeLayoutId === layout.id}<Icon name="check" size={16} />{/if}</span>
 							<span class="wl-name">{layout.name}</span>
+							<!-- 42 I8: which toolbars the layout carries — the desktop one, the folded phone's, or
+							     both (each saved from its own screen; a save from the other keeps this one) -->
+							{#if layout.chrome?.desktop}<span class="wl-prof" data-profile="desktop" title="Carries the desktop toolbar, corner buttons and top-right group"><Icon name="monitor" size={16} aria-hidden="true" /></span>{/if}
+							{#if layout.chrome?.phone}<span class="wl-prof" data-profile="phone" title="Carries the phone bar"><Icon name="smartphone" size={16} aria-hidden="true" /></span>{/if}
 						</button>
 						<button class="wl-icon" title="Rename" aria-label="Rename {layout.name}" onclick={() => startRename(layout)}><Icon name="pencil" size={16} aria-hidden="true" /></button>
 						<button class="wl-icon wl-danger" title="Delete" aria-label="Delete {layout.name}" onclick={() => remove(layout)}><Icon name="trash-2" size={16} aria-hidden="true" /></button>
@@ -98,7 +102,7 @@
 			{/each}
 		</ul>
 	{:else}
-		<p class="wl-empty">No saved layouts yet. Arrange your windows, then save the arrangement under a name.</p>
+		<p class="wl-empty">No saved layouts yet. Arrange your windows and toolbar, then save the arrangement under a name.</p>
 	{/if}
 	<form
 		class="wl-save"
@@ -116,7 +120,7 @@
 			bind:value={name}
 			onkeydown={(e) => e.stopPropagation()}
 		/>
-		<button id="{idPrefix}-save" type="submit" class="wl-btn" title="Save the current windows, docks and sizes under this name"><Icon name="save" size={16} aria-hidden="true" /> Save</button>
+		<button id="{idPrefix}-save" type="submit" class="wl-btn" title="Save the current windows, docks, sizes and toolbar under this name — the toolbar of this screen (desktop or phone); the other one's, saved under the same name, is kept"><Icon name="save" size={16} aria-hidden="true" /> Save</button>
 	</form>
 	{#if error}<p class="wl-error" role="alert">{error}</p>{/if}
 </div>
@@ -174,6 +178,14 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.wl-prof {
+		flex: none;
+		display: inline-flex;
+		color: var(--text-faint);
+	}
+	.wl-name + .wl-prof {
+		margin-left: auto;
 	}
 	.wl-icon {
 		flex: none;

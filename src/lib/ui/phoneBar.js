@@ -18,6 +18,7 @@
 // and removed. Pure helpers + stores; tests/unit/phoneBar.test.js.
 import { writable } from 'svelte/store';
 import { safeStorage } from '../safeStorage';
+import { onLayoutRestore } from '../uiLayoutsCore';
 
 /** More ▸ Windows, in the order the sheet lists them (Play shows there only while off the bar) */
 export const WINDOW_ITEMS = ['play', 'add', 'more', 'objects', 'stats', 'chat', 'explorer', 'flow', 'animation', 'scene', 'ai', 'notes', 'flowcode', 'shader', 'uv', 'hud', 'profiler', 'code'];
@@ -178,3 +179,7 @@ export function setBar(list) {
 	phoneBar.set(next);
 	save(next);
 }
+
+// 42 I8: a workspace layout carries the phone bar (its `phone` chrome profile: STORAGE_KEY, listed
+// in uiLayoutsCore's CHROME_KEYS with phonePrefs' three switches) — re-read it when one is applied
+if (typeof localStorage !== 'undefined') onLayoutRestore(() => phoneBar.set(loadBar()));
