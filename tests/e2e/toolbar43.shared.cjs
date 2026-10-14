@@ -443,7 +443,7 @@ h.run(async () => {
 	}
 
 	// ═══ OPPO Find N6 UNFOLDED (770×850, DPR 2.9) — REAL touch ════════════════════════════════════
-	if (want('j8menu') || want('j5') || want('j10')) {
+	if (want('j2') || want('j8menu') || want('j5') || want('j10')) {
 		const A = await h.setupPage(browser, 'unfolded', {
 			context: { viewport: { width: 770, height: 850 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2.9 },
 			storage: { theme: 'dark', toastsInDrawerOnly: 'true', toursSeen: '{"editor-touch":true,"editor":true}' }
@@ -487,6 +487,13 @@ h.run(async () => {
 			await closeMenus(P);
 			await sidebar(P, { open: false });
 			await setBar(P, null, A);
+		}
+		if (want('j2')) {
+			// a long press on the "…" opens the toolbar menu (Hide button included), as a right-click does
+			await hold(await centre(P.locator('#toolbar-customize')));
+			const rows = (await menuRows(P)).map((r) => r.label);
+			h.check(rows.includes('Hide button') && rows.includes('Edit positions'), T + `J2: a long press on the "…" opens the toolbar menu (${rows.join(' | ')})`);
+			await closeMenus(P);
 		}
 		if (want('j8menu')) {
 			// a long press on a GAP between two cells opens the bar's menu
