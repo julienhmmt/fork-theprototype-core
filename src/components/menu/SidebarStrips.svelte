@@ -36,6 +36,7 @@
 		toggleSidebarFull,
 		setSidebarWidth,
 		sidebarWidth,
+		sidebarResizing,
 		inspectorTabTitle
 	} from '$lib/sidebars';
 	import { inspectorKind } from '../../stores/appStore.js';
@@ -186,6 +187,7 @@
 		e.preventDefault();
 		sizing = { side, x0: e.clientX, w0: $sidebarWidth[side], id: e.pointerId };
 		(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+		sidebarResizing.set(side); // 43 K1: the edge-followers stop animating for the gesture
 	}
 	function onGripMove(e: PointerEvent) {
 		if (!sizing || e.pointerId !== sizing.id) return;
@@ -196,6 +198,13 @@
 		if (!sizing || e.pointerId !== sizing.id) return;
 		setSidebarWidth(sizing.side, $sidebarWidth[sizing.side], true);
 		sizing = null;
+		sidebarResizing.set(null);
+	}
+	function onGripCancel() {
+		if (!sizing) return;
+		setSidebarWidth(sizing.side, $sidebarWidth[sizing.side], true);
+		sizing = null;
+		sidebarResizing.set(null);
 	}
 	/** double-click forgets the width (back to the default) */
 	function onGripReset(side: Side) {
@@ -293,6 +302,8 @@
 				onpointerdown={(e) => onGripDown(e, side)}
 				onpointermove={onGripMove}
 				onpointerup={onGripUp}
+				onpointercancel={onGripCancel}
+				onlostpointercapture={onGripCancel}
 				ondblclick={() => onGripReset(side)}
 			></div>
 		{/if}
@@ -428,12 +439,30 @@
 		color: var(--accent-text);
 		background: var(--accent-soft);
 	}
+	/* 43 K2: above the column's own panel (the Inspector sits on --z-side-panel) — the grip straddles the
+	   column's inner edge, and its inner half used to be UNDER the panel, so a finger there pressed the
+	   panel instead of the grip; wider under a finger */
 	.sb-grip {
 		position: fixed;
-		z-index: var(--z-dock);
+		z-index: calc(var(--z-side-panel) + 1);
 		width: 6px;
 		cursor: ew-resize;
 		touch-action: none;
+	}
+	/* under a DOCKED Connect bar the column's panel rides --z-chrome-top + 1 (ui.css), so the grip does too */
+	:global(:root.connect-docked) .sb-grip {
+		z-index: calc(var(--z-chrome-top) + 2);
+	}
+	@media (pointer: coarse) {
+		.sb-grip {
+			width: 14px;
+		}
+		#sidebar-grip-left {
+			margin-left: -4px;
+		}
+		#sidebar-grip-right {
+			margin-right: -4px;
+		}
 	}
 	.sb-ghost {
 		position: fixed;

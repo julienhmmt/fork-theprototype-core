@@ -200,6 +200,9 @@
 <style>
 	.ts-wrap {
 		position: relative;
+		/* 43 K2: a select in a flex row may shrink with its column — its label ellipsizes rather than
+		   pushing the row (and a narrow sidebar) wider than it is */
+		min-width: 0;
 		/* a flex column so the button can stretch to the wrap's height when the wrap
 		   is itself stretched by a flex row (e.g. beside a taller label box) — keeps
 		   the control vertically aligned with its setting label instead of sitting
@@ -213,6 +216,7 @@
 		justify-content: space-between;
 		gap: 0.5rem;
 		width: 100%;
+		min-width: 0;
 		flex: 1 1 auto;
 		min-height: 2.25rem;
 		padding: 0.3rem 0.55rem;
@@ -229,6 +233,7 @@
 		cursor: not-allowed;
 	}
 	.ts-label {
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;

@@ -506,6 +506,15 @@
 	height: calc(100vh - var(--sb-right-top, 64px) - var(--sb-strip-h, 30px) - var(--sb-right-bottom, 0px)) !important;
 }
 
+/* 43 K1 — while a sidebar's grip is held ($lib/sidebars `sidebarResizing`), nothing that follows the column's
+   edge animates: the logo, the profile corner, the dock's ends and the corner stacks land on the edge in the
+   SAME frame as the column (they ease over 0.2 s otherwise, which read as the buttons trailing the drag). */
+:root.sb-resizing *,
+:root.sb-resizing *::before,
+:root.sb-resizing *::after {
+	transition: none !important;
+}
+
 /* 42 I3 — ONE SIDEBAR PER SIDE ($lib/sidebars): only the tab in front of a side's column renders */
 [data-sidebar-hidden] {
 	display: none !important;

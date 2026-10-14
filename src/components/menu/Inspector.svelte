@@ -1633,7 +1633,7 @@
 	data-sidebar-side={sheetMode ? null : insSide}
 	data-sidebar-hidden={insCovered ? '' : null}
 	transition:fly={insTransition}
-	class={'tp-ui ins-shell fixed inset-e-0 top-16 z-(--z-side-panel) w-80 overflow-y-auto p-4 pt-0' + (bottomRounded ? ' ins-rounded-bl' : '')}
+	class={'tp-ui ins-shell fixed inset-e-0 top-16 z-(--z-side-panel) w-80 overflow-y-auto overflow-x-hidden touch-pan-y p-4 pt-0' + (bottomRounded ? ' ins-rounded-bl' : '')}
 	use:minimalScroll
 	id="inspector"
 	data-key-scope="panel"
@@ -4610,6 +4610,12 @@
 		border-right: 0;
 		border-top-left-radius: var(--radius-window);
 		box-shadow: var(--shadow-window);
+	}
+	/* 43 K2: the panel is never wider than its column (a sidebar goes down to 250px): it cannot scroll
+	   sideways (overflow-x-hidden + touch-pan-y on the shell), and a label + chips / toggles row WRAPS
+	   onto a second line instead of running off the edge (Grid ▸ Follow, Physics ▸ Lock rotation …) */
+	.ins-shell :global(.ui-row) {
+		flex-wrap: wrap;
 	}
 	.ins-rounded-bl {
 		border-bottom-left-radius: var(--radius-window);
