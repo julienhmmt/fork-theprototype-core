@@ -118,7 +118,7 @@ h.run(async () => {
 	// plus Play. It reads checked (it IS on the bar) and carries no toggle, because
 	// there is no toolbar without a way to press play.
 	h.check(
-		menu.filter((r) => r.checked).length === 20, // 37 R1: + Pivot; 41 G1: + the four corner buttons (Left/Right corner rows); 42 I9: + Top right (3) + Touch tools (3)
+		menu.filter((r) => r.checked).length === 21, // 37 R1: + Pivot; 41 G1: + the four corner buttons (Left/Right corner rows); 42 I9: + Top right (3) + Touch tools (3); 43 J2: + the "…" row
 		`Customize lists the nine buttons AND the play well as on the bar (${menu.filter((r) => r.checked).length})`
 	);
 	h.check(
@@ -232,14 +232,14 @@ h.run(async () => {
 	await cellMenu(A.page, 'Explorer');
 	await pick(A.page, 'Customize toolbar…');
 	h.check(
-		(await rows(A.page)).filter((r) => r.checked).length === 19, // 41 G1: + 4 corner rows; 42 I9: + 3 top-right + 3 touch-tools rows
+		(await rows(A.page)).filter((r) => r.checked).length === 20, // 41 G1: + 4 corner rows; 42 I9: + 3 top-right + 3 touch-tools rows; 43 J2: + the "…"
 		'premise: Customize opens showing the hidden button unchecked (8 buttons + Play)'
 	);
 	await pick(A.page, 'Reset toolbar');
 	// W1: Reset is `keepOpen` too, so the list itself has to show the restored roster
 	h.check(await menuOpen(A.page), 'Reset toolbar leaves the Customize list up');
 	h.check(
-		(await rows(A.page)).filter((r) => r.checked).length === 20, // 41 G1: + 4 corner rows; 42 I9: + 6
+		(await rows(A.page)).filter((r) => r.checked).length === 21, // 41 G1: + 4 corner rows; 42 I9: + 6; 43 J2: + the "…"
 		`and the rows re-rendered IN PLACE — all nine read checked again (${(await rows(A.page)).filter((r) => r.checked).length})`
 	);
 	titles = await barTitles(A.page);

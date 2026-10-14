@@ -82,8 +82,9 @@ h.run(async () => {
 		let d = await draft(P);
 		h.check(d.editing && d.bar.length === 10 && d.left.join() === 'ai,add' && d.right.join() === 'chat,mic', T + `edit mode draws the whole layout as placeholders (${JSON.stringify(d)})`);
 		const removers = await P.evaluate(() => [...document.querySelectorAll('.hud-edit-remove')].map((b) => b.closest('[data-edit-wrap]')?.dataset.editWrap));
-		// 42 I9: + the top-right group's three (notes, notifications, peers)
-		h.check(removers.length === 16 && !removers.includes('__spacer'), T + `a red "−" on every placeholder but Play (${removers.length})`);
+		// 42 I9: + the top-right group's three (notes, notifications, peers); 43 J2: + the "…";
+		// 43 J12: + the row beside the logo (undo, redo, multi-select), drawn on a mouse desktop too
+		h.check(removers.length === 20 && !removers.includes('__spacer') && removers.includes('__more'), T + `a red "−" on every placeholder but Play (${removers.length})`);
 		const plusLeft = await P.locator('#hud-stack-left .hud-edit-add').count();
 		const plusRight = await P.locator('#hud-stack-right .hud-edit-add').count();
 		h.check(plusLeft === 1 && plusRight === 1, T + `each corner shows ONE green "+" for its next place (${plusLeft}, ${plusRight})`);
