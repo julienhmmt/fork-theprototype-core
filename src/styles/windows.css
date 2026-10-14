@@ -485,3 +485,68 @@
 	font-size: var(--fs-desc);
 	font-weight: 600;
 }
+
+/* 42 I6 ($lib/dockHost.js) — a floating window with no docked layout of its own (Objects,
+   Statistics, the Live profiler, Chat, the AI assistant) DOCKED on a wider screen: the dock
+   frame (PhoneDockHost, published as --pd-top = its body's top edge) hosts the element, the way
+   the phone hosts its content tabs (phone.css section 2b). It sits over the frame's body, under
+   floating windows; a hosted tab that is open but not in front stays mounted and hidden; its
+   own corner grip stands down (the dock's top edge resizes it). */
+:root:not(.phone-shell) [data-pd-host] {
+	position: fixed !important;
+	left: 0 !important;
+	right: 0 !important;
+	top: var(--pd-top) !important;
+	bottom: 0 !important;
+	width: auto !important;
+	height: auto !important;
+	min-width: 0 !important;
+	min-height: 0 !important;
+	max-width: none !important;
+	max-height: none !important;
+	margin: 0 !important;
+	transform: none !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+	outline: none !important;
+	z-index: calc(var(--z-dock) + 1) !important;
+	background: var(--surface-1);
+}
+:root:not(.phone-shell) [data-pd-host='hidden'] {
+	display: none !important;
+}
+:root:not(.phone-shell) [data-pd-host] .dw-resize,
+:root:not(.phone-shell) [data-pd-host] .resize-handle,
+:root:not(.phone-shell) [data-pd-host] [data-window-grip] {
+	display: none !important;
+}
+
+/* 42 I14 — FOCUS MODE ($lib/focusMode.js; `data-focus` on <html>). The chrome goes the way Play
+   takes #editor-chrome — display:none, so nothing unmounts and no panel closes; leaving restores
+   exactly what was there. What stays: the toasts, the spectator banner, menus (portaled to <body>),
+   modals and the command palette, the FPS counter, and focus mode's own exit pill (#focus-exit).
+   'viewport' = the 3D view alone (its dock inset lifted). 'dock' = the docked window in front fills
+   the browser window below a band for the exit pill and the dock's own tab strip. */
+:root[data-focus='viewport'] #editor-chrome > :not(.toasts-stack, .spectator-banner),
+:root[data-focus='viewport'] :is(.tp-window, .tp-dock-panel, [data-pd-host], #chat, #ai-assistant, .ps, .toolbox, #game-chip) {
+	display: none !important;
+}
+:root[data-focus='viewport'] .viewport {
+	bottom: 0 !important;
+}
+:root[data-focus='dock'] #editor-chrome > :not(.toasts-stack, .spectator-banner, #phone-dock, [data-pd-host='shown']),
+:root[data-focus='dock'] :is(.tp-window, #chat, #ai-assistant, .ps, .toolbox, #game-chip):not([data-pd-host='shown'], :has([data-pd-host='shown'])) {
+	display: none !important;
+}
+/* the dock takes the window's height for the duration ($lib/focusMode sets `dockHeight` to the window
+   less the pill's band and the 24px tab strip riding above the panel); on a phone the bar it normally
+   stops at is hidden, so it reaches the bottom edge */
+:root[data-focus='dock'] .tp-dock-panel:not(.hidden) {
+	bottom: 0 !important;
+	max-height: none !important;
+}
+/* (html:root outranks phone.css's `:root.phone-shell [data-pd-host]` bottom, which stops at the bar) */
+html:root[data-focus='dock'] [data-pd-host='shown'] {
+	bottom: 0 !important;
+}

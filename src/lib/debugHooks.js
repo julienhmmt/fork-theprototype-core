@@ -159,6 +159,9 @@ export const DEBUG_HOOKS = [
 	['bottomDock', () => import('./bottomDock')],
 	['dockMenu', () => import('./dockMenu')],
 	['phoneDock', () => import('./phoneDock')],
+	// 42 I6/I14: the hosted dock tabs, focus mode
+	['dockHost', () => import('./dockHost')],
+	['focusMode', () => import('./focusMode')],
 	['explorerDrop', () => import('./explorerDrop')],
 	['assetShare', () => import('./assetShare')],
 	['soundRuntime', () => import('./soundRuntime')],

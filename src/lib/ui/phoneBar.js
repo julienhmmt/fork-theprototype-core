@@ -24,7 +24,7 @@ export const WINDOW_ITEMS = ['play', 'add', 'more', 'objects', 'stats', 'chat', 
 /** More ▸ Edit: the selection tools and the history, every one placeable on the bar */
 export const EDIT_ITEMS = ['inspect', 'move', 'rotate', 'scale', 'undo', 'redo', 'multiselect', 'interact'];
 /** More ▸ Tools & View */
-export const VIEW_ITEMS = ['tools'];
+export const VIEW_ITEMS = ['tools', 'focus'];
 
 /** every key the bar may hold */
 export const BAR_CATALOG = [...WINDOW_ITEMS, ...EDIT_ITEMS, ...VIEW_ITEMS];

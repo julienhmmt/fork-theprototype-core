@@ -37,6 +37,7 @@ import { recallBookmark } from './cameraBookmarks';
 import { backToStartView } from './startView';
 import { snapTargets } from './snapping';
 import { cycleViewMode } from './viewMode'; // 37 R18
+import { toggleFocusAtPointer, focusActive, exitFocus } from './focusMode'; // 42 I14 (a leaf: appStore/sceneStore/bottomDock)
 import { togglePanel, toggleDock } from './panelToggles';
 // Phase 5: the play FAB's own entry point. playMode.js imports sceneStore +
 // svelte/store ONLY (it says so at the top of the file, and that is deliberate),
@@ -655,6 +656,32 @@ export const shortcuts = [
 		action: () => {
 			showToast('View: ' + cycleViewMode());
 		}
+	},
+	{
+		// 42 I14: FOCUS MODE, Blender's "maximize area" key. GLOBAL, so it answers over the dock and
+		// over chrome as well as the viewport — the area under the POINTER decides what maximizes
+		// (focusMode.areaAt). The UV editor and the animation timeline keep Ctrl+Space for keyboard
+		// navigation INSIDE their focused panes (their capture handlers stop the event first — the
+		// scoped-beats-global rule), so there the View menu / the tab menu's Maximize reach it.
+		id: 'view.focus',
+		keys: 'Ctrl+Space',
+		group: 'View',
+		scope: 'global',
+		label: 'Focus mode — maximize the area under the pointer (the viewport alone, or a docked window filling the window); again to restore',
+		action: () => toggleFocusAtPointer()
+	},
+	{
+		// 42 I14: Esc restores too — only WHILE focus mode is on (`when`), so Escape stays every
+		// other handler's the rest of the time; not rebindable (Escape belongs to a dozen handlers)
+		id: 'view.focus-exit',
+		keys: 'Escape',
+		group: 'View',
+		scope: 'global',
+		label: 'Leave focus mode',
+		fixed: true,
+		fixedReason: 'Escape always leaves focus mode',
+		when: () => focusActive(),
+		action: () => exitFocus()
 	},
 	{
 		id: 'voice.push-to-talk',

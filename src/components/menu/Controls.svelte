@@ -49,6 +49,7 @@
 	import { tabbable, groupRectOf, moveGroupOf, resizeGroup } from '$lib/windowTabs';
 	import { clampWinSize, clampResize, anchorOf } from '$lib/windowSize';
 	import { dockable } from '$lib/docking';
+	import { bottomDockable } from '$lib/bottomDockDrop';
 	import { visibleDockKey, dockOccupants, bottomInset, FLOW_FAMILY, armDockMode, DOCK_TITLES } from '$lib/bottomDock';
 	import { togglePanel } from '$lib/panelToggles';
 	import { requestPlay, willEnterXR, willEnterAR, xrSessionFailed, playAsItems } from '$lib/playMode';
@@ -859,6 +860,9 @@
 			const t = /** @type {any} */ (e.target);
 			if (e.button === 0 && isHeaderDrag(t)) {
 				moving = true;
+				// 42 I6: start from where the window IS — a tab tear-off or the dock (dockHost) may
+				// have placed it since the last drag
+				if (!grouped() && !node.dataset.docked) ({ left, top } = { left: node.offsetLeft, top: node.offsetTop });
 			}
 		});
 
@@ -2759,6 +2763,7 @@
 <div id="object-list" data-key-scope="objects" role="region" aria-label="Object list" class={($objectListClose ? 'hidden' : 'flex') + ' flex-col ui-panel tp-ui tp-window overflow-hidden'} use:dragMe use:focusStack={'objects'}
 	use:tabbable={{ key: 'objects', title: 'Objects', openStore: objectListClose, isOpen: (v) => !v, close: () => objectListClose.set(true) }}
 	use:dockable={{ key: 'objects' }}
+	use:bottomDockable={{ key: 'objects' }}
 	style="z-index: var(--z-window)">
 	<!-- dropping a row on the header moves the object back to the scene root -->
 	<!-- 38 R6: the one window header (ui/WindowChrome, tool size). It is still the move

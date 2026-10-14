@@ -48,11 +48,14 @@
 	// sheets) is drawn over the same components — see PhoneShell.svelte
 	import PhoneShell from './phone/PhoneShell.svelte'
 	import PhoneDockHost from './phone/PhoneDockHost.svelte'
+	import FocusModeExit from './menu/FocusModeExit.svelte'
 	import { phoneShell } from '$lib/ui/phoneShell.js'
 </script>
 
 <Chat />
 <AiAssistant />
+<!-- 42 I14: focus mode's exit pill + wiring (outside #editor-chrome, which focus mode hides) -->
+<FocusModeExit />
 <MeshGenModal />
 <MeshJobsCard />
 

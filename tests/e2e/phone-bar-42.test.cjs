@@ -110,7 +110,7 @@ h.run(async () => {
 	h.check(JSON.stringify(sec('Windows').slice(0, 4)) === JSON.stringify(['add', 'more', 'objects', 'stats']), `More ▸ Windows starts + Add, More, Objects, Statistics (${JSON.stringify(sec('Windows').slice(0, 6))})`);
 	h.check(!sec('Windows').includes('play'), 'Play is not in More while it is on the bar');
 	h.check(['inspect', 'move', 'rotate', 'scale', 'undo', 'redo', 'multiselect', 'interact'].every((k) => sec('Edit').includes(k)), `More ▸ Edit holds Inspect, Move, Rotate, Scale + Undo, Redo, Select multiple, Interact (${JSON.stringify(sec('Edit'))})`);
-	h.check(JSON.stringify(sec('Tools & View')) === JSON.stringify(['tools']) && (await read(() => document.getElementById('ps-viewport-tools')?.textContent?.trim())) === 'Tools & View', 'More ▸ Tools & View: one placeable tile named "Tools & View"');
+	h.check(JSON.stringify(sec('Tools & View')) === JSON.stringify(['tools', 'focus']) && (await read(() => document.getElementById('ps-viewport-tools')?.textContent?.trim())) === 'Tools & View', 'More ▸ Tools & View: placeable tiles "Tools & View" + (42 I14) "Focus mode"');
 	const foot = await read(() => {
 		const body = document.getElementById('ps-more-sheet');
 		const hint = document.getElementById('ps-more-hint');

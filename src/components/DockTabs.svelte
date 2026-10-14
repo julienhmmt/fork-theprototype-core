@@ -40,8 +40,8 @@
 	// strip it UNDOCKS that view into a floating window. Both are the fast paths for
 	// what the tab's right-click menu already offered in words, which is what keeps the
 	// feature reachable on a device that cannot drag.
-	import { dockTabs, bottomDockActive, activateDock, dockMinimized, reorderDockTabs, armDockMode, undockButtonMode, PHONE_DOCK_TABS } from '$lib/bottomDock';
-	import { dockAddItems, dockTabItems, closeDockView, undockFromDock, undockInto } from '$lib/dockMenu';
+	import { dockTabs, bottomDockActive, activateDock, dockMinimized, reorderDockTabs, armDockMode, undockButtonMode } from '$lib/bottomDock';
+	import { dockAddItems, dockTabItems, closeDockView, undockFromDock, undockInto, canUndockTab } from '$lib/dockMenu';
 	import { windowAt, nodeOf } from '$lib/windowTabs';
 	import { phoneShell } from '$lib/ui/phoneShell.js';
 	import { mobileUndockAllowed } from '../stores/appStore.js';
@@ -173,8 +173,9 @@
 			if (!state || !dragged) return; // never travelled: the click activates the tab
 			draggedAt = performance.now();
 			// 41b H1: a phone content tab has nowhere to float — dragged clear of the strip it
-			// simply stays (it still reorders inside the strip)
-			if ((join || out) && PHONE_DOCK_TABS.includes(dragged)) return;
+			// simply stays (it still reorders inside the strip). 42 I6: a hosted window docked on a
+			// wider screen (the Objects list) floats out like any other tab (`canUndockTab`)
+			if ((join || out) && !canUndockTab(dragged)) return;
 			if (join) {
 				// 40 F10: dropped onto/into a floating window — it joins that window as a tab
 				// (forms a group) instead of floating on its own

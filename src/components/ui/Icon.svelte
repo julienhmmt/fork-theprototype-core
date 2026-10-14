@@ -118,6 +118,7 @@
 		Magnet,
 		Map as MapIcon,
 		Maximize2,
+		Minimize2,
 		Menu,
 		MessageSquare,
 		MessageSquareWarning, // 37 R20: Report a problem
@@ -333,6 +334,7 @@
 		magnet: Magnet,
 		map: MapIcon,
 		'maximize-2': Maximize2,
+		'minimize-2': Minimize2,
 		menu: Menu,
 		'message-square': MessageSquare,
 		'message-square-warning': MessageSquareWarning,

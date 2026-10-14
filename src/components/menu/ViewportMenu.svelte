@@ -18,6 +18,9 @@
 	import { togglePanel } from '$lib/panelToggles';
 	import { trackpadMode } from '$lib/trackpadNav';
 	import { helpersInPlay } from '$lib/helperLayer';
+	// 42 I14: View ▸ Focus mode (the key's label follows a rebind)
+	import { focusMode, toggleViewportFocus } from '$lib/focusMode';
+	import { bindingOf } from '$lib/shortcuts';
 	import { safeStorage } from '$lib/safeStorage';
 	import { openRecording } from '$lib/recording/recordingStores.js';
 
@@ -315,7 +318,17 @@
 						'Ambient occlusion, colour grading, camera effects and shader materials (Configure Scene ▸ Scene look)',
 					action: () => openSceneSection('Scene look')
 				},
-				{ label: 'Screenshot', icon: 'camera', action: screenshot }
+				{ label: 'Screenshot', icon: 'camera', action: screenshot },
+				{
+					// 42 I14: the menu way into focus mode (a menu has no "area under the pointer", so
+					// this is the viewport's; over a docked window the key or the tab menu's Maximize)
+					label: 'Focus mode',
+					icon: 'maximize-2',
+					checked: !!$focusMode,
+					hint: bindingOf('view.focus') || 'Ctrl+Space',
+					tooltip: 'Hide every panel and window until you leave (Esc or the key again): the 3D view alone',
+					action: () => toggleViewportFocus()
+				}
 			]
 		},
 		// A5: module toolboxes — the SAME rows the sidebar's Modules section renders,

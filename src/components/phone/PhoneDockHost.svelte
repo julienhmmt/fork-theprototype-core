@@ -14,21 +14,38 @@
 	//
 	// Always mounted with the editor chrome: the posture watcher has to see a fold / unfold while
 	// the phone shell itself is unmounted (in Play, say).
+	//
+	// 42 I6 — THE HOST ON EVERY POSTURE. On a wider screen the same frame hosts the floating
+	// windows that dock without a docked layout of their own ($lib/dockHost: Objects, Statistics,
+	// the Live profiler, Chat, the AI assistant) — same re-seating rule, a desktop dock panel's
+	// box (top-edge resize, full width), rendered only while one of them is the tab in front.
 	import { onMount, tick } from 'svelte';
 	import DockTabs from '../DockTabs.svelte';
 	import EmptyState from '../ui/EmptyState.svelte';
 	import WorkspaceLayouts from '../menu/WorkspaceLayouts.svelte';
 	import { dockHeight } from '$lib/bottomDock';
 	import { phoneDockShown, phoneTabsOpen, startPhoneDock } from '$lib/phoneDock';
+	import { HOSTED, hostedTabsOpen, hostedDockShown, startDockHost } from '$lib/dockHost';
 	import { phoneShell } from '$lib/ui/phoneShell.js';
 	import { selectedObjects } from '../../stores/sceneStore';
 	import { inspectorKind } from '../../stores/appStore';
 	import { moduleSelection } from '$lib/moduleContent';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
 
-	onMount(() => startPhoneDock());
+	onMount(() => {
+		const offHost = startDockHost();
+		const offPhone = startPhoneDock();
+		return () => {
+			offPhone();
+			offHost();
+		};
+	});
 
 	const anyOpen = $derived(Object.values($phoneTabsOpen).some(Boolean));
+	// 42 I6: a hosted window docked on a wider screen
+	const anyHosted = $derived(Object.values($hostedTabsOpen).some(Boolean));
+	/** the tab in front, whichever posture hosts it */
+	const shownTab = $derived($phoneShell ? $phoneDockShown : $hostedDockShown);
 	// Properties with nothing selected has nothing to show (the Inspector would show the last
 	// object, which the selection no longer holds): the frame says so instead
 	const nothingSelected = $derived(
@@ -38,16 +55,18 @@
 	// ---- the reused elements -------------------------------------------------------------
 	/** content tab -> the element it reuses (Layouts renders in the frame) */
 	const HOST_OF = { properties: '#inspector', scene: '#inspector', objects: '#object-list', notes: '#notes-drawer' };
+	/** 42 I6: hosted tab -> its window element, on a wider screen */
+	const WIDE_HOST_OF = Object.fromEntries(Object.entries(HOSTED).map(([k, h]) => [k, h.sel]));
 	function clearHosts() {
 		for (const el of document.querySelectorAll('[data-pd-host]')) el.removeAttribute('data-pd-host');
 	}
 	function markHosts() {
-		if (!$phoneShell) return clearHosts();
-		const shown = $phoneDockShown;
-		const open = /** @type {Record<string, boolean>} */ ($phoneTabsOpen);
+		const shown = shownTab;
+		const hostOf = /** @type {Record<string, string>} */ ($phoneShell ? HOST_OF : WIDE_HOST_OF);
+		const open = /** @type {Record<string, boolean>} */ ($phoneShell ? $phoneTabsOpen : $hostedTabsOpen);
 		/** @type {Map<Element, string>} */
 		const want = new Map();
-		for (const [key, sel] of Object.entries(HOST_OF)) {
+		for (const [key, sel] of Object.entries(hostOf)) {
 			if (!open[key]) continue;
 			const el = document.querySelector(sel);
 			if (!el) continue;
@@ -61,6 +80,8 @@
 		void $phoneShell;
 		void $phoneDockShown;
 		void $phoneTabsOpen;
+		void $hostedTabsOpen;
+		void $hostedDockShown;
 		void nothingSelected;
 		// an element may mount a frame after its store flips (the Inspector's fly-in, the object
 		// list's chunked tree): try now, after the flush, on the next frame and once more
@@ -74,6 +95,26 @@
 		};
 	});
 	onMount(() => () => clearHosts());
+
+	// ---- 42 I6: the desktop dock's top-edge resize (every docked editor has the same one) --------
+	let resizing = false;
+	const clampH = (/** @type {number} */ h) => Math.min(Math.max(h || 320, 160), Math.round(window.innerHeight * 0.8));
+	/** @param {PointerEvent} e */
+	function startResize(e) {
+		resizing = true;
+		/** @type {HTMLElement} */ (e.currentTarget).setPointerCapture(e.pointerId);
+		e.preventDefault();
+	}
+	/** @param {PointerEvent} e */
+	function doResize(e) {
+		if (resizing) dockHeight.update((h) => clampH(h - e.movementY));
+	}
+	/** @param {PointerEvent} e */
+	function endResize(e) {
+		if (!resizing) return;
+		resizing = false;
+		/** @type {HTMLElement} */ (e.currentTarget).releasePointerCapture?.(e.pointerId);
+	}
 
 	// ---- the body rect the reused elements are placed into ----------------------------------
 	let bodyEl = $state(/** @type {HTMLElement | undefined} */ (undefined));
@@ -108,16 +149,30 @@
 	});
 </script>
 
-{#if $phoneShell && anyOpen}
+{#if ($phoneShell && anyOpen) || (!$phoneShell && anyHosted)}
 	<div
 		id="phone-dock"
-		class="tp-themed tp-ui tp-dock-panel pd-frame fixed inset-x-0 bottom-0 flex flex-col {$phoneDockShown ? '' : 'hidden'}"
+		class="tp-themed tp-ui tp-dock-panel pd-frame fixed inset-x-0 bottom-0 flex flex-col {shownTab ? '' : 'hidden'}"
 		style="z-index: var(--z-dock); height: {$dockHeight}px; border-top: 1px solid var(--tp-line)"
 		data-key-scope="panel"
-		data-phone-tab={$phoneDockShown ?? ''}
+		data-phone-tab={shownTab ?? ''}
+		data-dock-host={$phoneShell ? 'phone' : 'wide'}
 		role="region"
 		aria-label="Docked panels"
 	>
+		{#if !$phoneShell}
+			<!-- the desktop dock's shared top-edge resize (PhoneShell's grab bar does it on a phone) -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="resize-cue absolute -top-1 left-0 right-0 z-28 h-2 cursor-ns-resize hover:bg-accent/30"
+				style="touch-action: none"
+				title="Drag to resize"
+				onpointerdown={startResize}
+				onpointermove={doResize}
+				onpointerup={endResize}
+				onpointercancel={endResize}
+			></div>
+		{/if}
 		<DockTabs />
 		<div class="pd-body" bind:this={bodyEl}>
 			{#if $phoneDockShown === 'layouts'}

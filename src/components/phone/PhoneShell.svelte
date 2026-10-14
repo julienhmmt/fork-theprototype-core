@@ -82,6 +82,7 @@
 	import { undo, redo, canUndo, canRedo } from '$lib/history';
 	import { setTransformMode, toggleEditorMode } from '$lib/objectActions';
 	import { phoneBarTap, openPhoneTab, closePhoneTab, phoneDockShown } from '$lib/phoneDock';
+	import { toggleViewportFocus } from '$lib/focusMode';
 	import { requestPlay, willEnterXR, willEnterAR, playAsItems } from '$lib/playMode';
 	import { visibleDockKey, DOCK_TITLES, dockMinimized, dockHeight } from '$lib/bottomDock';
 	import { micActive, pttActive, toggleMic } from '$lib/voiceChat';
@@ -542,7 +543,8 @@
 		multiselect: { label: 'Select multiple', short: 'Multi', icon: 'square-dashed', run: () => multiSelectMode.update((v) => !v), pressed: () => $multiSelectMode },
 		interact: { label: 'Interact mode', short: 'Interact', icon: 'hand', run: () => toggleEditorMode(), pressed: () => interactOn },
 		// 42 I5: "Tools, snapping, view and camera…" renamed, and placeable
-		tools: { label: 'Tools & View', short: 'Tools', icon: 'wrench', run: () => viewportTools() }
+		tools: { label: 'Tools & View', short: 'Tools', icon: 'wrench', run: () => viewportTools() },
+		focus: { label: 'Focus mode', short: 'Focus', icon: 'maximize-2', run: () => enterFocusMode() }
 	};
 	/** a press on an item (the bar's and More's): a disabled one does nothing @param {string} key */
 	function runItem(key) {
@@ -556,7 +558,7 @@
 	/** @param {string} key */
 	const barId = (key) => (STRIP_IDS.has(key) ? `ps-bar-${key}` : `ps-${key}`);
 	/** More's own ids: the windows' tiles, the Edit tools (the 38 R9 rows' ids), Tools & View @param {string} key */
-	const tileId = (key) => (EDIT_ITEMS.includes(key) ? `ps-more-${key}` : key === 'tools' ? 'ps-viewport-tools' : `ps-tile-${key}`);
+	const tileId = (key) => (EDIT_ITEMS.includes(key) ? `ps-more-${key}` : key === 'tools' ? 'ps-viewport-tools' : key === 'focus' ? 'ps-focus-mode' : `ps-tile-${key}`);
 	/** More ▸ Windows: Play waits here only while it is off the bar */
 	const windowTiles = $derived(WINDOW_ITEMS.filter((k) => k !== 'play' || !$phoneBar.includes('play')));
 
@@ -693,6 +695,13 @@
 	$effect(() => {
 		if ($phoneSheet !== 'more' && drag && drag.from === 'more') drag = null;
 	});
+
+	// 42 I14: More ▸ Tools & View ▸ Focus mode (42-int: an ACTIONS item, so it is placeable on the bar too) — the phone's way in (no Ctrl+Space); the sheet closes first so the
+	// viewport is what maximizes, and the "Exit focus" pill is the way back
+	function enterFocusMode() {
+		phoneSheet.set(null);
+		toggleViewportFocus();
+	}
 </script>
 
 <svelte:window onresize={() => (viewportH = window.innerHeight)} />
