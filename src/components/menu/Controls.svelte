@@ -2988,6 +2988,7 @@
 		bare
 		body={false}
 		title="Objects"
+		dockedHead="tools"
 		headerClass="ui-panel-header move-handle cursor-move select-none"
 		headerAttrs={objHeaderAttrs}
 		onclose={() => objectListClose.set(true)}

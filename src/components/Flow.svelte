@@ -244,8 +244,8 @@
 				closeAttrs={{ title: 'Close (N)' }}
 			>
 				{#snippet actions()}
-					<button id="flow-add-view" class="wc-act" title="Add a view (Flow Code, Animation, UV editor, Shader editor)" aria-label="Add a view" onclick={openAddMenu}><Icon name="plus" size={16} /></button>
-					<button id="flow-dock" class="wc-act-text" title="Dock to the bottom" onclick={() => setDocked(true)}><Icon name="panel-bottom" size={16} />Dock</button>
+					<button id="flow-add-view" data-wc-chrome class="wc-act" title="Add a view (Flow Code, Animation, UV editor, Shader editor)" aria-label="Add a view" onclick={openAddMenu}><Icon name="plus" size={16} /></button>
+					<button id="flow-dock" data-wc-chrome class="wc-act-text" title="Dock to the bottom" onclick={() => setDocked(true)}><Icon name="panel-bottom" size={16} />Dock</button>
 				{/snippet}
 			</WindowChrome>
 			<div class="relative min-h-0 flex-1">

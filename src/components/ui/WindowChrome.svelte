@@ -25,11 +25,17 @@
 	//   heading       replaces icon + title (a label that sheds its text at narrow widths,
 	//                 an inline search field — the header rankings stay the caller's)
 	//   closeAttrs    on the close button (an id, the tooltip with its shortcut "Close (O)")
+	//   dockedHead    43 J7 — the header of a window docked into a SIDEBAR column (`data-docked`,
+	//                 docking.js), where the column's TAB is the header (its name, its ×, its menu):
+	//                 'hide' (default) drops the whole row; 'tools' keeps a row that carries real
+	//                 tools (a search field, a toolbar) and drops only the chrome — icon, title,
+	//                 label, ✕, and anything the caller marks `data-wc-chrome` (a "Dock" button, a
+	//                 "+"). windows.css holds the rule; a floating or bottom-docked window is untouched.
 	import Icon from './Icon.svelte';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
 	import { fullName } from '$lib/ui/fullName.js';
 
-	/** @type {{size?: 'modal'|'panel'|'tool', title?: string, icon?: string, count?: number|string, titleId?: string, onclose?: (() => void) | null, closeLabel?: string, onpin?: (() => void) | null, pinned?: boolean, pinAttrs?: Record<string, any>, onpopout?: (() => void) | null, onback?: (() => void) | null, backLabel?: string, bare?: boolean, headerClass?: string, closeAttrs?: Record<string, any>, heading?: import('svelte').Snippet, body?: boolean, padded?: boolean, elevated?: boolean, headerEl?: HTMLElement | null, headerAttrs?: Record<string, any>, actions?: import('svelte').Snippet, footer?: import('svelte').Snippet, children?: import('svelte').Snippet} & Record<string, any>} */
+	/** @type {{size?: 'modal'|'panel'|'tool', title?: string, icon?: string, count?: number|string, titleId?: string, onclose?: (() => void) | null, closeLabel?: string, onpin?: (() => void) | null, pinned?: boolean, pinAttrs?: Record<string, any>, onpopout?: (() => void) | null, onback?: (() => void) | null, backLabel?: string, bare?: boolean, headerClass?: string, closeAttrs?: Record<string, any>, heading?: import('svelte').Snippet, dockedHead?: 'hide'|'tools', body?: boolean, padded?: boolean, elevated?: boolean, headerEl?: HTMLElement | null, headerAttrs?: Record<string, any>, actions?: import('svelte').Snippet, footer?: import('svelte').Snippet, children?: import('svelte').Snippet} & Record<string, any>} */
 	let {
 		size = 'panel',
 		title = '',
@@ -48,6 +54,7 @@
 		headerClass = '',
 		closeAttrs = {},
 		heading = undefined,
+		dockedHead = 'hide',
 		body = true,
 		padded = true,
 		elevated = false,
@@ -64,7 +71,7 @@
 </script>
 
 <div class="tp-ui wc wc-{size}" class:wc-elevated={elevated} class:wc-headless-body={!body} class:wc-bare={bare} {...rest}>
-	<header class="wc-head {headerClass}" class:wc-nav={!!onback} bind:this={headerEl} {...headerAttrs}>
+	<header class="wc-head {headerClass}" class:wc-nav={!!onback} data-docked-head={dockedHead} bind:this={headerEl} {...headerAttrs}>
 		{#if onback}
 			<button type="button" class="wc-back" onclick={onback}>
 				<Icon name="chevron-left" size={20} />
