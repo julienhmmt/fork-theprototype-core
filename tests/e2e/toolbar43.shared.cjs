@@ -211,11 +211,16 @@ h.run(async () => {
 				tried++;
 				if (hit.gap) gaps++;
 				await P.mouse.click(x, y, { button: 'right' });
-				await P.waitForTimeout(90);
-				const ctx = await lastContext(P);
-				const opened = await menuOpen(P);
-				if (!ctx?.prevented || !opened) bad.push(`${Math.round(x)},${Math.round(y)} ${hit.cls} prevented=${ctx?.prevented} menu=${opened}`);
-				await closeMenus(P);
+				await P.waitForTimeout(60);
+				const got = await P.evaluate(() => {
+					const e = window.__ctxLog[window.__ctxLog.length - 1];
+					return { prevented: e?.defaultPrevented, menu: !!document.querySelector('[role="menu"]') };
+				});
+				if (!got.prevented || !got.menu) bad.push(`${Math.round(x)},${Math.round(y)} ${hit.cls} prevented=${got.prevented} menu=${got.menu}`);
+				if (got.menu) {
+					await P.keyboard.press('Escape');
+					await P.waitForTimeout(60);
+				}
 			}
 			if (theme === 'dark') h.check(tried > 60 && gaps > 10, T + `premise: the grid covered the bar and both corners (${tried} points, ${gaps} on gaps)`);
 			if (theme === 'dark') h.check(bad.length === 0, T + `J8: every right-click on the toolbar box opens the toolbar menu, never the browser's (${bad.length} bad${bad.length ? ': ' + bad.slice(0, 6).join(' ; ') : ''})`);
