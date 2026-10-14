@@ -162,10 +162,15 @@ h.run(async () => {
 
 	const C = await h.setupPage(browser, 'C');
 	await h.connect(C, A);
-	const cDef = await C.page.evaluate(
-		() => new Promise((r) => window.__stores.customNodeDefs.subscribe((d) => r(d.find((x) => x.id === 'def-wobble')))())
+	// the defs arrive on the HANDSHAKE (C asks `getnodedefs`, A answers once its connection back
+	// to C is open) — read once right after connect it raced that answer on a loaded box. Wait
+	// for it, bounded: a joiner that never gets them still reads red.
+	await h.eventually(
+		() => C.page.evaluate(() => { let d; window.__stores.customNodeDefs.subscribe((x) => (d = x))(); return !!d.find((x) => x.id === 'def-wobble'); }),
+		(v) => v === true,
+		'late joiner received custom defs',
+		30000
 	);
-	h.check(!!cDef, 'late joiner received custom defs');
 
 	await h.finish(browser);
 });

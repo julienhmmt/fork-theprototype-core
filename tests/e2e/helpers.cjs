@@ -505,6 +505,17 @@ async function framePixelsOffColor(page, frame, rgb, tolerance = 24) {
  * a module's own console noise) still only prints. */
 const FATAL_ERROR = /each_key_duplicate|effect_update_depth_exceeded|store\.set is not a function|is not a function.*svelte|Cannot read properties of undefined \(reading 'call'\)|derived_references_self|state_unsafe_mutation/;
 
+/**
+ * Close ONE peer's context early (a suite done with it, freeing the box for the pages still to
+ * boot) WITHOUT losing what `finish` would have checked: its render-crash errors are asserted here.
+ * @param {any} peer
+ */
+async function closePeer(peer) {
+	const fatal = (peer.page.__errors ?? []).filter((/** @type {string} */ m) => FATAL_ERROR.test(m));
+	for (const message of fatal) check(false, 'the page threw a render error: ' + message.split('\n')[0]);
+	await peer.ctx.close();
+}
+
 /** Close up and exit with the right code. */
 async function finish(browser) {
 	// collect before the browser goes away
@@ -949,4 +960,4 @@ function envelopeDelta(a, b) {
 	return { maxDelta, meanDelta: n ? sum / n : 0, worstSlice };
 }
 
-module.exports = { URL, GPU_ARGS, check, launch, setupPage, connect, leavePlay, eventually, projectPoint, freshReload, answerRestore, finish, run, installModule, moduleZipPath, makeCollectibleChains, pageErrors, grabFrame, centeredClip, frameDelta, framePixelsOffColor, AUDIO_ARGS, audioMetrics, renderOffline, envelopeDelta };
+module.exports = { URL, GPU_ARGS, check, launch, setupPage, connect, leavePlay, eventually, projectPoint, freshReload, answerRestore, closePeer, finish, run, installModule, moduleZipPath, makeCollectibleChains, pageErrors, grabFrame, centeredClip, frameDelta, framePixelsOffColor, AUDIO_ARGS, audioMetrics, renderOffline, envelopeDelta };

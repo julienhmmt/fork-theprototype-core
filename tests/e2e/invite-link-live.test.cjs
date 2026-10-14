@@ -13,6 +13,9 @@ const h = require('./helpers.cjs');
 const openPeers = (peer) => peer.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return [...(p?.openedPeers ?? [])]; });
 const pendingOut = (peer) => peer.page.evaluate(() => { let w; window.__stores.waitingForApproval.subscribe((x) => (w = x))(); return w.filter((e) => e[1] === 'pending').map((e) => e[0]); });
 const lastToasts = (peer) => peer.page.evaluate(() => { let n; window.__stores.notifications.subscribe((x) => (n = x))(); return n.slice(-4).map((x) => x.text); });
+// 41 G16: the two QUESTIONS (leave this session? / join on another server?) are confirmDialog
+// modals now, not toasts — so they are read from the dialog record, never from the toast log
+const question = (peer) => peer.page.evaluate(() => { let d; window.__stores.confirmDialog.confirmDialog.subscribe((x) => (d = x))(); return d ? (d.title ?? '') + ' | ' + (d.message ?? '') : ''; });
 const navCount = (peer) => peer.page.evaluate(() => performance.getEntriesByType('navigation').length);
 const serverKind = (peer) => peer.page.evaluate(() => { let s; window.__stores.peerServer.peerServerStatus.subscribe((x) => (s = x))(); return s?.kind ?? null; });
 // the toast STACK hides while the Connect drawer is open (toasts route into its Toasts
@@ -74,8 +77,7 @@ h.run(async () => {
 	// ---- 3. in a session, pasting C's id asks; Stay keeps the session ----------------
 	await paste(B, '#' + C.id);
 	await B.page.waitForTimeout(400);
-	toasts = await lastToasts(B);
-	h.check(toasts.some((t) => /Leave it and join/.test(t)), `a third id while connected asks to leave first (${JSON.stringify(toasts.at(-1))})`);
+	await h.eventually(() => question(B), (q) => /Leave it and join/.test(q), 'a third id while connected asks to leave first', 10000);
 	await clickToast(B, 'Stay');
 	await B.page.waitForTimeout(600);
 	h.check((await openPeers(B)).includes(A.id) && (await pendingOut(B)).length === 0, 'Stay leaves the session with A intact and dials nobody');
@@ -99,6 +101,10 @@ h.run(async () => {
 	h.check(edge.badSrv === 'none', `an unreadable ~srv is refused without a dial (${edge.badSrv})`);
 
 	// ---- 6. D2: a link pinning ANOTHER server switches at runtime, then dials ---------
+	// A, B and C are done with (section 7 needs A's id STRING only — it dials an unreachable server):
+	// close them, so D and E boot on a browser that is not already rendering three software-GL
+	// pages. A fourth page there took more than 90 s to boot (43-tests e2e/r2-invite-link-live.1.log).
+	for (const peer of [A, B, C]) await h.closePeer(peer);
 	// D on a CUSTOM config (the self-hosted box spelled out), E on the public cloud
 	const custom = { mode: 'custom', custom: { host: 'peerjs.theprototype.app', port: 443, path: '/peerjs', secure: true } };
 	const D = await h.setupPage(browser, 'D', { storage: { peerServerConfig: JSON.stringify(custom) } });
@@ -106,8 +112,7 @@ h.run(async () => {
 	h.check((await serverKind(D)) === 'custom' && (await serverKind(E)) === 'public', `premise: D on a custom server, E on the public cloud (${await serverKind(D)}, ${await serverKind(E)})`);
 	await paste(D, '#' + E.id + '~srv=public');
 	await D.page.waitForTimeout(400);
-	toasts = await lastToasts(D);
-	h.check(toasts.some((t) => /^Join .* on the public PeerJS cloud\?/.test(t)), `a link pinning another server asks, naming it (${JSON.stringify(toasts.at(-1))})`);
+	await h.eventually(() => question(D), (q) => /\| Join .* on the public PeerJS cloud\?/.test(q), 'a link pinning another server asks, naming it', 10000);
 	await clickToast(D, 'Join');
 	await h.eventually(() => serverKind(D), (k) => k === 'public', 'D switched to the public cloud without a reload', 20000);
 	await h.eventually(() => pendingOut(D), (p) => p.includes(E.id), 'D dials E on the new server', 15000);
