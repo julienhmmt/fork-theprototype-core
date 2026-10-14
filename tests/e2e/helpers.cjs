@@ -162,8 +162,10 @@ async function connect(from, to, settleMs = 9000) {
 	// is a per-suite decision (connect-decision drives all three by hand), and a suite that
 	// wants the OLD classic share-or-stash merge instead parks the setting that restores it —
 	// `h.setupPage(browser, 'X', { storage: { 'connect:mergeOnConnect': 'true' } })`.
+	// a cloud build (Pages deploys) asks the host for a ROLE instead — "View only" / "Editor access" /
+	// "Reject" (cloudHooks roles); "Editor access" is the plain build's Approve
 	await step(to, 'approve the request', () =>
-		to.page.getByRole('button', { name: 'Approve' }).click({ timeout: 30000 })
+		to.page.getByRole('button', { name: /^(Approve|Editor access)$/ }).first().click({ timeout: 30000 })
 	);
 	await from.page.waitForTimeout(settleMs);
 }

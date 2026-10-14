@@ -72,6 +72,19 @@ h.run(async () => {
 	h.check(!overlap(avatar, stripR) && !overlap(avatar, ins), 'the profile button is clear of the sidebar');
 	const logo1 = await rect(page, '#logo-menu');
 	h.check(logo1.x < 20, `the LEFT side's logo did not move (${logo1.x})`);
+	// 42-int (preview-1-33 proof): the cloud build's Connect pill is ~480 px wide (Rooms + menu). Centred on
+	// the WINDOW it lost its right-hand gap to the slid corner buttons and docked as a 44 px strip — and the
+	// "full height" column then started under it. It centres in the span between pinned columns instead.
+	const wide = await page.addStyleTag({ content: '.connect-pill { min-width: 480px !important; }' });
+	await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+	await page.waitForTimeout(600);
+	const pillW = await rect(page, '.connect-pill');
+	const dockedW = await page.evaluate(() => new Promise((r) => window.__stores.connectDocked.subscribe(r)()));
+	const freeMid = ins.x / 2;
+	h.check(dockedW === false && pillW.w >= 478 && Math.abs(pillW.x + pillW.w / 2 - freeMid) < 4 && pillW.right < cluster.x, `a 480 px Connect pill stays a pill, centred between the edge and the pinned column (docked ${dockedW}, pill ${pillW.x}..${pillW.right}, centre of the free span ${freeMid}, corner buttons from ${cluster.x})`);
+	await wide.evaluate((el) => el.remove());
+	await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+	await page.waitForTimeout(400);
 	const saved = await page.evaluate(() => localStorage.getItem('sidebar:full:right'));
 	h.check(saved === 'true', 'the pin persisted');
 

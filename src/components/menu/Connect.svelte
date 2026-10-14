@@ -133,7 +133,11 @@
 		const gap = 12;
 		// only trust a fresh content-width reading while the pill is its natural size
 		if (!docked) naturalWidth = Math.max(pillEl.scrollWidth, pillEl.offsetWidth);
-		const centerX = vw / 2;
+		// 42 I2: a FULL-HEIGHT sidebar takes its side's width — the pill centres in the span between
+		// the pinned columns (its CSS `left` shifts the same way), so pinning a column does not squeeze
+		// one side's gap and dock the pill for nothing
+		const g = $sidebarGeometry;
+		const centerX = (g.dockLeft + vw - g.dockRight) / 2;
 		// a centred element fits iff its width <= twice the SMALLER side gap
 		const available = 2 * Math.min(centerX - (leftRight + gap), (rightLeft - gap) - centerX);
 		docked = vw <= 640 || naturalWidth > available;
@@ -498,7 +502,9 @@
 	.connect-wrap {
 		position: fixed;
 		top: 8px;
-		left: 50%;
+		/* 42 I2: centred between the pinned full-height columns (0 when none is pinned) */
+		left: calc(50% + (var(--sb-dock-left, 0px) - var(--sb-dock-right, 0px)) / 2);
+		transition: left 0.2s ease;
 		transform: translateX(-50%);
 		z-index: var(--z-chrome-top);
 		pointer-events: none;
@@ -674,6 +680,7 @@
 	.connect-wrap.docked {
 		top: 0;
 		left: 0;
+		transition: none;
 		right: 0;
 		transform: none;
 		max-width: none;
