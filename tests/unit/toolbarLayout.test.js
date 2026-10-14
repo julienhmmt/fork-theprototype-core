@@ -396,3 +396,14 @@ describe('43 J2: the "…" in the record', () => {
 		expect(fromPlacements(off, { ...placements(off), more: true }).more).toBe(true);
 	});
 });
+
+describe('43 K3: the Connect pill in the record', () => {
+	const cfg = { order: ['move'], spacer: 1, left: [], right: [], isKnown: (/** @type {string} */ id) => id === 'move' };
+	it('is shown unless the record says connect: false, and survives placements', () => {
+		expect(normalizeLayout({ order: ['move'] }, cfg).connect).toBe(true);
+		const off = normalizeLayout({ order: ['move'], connect: false }, cfg);
+		expect(off.connect).toBe(false);
+		expect(fromPlacements(off, placements(off)).connect).toBe(false);
+		expect(fromPlacements(off, { ...placements(off), connect: true }).connect).toBe(true);
+	});
+});

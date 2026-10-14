@@ -34,6 +34,8 @@
 //   more         43 J2: the bar's trailing "…" (Customize toolbar) is shown — absent = true; it is
 //                the bar's own menu button, so it is not an id of `order`: it can be taken off and
 //                put back like any item, never moved into the row or a corner
+//   connect      43 K3: the Connect pill (top centre) is shown — absent = true; removable / restorable
+//                in Edit positions and Customize, never moved
 //
 // 42 I9 — FIVE REGIONS, ONE RECORD. The bar and four STACKS (the two bottom corners, the
 // top-right group, the touch tools). A stack holds at most SIDE_MAX (four — the user's "if I
@@ -74,6 +76,7 @@ export const isHole = (id) => typeof id === 'string' && id.startsWith(HOLE + ':'
  * @property {string[]} touch
  * @property {string[]} seen
  * @property {boolean} more
+ * @property {boolean} connect
  */
 
 /**
@@ -99,6 +102,7 @@ export const isHole = (id) => typeof id === 'string' && id.startsWith(HOLE + ':'
  * @property {string[]} touch     left → right (top → bottom when the cluster stacks)
  * @property {Record<string, Region>} [home]  42: the home-only ids (copied from the config)
  * @property {boolean} [more]  43 J2: the trailing "…" is on the bar (absent = keep the record's)
+ * @property {boolean} [connect]  43 K3: the Connect pill is shown (absent = keep the record's)
  */
 
 /** @param {unknown} v */
@@ -126,7 +130,8 @@ export function defaultLayout(cfg) {
 		top: [...cfgStack(cfg, 'top')],
 		touch: [...cfgStack(cfg, 'touch')],
 		seen: uniq([...cfg.order, ...STACKS.flatMap((s) => cfgStack(cfg, s))]),
-		more: true
+		more: true,
+		connect: true
 	};
 }
 
@@ -172,6 +177,7 @@ export function normalizeLayout(raw, cfg) {
 	const posX = readPosX(saved.posX);
 	const collapsed = saved.collapsed === true;
 	const more = saved.more !== false;
+	const connect = saved.connect !== false;
 	// 33 E1: a record that is still a SHIPPED default migrates to today's default bar (the
 	// corner stacks and `seen` it carries are kept — they are not part of the legacy rows)
 	if (isLegacyDefault(order, saved, cfg)) {
@@ -183,6 +189,7 @@ export function normalizeLayout(raw, cfg) {
 				collapsed,
 				posX,
 				more,
+				connect,
 				...(keepSides ? { left: saved.left ?? fresh.left, right: saved.right ?? fresh.right, seen: saved.seen } : {})
 			},
 			{ ...cfg, legacyRows: [] }
@@ -231,7 +238,7 @@ export function normalizeLayout(raw, cfg) {
 	const spacerIndex = Number.isFinite(saved.spacerIndex)
 		? clamp(Math.round(saved.spacerIndex), 0, room)
 		: Math.min(cfg.spacer, room);
-	return { order, hidden, spacerIndex, collapsed, posX, left, right, top, touch, seen: [...seen].filter(known), more };
+	return { order, hidden, spacerIndex, collapsed, posX, left, right, top, touch, seen: [...seen].filter(known), more, connect };
 }
 
 /** the bar buttons actually ON the bar, in bar order (Play's well is not one) */
@@ -345,6 +352,7 @@ export function placements(/** @type {ToolbarLayout} */ l, /** @type {Record<str
 		top: [...stackOf(l, 'top')],
 		touch: [...stackOf(l, 'touch')],
 		more: l.more !== false,
+		connect: l.connect !== false,
 		...(home ? { home } : {})
 	};
 }
@@ -367,7 +375,7 @@ export function fromPlacements(/** @type {ToolbarLayout} */ l, /** @type {Placem
 	const hidden = l.hidden.filter((id) => !placed.includes(id));
 	const order = [...shown, ...hidden];
 	const spacerIndex = clamp(bar.indexOf(PLAY), 0, shown.length);
-	return { ...l, order, hidden, spacerIndex, ...stacks, seen: uniq([...l.seen, ...placed]), more: typeof p.more === 'boolean' ? p.more : l.more !== false };
+	return { ...l, order, hidden, spacerIndex, ...stacks, seen: uniq([...l.seen, ...placed]), more: typeof p.more === 'boolean' ? p.more : l.more !== false, connect: typeof p.connect === 'boolean' ? p.connect : l.connect !== false };
 }
 
 /** @param {Placements} p @param {string} id @returns {Placements} */

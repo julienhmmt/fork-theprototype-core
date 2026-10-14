@@ -258,6 +258,91 @@ h.run(async () => {
 			await setBar(P, null, A);
 		}
 
+		if (want('k3')) {
+			// ---- K3: Edit positions hides / shows the Connect pill; a hidden Notifications stays hidden --------
+			const vis = (sel) => P.evaluate((s) => { const el = document.querySelector(s); return !!el && el.getClientRects().length > 0 && el.getBoundingClientRect().width > 0; }, sel);
+			h.check(await vis('.connect-pill'), T + 'premise: the Connect pill is at the top');
+			await enterEdit(P);
+			h.check((await P.locator('#connect-edit [data-edit-wrap="__connect"] .hud-edit-remove').count()) === 1, T + 'K3: Edit positions outlines the Connect pill with a red "−"');
+			await shot(P, `k3-edit-${theme}`);
+			await clickAt(P, P.locator('#connect-edit .hud-edit-remove'));
+			h.check(!(await vis('.connect-pill')) && (await vis('#connect-edit-add')), T + 'K3: its "−" hides the pill at once and leaves a "+ Connect" in its place');
+			await clickAt(P, P.locator('#toolbar-edit-apply'));
+			h.check(!(await vis('.connect-pill')) && (await stored(P))?.connect === false && (await flag(P, 'connectDocked')) === false, T + 'K3: ✓ — the pill stays hidden (stored), and docks nothing');
+			await shot(P, `k3-hidden-${theme}`);
+			await h.freshReload(A);
+			await P.locator('#restore-session-dismiss').click({ timeout: 4000 }).catch(() => {});
+			h.check(!(await vis('.connect-pill')), T + 'K3: hidden stays hidden after a reload');
+			await cellMenu(P, 'Explorer');
+			await P.getByRole('menuitem', { name: 'Customize toolbar…', exact: true }).click();
+			await P.waitForTimeout(400);
+			const row = (await menuRows(P)).find((r) => r.label === 'Connect bar');
+			h.check(!!row && row.checked === false, T + `K3: Customize lists "Connect bar" unchecked (${JSON.stringify(row)})`);
+			await closeMenus(P);
+			await enterEdit(P);
+			await clickAt(P, P.locator('#connect-edit-add'));
+			await clickAt(P, P.locator('#toolbar-edit-apply'));
+			h.check((await vis('.connect-pill')) && (await stored(P))?.connect !== false, T + 'K3: the "+" brings the pill back on ✓');
+			// Notifications hidden in Edit positions stays hidden — here, after a reload, and on the folded phone
+			await enterEdit(P);
+			await clickAt(P, P.locator('#hud-tr [data-edit-wrap="notifications"] .hud-edit-remove'));
+			await clickAt(P, P.locator('#toolbar-edit-apply'));
+			h.check(!(await vis('#notif-bell')), T + 'K3: Notifications removed in Edit positions is gone');
+			await h.freshReload(A);
+			await P.locator('#restore-session-dismiss').click({ timeout: 4000 }).catch(() => {});
+			h.check(!(await vis('#notif-bell')) && (await vis('#notes-toggle')), T + 'K3: …still gone after a reload (Scene notes still there)');
+			if (theme === 'dark') {
+				await P.setViewportSize({ width: 390, height: 896 });
+				await P.waitForTimeout(1200);
+				h.check(await P.evaluate(() => document.documentElement.classList.contains('phone-shell')), T + 'premise: narrowed to a phone, the phone shell takes over');
+				h.check(!(await vis('#notif-bell')), T + 'K3: …and on the phone shell too (hidden stays hidden)');
+				await shot(P, 'k3-phone-no-bell');
+				await P.setViewportSize({ width: 1440, height: 900 });
+				await P.waitForTimeout(1200);
+			}
+			await setBar(P, null, A);
+		}
+
+		if (want('k4')) {
+			// ---- K4: the Connect pill docks to its own row when the top row lacks room, and comes back --------
+			/** the pill against every wall of the top row; and the measurement's own reading */
+			const topRow = () =>
+				P.evaluate(() => {
+					const box = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? { left: r.left, right: r.right, top: r.top, bottom: r.bottom, id: el.id } : null; };
+					const pill = box(document.querySelector('.connect-pill'));
+					const tt = document.getElementById('touch-tools');
+					const walls = [box(document.getElementById('logo-menu')), tt && !tt.classList.contains('tt-stacked') ? box(tt) : null, box(document.getElementById('hud-tr')), box(document.getElementById('avatar-trigger'))].filter(Boolean);
+					const hits = pill ? walls.filter((w) => !(pill.right <= w.left || pill.left >= w.right || pill.bottom <= w.top || pill.top >= w.bottom)).map((w) => w.id) : [];
+					return { pill, hits, dock: window.__connectDock, docked: document.documentElement.classList.contains('connect-docked'), vw: innerWidth };
+				});
+			// four in the top-right group and four beside the logo (the corner buttons moved up there, so each
+			// id lives in one place)
+			const CROWDED = JSON.stringify({ ...JSON.parse(ALL_ON), left: [], right: [], top: ['notes', 'notifications', 'chat', 'mic'], touch: ['undo', 'redo', 'multiselect', 'ai'] });
+			const SPARSE = JSON.stringify({ ...JSON.parse(ALL_ON), top: [], touch: [] });
+			let flipped = 0;
+			for (const width of [1440, 1100, 900, 760]) {
+				await P.setViewportSize({ width, height: 900 });
+				await P.evaluate(() => window.__stores.touchTools.set(true));
+				const seq = [];
+				for (const [name, bar] of [['default', null], ['crowded', CROWDED], ['sparse', SPARSE], ['crowded again', CROWDED]]) {
+					await setBar(P, bar, A);
+					await P.waitForTimeout(500);
+					const t = await topRow();
+					seq.push(`${name}:${t.docked ? 'own row' : 'centre'}`);
+					h.check(t.hits.length === 0, T + `K4 ${width}px ${name}: the pill (${t.docked ? 'on its own row' : 'centred'}) overlaps nothing on the top row (${t.hits.join(',') || 'clear'}; fits ${Math.round(t.dock?.naturalWidth)} in ${Math.round(t.dock?.available)})`);
+					h.check(t.docked === !!t.dock?.docked && (t.docked || Math.abs((t.pill.left + t.pill.right) / 2 - width / 2) <= 2), T + `K4 ${width}px ${name}: ${t.docked ? 'docked full width' : 'centred on the window'} — the measurement and the page agree`);
+					h.check(t.docked === (t.dock.naturalWidth > t.dock.available || width <= 640), T + `K4 ${width}px ${name}: it docks exactly when it would not fit between the walls (${Math.round(t.dock.left)}..${Math.round(t.dock.right)})`);
+					if (width === 900) await shot(P, `k4-${width}-${name.replace(' ', '-')}-${theme}`);
+				}
+				if (seq[1].endsWith('own row') && seq[2].endsWith('centre') && seq[3].endsWith('own row')) flipped++;
+				console.log(T + `K4 ${width}px: ${seq.join(' → ')}`);
+			}
+			h.check(flipped >= 1, T + `K4: at some width the pill takes its own row when the top row fills, returns to it when room comes back, and leaves again (${flipped} width(s))`);
+			await P.setViewportSize({ width: 1440, height: 900 });
+			await P.evaluate(() => window.__stores.touchTools.set(false));
+			await setBar(P, null, A);
+		}
+
 		if (want('j8menu')) {
 			// ---- J8: no browser context menu anywhere on the toolbar box — a grid of right-clicks --------
 			// the points: EVERY gap between two cells (top, middle, bottom of the row), the bar's padding

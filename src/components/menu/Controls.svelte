@@ -1055,6 +1055,9 @@
 	const BAR = '__bar';
 	/** the name menus print for the "…" */
 	const MORE_LABEL = '… (Customize toolbar)';
+	/** 43 K3: the Connect pill (top centre) as an edit/menu id — shown or hidden, never moved */
+	const CONNECT = '__connect';
+	const CONNECT_LABEL = 'Connect bar';
 	// 30 P1: `pressed` makes the cell a TOGGLE — it renders as a real <button> carrying
 	// aria-pressed (a <p> cannot: the attribute is not supported on its role)
 	const PIVOT_NAMES: Record<string, string> = { median: 'Median point', active: 'Active object', individual: 'Individual origins', parent: 'Parent origin' };
@@ -1631,6 +1634,12 @@
 	/** the red "−": take the item off (a bar item leaves a "+" in its place until ✓) */
 	function editRemove(id: string) {
 		if (!editing || id === SPACER) return;
+		if (id === CONNECT) {
+			// 43 K3: the Connect pill hides; the "+" left at the top centre brings it back
+			editing = { ...editing, connect: false };
+			if (editFocus === id) editFocus = null;
+			return;
+		}
 		if (id === MORE) {
 			// 43 J2: the "…" leaves the bar like any item; the end "+" offers it back
 			editing = { ...editing, more: false };
@@ -1716,7 +1725,7 @@
 	function onEditOutside(e: PointerEvent) {
 		if (!editing || editAddMenu) return;
 		const t = e.target as Element | null;
-		if (t?.closest?.('#controls-pill, .hud-stack, #hud-tr, #touch-tools, #toolbar-edit-ghost, [role="menu"]')) return;
+		if (t?.closest?.('#controls-pill, .hud-stack, #hud-tr, #touch-tools, #toolbar-edit-ghost, #connect-edit, [role="menu"]')) return;
 		cancelEditPositions();
 	}
 
@@ -1852,6 +1861,22 @@
 		};
 	}
 
+	/** 43 K3: where the Connect pill sits, so Edit positions can outline it (measured on entering, and
+	 *  while editing on a resize) — null while the pill is hidden */
+	let connectRect: { left: number; top: number; width: number; height: number } | null = $state(null);
+	function measureConnect() {
+		const el = document.querySelector('.connect-pill') as HTMLElement | null;
+		const r = el?.getBoundingClientRect();
+		connectRect = r && r.width ? { left: r.left, top: r.top, width: r.width, height: r.height } : null;
+	}
+	$effect(() => {
+		if (!editing) return;
+		void editing.connect;
+		tick().then(measureConnect);
+		window.addEventListener('resize', measureConnect);
+		return () => window.removeEventListener('resize', measureConnect);
+	});
+
 	/** the edit button's label, for the a11y tree and the tooltip */
 	function editLabel(id: string) {
 		return labelOf(id);
@@ -1870,7 +1895,10 @@
 	const stackTop = $derived.by(() => (editing ? editing.top : controlsLayout.top));
 	const stackTouch = $derived.by(() => (editing ? editing.touch : controlsLayout.touch));
 	$effect(() => {
-		toolbarSlots.set({ top: [...stackTop], touch: [...stackTouch], editing: editing !== null });
+		// 43 K3: + whether the Connect pill shows (the draft's while editing — the pill hides the moment its
+		// "−" is pressed, and the "+" in its place brings it back)
+		const connect = editing ? editing.connect !== false : controlsLayout.connect !== false;
+		toolbarSlots.set({ top: [...stackTop], touch: [...stackTouch], editing: editing !== null, connect });
 	});
 	/** the buttons of a group Controls draws in it outside Edit positions (not the natives) */
 	const topExtras = $derived(stackTop.filter((id) => !TOP_NATIVE.includes(id)));
@@ -2378,6 +2406,16 @@
 			...(controlsLayout.right.length ? [{ section: 'Right corner' }, ...cornerRows('right')] : []),
 			...(controlsLayout.top.length ? [{ section: 'Top right' }, ...groupRows('top')] : []),
 			...(controlsLayout.touch.length ? [{ section: $touchTools ? 'Touch tools' : 'Touch tools (shown while Touch tools is on)' }, ...groupRows('touch')] : []),
+			// 43 K3: the Connect pill — shown or hidden, never moved
+			{ section: 'Top' },
+			{
+				key: CONNECT,
+				label: CONNECT_LABEL,
+				checked: controlsLayout.connect !== false,
+				keepOpen: true,
+				tooltip: controlsLayout.connect !== false ? 'Hide the Connect bar at the top of the screen' : 'Show the Connect bar at the top of the screen',
+				action: () => setLayout({ connect: controlsLayout.connect === false })
+			},
 			...(offBar.length || controlsLayout.more === false
 				? [
 						{ section: 'Not on the bar' },
@@ -3113,6 +3151,24 @@
 {/if}
 {#if ($touchTools || editing) && !$phoneShell}
 	<div class="contents" data-toolbar-portal="touch" use:portalTo={'#touch-tools'}>{@render group('touch', stackTouch, touchExtras, 'tt-btn')}</div>
+{/if}
+
+{#if editing && !$phoneShell}
+	<!-- 43 K3: the Connect pill in Edit positions — outlined with a red "−" (it is shown / hidden, never
+	     moved); hidden, a "+" at the top centre brings it back. The outline covers the pill, so a press
+	     there is part of the edit, not a Connect click. -->
+	<div id="connect-edit" class="tp-ui">
+		{#if editing.connect !== false && connectRect}
+			<div class="hud-edit-item hud-edit-connect" data-edit-wrap={CONNECT} style="left: {connectRect.left}px; top: {connectRect.top}px; width: {connectRect.width}px; height: {connectRect.height}px">
+				<span class="hud-edit-grip" data-edit-id={CONNECT} title={CONNECT_LABEL}></span>
+				<button type="button" class="hud-edit-remove" tabindex="-1" title="Hide the Connect bar" aria-label="Hide the {CONNECT_LABEL}" use:onPress={() => editRemove(CONNECT)}><Icon name="minus" size={16} aria-hidden="true" /></button>
+			</div>
+		{:else if editing.connect === false}
+			<button type="button" id="connect-edit-add" class="hud-cell hud-edit-add hud-edit-connect-add" title="Show the Connect bar" aria-label="Show the {CONNECT_LABEL}" use:onPress={() => editing && (editing = { ...editing, connect: true })}
+				><Icon name="plus" size={16} aria-hidden="true" /><span>Connect</span></button
+			>
+		{/if}
+	</div>
 {/if}
 
 {#if editDrag}

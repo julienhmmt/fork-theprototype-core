@@ -620,3 +620,28 @@
 #touch-tools:not(:has(> :not([data-toolbar-portal]))):not(:has(> [data-toolbar-portal] > *)) {
 	display: none;
 }
+/* 43 K3: the Connect pill in Edit positions — an outline over the real pill (it takes the presses, so the
+   pill is not clicked mid-edit) with the red "−"; hidden, a "+ Connect" at the top centre */
+.hud-edit-connect {
+	position: fixed;
+	z-index: calc(var(--z-chrome-top) + 1);
+	border-radius: var(--radius-window);
+	cursor: default;
+	animation: none;
+}
+.hud-edit-connect .hud-edit-grip {
+	cursor: default;
+}
+.hud-edit-connect-add {
+	position: fixed;
+	top: 8px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: calc(var(--z-chrome-top) + 1);
+	width: auto;
+	height: var(--hud-icon-button);
+	padding: 0 12px;
+	gap: 4px;
+	border-radius: var(--radius-pill);
+	font: 500 var(--fs-body) var(--font-ui);
+}

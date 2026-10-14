@@ -4,7 +4,9 @@
 	import { peerColor } from '$lib/lockControl';
 	import Icon from '../ui/Icon.svelte';
 	import { phoneShellActive } from '$lib/ui/phoneShell.js';
-	import { peers, userdata, waitingForApproval, pendingApprovals, showToast, settingsOpen, settingsSection, connectDrawerOpen, connectDrawerTab, connectDrawerPinned, showRoomsButton, connectDocked, connectBarHeight, toastStore, toastsInDrawerOnly } from '../../stores/appStore'
+	// 43 K3/K4: whether the pill is shown (Edit positions / Customize), and the top-row items it measures against
+	import { toolbarSlots } from '$lib/toolbarSlots';
+	import { peers, userdata, waitingForApproval, pendingApprovals, showToast, settingsOpen, settingsSection, connectDrawerOpen, connectDrawerTab, connectDrawerPinned, showRoomsButton, connectDocked, connectBarHeight, toastStore, toastsInDrawerOnly, touchTools } from '../../stores/appStore'
 	import { onMount, tick } from 'svelte';
 	import { createPeer, PeerConnection } from '$lib/peerHandler.svelte';
 	import { peerServerStatus, inviteServerParam } from '$lib/peerServer';
@@ -123,18 +125,40 @@
 	// 42 I2: how far the pill sits off the window's centre while a full-height column is pinned
 	let cxShift = $state(0);
 
+	// 43 K3: the person can hide the pill (Edit positions' "−", Customize ▸ Connect bar). The phone shell's
+	// chip is its own chrome and stays.
+	const pillShown = $derived($phoneShellActive || $toolbarSlots.connect !== false);
+
+	/** 43 K4: the top row's walls, MEASURED from what is drawn there now. The left wall is the logo — and
+	 *  the row beside it (#touch-tools) while that row sits on the logo's row; the right wall is the
+	 *  top-right group's left edge (#hud-tr, whatever it holds, when it draws at all — J11) else the profile
+	 *  button. It used to be `#notes-toggle` alone, so hiding Scene notes moved the wall to the avatar
+	 *  while the bell still stood in the way, and adding a button never moved it at all. Horizontal
+	 *  edges only: docking moves this chrome DOWN, never sideways, so the decision cannot oscillate. */
+	function topRowWalls(vw: number) {
+		const visible = (el: Element | null) => {
+			const r = el?.getBoundingClientRect();
+			return r && r.width > 0 && r.height > 0 ? r : null;
+		};
+		const logo = visible(document.getElementById('logo-menu'));
+		let left = logo ? logo.right : 56;
+		const row = document.getElementById('touch-tools');
+		const rowRect = visible(row);
+		// stacked under the logo, the row is not on the top row at all
+		if (rowRect && logo && !row!.classList.contains('tt-stacked')) left = Math.max(left, rowRect.right);
+		const group = visible(document.getElementById('hud-tr'));
+		const avatar = visible(document.getElementById('avatar-trigger')) ?? visible(document.getElementById('avatar-menu'));
+		const right = group ? group.left : avatar ? avatar.left : vw - 240;
+		return { left, right };
+	}
+
 	function measureDock() {
 		if (typeof window === 'undefined' || !pillEl) return;
 		const vw = window.innerWidth;
-		const logo = document.getElementById('logo-menu');
-		// leftmost element of the right-hand chrome (notes button) — falls back to the
-		// avatar, then a sane estimate. Horizontal position is dock-independent.
-		const rightAnchor = document.getElementById('notes-toggle') || document.getElementById('avatar-menu');
-		const leftRight = logo ? logo.getBoundingClientRect().right : 56;
-		const rightLeft = rightAnchor ? rightAnchor.getBoundingClientRect().left : vw - 240;
+		const { left: leftRight, right: rightLeft } = topRowWalls(vw);
 		const gap = 12;
 		// only trust a fresh content-width reading while the pill is its natural size
-		if (!docked) naturalWidth = Math.max(pillEl.scrollWidth, pillEl.offsetWidth);
+		if (!docked) naturalWidth = Math.max(pillEl.scrollWidth, pillEl.offsetWidth) || naturalWidth;
 		// 42 I2: a FULL-HEIGHT sidebar slides its corner's buttons inward by the column's width. Centred
 		// on the window, the pill then lost the gap on that side and docked for nothing (the cloud
 		// build's ~480 px pill at 1440 px) — so while a column is pinned it centres in the gap between
@@ -145,14 +169,41 @@
 		cxShift = pinned ? Math.round(centerX - vw / 2) : 0;
 		// a centred element fits iff its width <= twice the SMALLER side gap
 		const available = 2 * Math.min(centerX - (leftRight + gap), (rightLeft - gap) - centerX);
-		docked = vw <= 640 || naturalWidth > available;
+		docked = pillShown && (vw <= 640 || naturalWidth > available);
+		(window as any).__connectDock = { docked, naturalWidth, available, left: leftRight, right: rightLeft };
 	}
+
+	// 43 K4: the walls change without the window or the pill changing — a button added to / removed from
+	// the top-right group or the row beside the logo (Edit positions, Customize, a layout), the row
+	// switched on, the group emptying. Re-measure after each, and WATCH the walls themselves (a peer
+	// connecting widens the group by its trigger; the row stacks / unstacks on its own measurement).
+	$effect(() => {
+		void $toolbarSlots;
+		void $touchTools;
+		void pillShown;
+		tick().then(measureDock);
+		const t = setTimeout(measureDock, 160);
+		if (typeof ResizeObserver === 'undefined') return () => clearTimeout(t);
+		const ro = new ResizeObserver(() => measureDock());
+		for (const id of ['logo-menu', 'touch-tools', 'hud-tr', 'avatar-trigger']) {
+			const el = document.getElementById(id);
+			if (el) ro.observe(el);
+		}
+		const mo = new MutationObserver(() => measureDock());
+		const tt = document.getElementById('touch-tools');
+		if (tt) mo.observe(tt, { attributes: true, attributeFilter: ['class'] });
+		return () => {
+			clearTimeout(t);
+			ro.disconnect();
+			mo.disconnect();
+		};
+	});
 
 	// publish docked + the bar height so the logo/profile chrome can clear it
 	const TAB_STRIP_H = 32; // approx height of the drawer's tab bar
 	// 38 R9: on the phone shell the bar is a SHEET behind a chip — it docks nothing and
 	// pushes nothing down, so it publishes the undocked values
-	const docksChrome = $derived(docked && !$phoneShellActive);
+	const docksChrome = $derived(docked && !$phoneShellActive && pillShown);
 	$effect(() => {
 		connectDocked.set(docksChrome);
 	});
@@ -324,7 +375,7 @@
 	 transparent margin pass clicks to windows underneath (z-index 300); the pill
 	 re-enables them. Narrow screens drop the bar to its own row BELOW the logo
 	 (left) and the peers/profile chrome (right) instead of squeezing between them. -->
-<div class="connect-wrap" data-key-scope="keep" class:docked class:body-open={$connectDrawerOpen} style:--cx-shift="{cxShift}px">
+<div class="connect-wrap" data-key-scope="keep" class:docked class:body-open={$connectDrawerOpen} class:cx-hidden={!pillShown} style:--cx-shift="{cxShift}px">
 	<!-- 38 R8: one glass bar (styles/hud.css) — your invite id as a mono chip, the dial field
 	     with ONE primary button, status as a Badge, icon buttons for the rest. Every id,
 	     testid, placeholder and button name the suites and the tour read is unchanged. -->
@@ -683,6 +734,10 @@
 	   flips to DOCKED (measured in script): a full-width bar stuck to the top edge — the
 	   field flexes to fill, the buttons stay visible, the Rooms shortcut hides, and the
 	   corner chrome drops below the bar (Sidebar/Users read connectDocked/BarHeight). */
+	/* 43 K3: hidden from Edit positions / Customize — it takes no room and docks nothing */
+	.connect-wrap.cx-hidden {
+		display: none;
+	}
 	.connect-wrap.docked {
 		top: 0;
 		left: 0;
