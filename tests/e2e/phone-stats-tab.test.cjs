@@ -70,10 +70,64 @@ h.run(async () => {
 		});
 	await read(() => window.__stores.toastStore.set([]));
 
+	// ---------- 0. EVERY way in opens it docked, never one floating frame first ----------
+	// (the burger menu's "Statistics" and the toolbar's budget badge both just set statsOpen — the
+	// orchestrator reconfirmed: on a phone Statistics is a docked window, never a floating one)
+	const sampleOpen = async (open) => {
+		await P.evaluate(() => {
+			window.__floatFrames = 0;
+			window.__seenFrames = 0;
+			const check = () => {
+				const el = document.querySelector('#stats-window');
+				if (el && el.getClientRects().length) {
+					window.__seenFrames++;
+					if (!el.hasAttribute('data-pd-host')) window.__floatFrames++;
+				}
+			};
+			window.__mo = new MutationObserver(check);
+			window.__mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-pd-host'] });
+			window.__smpOn = true;
+			const t = () => {
+				if (!window.__smpOn) return;
+				check();
+				requestAnimationFrame(t);
+			};
+			requestAnimationFrame(t);
+		});
+		await open();
+		await P.waitForTimeout(900);
+		return P.evaluate(() => {
+			window.__smpOn = false;
+			window.__mo.disconnect();
+			return { seen: window.__seenFrames, floating: window.__floatFrames };
+		});
+	};
+	let smp = await sampleOpen(() => read(() => window.__stores.sceneBudget.statsOpen.set(true)));
+	let d0 = await state();
+	h.check(smp.seen > 0 && smp.floating === 0 && d0.host === 'shown' && d0.vis === 'stats', `opened the way the menu / badge do, it is docked from its first frame (${JSON.stringify(smp)}, front ${d0.vis})`);
+	await read(() => window.__stores.sceneBudget.statsOpen.set(false));
+	await P.waitForTimeout(500);
+	// the burger menu's own row, where the phone shows it
+	const burger = await P.evaluate(() => !!document.querySelector('#logo-menu'));
+	if (burger) {
+		await tapOn('#logo-menu', 500);
+		if (await centre('#open-stats')) {
+			smp = await sampleOpen(() => tapOn('#open-stats', 100));
+			d0 = await state();
+			h.check(smp.seen > 0 && smp.floating === 0 && d0.host === 'shown', `burger menu ▸ Statistics opens it docked too (${JSON.stringify(smp)})`);
+			await read(() => window.__stores.sceneBudget.statsOpen.set(false));
+			await P.waitForTimeout(500);
+		} else await read(() => window.__stores.closeMenu.set(true));
+	}
+	h.check((await read(() => localStorage.getItem('mobileUndockAllowed'))) !== 'true', 'premise: "Allow undocking on touch screens" is off by default');
+
 	// ---------- 1. More ▸ Statistics opens a TAB of the dock, not a floating window ----------
-	await tapOn('#ps-more', 500);
-	await tapOn('#ps-tile-stats', 900);
+	smp = await sampleOpen(async () => {
+		await tapOn('#ps-more', 500);
+		await tapOn('#ps-tile-stats', 100);
+	});
 	let d = await state();
+	h.check(smp.floating === 0, `More ▸ Statistics never shows a floating frame (${JSON.stringify(smp)})`);
 	h.check(d.open && d.vis === 'stats' && d.tabs.includes('stats'), `More ▸ Statistics opens the "Statistics" dock tab, in front (${JSON.stringify({ vis: d.vis, tabs: d.tabs })})`);
 	h.check(d.host === 'shown' && !!d.stats && !!d.frame && d.stats.top >= d.frame.top - 1 && Math.abs(d.stats.bottom - d.bar.top) <= 2, `the Statistics window sits in the dock frame, down to the bar (${JSON.stringify({ stats: d.stats, frame: d.frame, bar: d.bar })})`);
 	h.check(d.stats && d.stats.left <= 1 && d.stats.right >= 389, `...the full width of the phone (${JSON.stringify(d.stats)})`);
