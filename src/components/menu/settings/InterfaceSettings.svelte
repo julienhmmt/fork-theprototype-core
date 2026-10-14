@@ -15,6 +15,7 @@
 		'editor tour': ['tour', 'tutorial', 'help', 'guide'],
 		'offer enter vr in a headset browser': ['offer enter vr', 'enter vr', 'headset browser', 'quest'],
 		'reset tours': ['tour', 'tours', 'tutorial'],
+		'reset tips': ['tip', 'tips', 'hint', 'hints', 'help', 'how-to'],
 		'lift the toolbar above docked panels': ['floating toolbar', 'toolbar'],
 		'lift the corner buttons above docked panels': ['corner buttons', 'corner', 'chat', 'microphone', 'ai', 'stack', 'dock', 'lift'],
 		'allow undocking on touch screens': ['allow undocking (touch)', 'undock', 'touch', 'phone'],
@@ -70,6 +71,8 @@
 	import { showWelcomeOnStart, showWhatsNewNotice, openWelcome } from '$lib/whatsNew';
 	import { tours, tourRecords } from '$lib/tours/index.js';
 	import { VR_TOUR, editorTourId, startVRWelcome, startEditorTour, resetAllTours } from '$lib/tours/builtin.js';
+	// 43 J9: closed tips (the phone More sheet's how-to) come back from one row
+	import { resetTips, dismissedTips } from '$lib/tips';
 	import { xrOfferEnabled } from '$lib/xrOffer';
 	import { drawerSlot } from '$lib/cloudHooks';
 	import { resetWindowLayout } from '$lib/dragWindow';
@@ -237,6 +240,9 @@
 		</SettingRow>
 		<SettingRow id="row-tours-reset" label="Reset tours" description="Forgets which tours you have seen and turns automatic tours back on.">
 			<Button id="setting-tours-reset" size="sm" variant="outline" onclick={resetAllTours}>Reset</Button>
+		</SettingRow>
+		<SettingRow id="row-tips-reset" label="Reset tips" description="Shows the small how-to tips you closed with their × again.">
+			<Button id="setting-tips-reset" size="sm" variant="outline" disabled={!$dismissedTips.length} onclick={resetTips}>Reset</Button>
 		</SettingRow>
 	</Section>
 

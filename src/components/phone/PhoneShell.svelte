@@ -52,6 +52,8 @@
 	import Toggle from '../ui/Toggle.svelte';
 	import ContextMenu from '../ContextMenu.svelte';
 	import { safeStorage } from '$lib/safeStorage';
+	// 43 J9: the More sheet's how-to closes with an × and stays closed (Settings ▸ Reset tips)
+	import { tipShown, dismissTip, TIP_PHONE_MORE } from '$lib/tips';
 	import { showChoiceEx } from '$lib/confirmDialog';
 	import { hudIsGame } from '$lib/hudDocs';
 	import { testPlay } from '$lib/gamePresence';
@@ -89,6 +91,7 @@
 	import { aiReady } from '$lib/ai/providers';
 	import { canvasCenter } from '$lib/canvasRect';
 	import { statsOpen } from '$lib/sceneBudget';
+	const moreTipShown = tipShown(TIP_PHONE_MORE);
 
 	// ---- the <html> class + the sheet geometry --------------------------------------
 	let viewportH = $state(typeof window === 'undefined' ? 844 : window.innerHeight);
@@ -944,7 +947,12 @@
 						<button type="button" class="ps-btn" id="ps-bar-reset" disabled={$phoneBar.join() === DEFAULT_BAR.join()} onclick={resetBar}>Reset bar</button>
 					</div>
 					<!-- the how-to rides the sheet's bottom edge, right above the bar it talks about -->
-					<p class="ps-hint" id="ps-more-hint">Hold and drag items to or from the bar (up to {MAX_ITEMS})</p>
+					{#if $moreTipShown}
+						<p class="ps-hint" id="ps-more-hint">
+							<span class="ps-hint-txt">Hold and drag items to or from the bar (up to {MAX_ITEMS})</span>
+							<button type="button" class="ps-hint-x" id="ps-more-hint-close" title="Close this tip — Settings ▸ Reset tips brings it back" aria-label="Close this tip" onclick={() => dismissTip(TIP_PHONE_MORE)}><Icon name="x" size={16} aria-hidden="true" /></button>
+						</p>
+					{/if}
 				</div>
 			{/if}
 		</section>
@@ -1308,9 +1316,37 @@
 		white-space: nowrap;
 	}
 	.ps-hint {
+		display: flex;
+		align-items: center;
+		gap: 4px;
 		margin: 8px 4px 12px;
 		color: var(--text-muted);
 		font: 400 var(--fs-desc) var(--font-ui);
+	}
+	.ps-hint-txt {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	/* 43 J9: the tip's × — a 44 px touch target around a 16 px glyph */
+	.ps-hint-x {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 44px;
+		height: 44px;
+		margin: -12px -8px -12px 0;
+		padding: 0;
+		border: 0;
+		border-radius: var(--radius-button, 8px);
+		background: transparent;
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+	.ps-hint-x:hover,
+	.ps-hint-x:focus-visible {
+		color: var(--text);
+		background: var(--surface-hover);
 	}
 	.ps-btn {
 		height: 44px;

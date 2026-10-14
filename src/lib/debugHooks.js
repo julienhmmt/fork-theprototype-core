@@ -269,6 +269,8 @@ export const DEBUG_HOOKS = [
 	['undoToast', () => import('./undoToast')],
 	['docking', () => import('./docking')],
 	['sidebars', () => import('./sidebars')],
+	// 43 J9: dismissible tips (the phone More sheet's drag how-to) + Reset tips
+	['tips', () => import('./tips')],
 	['editResume', () => import('./editResume')],
 	['moduleRequirements', () => import('./moduleRequirements')],
 	['hudDocs', () => import('./hudDocs')],

@@ -38,6 +38,7 @@ export const SETTINGS_ROWS = [
 	["Interface", "Editor tour", "Six steps around the editor — adding things, looking around, the tools, Play, building together and the log…"],
 	["Interface", "Offer Enter VR", "In a headset's browser (Quest), let the browser show its own \"Enter VR\" button for this page, once per visit."],
 	["Interface", "Reset tours", "Forget which tours you have seen or skipped and turn automatic tours back on"],
+	["Interface", "Reset tips", "Show the small how-to tips you closed with their × again (the phone More sheet's drag tip)"],
 	["Interface", "Floating toolbar", "The bottom toolbar lifts above the docked Node editor or Explorer when one opens, so it never sits over the…"],
 	["Interface", "Toolbar always on top", "The bottom toolbar paints over the docked panels and over floating windows, so it is always reachable."],
 	["Interface", "Window positions", "Bring back any floating window (object list, chat, Explorer, editors) that drifted off-screen or behind the UI"],
