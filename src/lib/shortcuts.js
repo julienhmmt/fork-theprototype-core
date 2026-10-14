@@ -38,6 +38,7 @@ import { backToStartView } from './startView';
 import { snapTargets } from './snapping';
 import { cycleViewMode } from './viewMode'; // 37 R18
 import { toggleFocusAtPointer, focusActive, exitFocus } from './focusMode'; // 42 I14 (a leaf: appStore/sceneStore/bottomDock)
+import { viewportPipOpen, framePipSelection } from './viewportPip'; // 43 K5 (a leaf: sceneStore + three)
 import { togglePanel, toggleDock } from './panelToggles';
 // Phase 5: the play FAB's own entry point. playMode.js imports sceneStore +
 // svelte/store ONLY (it says so at the top of the file, and that is deliberate),
@@ -682,6 +683,48 @@ export const shortcuts = [
 		fixedReason: 'Escape always leaves focus mode',
 		when: () => focusActive(),
 		action: () => exitFocus()
+	},
+	/*
+	 * 43 K5 — THE VIEWPORT PiP's keys (scope `pip`, keyScope.js). A press over the PiP falls back to the
+	 * viewport's rows (Delete, 1/2/3, G, Ctrl+D …: they act on the selection, wherever you look at it);
+	 * these four shadow theirs. W/E/R arm Move/Rotate/Scale (Unity's QWER — a PiP has no fly navigation,
+	 * so the keys are free there), F frames the selection with the PiP's own camera.
+	 */
+	{
+		id: 'pip.move',
+		keys: 'W',
+		group: 'Viewport picture-in-picture',
+		scope: 'pip',
+		label: 'Move (translate) — in the viewport PiP',
+		when: () => viewportPipOpen(),
+		action: () => setTransformMode('translate')
+	},
+	{
+		id: 'pip.rotate',
+		keys: 'E',
+		group: 'Viewport picture-in-picture',
+		scope: 'pip',
+		label: 'Rotate — in the viewport PiP',
+		when: () => viewportPipOpen(),
+		action: () => setTransformMode('rotate')
+	},
+	{
+		id: 'pip.scale',
+		keys: 'R',
+		group: 'Viewport picture-in-picture',
+		scope: 'pip',
+		label: 'Scale — in the viewport PiP',
+		when: () => viewportPipOpen(),
+		action: () => setTransformMode('scale')
+	},
+	{
+		id: 'pip.frame',
+		keys: 'F',
+		group: 'Viewport picture-in-picture',
+		scope: 'pip',
+		label: "Frame the selection with the PiP's camera",
+		when: () => viewportPipOpen(),
+		action: () => framePipSelection()
 	},
 	{
 		id: 'voice.push-to-talk',

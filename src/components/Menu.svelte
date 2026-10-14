@@ -49,6 +49,7 @@
 	import PhoneShell from './phone/PhoneShell.svelte'
 	import PhoneDockHost from './phone/PhoneDockHost.svelte'
 	import FocusModeExit from './menu/FocusModeExit.svelte'
+	import ViewportPip from './menu/ViewportPip.svelte' // 43 K5
 	import { phoneShell } from '$lib/ui/phoneShell.js'
 </script>
 
@@ -56,6 +57,8 @@
 <AiAssistant />
 <!-- 42 I14: focus mode's exit pill + wiring (outside #editor-chrome, which focus mode hides) -->
 <FocusModeExit />
+<!-- 43 K5: the 3D view as a picture-in-picture while a docked window fills the whole window -->
+<ViewportPip />
 <MeshGenModal />
 <MeshJobsCard />
 

@@ -1,28 +1,32 @@
 <script>
-	// 16-Q4: chrome for the camera preview window. The PICTURE comes from the main
-	// render loop (Outline.svelte draws one extra scissored viewport into the rect we
-	// publish), so this component is a frame with a title, a close button and the
-	// dragging — nothing draws here, which is why the body is transparent.
+	// 16-Q4: chrome for the camera preview window. 43 K5: the frame is the shared PipFrame (also the
+	// maximized dock's viewport PiP), the PICTURE is drawn into its canvas by the render loop
+	// ($lib/pipViews — this component only hands it the camera), and it is RESIZABLE by its corner
+	// (the height is remembered; the width follows the camera's framing aspect).
 	//
 	// Dragging is RIGHT-button (left stays free for the viewport) and touch-HOLD, as
 	// asked. Parked bottom-right by default, left of an open side panel so the two
 	// never cover each other.
-	import { objectsGroup } from '../../stores/sceneStore';
+	import { objectsGroup, TControls, globalScene } from '../../stores/sceneStore';
 	import { inspectorClose } from '../../stores/appStore';
-	import { cameraSpec, setCameraFor } from '$lib/cameraObjects';
+	import { cameraSpec, setCameraFor, buildCamera } from '$lib/cameraObjects';
 	import { startCameraPreview } from '$lib/cameraPreview';
 	import {
 		pipTarget,
 		pipRect,
 		pipPosition,
 		pipSize,
+		pipHeight,
+		resetPipSize,
 		autoPosition,
 		clampPosition
 	} from '$lib/cameraPip';
+	import { registerPipView } from '$lib/pipViews';
+	import PipFrame from './PipFrame.svelte';
 	import { viewportInset } from '$lib/bottomDock';
 
 	const object = $derived($pipTarget ? ($objectsGroup?.getObjectByProperty('uuid', $pipTarget) ?? null) : null);
-	const size = $derived(object ? pipSize(object) : { w: 0, h: 0 });
+	const size = $derived(object ? pipSize(object, $pipHeight) : { w: 0, h: 0 });
 
 	let vw = $state(0);
 	let vh = $state(0);
@@ -61,139 +65,77 @@
 		pipRect.set(object && vw && vh ? { x: position.x, y: position.y, w: size.w, h: size.h } : null);
 	});
 
-	let dragging = $state(false);
-	/** @type {any} */
-	let holdTimer = null;
-	let startX = 0;
-	let startY = 0;
-	let origin = { x: 0, y: 0 };
+	/** @type {HTMLCanvasElement | null} */
+	let canvas = $state(null);
+	/** the render loop's camera for this preview (re-used frame to frame) @type {any} */
+	let pipCamera = null;
+	// hand the shared PiP renderer this view while the window is up
+	$effect(() => {
+		const el = canvas;
+		const obj = object;
+		if (!el || !obj) return;
+		/** @type {{marker: boolean, frustums: boolean, gizmo: boolean}} */
+		const was = { marker: true, frustums: false, gizmo: false };
+		return registerPipView('camera', {
+			canvas: el,
+			camera: (aspect) => (pipCamera = buildCamera(obj, aspect, pipCamera)),
+			before: () => {
+				// looking through a camera means standing inside its own body, its frustum lines would
+				// wrap the lens, and the transform gizmo (16-Q5) sat on the lens as a coloured blob —
+				// three keeps the gizmo VISUALS in `getHelper()`, so that is what hides
+				const frustums = $globalScene?.getObjectByName?.('camera-frustums');
+				const gizmo = $TControls?.getHelper?.() ?? $TControls;
+				was.marker = obj.visible;
+				was.frustums = frustums?.visible ?? false;
+				was.gizmo = gizmo?.visible ?? false;
+				obj.visible = false;
+				if (frustums) frustums.visible = false;
+				if (gizmo) gizmo.visible = false;
+			},
+			after: () => {
+				const frustums = $globalScene?.getObjectByName?.('camera-frustums');
+				const gizmo = $TControls?.getHelper?.() ?? $TControls;
+				obj.visible = was.marker;
+				if (frustums) frustums.visible = was.frustums;
+				if (gizmo) gizmo.visible = was.gizmo;
+			}
+		});
+	});
 
-	/** @param {PointerEvent} event */
-	function onPointerDown(event) {
-		const touch = event.pointerType !== 'mouse';
-		// 16-Q5: the title BAR drags with the left button too (that's where a hand
-		// goes); the body keeps right-drag so a left-click there can't move the window
-		// by accident. Touch holds anywhere.
-		const onBar = !!(/** @type {any} */ (event.target)?.closest?.('.pip-bar'));
-		const leftOnBar = event.button === 0 && onBar && !/** @type {any} */ (event.target)?.closest?.('.pip-btn');
-		if (!touch && event.button !== 2 && !leftOnBar) return;
-		startX = event.clientX;
-		startY = event.clientY;
-		origin = { ...position };
-		if (touch) {
-			// hold-to-drag on touch, so a tap can still hit the buttons
-			holdTimer = setTimeout(() => (dragging = true), 350);
-		} else {
-			dragging = true;
-			event.preventDefault();
+	/** @param {{x: number, y: number, w: number, h: number}} r @param {'move'|'resize'} kind */
+	function onrect(r, kind) {
+		const view = { width: vw, height: canvasH };
+		if (kind === 'resize') {
+			// the height decides (the width is the framing aspect's); never taller than the view
+			const h = Math.min(r.h, Math.max(PIP_MIN, canvasH - 8));
+			pipHeight.set(Math.round(h));
+			const sz = pipSize(/** @type {any} */ (object), h);
+			pipPosition.set(clampPosition({ x: r.x + r.w - sz.w, y: r.y + r.h - sz.h }, sz, view));
+			return;
 		}
-		/** @type {any} */ (event.currentTarget).setPointerCapture?.(event.pointerId);
+		pipPosition.set(clampPosition({ x: r.x, y: r.y }, size, view));
 	}
-
-	/** @param {PointerEvent} event */
-	function onPointerMove(event) {
-		if (!dragging) return;
-		pipPosition.set(
-			clampPosition(
-				{ x: origin.x + (event.clientX - startX), y: origin.y + (event.clientY - startY) },
-				size,
-				{ width: vw, height: canvasH }
-			)
-		);
-		event.preventDefault();
-	}
-
-	/** @param {PointerEvent} event */
-	function onPointerUp(event) {
-		clearTimeout(holdTimer);
-		dragging = false;
-		/** @type {any} */ (event.currentTarget).releasePointerCapture?.(event.pointerId);
-	}
+	const PIP_MIN = 90;
+	const ratio = $derived(size.h ? size.w / size.h : 16 / 9);
 </script>
 
 <svelte:window bind:innerWidth={vw} bind:innerHeight={vh} />
 
 {#if object}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div
-		class="pip"
-		class:pip-drag={dragging}
-		style="left: {position.x}px; top: {position.y}px; width: {size.w}px; height: {size.h}px;"
-		onpointerdown={onPointerDown}
-		onpointermove={onPointerMove}
-		onpointerup={onPointerUp}
-		oncontextmenu={(e) => e.preventDefault()}
+	<PipFrame
+		title={object.name || 'Camera'}
+		rect={{ x: position.x, y: position.y, w: size.w, h: size.h }}
+		{onrect}
+		onreset={resetPipSize}
+		aspect={ratio}
+		minH={PIP_MIN}
+		hint="right-drag to move"
+		closeTitle="Hide this camera's preview window (Camera properties can bring it back)"
+		onclose={() => setCameraFor(object.uuid, { pip: false })}
+		bind:canvas
 	>
-		<div class="pip-bar">
-			<span class="pip-title" title={object.name || 'Camera'}>{object.name || 'Camera'}</span>
-			<button
-				class="pip-btn"
-				title="Look through this camera (full screen)"
-				onclick={() => startCameraPreview(object.uuid)}>⤢</button
-			>
-			<button
-				class="pip-btn"
-				title="Hide this camera's preview window (Camera properties can bring it back)"
-				onclick={() => setCameraFor(object.uuid, { pip: false })}>✕</button
-			>
-		</div>
-		<p class="pip-hint">right-drag to move</p>
-	</div>
+		{#snippet buttons()}
+			<button class="pip-btn" title="Look through this camera (full screen)" onclick={() => startCameraPreview(object.uuid)}>⤢</button>
+		{/snippet}
+	</PipFrame>
 {/if}
-
-<style>
-	/* the frame only — the live image is drawn by the renderer INSIDE this box, so
-	   the body must stay transparent (no background, no backdrop-filter) */
-	.pip {
-		position: fixed;
-		/* 16-Q6: BELOW every panel and HUD (viewport 0 < this < drawer 30) — the frame
-		   is a viewport overlay, not chrome, so nothing of the UI hides behind it */
-		z-index: var(--z-canvas-overlay);
-		border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-		border-radius: 6px;
-		box-shadow: var(--shadow-window);
-		pointer-events: auto;
-		overflow: hidden;
-	}
-	.pip-drag {
-		border-color: var(--accent);
-		cursor: grabbing;
-	}
-	.pip-bar {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		padding: 2px 4px 2px 6px;
-		background: color-mix(in srgb, var(--bg-app) 72%, transparent);
-		font-size: 10px;
-		color: var(--text);
-	}
-	.pip-title {
-		flex: 1 1 auto;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-weight: 600;
-	}
-	.pip-btn {
-		flex: 0 0 auto;
-		width: 16px;
-		height: 16px;
-		border-radius: 3px;
-		line-height: 1;
-		color: var(--text-2);
-		background: color-mix(in srgb, var(--text-faint) 20%, transparent);
-	}
-	.pip-btn:hover {
-		background: color-mix(in srgb, var(--text-faint) 45%, transparent);
-		color: var(--text);
-	}
-	.pip-hint {
-		position: absolute;
-		bottom: 2px;
-		right: 5px;
-		font-size: 9px;
-		color: color-mix(in srgb, var(--text) 50%, transparent);
-		pointer-events: none;
-	}
-</style>
