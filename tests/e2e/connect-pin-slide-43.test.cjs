@@ -24,8 +24,26 @@ async function sidebar(page, { side = 'right', open = true, full = false, w = 44
 		S.sidebars.toggleSidebarFull('right', side === 'right' && full);
 		S.sidebars.setSidebarWidth(side, w);
 	}, { side, open, full, w });
-	// the slow slide is 1.5 s; give it, its transitionend and a frame or two time to land
+	// the slow slide is 1.5 s; give it, its transitionend and a frame or two time to land — and count the frames
+	// the pill spent on its own row meanwhile (a decision taken mid-slide flips it there and back)
+	await page.evaluate(() => {
+		window.__cpsDocked = 0;
+		window.__cpsFrames = 0;
+		// every class change of the pill, not samples: a busy headless page runs a 25 ms timer ~5 times in
+		// 2.6 s, so a flip to the own row and back falls between samples — an observer sees each one
+		window.__cpsObs?.disconnect();
+		const pill = document.querySelector('.connect-pill');
+		window.__cpsObs = new MutationObserver(() => {
+			window.__cpsFrames++;
+			if (pill?.classList.contains('docked')) window.__cpsDocked++;
+		});
+		if (pill) window.__cpsObs.observe(pill, { attributes: true, attributeFilter: ['class'] });
+	});
 	await page.waitForTimeout(2600);
+	return page.evaluate(() => {
+		window.__cpsObs?.disconnect();
+		return { docked: window.__cpsDocked, frames: window.__cpsFrames };
+	});
 }
 
 /** where the pill and the corner walls are NOW */
@@ -73,22 +91,26 @@ h.run(async () => {
 		h.check(!!L.pill && !L.overlaps.tr && !L.overlaps.avatar && !L.overlaps.logo, T + `premise: unpinned, the pill (${r(L.pill?.left)}..${r(L.pill?.right)}) is clear of the corners (${JSON.stringify(L.overlaps)})`);
 
 		// ---- 1. a pinned RIGHT sidebar: the corner slides 440 px left over 1.5 s ----
-		await sidebar(page, { side: 'right', full: true, w: 440 });
+		let S = await sidebar(page, { side: 'right', full: true, w: 440 });
 		L = await layout(page);
+		// 1440: the pill fits before the slide and after it, so it never has a reason to take its own row
+		if (vw === 1440) h.check(S.docked === 0, T + `1. the pill stays on the top row while the corner slides (${S.docked} of ${S.frames} class changes put it on its own row)`);
 		h.check(!L.overlaps.tr && !L.overlaps.avatar, T + `1. right sidebar pinned (440): the pill (${r(L.pill?.left)}..${r(L.pill?.right)}${L.docked ? ', own row' : ''}) does not cover the top-right group (${r(L.tr?.left)}..${r(L.tr?.right)}) or the profile (${r(L.avatar?.left)}..${r(L.avatar?.right)})`);
 		if (L.dock && L.dock.right != null)
 			h.check(Math.abs(L.dock.right - L.wallRight) <= 2, T + `1. the measured right wall is where the slide ENDED (measured ${r(L.dock.right)}, drawn ${r(L.wallRight)})`);
 
 		// ---- 2. unpinned again: the corner slides back, the pill returns to the middle ----
-		await sidebar(page, { side: 'right', full: false, open: false, w: 440 });
+		S = await sidebar(page, { side: 'right', full: false, open: false, w: 440 });
 		L = await layout(page);
+		if (vw === 1440) h.check(S.docked === 0, T + `2. …and while it slides back (${S.docked} of ${S.frames} class changes put it on its own row)`);
 		h.check(!L.overlaps.tr && !L.overlaps.avatar && !L.docked, T + `2. unpinned: the pill is back on the top row (${r(L.pill?.left)}..${r(L.pill?.right)}), clear of the corner`);
 		if (L.dock && L.dock.right != null)
 			h.check(Math.abs(L.dock.right - L.wallRight) <= 2, T + `2. …and measured the wall where it ended (${r(L.dock.right)} vs ${r(L.wallRight)})`);
 
 		// ---- 3. a pinned LEFT sidebar: the logo slides 440 px right ----
-		await sidebar(page, { side: 'left', full: true, w: 440 });
+		S = await sidebar(page, { side: 'left', full: true, w: 440 });
 		L = await layout(page);
+		if (vw === 1440) h.check(S.docked === 0, T + `3. the pill stays on the top row while the logo slides (${S.docked} of ${S.frames} class changes put it on its own row)`);
 		h.check(!L.overlaps.logo, T + `3. left sidebar pinned (440): the pill (${r(L.pill?.left)}..${r(L.pill?.right)}${L.docked ? ', own row' : ''}) does not cover the logo (${r(L.logo?.left)}..${r(L.logo?.right)})`);
 		if (L.dock && L.dock.left != null && !L.docked)
 			h.check(L.dock.left >= L.wallLeft - 2, T + `3. the measured left wall is at or past the slid logo (measured ${r(L.dock.left)}, logo right ${r(L.wallLeft)})`);

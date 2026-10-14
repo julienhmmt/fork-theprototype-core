@@ -152,8 +152,39 @@
 		return { left, right };
 	}
 
+	// 43-int: a wall that is still SLIDING (a pinned sidebar moves the corner chrome on a CSS transition)
+	// is not a wall yet. Deciding mid-slide parked the pill on a wall that was about to move — over the
+	// top-right group on a busy box — and flipped it to its own row for a moment on every pin/unpin. While
+	// any wall (or the chrome carrying it) is in a CSS transition, keep the current layout and look again
+	// next frame; decide once it has landed (capped, so a stuck transition cannot freeze the pill).
+	const WALL_IDS = ['logo-menu', 'touch-tools', 'hud-tr', 'avatar-trigger'];
+	let settleRaf = 0;
+	let settleSince = 0;
+	function wallsSliding() {
+		for (const id of WALL_IDS) {
+			for (let n = document.getElementById(id); n && n !== document.body; n = n.parentElement) {
+				const anims = n.getAnimations?.() ?? [];
+				if (anims.some((a) => a.playState === 'running' && typeof CSSTransition !== 'undefined' && a instanceof CSSTransition)) return true;
+			}
+		}
+		return false;
+	}
+
 	function measureDock() {
 		if (typeof window === 'undefined' || !pillEl) return;
+		if (wallsSliding()) {
+			const now = performance.now();
+			if (!settleSince) settleSince = now;
+			if (now - settleSince < 2000) {
+				if (!settleRaf)
+					settleRaf = requestAnimationFrame(() => {
+						settleRaf = 0;
+						measureDock();
+					});
+				return;
+			}
+		}
+		settleSince = 0;
 		const vw = window.innerWidth;
 		const { left: leftRight, right: rightLeft } = topRowWalls(vw);
 		const gap = 12;
@@ -185,7 +216,7 @@
 		const t = setTimeout(measureDock, 160);
 		if (typeof ResizeObserver === 'undefined') return () => clearTimeout(t);
 		const ro = new ResizeObserver(() => measureDock());
-		for (const id of ['logo-menu', 'touch-tools', 'hud-tr', 'avatar-trigger']) {
+		for (const id of WALL_IDS) {
 			const el = document.getElementById(id);
 			if (el) ro.observe(el);
 		}
@@ -241,14 +272,18 @@
 			if (e.propertyName !== 'left' && e.propertyName !== 'right') return;
 			const t = e.target;
 			if (!(t instanceof Element)) return;
-			const wall = ['logo-menu', 'touch-tools', 'hud-tr', 'avatar-trigger'].some((id) => {
+			const wall = WALL_IDS.some((id) => {
 				const el = document.getElementById(id);
 				return !!el && (t.contains(el) || el.contains(t));
 			});
 			if (wall) measureDock();
 		};
 		document.addEventListener('transitionend', onEnd, true);
-		return () => document.removeEventListener('transitionend', onEnd, true);
+		return () => {
+			document.removeEventListener('transitionend', onEnd, true);
+			if (settleRaf) cancelAnimationFrame(settleRaf);
+			settleRaf = 0;
+		};
 	});
 	// re-measure after any layout-affecting change (state, drawer, viewport)
 	$effect(() => {
