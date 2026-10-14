@@ -165,6 +165,17 @@ let revealInspector = null;
 export function setInspectorRevealer(fn) {
 	revealInspector = fn;
 }
+/** 42 I3 — on a desktop sidebar the Inspector is a TAB of its side's column and can be covered by
+ *  another tab (the Objects list docked to the same side). `$lib/sidebars` registers this: an explicit
+ *  open of an Inspector that is already open brings its tab to the front, answering true when it
+ *  WAS covered (so Configure Scene's toggle reveals a covered tab rather than closing it).
+ * @type {(() => boolean) | null} */
+let focusInspector = null;
+/** @param {(() => boolean) | null} fn */
+export function setInspectorFocuser(fn) {
+	focusInspector = fn;
+}
+const focusCovered = () => !!focusInspector?.();
 /** 41b H1 — told when hidePanels()/restorePanels() hide and bring back the panels (the phone dock
  *  puts back the tab that was in front, not whichever reopened last)
  * @type {((phase: 'hide' | 'restore') => void) | null} */
@@ -175,8 +186,13 @@ export function setPanelsHook(fn) {
 }
 
 // update the sidebar visibility
-/** @param {'properties'|'lightProperties'|'scene'|'library'} store */
-export function showSidebar(store) {
+/**
+ * @param {'properties'|'lightProperties'|'scene'|'library'} store
+ * @param {{focus?: boolean}} [opts] 42 I3: `focus: false` = follow the selection without pulling a
+ *   covered Properties tab to the front (a PINNED panel following a click in the Objects list that
+ *   shares its column must not take the list away). Default: an explicit open focuses.
+ */
+export function showSidebar(store, { focus = true } = {}) {
 	if (store === 'library') {
 		// Library TOGGLES: a second click closes it
 		if (!get(libraryClose)) {
@@ -195,13 +211,24 @@ export function showSidebar(store) {
 	// Configure Scene TOGGLES; selection stays open-only (clicks must never close it)
 	if (store === 'scene' && open && get(inspectorKind) === 'scene') {
 		if (revealInspector?.('scene')) return; // a covered phone tab comes to the front instead
+		if (focusCovered()) return; // ...and a covered desktop sidebar tab (42 I3)
 		inspectorClose.set(true);
 		return;
 	}
 	libraryClose.set(true);
 	if (open && get(inspectorKind) === kind) {
 		revealInspector?.(kind);
+		if (focus) focusInspector?.();
 		return; // already showing this target
+	}
+	// 42 I4: an OPEN panel swaps its content in place. Closing it and reopening 50 ms later
+	// replayed the fly-in on every select after a deselect (Scene -> Properties) — the pinned
+	// sidebar "shook". The slide belongs to a panel opening from CLOSED, never to a swap.
+	if (open) {
+		inspectorKind.set(kind);
+		revealInspector?.(kind);
+		if (focus) focusInspector?.();
+		return;
 	}
 	inspectorClose.set(true);
 	// The delay adds cool effect
@@ -223,6 +250,7 @@ export function openSceneSection(label) {
 	libraryClose.set(true);
 	const wasOpen = !get(inspectorClose) && get(inspectorKind) === 'scene';
 	if (wasOpen) revealInspector?.('scene');
+	focusInspector?.();
 	inspectorKind.set('scene');
 	inspectorClose.set(false);
 	// let the panel mount before asking a section to scroll (it may not exist yet)
@@ -656,6 +684,22 @@ if (typeof localStorage !== 'undefined') {
   });
 }
 
+/** 42 I10: LIFT THE CORNER BUTTONS ABOVE DOCKED PANELS — `floatingToolbar`'s question asked of
+ * the two round-button STACKS (bottom-left / bottom-right, Controls.svelte). ON, each stack sits
+ * on `--bottom-inset` (the open bottom dock's height) so a docked Node editor / Explorer no
+ * longer covers it; OFF (the DEFAULT, the user's ask) they stay on the viewport floor under the
+ * dock tier, exactly as before. Root class `hud-stacks-lifted` (hud.css) carries it, so the opt-in
+ * sim transport above the right stack rides up with it. LOCAL, persisted, absent = OFF. */
+export const hudStackLift = writable(
+  typeof localStorage !== 'undefined' ? safeStorage.getItem('hudStackLift') === 'true' : false
+);
+if (typeof localStorage !== 'undefined') {
+  hudStackLift.subscribe((v) => {
+    try { safeStorage.setItem('hudStackLift', v ? 'true' : 'false'); } catch { /* */ }
+    if (typeof document !== 'undefined') document.documentElement.classList.toggle('hud-stacks-lifted', !!v);
+  });
+}
+
 /** PINNED: keep the drawer's tab bar (+ status) visible even when the body is
  * collapsed, so it acts as a persistent mini-bar under the pill. Persisted. */
 export const connectDrawerPinned = writable(
@@ -732,6 +776,26 @@ export function showToast(message, actions) {
   });
   // E1: every toast also lands in the notification history
   pushNotification(message, actions ? 'action' : 'info');
+}
+
+/**
+ * 42 I12: a transient toast that is ONE card per `id` — a second call while it is still up
+ * replaces its text and buttons IN PLACE (the stack keys an id'd card by its id, so it neither
+ * re-mounts nor stacks a twin) and restarts its timer. For a source that can speak several
+ * times in a row about one subject: the auto-quality notice used to stack a second "Lowered …"
+ * card a few seconds after the first. Every call still lands in the notification history.
+ * @param {string} id @param {string} message @param {{label: string, action: () => void}[]=} actions
+ */
+export function showToastById(id, message, actions) {
+  toastStore.update((list) => {
+    const row = { id, text: message, actions: actions ?? [] };
+    const at = list.findIndex((entry) => entry && typeof entry === 'object' && entry.id === id);
+    if (at === -1) return [...list, row];
+    const next = [...list];
+    next[at] = row;
+    return next;
+  });
+  pushNotification(message, actions?.length ? 'action' : 'info');
 }
 
 export function clearToast(toast) {

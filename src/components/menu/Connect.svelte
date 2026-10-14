@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { geometry as sidebarGeometry } from '$lib/sidebars'; // 42 I2
 	import { micActive, pttActive, toggleMic, speakingPeers } from '$lib/voiceChat';
 	import { peerColor } from '$lib/lockControl';
 	import Icon from '../ui/Icon.svelte';
@@ -119,6 +120,8 @@
 	// last natural (undocked) width of the pill content — frozen while docked so the
 	// undock threshold uses a stable value even though the bar is now full-width
 	let naturalWidth = 0;
+	// 42 I2: how far the pill sits off the window's centre while a full-height column is pinned
+	let cxShift = $state(0);
 
 	function measureDock() {
 		if (typeof window === 'undefined' || !pillEl) return;
@@ -132,7 +135,14 @@
 		const gap = 12;
 		// only trust a fresh content-width reading while the pill is its natural size
 		if (!docked) naturalWidth = Math.max(pillEl.scrollWidth, pillEl.offsetWidth);
-		const centerX = vw / 2;
+		// 42 I2: a FULL-HEIGHT sidebar slides its corner's buttons inward by the column's width. Centred
+		// on the window, the pill then lost the gap on that side and docked for nothing (the cloud
+		// build's ~480 px pill at 1440 px) — so while a column is pinned it centres in the gap between
+		// the logo and the corner buttons instead (`--cx-shift`); unpinned it stays window-centred.
+		const g = $sidebarGeometry;
+		const pinned = g.dockLeft > 0 || g.dockRight > 0;
+		const centerX = pinned ? (leftRight + rightLeft) / 2 : vw / 2;
+		cxShift = pinned ? Math.round(centerX - vw / 2) : 0;
 		// a centred element fits iff its width <= twice the SMALLER side gap
 		const available = 2 * Math.min(centerX - (leftRight + gap), (rightLeft - gap) - centerX);
 		docked = vw <= 640 || naturalWidth > available;
@@ -163,6 +173,13 @@
 		}
 	});
 
+	// 42 I2: a FULL-HEIGHT sidebar slides the corner chrome inward (a 0.2 s CSS transition) —
+	// measure where it ENDS, not where it is mid-slide
+	$effect(() => {
+		$sidebarGeometry; // track
+		const t = setTimeout(measureDock, 260);
+		return () => clearTimeout(t);
+	});
 	// re-measure after any layout-affecting change (state, drawer, viewport)
 	$effect(() => {
 		connState; // track content-width changes
@@ -307,7 +324,7 @@
 	 transparent margin pass clicks to windows underneath (z-index 300); the pill
 	 re-enables them. Narrow screens drop the bar to its own row BELOW the logo
 	 (left) and the peers/profile chrome (right) instead of squeezing between them. -->
-<div class="connect-wrap" data-key-scope="keep" class:docked class:body-open={$connectDrawerOpen}>
+<div class="connect-wrap" data-key-scope="keep" class:docked class:body-open={$connectDrawerOpen} style:--cx-shift="{cxShift}px">
 	<!-- 38 R8: one glass bar (styles/hud.css) — your invite id as a mono chip, the dial field
 	     with ONE primary button, status as a Badge, icon buttons for the rest. Every id,
 	     testid, placeholder and button name the suites and the tour read is unchanged. -->
@@ -490,7 +507,10 @@
 	.connect-wrap {
 		position: fixed;
 		top: 8px;
-		left: 50%;
+		/* 42 I2: centred in the gap between the corner chrome while a full-height column is pinned
+		   (measureDock; 0 = the window's centre) */
+		left: calc(50% + var(--cx-shift, 0px));
+		transition: left 0.2s ease;
 		transform: translateX(-50%);
 		z-index: var(--z-chrome-top);
 		pointer-events: none;
@@ -666,6 +686,7 @@
 	.connect-wrap.docked {
 		top: 0;
 		left: 0;
+		transition: none;
 		right: 0;
 		transform: none;
 		max-width: none;

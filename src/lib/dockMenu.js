@@ -11,9 +11,10 @@ import {
 } from '../stores/appStore';
 import { imageEditorClose } from './image/imageEditorState';
 import { get } from 'svelte/store';
-import { activateDock, armDockMode, armDockModes, dockOccupants, dockTabs, moveDockTab, visibleDockKey, undockButtonMode, placeDockTabs, DOCK_FAMILY, DOCK_TITLES, DOCK_ICONS, PHONE_DOCK_TABS } from './bottomDock';
+import { activateDock, armDockMode, armDockModes, dockOccupants, dockTabs, moveDockTab, visibleDockKey, undockButtonMode, placeDockTabs, canDockFloating, DOCK_TITLES, DOCK_ICONS, PHONE_DOCK_TABS, HOSTED_DOCK_TABS } from './bottomDock';
 import { phoneShell } from './ui/phoneShell.js';
 import { queueMerge } from './windowTabs';
+import { maximizeDockTab } from './focusMode';
 
 // The dock's "+" add-a-view menu, in ONE place. The docked tab strip
 // (DockTabs.svelte) and the FLOATING Node editor's header "+" (Flow.svelte) each
@@ -92,9 +93,63 @@ export const PHONE_DOCK_WINDOWS = [
 	{ key: 'layouts', tooltip: 'Save and switch named workspace layouts', phone: true },
 	{ key: 'scene', tooltip: 'Sky, light, physics, grid and the rest of the scene’s settings', phone: true }
 ];
+/**
+ * 42 I6 — the floating windows the dock HOSTS on a wider screen ($lib/dockHost): the "+" offers
+ * them there (on a phone the Objects list is already a phone row above, the others float).
+ * @type {{key: string, tooltip: string}[]}
+ */
+export const HOSTED_DOCK_WINDOWS = [
+	{ key: 'objects', tooltip: 'Every object in the scene, as a tree' },
+	{ key: 'stats', tooltip: 'Scene budget: draw calls, triangles, textures and memory' },
+	{ key: 'profilerLive', tooltip: 'Frame time as it happens, this peer or one you watch' },
+	{ key: 'chat', tooltip: 'Talk to the people in this session' },
+	{ key: 'aiAssistant', tooltip: 'Ask the AI assistant to build or change the scene' }
+];
 /** the registry rows for the posture we are in @returns {{key: string, tooltip: string}[]} */
 function windowsHere() {
-	return get(phoneShell) ? [...DOCK_WINDOWS, ...PHONE_DOCK_WINDOWS] : DOCK_WINDOWS;
+	return get(phoneShell) ? [...DOCK_WINDOWS, ...PHONE_DOCK_WINDOWS] : [...DOCK_WINDOWS, ...HOSTED_DOCK_WINDOWS];
+}
+
+/**
+ * 42 I6 — is a view OPEN when no close store can say (the hosted windows: their open state is
+ * a `''|'hidden'` class, a positive flag, …)? $lib/dockHost registers each.
+ * @type {Record<string, () => boolean>}
+ */
+const dockOpenStates = {};
+/** @param {string} key @param {() => boolean} fn @returns {() => void} unregister */
+export function registerDockOpenState(key, fn) {
+	dockOpenStates[key] = fn;
+	return () => {
+		if (dockOpenStates[key] === fn) delete dockOpenStates[key];
+	};
+}
+/** open as a floating window or a tab — whatever its close store or open-state says @param {string} key */
+function viewOpen(key) {
+	const closer = closeStoreFor(key);
+	if (closer) return get(closer) === false;
+	return !!dockOpenStates[key]?.();
+}
+
+/**
+ * 42 I6 — can this FLOATING window become a dock tab here? Every view with a docked branch,
+ * and a hosted window on a wider screen (on a phone the dock hosts only its own content tabs,
+ * so the hosted windows keep floating there). The one predicate 41 G7's drop code asks.
+ * @param {string} key
+ */
+export function canDockHere(key) {
+	if (!canDockFloating(key)) return false;
+	return !(HOSTED_DOCK_TABS.includes(key) && get(phoneShell));
+}
+
+/**
+ * 42 I6 — can this dock TAB be taken out into a floating window? Every view with a floating
+ * mode can; a phone content tab cannot (its wider-screen home is a drawer or a dialog) —
+ * except a hosted window (the Objects list) on a wider screen, which is a floating window there.
+ * @param {string} key
+ */
+export function canUndockTab(key) {
+	if (!PHONE_DOCK_TABS.includes(key)) return true;
+	return HOSTED_DOCK_TABS.includes(key) && !get(phoneShell);
 }
 
 /**
@@ -157,9 +212,8 @@ export function dockAddItems({ exclude = [] } = {}) {
 	return windowsHere().filter((view) => !exclude.includes(view.key)).map((view) => {
 		const title = DOCK_TITLES[view.key] ?? view.key;
 		const docked = !!occupied[view.key]?.present;
-		const closer = closeStoreFor(view.key);
 		// not docked, but OPEN = a floating window: the row moves it rather than opening a copy
-		const floating = !docked && !!closer && get(closer) === false;
+		const floating = !docked && viewOpen(view.key);
 		const icon = DOCK_ICONS[view.key] ?? 'app-window';
 		if (docked)
 			return { key: view.key, label: title, icon, hint: 'Remove', checked: true, tooltip: `${title} is in the dock — click to remove it (closes it)`, action: () => closeDockView(view.key) };
@@ -210,13 +264,20 @@ export function dockTabItems(key) {
 		action: () => moveDockTab(key, 'right')
 	});
 	// 41b H1: a phone content tab has no floating window to undock into (it is a tab only on
-	// the phone, and its wider-screen home is a side drawer or a dialog)
-	if (!PHONE_DOCK_TABS.includes(key))
+	// the phone, and its wider-screen home is a side drawer or a dialog) — 42 I6: a hosted
+	// window docked on a wider screen does (`canUndockTab`)
+	if (canUndockTab(key))
 		items.push({
 			label: 'Undock into a floating window',
 			tooltip: `Take ${title} out of the dock`,
 			action: () => armDockMode(key, false)
 		});
+	// 42 I14: focus mode's touch/pointer way in for a docked window — the tab fills the window
+	items.push({
+		label: 'Maximize (focus mode)',
+		tooltip: `Show ${title} alone, filling the window — Esc, Ctrl+Space or "Exit focus" restores`,
+		action: () => maximizeDockTab(key)
+	});
 	items.push({
 		label: 'Close',
 		tooltip: `Close ${title} (it leaves the dock; nothing else is touched)`,
@@ -256,24 +317,25 @@ export function closeDockView(key) {
 export function undockFromDock(mode) {
 	const how = mode ?? get(undockButtonMode);
 	if (how === 'group') {
-		const keys = get(dockTabs).map((t) => t.key).filter((k) => !PHONE_DOCK_TABS.includes(k));
+		const keys = get(dockTabs).map((t) => t.key).filter((k) => canUndockTab(k));
 		if (!keys.length) return;
 		armDockModes(keys, false);
 		for (const key of keys.slice(1)) queueMerge(keys[0], key);
 		return;
 	}
 	const key = get(visibleDockKey);
-	if (key && !PHONE_DOCK_TABS.includes(key)) armDockMode(key, false);
+	if (key && canUndockTab(key)) armDockMode(key, false);
 }
 
 /**
  * 40 F8 — a floating tab group's dock button (left of "close all tabs") docks ALL of its
- * tabs. Members that have no docked mode (Objects, Chat, the AI window) stay floating.
+ * tabs. 42 I6: Objects, Chat and the AI window dock too now (hosted); a window with no dock
+ * tab at all (a file preview) stays floating.
  * @param {string[]} members @param {string=} active the tab to show once docked
  * @returns {number} how many were docked
  */
 export function dockAllOf(members, active) {
-	const keys = members.filter((k) => DOCK_FAMILY.includes(k));
+	const keys = members.filter((k) => canDockHere(k));
 	if (!keys.length) return 0;
 	armDockModes(keys, true);
 	activateDock(active && keys.includes(active) ? active : keys[0]);
@@ -283,12 +345,12 @@ export function dockAllOf(members, active) {
 /**
  * 41 G6 — "Dock this tab" (a floating group tab's long-press / right-click menu): that ONE
  * view goes to the bottom dock and is shown; the rest of its group stays floating (the
- * member leaves the group as its floating node unmounts). False for a window with no
- * docked mode (Objects, Chat, the AI window).
+ * member leaves the group as its floating node unmounts — a hosted window leaves it
+ * explicitly, $lib/dockHost). False for a window with no dock tab (a file preview).
  * @param {string} key
  */
 export function dockTab(key) {
-	if (!DOCK_FAMILY.includes(key)) return false;
+	if (!canDockHere(key)) return false;
 	dockView(key);
 	return true;
 }
@@ -301,7 +363,7 @@ export function dockTab(key) {
  * @returns {number} how many were docked
  */
 export function dockAtStrip(keys, before) {
-	const docking = keys.filter((k) => DOCK_FAMILY.includes(k));
+	const docking = keys.filter((k) => canDockHere(k));
 	if (!docking.length) return 0;
 	placeDockTabs(docking, before);
 	if (docking.length === 1) armDockMode(docking[0], true);
@@ -327,12 +389,11 @@ export function undockInto(key, targetKey) {
 export function dockSheetRows() {
 	const occupied = get(dockOccupants);
 	return windowsHere().map((view) => {
-		const closer = closeStoreFor(view.key);
 		return {
 			key: view.key,
 			title: DOCK_TITLES[view.key] ?? view.key,
 			tooltip: view.tooltip,
-			open: !!occupied[view.key]?.present || (!!closer && get(closer) === false)
+			open: !!occupied[view.key]?.present || viewOpen(view.key)
 		};
 	});
 }

@@ -11,10 +11,21 @@
 // learn how a window describes itself. Restoring is the reverse plus one thing the owners
 // lacked: a way to RE-READ their key while they are mounted (`onLayoutRestore`).
 //
-// What it is NOT: the toolbar roster (`controlsLayout`, a separate customisation),
-// settings, or anything scene-side. Layouts are LOCAL — a fact about this screen, like
-// the dock order — and never replicate or ride a save. The `workspace` rule (a plain
-// reload is a clean slate) is untouched: a layout is applied only when you pick one.
+// What it is NOT: settings, or anything scene-side. Layouts are LOCAL — a fact about this
+// screen, like the dock order — and never replicate or ride a save. The `workspace` rule (a
+// plain reload is a clean slate) is untouched: a layout is applied only when you pick one.
+//
+// 42 I8 — A LAYOUT CARRIES THE CHROME TOO, IN TWO PROFILES. The user: "Layouts also should save
+// toolbar position, its configuration of which icons added/removed … and sidebar icons, such as
+// microphone/ai assistant … (also layout should keep desktop and mobile settings)". The bottom
+// toolbar, its corner stacks, the top-right group and the touch tools are ONE record
+// (`controlsLayout`, $lib/toolbarLayout), beside the bar's lift / on-top prefs; the folded phone
+// draws a different bar (`phoneBar`, 42 I5) under More's Show switches. A v2 record keeps them apart:
+// `chrome: {desktop: {key: value}, phone: {key: value}}`, the owners' own stored strings exactly
+// like `storage`. SAVE captures the profile of the shell you are in and keeps the other one from
+// the same-name record (`upsertLayout` merges); APPLY restores every profile the record has. A
+// pre-42 record has no `chrome` and migrates to `{}` — applying it leaves the chrome alone, which
+// is what it always did.
 
 /** the dock-family panels whose mode + floating size are component state, by the prefix
  *  their keys use (`<prefix>Docked`, `<prefix>WinW`, `<prefix>WinH`) */
@@ -29,15 +40,41 @@ const EXACT = new Set([
 	'windowTabGroups',
 	'objectListRect',
 	'profilerDockSized',
+	// 42 I6: which floating windows the dock hosts as tabs ($lib/dockHost)
+	'objectListDocked',
+	'statsDocked',
+	'profilerLiveDocked',
+	'chatDocked',
+	'aiAssistantDocked',
 	...PANEL_PREFIXES.flatMap((p) => [p + 'Docked', p + 'WinW', p + 'WinH'])
 ]);
 /** key families that belong to the layout */
-const PREFIXES = ['win:', 'dockWidth:', 'dockSplit:'];
+const PREFIXES = ['win:', 'dockWidth:', 'dockSplit:', 'sidebarWidth:', 'sidebar:']; // 42 I2/I3: the sidebars' side / width / full height / tabs
 
 /** Is this stored key part of a workspace layout? @param {string} key */
 export function isLayoutKey(key) {
 	if (typeof key !== 'string') return false;
 	return EXACT.has(key) || PREFIXES.some((p) => key.startsWith(p));
+}
+
+/** 42 I8: the record version this build writes (1 = before the chrome profiles) */
+export const LAYOUT_VERSION = 2;
+
+/** @typedef {'desktop' | 'phone'} ChromeProfile */
+/** 42 I8: the stored keys each chrome profile is made of. MUTABLE ON PURPOSE — an owner that adds
+ *  a chrome pref adds its key with `addChromeKeys` (the phone bar's owner, for its new toggles),
+ *  so this leaf never has to learn another module's names twice.
+ *  @type {Record<ChromeProfile, string[]>} */
+export const CHROME_KEYS = {
+	// the toolbar record (bar, corners, top-right group, touch tools, position), its two lift
+	// prefs and always-on-top, and the Connect bar's one optional button
+	desktop: ['controlsLayout', 'floatingToolbar', 'toolbarOnTop', 'hudStackLift', 'showRoomsButton'],
+	// the folded phone's bottom bar (42 I5's one list) and More's three Show switches
+	phone: ['phoneBar', 'phoneSelectionStrip', 'phoneDockTabs', 'phoneGrabHandle']
+};
+/** @param {ChromeProfile} profile @param {string[]} keys */
+export function addChromeKeys(profile, keys) {
+	for (const key of keys) if (typeof key === 'string' && key && !CHROME_KEYS[profile].includes(key)) CHROME_KEYS[profile].push(key);
 }
 
 /** the most layouts kept; the oldest unnamed overflow is refused rather than evicted */
@@ -68,6 +105,59 @@ export function pickLayoutStorage(keys, read) {
 		if (!isLayoutKey(key)) continue;
 		const value = read(key);
 		if (typeof value === 'string' && value.length <= MAX_VALUE) out[key] = value;
+	}
+	return out;
+}
+
+/**
+ * 42 I8: one chrome profile out of storage — its keys that hold a value (an absent key is the
+ * owner's default, and stays absent in the record, so applying it puts the default back).
+ * @param {ChromeProfile} profile @param {(key: string) => string | null} read
+ * @returns {Record<string, string>}
+ */
+export function pickChrome(profile, read) {
+	/** @type {Record<string, string>} */
+	const out = {};
+	for (const key of CHROME_KEYS[profile]) {
+		const value = read(key);
+		if (typeof value === 'string' && value.length <= MAX_VALUE) out[key] = value;
+	}
+	return out;
+}
+
+/**
+ * 42 I8: the writes that make storage match one chrome profile — its keys the record has are SET,
+ * the rest of the profile's keys are REMOVED (their owners fall back to the default). Keys the
+ * profile does not list are never written, whatever the record holds.
+ * @param {ChromeProfile} profile @param {Record<string, string>} chrome
+ * @returns {{set: [string, string][], remove: string[]}}
+ */
+export function chromeWrites(profile, chrome) {
+	/** @type {[string, string][]} */
+	const set = [];
+	/** @type {string[]} */
+	const remove = [];
+	for (const key of CHROME_KEYS[profile]) {
+		const value = chrome?.[key];
+		if (typeof value === 'string' && value.length <= MAX_VALUE) set.push([key, value]);
+		else remove.push(key);
+	}
+	return { set, remove };
+}
+
+/** a stored `chrome` block -> only the known profiles, only string values @param {any} raw */
+function normalizeChrome(raw) {
+	/** @type {Partial<Record<ChromeProfile, Record<string, string>>>} */
+	const out = {};
+	if (!raw || typeof raw !== 'object') return out;
+	for (const profile of /** @type {ChromeProfile[]} */ (['desktop', 'phone'])) {
+		const block = raw[profile];
+		if (!block || typeof block !== 'object' || Array.isArray(block)) continue;
+		/** @type {Record<string, string>} */
+		const keep = {};
+		for (const [key, value] of Object.entries(block))
+			if (typeof value === 'string' && value.length <= MAX_VALUE && typeof key === 'string' && key.length <= 64) keep[key] = value;
+		out[profile] = keep;
 	}
 	return out;
 }
@@ -109,12 +199,14 @@ export function normalizeLayout(raw) {
 		for (const [key, value] of Object.entries(raw.open)) if (typeof value === 'boolean') open[key] = value;
 	return {
 		...raw,
-		v: 1,
+		v: LAYOUT_VERSION,
 		id: raw.id,
 		name,
 		savedAt: Number.isFinite(raw.savedAt) ? raw.savedAt : 0,
 		open,
-		storage
+		storage,
+		// 42 I8: absent on a v1 record = no chrome = applying it leaves the toolbar alone
+		chrome: normalizeChrome(raw.chrome)
 	};
 }
 
@@ -150,7 +242,8 @@ export function upsertLayout(list, record) {
 	const at = list.findIndex((l) => l.name.toLowerCase() === rec.name.toLowerCase());
 	if (at >= 0) {
 		const next = [...list];
-		next[at] = { ...rec, id: list[at].id };
+		// 42 I8: the chrome profile this save did not capture (the OTHER shell's) is kept
+		next[at] = { ...rec, id: list[at].id, chrome: { ...(list[at].chrome ?? {}), ...rec.chrome } };
 		return next;
 	}
 	if (list.length >= MAX_LAYOUTS) return null;

@@ -1,7 +1,7 @@
 // 41 G1 — "Edit positions" for the bottom toolbar (the user's 1.32 review): right-click / long
 // press → Edit positions; drag to reorder (pointer events, so a finger drags like a mouse); a
 // small red "−" on every placeholder but Play; an emptied place shows a small green "+" that
-// offers every "Customize toolbar…" button not placed yet (never Play); up to THREE round
+// offers every "Customize toolbar…" button not placed yet (never Play); up to THREE (42 I9: FOUR, with one "+" for the next place) round
 // buttons stacked in each bottom corner; a round green ✓ at the bar's top right applies, Escape
 // or a press outside cancels; the arrow keys move the focused item. Shares G23's model
 // ($lib/toolbarLayout), so it is persisted like Customize and Customize shows the result.
@@ -82,10 +82,11 @@ h.run(async () => {
 		let d = await draft(P);
 		h.check(d.editing && d.bar.length === 10 && d.left.join() === 'ai,add' && d.right.join() === 'chat,mic', T + `edit mode draws the whole layout as placeholders (${JSON.stringify(d)})`);
 		const removers = await P.evaluate(() => [...document.querySelectorAll('.hud-edit-remove')].map((b) => b.closest('[data-edit-wrap]')?.dataset.editWrap));
-		h.check(removers.length === 13 && !removers.includes('__spacer'), T + `a red "−" on every placeholder but Play (${removers.length})`);
+		// 42 I9: + the top-right group's three (notes, notifications, peers)
+		h.check(removers.length === 16 && !removers.includes('__spacer'), T + `a red "−" on every placeholder but Play (${removers.length})`);
 		const plusLeft = await P.locator('#hud-stack-left .hud-edit-add').count();
 		const plusRight = await P.locator('#hud-stack-right .hud-edit-add').count();
-		h.check(plusLeft === 1 && plusRight === 1, T + `each corner shows its one empty place as a green "+" (${plusLeft}, ${plusRight})`);
+		h.check(plusLeft === 1 && plusRight === 1, T + `each corner shows ONE green "+" for its next place (${plusLeft}, ${plusRight})`);
 		const pill = await P.locator('#controls-pill').boundingBox();
 		const tick = await P.locator('#toolbar-edit-apply').boundingBox();
 		h.check(tick && Math.abs(tick.x + tick.width / 2 - (pill.x + pill.width)) < 16 && Math.abs(tick.y + tick.height / 2 - pill.y) < 16, T + `the round ✓ sits on the bar's top-right corner (${JSON.stringify({ pill, tick })})`);
@@ -102,11 +103,15 @@ h.run(async () => {
 		await mouseDrag(P, await centre(P.locator('#controls-pill [data-edit-id="animation"]')), await centre(P.locator('#hud-stack-left .hud-edit-add')));
 		d = await draft(P);
 		h.check(d.left.join() === 'ai,add,animation' && !d.bar.includes('animation'), T + `a dragged bar button lands on top of the left stack (${JSON.stringify(d)})`);
-		h.check((await P.locator('#hud-stack-left .hud-edit-add').count()) === 0, T + 'the left corner is now full — three is the limit, no "+" left');
-		// a full corner refuses a fourth: drag Move onto it, nothing changes there
+		// 42 I9: three placed → one more "+" for a FOURTH
+		h.check((await P.locator('#hud-stack-left .hud-edit-add').count()) === 1, T + 'three placed: the left corner still offers a "+" for a fourth');
+		await mouseDrag(P, await centre(P.locator('#controls-pill [data-edit-id="objects"]')), await centre(P.locator('#hud-stack-left .hud-edit-add')));
+		d = await draft(P);
+		h.check(d.left.join() === 'ai,add,animation,objects' && (await P.locator('#hud-stack-left .hud-edit-add').count()) === 0, T + `a fourth fits, then no "+" is left — four is the limit (${d.left.join()})`);
+		// a full corner refuses a fifth: drag Move onto it, nothing changes there
 		await mouseDrag(P, await centre(P.locator('#controls-pill [data-edit-id="move"]')), await centre(P.locator('#hud-stack-left [data-edit-id="add"]')));
 		d = await draft(P);
-		h.check(d.left.join() === 'ai,add,animation' && d.bar.includes('move'), T + `a full corner takes nothing new (${JSON.stringify(d.left)})`);
+		h.check(d.left.join() === 'ai,add,animation,objects' && d.bar.includes('move'), T + `a full corner takes nothing new (${JSON.stringify(d.left)})`);
 		// reorder inside the bar: Play to the far left
 		await mouseDrag(P, await centre(P.locator('#controls-pill [data-edit-id="__spacer"]')), { x: (await P.locator('#toolbar-edit-add-start').boundingBox()).x + 30, y: (await centre(P.locator('#toolbar-edit-add-start'))).y });
 		d = await draft(P);
@@ -116,7 +121,7 @@ h.run(async () => {
 		await clickAt(P, P.locator('#hud-stack-right [data-edit-wrap="chat"] .hud-edit-remove'));
 		await P.waitForTimeout(200);
 		d = await draft(P);
-		h.check(d.right.join() === 'mic' && (await P.locator('#hud-stack-right .hud-edit-add').count()) === 2, T + `− takes Chat off; the right corner shows two "+" (${d.right})`);
+		h.check(d.right.join() === 'mic' && (await P.locator('#hud-stack-right .hud-edit-add').count()) === 1, T + `− takes Chat off; the right corner still shows ONE "+" (${d.right})`);
 		await clickAt(P, P.locator('#controls-pill [data-edit-wrap="rotate"] .hud-edit-remove'));
 		await P.waitForTimeout(200);
 		d = await draft(P);
@@ -157,7 +162,7 @@ h.run(async () => {
 		await P.waitForTimeout(400);
 		h.check(!(await draft(P)).editing, T + '✓ leaves edit mode');
 		const rec = await stored(P);
-		h.check(rec?.left?.join() === 'ai,add,animation' && rec?.right?.join() === 'mic', T + `the record holds the corners (${JSON.stringify(rec && { left: rec.left, right: rec.right })})`);
+		h.check(rec?.left?.join() === 'ai,add,animation,objects' && rec?.right?.join() === 'mic', T + `the record holds the corners (${JSON.stringify(rec && { left: rec.left, right: rec.right })})`);
 		await shot(P, `g1-${theme}-desktop-applied`, { x: 0, y: 700, width: 1440, height: 200 });
 		const barNow = await P.evaluate(() => [...document.querySelector('#controls-pill .hud-bar-row').children].map((el) => el.querySelector('#play-button') ? '__spacer' : el.id || el.getAttribute('title')));
 		await P.reload({ waitUntil: 'domcontentloaded' });
@@ -166,7 +171,7 @@ h.run(async () => {
 		const barAfter = await P.evaluate(() => [...document.querySelector('#controls-pill .hud-bar-row').children].map((el) => el.querySelector('#play-button') ? '__spacer' : el.id || el.getAttribute('title')));
 		h.check(barAfter.join() === barNow.join() && barAfter[0] === '__spacer', T + `the applied bar survives a reload (${barAfter.join(',')})`);
 		const cAfter = await corners(P);
-		h.check(cAfter.left.length === 3 && cAfter.right.join() === 'mic-button', T + `…and so do the corners (${JSON.stringify(cAfter)})`);
+		h.check(cAfter.left.length === 4 && cAfter.right.join() === 'mic-button', T + `…and so do the corners (${JSON.stringify(cAfter)})`);
 		h.check(!(await P.locator('#chat-button').evaluate((el) => !!el.closest('.hud-stack'))), T + 'Chat now lives on the bar');
 		await P.locator('#toolbar-customize').click();
 		await P.waitForTimeout(400);

@@ -16,9 +16,12 @@
 	import { newlyLowered, toAnnounce, noticeText, KEEP_FULL_LABEL } from '$lib/qualityNoticeCore.js';
 	import { FULL_QUALITY } from '$lib/qualityGovernorCore';
 	import { isLocked, globalRenderer } from '../stores/sceneStore';
-	import { showToast } from '../stores/appStore';
+	import { showToastById } from '../stores/appStore';
 
 	const KEY = 'quality:announced';
+	/** 42 I12: ONE card for this notice — a drop that follows the last one while its card is still
+	 * up rewords that card instead of stacking a second "Lowered …" toast under it */
+	const CARD_ID = 'auto-quality';
 	/** the reasons a level moves by itself (qualityGovernor publish reasons) */
 	const AUTOMATIC = new Set(['frames', 'long tasks', 'phone: a lighter start']);
 	/** a drop's store writes land over a frame or two (the water tier follows on its next tick) */
@@ -55,7 +58,7 @@
 			pending.clear();
 			if (!keys.length) return;
 			remember(keys);
-			showToast(noticeText(keys), [{ label: KEEP_FULL_LABEL, action: () => keepFullQuality() }]);
+			showToastById(CARD_ID, noticeText(keys), [{ label: KEEP_FULL_LABEL, action: () => keepFullQuality() }]);
 		}
 		function schedule() {
 			if (!timer) timer = setTimeout(flush, BATCH_MS);

@@ -567,10 +567,11 @@ h.run(async () => {
 	// --- 9. the band must NOT swallow an edge dock it could never accept ---
 	// docking.js stands its left/right edges down inside the band, so a DOCK_FAMILY panel
 	// dropped in the bottom corner joins the dock instead of becoming a side panel. That
-	// stand-down has to be SCOPED to windows the dock can actually take: the object list
-	// edge-docks and can never be a tab, so an unscoped rule silently kills its drop in
-	// the bottom strip of BOTH edges. That is the worst kind of regression — the drag
-	// does nothing at all, which reads as the window ignoring you.
+	// stand-down has to be SCOPED to windows the dock can actually take: a drop deep in the bottom
+	// strip must still DO something. Before 42 the object list could never be a tab, so it
+	// edge-docked; since 42 I6 the dock hosts it, and a bottom-corner drop prefers the bottom dock
+	// (docking.js' corner rule) — it becomes a dock TAB. The regression this guards is unchanged:
+	// a drag that does nothing at all reads as the window ignoring you.
 	await A.page.evaluate(() => {
 		localStorage.removeItem('dockedWindows');
 		window.__stores.objectListClose.set(false);
@@ -598,21 +599,20 @@ h.run(async () => {
 		`9.1 premise: the drop really is inside the dock band (y=${objDrop.to.y}, band starts ${objDrop.bandTop})`
 	);
 	await drag(A.page, objDrop.from, objDrop.to);
+	await A.page.waitForTimeout(400);
 	const objDocked = await A.page.evaluate(() => {
 		const el = document.querySelector('#object-list');
-		const r = el?.getBoundingClientRect();
-		return {
-			side: el?.dataset?.docked ?? null,
-			right: r ? Math.round(r.x + r.width) : 0,
-			vw: window.innerWidth
-		};
+		let hosted;
+		window.__stores.dockHost.hostedDocked.subscribe((v) => (hosted = v))();
+		return { side: el?.dataset?.docked ?? null, host: el?.getAttribute('data-pd-host') ?? null, hosted: !!hosted?.objects };
 	});
 	h.check(
-		objDocked.side === 'right' && Math.abs(objDocked.right - objDocked.vw) < 6,
-		`9.2 a window the dock cannot take still EDGE-docks from inside the band (docked=${objDocked.side} right=${objDocked.right}/${objDocked.vw})`
+		objDocked.hosted && objDocked.host === 'shown',
+		`9.2 (42 I6) the object list dropped deep in the band docks as a BOTTOM dock tab, not nothing (${JSON.stringify(objDocked)})`
 	);
 	await A.page.evaluate(() => {
 		localStorage.removeItem('dockedWindows');
+		window.__stores.dockHost.setHostedDocked('objects', false);
 		window.__stores.objectListClose.set(true);
 	});
 	await A.page.waitForTimeout(400);

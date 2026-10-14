@@ -12,14 +12,19 @@ import {
 	onLayoutRestore,
 	runLayoutReloaders,
 	storedPanelLayout,
-	MAX_LAYOUTS
+	MAX_LAYOUTS,
+	CHROME_KEYS,
+	addChromeKeys,
+	pickChrome,
+	chromeWrites,
+	LAYOUT_VERSION
 } from '../../src/lib/uiLayoutsCore.js';
 
 // 37 R14 — the rules of a named workspace layout (the live half is e2e `workspace-layouts`).
 
 describe('which stored keys are the layout', () => {
 	it('takes window rects, docks and panel modes, nothing else', () => {
-		for (const key of ['win:chat', 'dockWidth:explorer', 'dockSplit:left', 'dockedWindows', 'bottomDockActive', 'flowDockHeight', 'dockTabOrder', 'windowTabGroups', 'objectListRect', 'flowDocked', 'explorerWinW', 'codeWinH'])
+		for (const key of ['win:chat', 'dockWidth:explorer', 'dockSplit:left', 'dockedWindows', 'bottomDockActive', 'flowDockHeight', 'dockTabOrder', 'windowTabGroups', 'objectListRect', 'flowDocked', 'explorerWinW', 'codeWinH', 'sidebarWidth:left', 'sidebar:full:right', 'sidebar:inspectorSide', 'sidebar:order:left', 'sidebar:active:right'])
 			expect(isLayoutKey(key), key).toBe(true);
 		for (const key of ['uiLayouts', 'theme', 'controlsLayout', 'viewMode', 'win', 'flowPaletteOpen', 'explorerSingleClickOpen', 'shortcutOverrides'])
 			expect(isLayoutKey(key), key).toBe(false);
@@ -103,5 +108,51 @@ describe('the reload registry', () => {
 		const store = { flowDocked: 'false', flowWinW: '800' };
 		expect(storedPanelLayout((k) => store[k] ?? null, 'flow', 760, 480)).toEqual({ docked: false, w: 800, h: 480 });
 		expect(storedPanelLayout(() => null, 'uv', 640, 460)).toEqual({ docked: true, w: 640, h: 460 });
+	});
+});
+
+// 42 I8 — a layout carries the toolbar chrome, kept apart per shell (desktop / folded phone)
+describe('42 I8: chrome profiles', () => {
+	it('a pre-42 record migrates to v2 with NO chrome (applying it leaves the toolbar alone)', () => {
+		const old = normalizeLayout({ v: 1, id: 'a', name: 'Old', open: {}, storage: { 'win:a': 'x' } });
+		expect(old?.v).toBe(LAYOUT_VERSION);
+		expect(old?.chrome).toEqual({});
+		expect(parseLayouts(JSON.stringify([{ v: 1, id: 'a', name: 'Old' }]))[0].chrome).toEqual({});
+	});
+
+	it('picks a profile\'s keys only — the toolbar record and its prefs, or the phone bar', () => {
+		/** @type {Record<string, string>} */
+		const store = { controlsLayout: '{"order":[]}', floatingToolbar: 'false', hudStackLift: 'true', phoneBar: '["add"]', phoneGrabHandle: '0', theme: 'light', 'win:a': '{}' };
+		const read = (/** @type {string} */ k) => store[k] ?? null;
+		expect(pickChrome('desktop', read)).toEqual({ controlsLayout: '{"order":[]}', floatingToolbar: 'false', hudStackLift: 'true' });
+		expect(pickChrome('phone', read)).toEqual({ phoneBar: '["add"]', phoneGrabHandle: '0' });
+	});
+
+	it('restoring a profile SETS what it names and REMOVES that profile\'s other keys (defaults back), nothing else', () => {
+		const { set, remove } = chromeWrites('desktop', { controlsLayout: 'X', theme: 'evil', 'win:a': 'no' });
+		expect(set).toEqual([['controlsLayout', 'X']]);
+		expect(remove).toEqual(CHROME_KEYS.desktop.filter((k) => k !== 'controlsLayout'));
+		expect(remove).not.toContain('theme');
+		expect(set.flat()).not.toContain('evil'); // a key outside the profile is never written
+	});
+
+	it('saving one profile under an existing name KEEPS the other profile', () => {
+		const list = [{ id: 'a', name: 'Modelling', open: {}, storage: {}, chrome: { desktop: { controlsLayout: 'D1' }, phone: { phoneBar: 'P1' } } }];
+		const next = upsertLayout(list, { id: 'z', name: 'modelling', open: {}, storage: {}, chrome: { phone: { phoneBar: 'P2' } } });
+		expect(next?.[0].id).toBe('a');
+		expect(next?.[0].chrome).toEqual({ desktop: { controlsLayout: 'D1' }, phone: { phoneBar: 'P2' } });
+	});
+
+	it('normalizes a hostile chrome block: unknown profiles and non-string values dropped', () => {
+		const n = normalizeLayout({ id: 'a', name: 'X', chrome: { desktop: { controlsLayout: 'ok', bad: 3 }, tablet: { a: 'b' }, phone: 'x' } });
+		expect(n?.chrome).toEqual({ desktop: { controlsLayout: 'ok' } });
+	});
+
+	it('an owner can add its own chrome key (the phone bar\'s new prefs)', () => {
+		addChromeKeys('phone', ['phoneBarTestToggle']);
+		expect(CHROME_KEYS.phone).toContain('phoneBarTestToggle');
+		addChromeKeys('phone', ['phoneBarTestToggle']);
+		expect(CHROME_KEYS.phone.filter((k) => k === 'phoneBarTestToggle').length).toBe(1);
+		CHROME_KEYS.phone.splice(CHROME_KEYS.phone.indexOf('phoneBarTestToggle'), 1);
 	});
 });

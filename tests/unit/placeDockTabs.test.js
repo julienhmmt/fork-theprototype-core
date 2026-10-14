@@ -35,8 +35,13 @@ describe('placeDockTabs', () => {
 		expect(get(dockTabOrder)).toEqual(['flowcode', 'uv', 'flow', 'explorer']);
 	});
 
-	it('ignores views with no docked mode', () => {
-		placeDockTabs(['objects'], 'flow');
+	it('ignores views with no floating window to dock (a phone content tab)', () => {
+		placeDockTabs(['notes'], 'flow');
 		expect(get(dockTabOrder)).toEqual(['flow', 'explorer']);
+	});
+
+	it('42 I6: places a HOSTED window (the Objects list) like any dock view', () => {
+		placeDockTabs(['objects'], 'flow');
+		expect(get(dockTabOrder)).toEqual(['objects', 'flow', 'explorer']);
 	});
 });

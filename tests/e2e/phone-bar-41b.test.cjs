@@ -3,11 +3,11 @@
 //   H4  the Connect chip SAYS its state ("Offline" / "Connecting…" / "Connected") when the top bar has
 //       room, and drops to the dot alone only when its slot is crowded — a container-width rule
 //       (the slot is narrowed here the way the peers button narrows it), not a device one;
-//   H6  Edit bar: More can leave the bar, the first time with a modal saying how to get it back
-//       ("Keep More" undoes it); the editor's header reads "More ▸ Edit bar…" and "More" goes back to
-//       the More menu; a long press on a tab still reaches Edit bar without More. Play's long press:
-//       phone rows only (no "Always on top" / "Move toolbar" / "Customize toolbar…"), Move left /
-//       Move right walk Play along the bar (remembered; the middle is forgotten), Edit bar… is there;
+//   H6  More can leave the bar (42 I5: by dragging it off in More — phone-bar-42 covers the gesture
+//       and the one-time "how to get More back" modal); a long press on any tab opens More, with or
+//       without More on the bar. Play's long press: phone rows only (no "Always on top" / "Move
+//       toolbar" / "Customize toolbar…"), Move left / Move right walk Play along the bar (remembered;
+//       the default order is forgotten), and 42 I5's "Arrange the bar…" (More) replaces Edit bar…;
 //   H7  Play defaults to plain Play on a phone even where the browser offers immersive VR (faked
 //       here: headless has none), and choosing VR from its menu turns the glyph into the headset;
 //   H11 the profile sheet's header has no avatar (it is already top right); desktop keeps its notch.
@@ -109,12 +109,12 @@ h.run(async () => {
 	await P.locator('#ps-play').dispatchEvent('contextmenu');
 	await P.waitForTimeout(600);
 	let rows = await menuRows();
-	h.check(['Play (desktop)', 'Enter VR', 'Enter AR passthrough', 'Move left', 'Move right', 'Edit bar…'].every((r) => rows.includes(r)), `H6: Play's menu has Play as + Move left / right + Edit bar… (${JSON.stringify(rows)})`);
+	h.check(['Play (desktop)', 'Enter VR', 'Enter AR passthrough', 'Move left', 'Move right', 'Arrange the bar…'].every((r) => rows.includes(r)) && !rows.includes('Edit bar…'), `H6 / 42 I5: Play's menu has Play as + Move left / right + Arrange the bar… (no Edit bar…) (${JSON.stringify(rows)})`);
 	h.check(!rows.some((r) => /Always on top|Move toolbar|Customize toolbar|Collapse toolbar|Edit positions|Reset toolbar/.test(r)), 'H6: no desktop-toolbar rows on the phone (Always on top, Move toolbar…)');
 	await P.getByRole('menuitem', { name: 'Move left' }).click();
 	await P.waitForTimeout(400);
 	h.check(JSON.stringify(await barIds()) === JSON.stringify(['ps-add', 'ps-play', 'ps-objects', 'ps-explorer', 'ps-more']), `H6: Move left walks Play one place left (${JSON.stringify(await barIds())})`);
-	h.check((await read(() => localStorage.getItem('phoneBarPlayAt'))) === '1', 'H6: the new place is remembered on this device');
+	h.check((await read(() => localStorage.getItem('phoneBar'))) === JSON.stringify(['add', 'play', 'objects', 'explorer', 'more']), 'H6: the new place is remembered on this device (42 I5: in the one bar list)');
 	await P.locator('#ps-play').dispatchEvent('contextmenu');
 	await P.waitForTimeout(500);
 	await P.getByRole('menuitem', { name: 'Move left' }).click();
@@ -129,7 +129,7 @@ h.run(async () => {
 	await P.waitForTimeout(500);
 	await P.getByRole('menuitem', { name: 'Move right' }).click();
 	await P.waitForTimeout(400);
-	h.check(JSON.stringify(await barIds()) === JSON.stringify(['ps-add', 'ps-objects', 'ps-play', 'ps-explorer', 'ps-more']) && (await read(() => localStorage.getItem('phoneBarPlayAt'))) === null, 'H6: back in the middle, the place is forgotten');
+	h.check(JSON.stringify(await barIds()) === JSON.stringify(['ps-add', 'ps-objects', 'ps-play', 'ps-explorer', 'ps-more']) && (await read(() => localStorage.getItem('phoneBar'))) === null, 'H6: back in the middle, the place is forgotten');
 
 	// H7: choosing VR changes the glyph (the press also tries to enter — headless falls back to play)
 	await P.locator('#ps-play').dispatchEvent('contextmenu');
@@ -157,43 +157,29 @@ h.run(async () => {
 	await h.leavePlay(P);
 	h.check((await play()).as === 'screen', 'H7: and Play (desktop) brings the triangle back');
 
-	// ---- H6: More can leave the bar ----------------------------------------------------------
+	// ---- H6: More can leave the bar; a long press still reaches it ---------------------------
+	// (42 I5: "Edit bar…" is gone — More itself is where the bar is arranged; the drag that takes More off
+	// the bar and the one-time notice are phone-bar-42's)
 	await rest();
 	await P.locator('#ps-objects').dispatchEvent('contextmenu');
 	await P.waitForTimeout(600);
-	h.check(await visible('#ps-edit-bar'), 'H6: a long press on a tab opens Edit bar');
-	const head = await read(() => (document.querySelector('.ps-sheet .ps-head')?.textContent || '').replace(/\s+/g, ' ').trim());
-	h.check(head.startsWith('More') && head.includes('Edit bar…'), `H6: the header reads "More ▸ Edit bar…" ("${head}")`);
-	h.check((await read(() => document.querySelector('#ps-pick-more')?.getAttribute('aria-disabled'))) !== 'true', 'H6: More is a pick like any other');
-	await P.evaluate(() => localStorage.removeItem('phoneBarMoreHint'));
-	await tap('#ps-pick-more');
-	await P.waitForTimeout(400);
-	h.check(!(await barIds()).includes('ps-more'), `H6: More leaves the bar (${JSON.stringify(await barIds())})`);
-	const hint = await read(() => document.getElementById('confirm-more-hint')?.textContent?.replace(/\s+/g, ' ') ?? '');
-	h.check(/press and hold any item on the bottom bar/i.test(hint), `H6: a modal says how to get More back ("${hint.slice(0, 90)}")`);
-	await P.locator('#confirm-dialog-cancel').click();
-	await P.waitForTimeout(400);
-	h.check((await barIds()).includes('ps-more'), 'H6: "Keep More" puts it back');
-	await tap('#ps-pick-more');
-	await P.waitForTimeout(400);
-	h.check(!(await visible('#confirm-more-hint')), 'H6: the notice is one-time — the second removal says nothing');
-	h.check(!(await barIds()).includes('ps-more') && (await read(() => localStorage.getItem('phoneBarSlots'))) === JSON.stringify(['add', 'objects', 'explorer']), 'H6: the bar without More is saved on this device');
-	// "More" in the header goes back to the More menu
-	await tap('#ps-more-crumb');
-	h.check((await visible('#ps-more-sheet')) && !(await visible('#ps-edit-bar')), 'H6: tapping "More" in the header opens the More menu');
-	// without More on the bar, a long press still reaches Edit bar — and so does Play's menu
+	h.check(await visible('#ps-more-sheet'), 'H6: a long press on a tab opens More (where the bar is arranged)');
+	h.check(!(await visible('#ps-edit-bar')) && !(await read(() => !!document.getElementById('ps-more-crumb'))), '42 I5: no Edit bar page and no "More ▸ Edit bar…" crumb any more');
 	await rest();
+	await P.evaluate(() => window.__stores.phoneBar.setBar(['add', 'objects', 'play', 'explorer']));
+	await P.waitForTimeout(400);
+	h.check(!(await barIds()).includes('ps-more') && (await read(() => localStorage.getItem('phoneBar'))) === JSON.stringify(['add', 'objects', 'play', 'explorer']), 'H6: the bar without More is saved on this device');
 	await P.locator('#ps-explorer').dispatchEvent('contextmenu');
 	await P.waitForTimeout(600);
-	h.check(await visible('#ps-edit-bar'), 'H6: with More gone, a long press on a tab still opens Edit bar');
+	h.check(await visible('#ps-more-sheet'), 'H6: with More gone, a long press on a tab still opens More');
 	await rest();
 	await P.locator('#ps-play').dispatchEvent('contextmenu');
 	await P.waitForTimeout(500);
-	await P.getByRole('menuitem', { name: 'Edit bar…' }).click();
+	await P.getByRole('menuitem', { name: 'Arrange the bar…' }).click();
 	await P.waitForTimeout(600);
-	h.check(await visible('#ps-edit-bar'), "H6: Play's Edit bar… opens the editor too");
+	h.check(await visible('#ps-more-sheet'), "H6: Play's Arrange the bar… opens More too");
 	await tap('#ps-bar-reset');
-	h.check(JSON.stringify(await barIds()) === JSON.stringify(['ps-add', 'ps-objects', 'ps-play', 'ps-explorer', 'ps-more']), 'H6: Reset to default restores More and the middle Play');
+	h.check(JSON.stringify(await barIds()) === JSON.stringify(['ps-add', 'ps-objects', 'ps-play', 'ps-explorer', 'ps-more']), 'H6: Reset bar restores More and the middle Play');
 	await rest();
 	await closeMenu();
 

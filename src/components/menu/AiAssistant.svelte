@@ -18,6 +18,7 @@
 	import { aiEnabled, aiProviders, aiActiveProvider, setAiActiveProvider } from '$lib/ai/providers';
 	import { aiMessages, aiBusy, aiStatus, runPrompt, stopAi } from '$lib/ai/assistant';
 	import { dragWindow } from '$lib/dragWindow';
+	import { bottomDockable } from '$lib/bottomDockDrop';
 	import { focusStack } from '$lib/windowFocus';
 	import { tabbable } from '$lib/windowTabs';
 	import { sttConfig, sttReady } from '$lib/ai/stt';
@@ -123,6 +124,7 @@
 	<div
 		id="ai-assistant-window"
 		use:dragWindow={{ key: 'aiAssistant', defaultRect: { right: 15, bottom: 460 } }}
+		use:bottomDockable={{ key: 'aiAssistant' }}
 		use:focusStack
 		use:tabbable={{ key: 'aiAssistant', title: 'AI assistant', openStore: aiAssistantHidden, isOpen: (v: string) => v === '', close: () => aiAssistantHidden.set('hidden') }}
 		class="ui-panel tp-ui tp-window flex h-[440px] w-[min(500px,90vw)] flex-col overflow-hidden"

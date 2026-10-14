@@ -16,6 +16,7 @@
 		'offer enter vr in a headset browser': ['offer enter vr', 'enter vr', 'headset browser', 'quest'],
 		'reset tours': ['tour', 'tours', 'tutorial'],
 		'lift the toolbar above docked panels': ['floating toolbar', 'toolbar'],
+		'lift the corner buttons above docked panels': ['corner buttons', 'corner', 'chat', 'microphone', 'ai', 'stack', 'dock', 'lift'],
 		'allow undocking on touch screens': ['allow undocking (touch)', 'undock', 'touch', 'phone'],
 		'show system objects in the object list': ['advanced mode', 'advanced', 'system'],
 		'show the environment in the object list': ['environment in list', 'environment'],
@@ -49,6 +50,7 @@
 		showRoomsButton,
 		floatingToolbar,
 		toolbarAlwaysOnTop,
+		hudStackLift,
 		touchTools,
 		mobileUndockAllowed,
 		advancedMode,
@@ -61,6 +63,8 @@
 	import { peersAsClassic, knockedAfterSeconds, KNOCKED_AFTER_CHOICES } from '$lib/avatars/avatarState';
 	import WorkspaceLayoutsSettings from './WorkspaceLayoutsSettings.svelte'; // 37 R14
 	import UndockButtonSettings from './UndockButtonSettings.svelte'; // 40 F8
+	import PanelHeaderSettings from './PanelHeaderSettings.svelte'; // 42 I1
+	import PhoneBarSettings from './PhoneBarSettings.svelte'; // 42 I5
 	import { gameSoundVolume } from '$lib/gameSfx';
 	import { gameMusicVolume } from '$lib/gameMusic';
 	import { showWelcomeOnStart, showWhatsNewNotice, openWelcome } from '$lib/whatsNew';
@@ -245,6 +249,9 @@
 		<SettingRow id="row-floating-toolbar" label="Lift the toolbar above docked panels" description="The bottom toolbar moves up when the Node editor or Explorer is docked.">
 			<Toggle id="floating-toolbar" label="Lift the toolbar above docked panels" bind:checked={$floatingToolbar} />
 		</SettingRow>
+		<SettingRow id="row-corner-lift" label="Lift the corner buttons above docked panels" description="The round buttons in the bottom corners (chat, microphone, AI…) move up when a panel is docked.">
+			<Toggle id="corner-lift" label="Lift the corner buttons above docked panels" bind:checked={$hudStackLift} />
+		</SettingRow>
 		<SettingRow id="row-toolbar-top" label="Toolbar always on top" description="The toolbar draws over panels and windows, so it is always reachable.">
 			<Toggle id="toolbar-on-top" label="Toolbar always on top" bind:checked={$toolbarAlwaysOnTop} />
 		</SettingRow>
@@ -261,12 +268,14 @@
 		</SettingRow>
 		<WorkspaceLayoutsSettings />
 		<UndockButtonSettings />
+		<PanelHeaderSettings />
 		<SettingRow id="row-touch-tools" label="Touch tools" description="Undo, Redo and Multi-select buttons beside the logo. On by default on phones.">
 			<Toggle id="setting-touch-tools" label="Touch tools" bind:checked={$touchTools} />
 		</SettingRow>
 		<SettingRow id="row-undock-touch" label="Allow undocking on touch screens" description="Lets the Node editor and Explorer float as windows on a phone.">
 			<Toggle id="mobile-undock" label="Allow undocking on touch screens" bind:checked={$mobileUndockAllowed} />
 		</SettingRow>
+		<PhoneBarSettings />
 	</Section>
 
 	<Section variant="card" label="Lists & menus">

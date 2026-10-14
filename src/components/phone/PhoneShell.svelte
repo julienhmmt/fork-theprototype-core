@@ -34,19 +34,22 @@
 		phoneSheetMaxH
 	} from '$lib/ui/phoneShell.js';
 	import {
-		phoneBarSlots,
-		setBarSlots,
-		toggleSlot,
-		splitAroundPlay,
-		phoneBarPlayAt,
-		setBarPlayAt,
-		movePlay,
-		playIndex,
-		BAR_CATALOG,
+		phoneBar,
+		setBar,
+		placeItem,
+		removeItem,
+		moveItem,
+		labelled,
+		WINDOW_ITEMS,
+		EDIT_ITEMS,
+		VIEW_ITEMS,
 		DEFAULT_BAR,
-		MAX_SLOTS,
+		MAX_ITEMS,
 		MORE_HINT_KEY
 	} from '$lib/ui/phoneBar.js';
+	import { phoneSelectionStrip, phoneDockTabs, phoneGrabHandle } from '$lib/ui/phonePrefs.js';
+	import { barHold } from '$lib/ui/barHold.js';
+	import Toggle from '../ui/Toggle.svelte';
 	import ContextMenu from '../ContextMenu.svelte';
 	import { safeStorage } from '$lib/safeStorage';
 	import { showChoiceEx } from '$lib/confirmDialog';
@@ -79,6 +82,7 @@
 	import { undo, redo, canUndo, canRedo } from '$lib/history';
 	import { setTransformMode, toggleEditorMode } from '$lib/objectActions';
 	import { phoneBarTap, openPhoneTab, closePhoneTab, phoneDockShown } from '$lib/phoneDock';
+	import { toggleViewportFocus } from '$lib/focusMode';
 	import { requestPlay, willEnterXR, willEnterAR, playAsItems } from '$lib/playMode';
 	import { visibleDockKey, DOCK_TITLES, dockMinimized, dockHeight } from '$lib/bottomDock';
 	import { micActive, pttActive, toggleMic } from '$lib/voiceChat';
@@ -98,7 +102,9 @@
 	const hasSel = $derived(($selectedObjects ?? []).length > 0);
 	// 41 G13: Interact empties the selection, and the strip STAYS so Interact can be turned off
 	const interactOn = $derived($editorMode === 'interact');
-	const stripOn = $derived(hasSel || interactOn);
+	// 42 I5: More ▸ "Selection toolbar" off = no floating strip at all (the tools that matter can sit
+	// on the bar, and More ▸ Edit keeps every one of them — Interact included — one tap away)
+	const stripOn = $derived($phoneSelectionStrip && (hasSel || interactOn));
 	const sheetMax = $derived(phoneSheetMax(viewportH, { barH: BAR_H, topH: TOP_ROOM, stripH: stripOn ? STRIP_ROOM : 0 }));
 	const heights = $derived.by(() => {
 		const d = phoneDetentHeights(viewportH - BAR_H);
@@ -183,7 +189,9 @@
 	let frameEl = $state();
 	const sheetH = $derived(top ? (dragH ?? heights[detent] ?? heights.half) : 0);
 	const titled = $derived(top ? HOSTS[top][1] !== null : false);
-	const STRIP_H = 22; // the handle strip
+	// 42 I5: More ▸ "Grab handle" off = no grabber pill and no tap-to-resize; a thin invisible edge
+	// still drags (the handle strip shrinks to it)
+	const STRIP_H = $derived($phoneGrabHandle ? 22 : 10); // the handle strip
 	const HEAD_H = 44; // the frame's own title row (Connection, More)
 
 	// publish the frame rect for phone.css (the reused element is placed into it)
@@ -245,6 +253,7 @@
 		setDetent(d);
 	}
 	function tapHandle() {
+		if (!$phoneGrabHandle) return; // the tap-to-resize goes with the visible handle
 		const up = stepDetent(detent, 1, DETENTS, heights, false);
 		setDetent(up === detent ? 'peek' : up);
 	}
@@ -363,7 +372,15 @@
 	// HERE, over the panel's top edge (phone.css pads the panel for it): drag resizes the shared
 	// `dockHeight`, swipe down to the end MINIMIZES the dock (every tab stays open; the bar's
 	// buttons bring it back — panelToggles' minimized rule).
-	const DOCK_TABS_ROOM = 28; // DockTabs' strip rides just above the panel
+	// 42 I5: More ▸ "Dock tab row" off hides DockTabs' strip (phone.css), so the room goes too
+	const DOCK_TABS_ROOM = $derived($phoneDockTabs ? 28 : 0); // DockTabs' strip rides just above the panel
+	// the root classes phone.css reads for the two chrome switches
+	$effect(() => {
+		const root = document.documentElement.classList;
+		root.toggle('ps-no-dock-tabs', !$phoneDockTabs);
+		root.toggle('ps-no-grab', !$phoneGrabHandle);
+		return () => root.remove('ps-no-dock-tabs', 'ps-no-grab');
+	});
 	const dockOn = $derived(!!$visibleDockKey && !$dockMinimized);
 	const dockMax = $derived(Math.max(160, sheetMax - DOCK_TABS_ROOM));
 	const dockShown = $derived(Math.min($dockHeight, dockMax));
@@ -402,20 +419,17 @@
 	// walked a bar that is not drawn on a phone, and "Always on top", "Move toolbar", "Collapse"
 	// and "Customize toolbar…" do nothing here. The phone rows: the same "Play as" rows the desktop
 	// opens with ($lib/playMode), Test play in a game, then this bar's own: Move left / Move right
-	// (Play walks along the bar) and Edit bar… (so a bar emptied down to Play is still editable).
+	// (Play walks along the bar) and, 42 I5, "Arrange the bar…" (More, where the bar is arranged —
+	// so a bar emptied down to Play can still be changed).
 	let playMenuAt = $state(/** @type {{x: number, y: number} | null} */ (null));
 	/** @param {MouseEvent} e */
 	function playMenu(e) {
 		e.preventDefault();
 		playMenuAt = { x: e.clientX, y: e.clientY };
 	}
-	/** @param {-1 | 1} dir */
-	function nudgePlay(dir) {
-		setBarPlayAt(movePlay($phoneBarSlots.length, $phoneBarPlayAt, dir));
-	}
 	function playMenuItems() {
-		const n = $phoneBarSlots.length;
-		const at = playIndex(n, $phoneBarPlayAt);
+		const list = $phoneBar;
+		const at = list.indexOf('play');
 		return [
 			...playAsItems(),
 			...($hudIsGame
@@ -425,16 +439,9 @@
 					]
 				: []),
 			{ section: 'Bar' },
-			{ label: 'Move left', tooltip: 'Move Play one place left on the bar', disabled: at <= 0, action: () => nudgePlay(-1) },
-			{ label: 'Move right', tooltip: 'Move Play one place right on the bar', disabled: at >= n, action: () => nudgePlay(1) },
-			{
-				label: 'Edit bar…',
-				tooltip: 'Choose what the bar holds on this device',
-				action: () => {
-					phoneSheet.set('more');
-					tick().then(() => (editingBar = true));
-				}
-			}
+			{ label: 'Move left', tooltip: 'Move Play one place left on the bar', disabled: at <= 0, action: () => setBar(moveItem($phoneBar, 'play', -1)) },
+			{ label: 'Move right', tooltip: 'Move Play one place right on the bar', disabled: at < 0 || at >= list.length - 1, action: () => setBar(moveItem($phoneBar, 'play', 1)) },
+			{ label: 'Arrange the bar…', tooltip: 'Open More — press and hold any item to drag it to or from the bar', action: () => phoneSheet.set('more') }
 		];
 	}
 	function toggleMore() {
@@ -442,11 +449,6 @@
 	}
 
 	// ---- the More sheet --------------------------------------------------------------
-	/** @param {string} key */
-	function openView(key) {
-		phoneSheet.set(null);
-		phoneBarTap(key);
-	}
 	function openAi() {
 		phoneSheet.set(null);
 		if (!aiReady()) {
@@ -469,13 +471,26 @@
 		run: fromMore(() => phoneBarTap(key)),
 		pressed: () => $visibleDockKey === key && !$dockMinimized
 	});
-	/** ONE map the bar AND the More tiles render from, so a destination cannot behave
-	 *  differently in its two places (NOTES-38 #7: any of them may sit on the bar).
-	 * @type {Record<string, {label: string, icon: string, run: () => void, pressed: () => boolean, badge?: () => number}>} */
+	/** @param {'translate' | 'rotate' | 'scale'} mode @param {string} label @param {string} icon @param {string} key */
+	const transformAction = (mode, label, icon, key) => ({
+		label,
+		hint: `${label} (${key})`,
+		icon,
+		run: fromMore(() => setTransformMode(mode)),
+		pressed: () => hasSel && $transformMode === mode,
+		disabled: () => !hasSel
+	});
+	/** ONE map the bar AND the More tiles render from, so an item cannot behave differently in its
+	 *  two places (NOTES-38 #7 / 42 I5: any of them may sit on the bar). `short` is the bar's label
+	 *  where the full one would not fit; `pressed` absent = not a toggle; `disabled` keeps the item
+	 *  holdable (aria-disabled, not the attribute — a disabled button takes no pointer events).
+	 * @type {Record<string, {label: string, short?: string, hint?: string, icon: string, run: () => void, pressed?: () => boolean, disabled?: () => boolean, badge?: () => number}>} */
 	const ACTIONS = {
-		add: { label: 'Add', icon: 'plus', run: () => add(), pressed: () => false },
+		play: { label: 'Play', icon: 'play', run: fromMore(() => requestPlay()) },
+		add: { label: 'Add', icon: 'plus', run: () => add() },
 		// 41b H1/H5: Objects, Configure Scene and Notes are dock tabs — the bar shows / minimizes them
 		objects: { label: 'Objects', icon: 'list', run: fromMore(() => phoneBarTap('objects')), pressed: () => $visibleDockKey === 'objects' && !$dockMinimized },
+		stats: { label: 'Statistics', short: 'Stats', icon: 'gauge', run: () => toggleStats(), pressed: () => $statsOpen },
 		chat: {
 			label: 'Chat',
 			icon: 'message-square',
@@ -493,7 +508,7 @@
 			run: fromMore(() => phoneBarTap('scene')),
 			pressed: () => $visibleDockKey === 'scene' && !$dockMinimized
 		},
-		ai: { label: 'AI assistant', icon: 'sparkles', run: () => openAi(), pressed: () => $aiAssistantHidden === '' },
+		ai: { label: 'AI assistant', short: 'AI', icon: 'sparkles', run: () => openAi(), pressed: () => $aiAssistantHidden === '' },
 		notes: {
 			label: 'Notes',
 			icon: 'sticky-note',
@@ -506,7 +521,7 @@
 			run: () => toggleMore(),
 			pressed: () => $phoneSheet === 'more',
 			// the More tab carries the unread count of whatever lives in More
-			badge: () => ($phoneBarSlots.includes('chat') ? 0 : chatUnread)
+			badge: () => ($phoneBar.includes('chat') ? 0 : chatUnread)
 		},
 		explorer: { ...viewAction('explorer'), icon: 'folder-open' },
 		flow: { ...viewAction('flow'), icon: 'workflow' },
@@ -516,34 +531,41 @@
 		uv: { ...viewAction('uv'), icon: 'grid-2x2' },
 		hud: { ...viewAction('hud'), icon: 'monitor' },
 		profiler: { ...viewAction('profiler'), icon: 'activity' },
-		code: { ...viewAction('code'), icon: 'braces' }
+		code: { ...viewAction('code'), icon: 'braces' },
+		// 42 I5: More ▸ Edit — the selection strip's tools, placeable on the bar (Inspect toggles the
+		// Properties tab as the strip's does; Move / Rotate / Scale arm the gizmo)
+		inspect: { label: 'Inspect', icon: 'sliders-horizontal', run: fromMore(() => toggleInspect()), pressed: () => inspecting, disabled: () => !hasSel && !inspecting },
+		move: transformAction('translate', 'Move', 'move', '1'),
+		rotate: transformAction('rotate', 'Rotate', 'rotate-ccw', '2'),
+		scale: transformAction('scale', 'Scale', 'maximize-2', '3'),
+		undo: { label: 'Undo', icon: 'undo-2', run: () => undo(), disabled: () => !$canUndo },
+		redo: { label: 'Redo', icon: 'redo-2', run: () => redo(), disabled: () => !$canRedo },
+		multiselect: { label: 'Select multiple', short: 'Multi', icon: 'square-dashed', run: () => multiSelectMode.update((v) => !v), pressed: () => $multiSelectMode },
+		interact: { label: 'Interact mode', short: 'Interact', icon: 'hand', run: () => toggleEditorMode(), pressed: () => interactOn },
+		// 42 I5: "Tools, snapping, view and camera…" renamed, and placeable
+		tools: { label: 'Tools & View', short: 'Tools', icon: 'wrench', run: () => viewportTools() },
+		focus: { label: 'Focus mode', short: 'Focus', icon: 'maximize-2', run: () => enterFocusMode() }
 	};
-	/** the More sheet's Windows tiles: every destination except the bar's own verbs */
-	const TILES = ['chat', 'explorer', 'flow', 'animation', 'scene', 'ai', 'notes', 'flowcode', 'shader', 'uv', 'hud', 'profiler', 'code'];
-	const bar = $derived(splitAroundPlay($phoneBarSlots, $phoneBarPlayAt));
-
-	// ---- Edit bar (NOTES-38 #7): inside the More sheet; a long press on a tab gets there too
-	let editingBar = $state(false);
-	$effect(() => {
-		if ($phoneSheet !== 'more') editingBar = false;
-	});
-	/** @param {MouseEvent} e */
-	function editBarFromTab(e) {
-		e.preventDefault();
-		phoneSheet.set('more');
-		tick().then(() => (editingBar = true));
+	/** a press on an item (the bar's and More's): a disabled one does nothing @param {string} key */
+	function runItem(key) {
+		const act = ACTIONS[key];
+		if (!act || act.disabled?.()) return;
+		act.run();
 	}
+	// the strip already owns #ps-move … #ps-redo, #ps-multiselect, #ps-interact and #ps-inspect; the
+	// same tools on the bar take a `ps-bar-` id so every id exists once
+	const STRIP_IDS = new Set(EDIT_ITEMS);
 	/** @param {string} key */
-	function editTap(key) {
-		const before = $phoneBarSlots;
-		const next = toggleSlot(before, key);
-		if (next === before && !before.includes(key)) {
-			showToast(`The bar holds ${MAX_SLOTS} — take one off first`);
-			return;
-		}
-		setBarSlots(next);
-		if (key === 'more' && before.includes('more') && !next.includes('more')) moreHint(before);
-	}
+	const barId = (key) => (STRIP_IDS.has(key) ? `ps-bar-${key}` : `ps-${key}`);
+	/** More's own ids: the windows' tiles, the Edit tools (the 38 R9 rows' ids), Tools & View @param {string} key */
+	const tileId = (key) => (EDIT_ITEMS.includes(key) ? `ps-more-${key}` : key === 'tools' ? 'ps-viewport-tools' : key === 'focus' ? 'ps-focus-mode' : `ps-tile-${key}`);
+	/** More ▸ Windows: Play waits here only while it is off the bar */
+	const windowTiles = $derived(WINDOW_ITEMS.filter((k) => k !== 'play' || !$phoneBar.includes('play')));
+
+	// the bar's width decides the labels past five (a container rule: a wider phone stays labelled)
+	let barW = $state(0);
+	const withLabels = $derived(labelled($phoneBar.length, barW));
+
 	// 41b H6: More may leave the bar — the FIRST time it does, a modal says how to get it back (a long
 	// press on any bar item, the one door left). "Keep More" puts it back where it was.
 	/** @param {string[]} before */
@@ -563,21 +585,122 @@
 			choices: [{ value: 'ok', label: 'Got it' }],
 			cancelLabel: 'Keep More'
 		}).then((answer) => {
-			if (!answer && !$phoneBarSlots.includes('more')) setBarSlots(before);
+			if (!answer && !$phoneBar.includes('more')) setBar(before);
 		});
 	}
 	function resetBar() {
-		setBarSlots(DEFAULT_BAR);
-		setBarPlayAt(null);
+		setBar(DEFAULT_BAR);
 	}
 	function viewportTools() {
 		phoneSheet.set(null);
 		const c = canvasCenter();
 		tick().then(() => $viewportMenuOpener?.(c.x, c.y, false));
 	}
-	function openStats() {
+	function toggleStats() {
+		const open = $statsOpen;
 		phoneSheet.set(null);
-		statsOpen.set(true);
+		statsOpen.set(!open);
+	}
+	/** a long press / right-click on a bar item (41b H6: the way to More, and so to the bar) @param {MouseEvent} e */
+	function openMoreFromBar(e) {
+		e.preventDefault();
+		phoneSheet.set('more');
+	}
+
+	// ---- 42 I5: hold and drag, into / along / out of the bar ------------------------------
+	// While More is open every item — More's and the bar's, Play included — is held and dragged
+	// (barHold): dropped on the bar it lands where the finger is (a new one if there is room, the
+	// same one moved along); a bar item dropped on the More sheet leaves the bar. Closed More = no
+	// dragging, except the long press on a bar item (not Play), which opens More AND picks the item
+	// up in one gesture. Play's long press with More closed stays Play's menu (41b H6/H7).
+	/** @type {{key: string, from: 'bar' | 'more', x: number, y: number, over: 'bar' | 'more' | null, at: number, caret: number, refused: string} | null} */
+	let drag = $state(null);
+	/** @type {HTMLElement | undefined} */
+	let barEl = $state();
+
+	/** the bar's items other than the dragged one, in order, with their rects @param {string} key */
+	function otherItems(key) {
+		if (!barEl) return [];
+		return [...barEl.querySelectorAll('[data-bar-item]')]
+			.filter((el) => /** @type {HTMLElement} */ (el).dataset.barItem !== key)
+			.map((el) => el.getBoundingClientRect());
+	}
+	/** what a finger at (x, y) is over, and where on the bar it would land @param {number} x @param {number} y */
+	function dropAt(x, y) {
+		if (!drag) return;
+		const br = barEl?.getBoundingClientRect();
+		const fr = frameEl?.getBoundingClientRect();
+		/** @type {'bar' | 'more' | null} */
+		let over = null;
+		if (br && y >= br.top - 16) over = 'bar';
+		else if (fr && top === 'more' && y >= fr.top && y <= fr.bottom) over = 'more';
+		let at = 0;
+		let caret = 0;
+		let refused = '';
+		if (over === 'bar' && br) {
+			const rects = otherItems(drag.key);
+			at = rects.filter((r) => r.left + r.width / 2 < x).length;
+			caret = rects.length === 0 ? br.width / 2 : at === 0 ? rects[0].left - br.left : at >= rects.length ? rects[rects.length - 1].right - br.left : (rects[at - 1].right + rects[at].left) / 2 - br.left;
+			if (!$phoneBar.includes(drag.key) && $phoneBar.length >= MAX_ITEMS) refused = 'full';
+		} else if (over === 'more' && drag.from === 'bar' && $phoneBar.length <= 1) refused = 'last';
+		drag = { ...drag, x, y, over, at, caret, refused };
+	}
+	/** @param {string} key @param {'bar' | 'more'} from @param {number} x @param {number} y */
+	function pickUp(key, from, x, y) {
+		drag = { key, from, x, y, over: null, at: 0, caret: 0, refused: '' };
+		dropAt(x, y);
+	}
+	/** @param {number} x @param {number} y */
+	function drop(x, y) {
+		dropAt(x, y);
+		const d = drag;
+		drag = null;
+		if (!d) return;
+		const before = $phoneBar;
+		if (d.over === 'bar') {
+			const res = placeItem(before, d.key, d.at);
+			if (res.refused === 'full') showToast(`The bar holds ${MAX_ITEMS} — drag one off first`);
+			else setBar(res.list);
+		} else if (d.over === 'more' && d.from === 'bar') {
+			const res = removeItem(before, d.key);
+			if (res.refused === 'last') showToast('The bar keeps at least one item');
+			else {
+				setBar(res.list);
+				if (d.key === 'more') moreHint(before);
+			}
+		}
+	}
+	/** what a hold on an item means @param {string} key @param {'bar' | 'more'} from @returns {'drag' | 'menu' | null} */
+	function holdItem(key, from, /** @type {number} */ x, /** @type {number} */ y) {
+		if (from === 'more' || $phoneSheet === 'more') {
+			pickUp(key, from, x, y);
+			return 'drag';
+		}
+		if (key === 'play') {
+			playMenuAt = { x, y };
+			return 'menu';
+		}
+		phoneSheet.set('more');
+		pickUp(key, from, x, y);
+		return 'drag';
+	}
+	/** barHold's options for one item @param {string} key @param {'bar' | 'more'} from */
+	const holdOpts = (key, from) => ({
+		onhold: (/** @type {number} */ x, /** @type {number} */ y) => holdItem(key, from, x, y),
+		onmove: (/** @type {number} */ x, /** @type {number} */ y) => dropAt(x, y),
+		ondrop: drop,
+		oncancel: () => (drag = null)
+	});
+	// a closed More ends any drag it was the target of
+	$effect(() => {
+		if ($phoneSheet !== 'more' && drag && drag.from === 'more') drag = null;
+	});
+
+	// 42 I14: More ▸ Tools & View ▸ Focus mode (42-int: an ACTIONS item, so it is placeable on the bar too) — the phone's way in (no Ctrl+Space); the sheet closes first so the
+	// viewport is what maximizes, and the "Exit focus" pill is the way back
+	function enterFocusMode() {
+		phoneSheet.set(null);
+		toggleViewportFocus();
 	}
 </script>
 
@@ -642,50 +765,78 @@
 		</div>
 	{/if}
 
-	<!-- BOTTOM BAR: five destinations; Play is the only live (orange) control -->
-	<nav class="ps-bar" aria-label="Main" id="ps-bar" style:grid-template-columns="repeat({$phoneBarSlots.length + 1}, minmax(0, 1fr))">
-		{#snippet tab(/** @type {string} */ key)}
-			{@const act = ACTIONS[key]}
-			{@const n = act.badge?.() ?? 0}
-			<button
-				type="button"
-				class="ps-tab"
-				id="ps-{key}"
-				data-tour={key === 'add' ? 'add' : key === 'more' ? 'tools' : undefined /* #31: the tools live in More at rest */}
-				aria-pressed={key === 'add' ? undefined : act.pressed()}
-				onclick={act.run}
-				oncontextmenu={editBarFromTab}
-			>
-				<Icon name={act.icon} size={20} /><span class="ps-tab-lbl">{act.label}</span>
-				{#if n > 0}<span class="ps-nb" aria-label={`${n} unread`}>{n > 99 ? '99+' : n}</span>{/if}
-			</button>
-		{/snippet}
-		{#each bar.left as key (key)}{@render tab(key)}{/each}
-		<button
-			type="button"
-			class="ps-tab ps-play"
-			id="ps-play"
-			data-tour="play"
-			oncontextmenu={playMenu}
-			aria-label={$willEnterAR ? 'Enter AR' : $willEnterXR ? 'Enter VR' : 'Play'}
-			data-play-as={$willEnterAR ? 'ar' : $willEnterXR ? 'vr' : 'screen'}
-			onclick={() => requestPlay()}
-		><span class="ps-live" class:ps-live-xr={$willEnterXR}>
-			<!-- 41b H7: the glyph says what a press does, as on desktop: the triangle, a headset for VR,
-			     the headset with A and R in its lenses for AR -->
-			{#if $willEnterAR}
-				<span class="ps-play-ar"><Icon name="tool:vr" size={24} /><span class="hud-play-lens" style="left: 29%">A</span><span class="hud-play-lens" style="left: 71%">R</span></span>
-			{:else if $willEnterXR}
-				<Icon name="tool:vr" size={24} />
+	<!-- BOTTOM BAR (42 I5): up to seven items in this device's order, Play among them (or not);
+	     Play is the only live (orange) control. Labelled at five or fewer; past five a narrow bar
+	     shows icons (the name stays the accessible name and the tooltip). While More is open every
+	     item is held and dragged along / off the bar; the caret shows where a drop lands. -->
+	<nav
+		class="ps-bar"
+		aria-label="Main"
+		id="ps-bar"
+		bind:this={barEl}
+		bind:clientWidth={barW}
+		data-icons-only={withLabels ? undefined : ''}
+		data-dense={$phoneBar.length > 5 ? '' : undefined}
+		data-drop={drag?.over === 'bar' ? (drag.refused ? 'refused' : 'ok') : undefined}
+		style:grid-template-columns="repeat({$phoneBar.length}, minmax(0, 1fr))"
+	>
+		{#each $phoneBar as key (key)}
+			{#if key === 'play'}
+				<button
+					type="button"
+					class="ps-tab ps-play"
+					class:ps-held={drag?.key === 'play'}
+					id="ps-play"
+					data-tour="play"
+					data-bar-item="play"
+					use:barHold={holdOpts('play', 'bar')}
+					oncontextmenu={playMenu}
+					aria-label={$willEnterAR ? 'Enter AR' : $willEnterXR ? 'Enter VR' : 'Play'}
+					data-play-as={$willEnterAR ? 'ar' : $willEnterXR ? 'vr' : 'screen'}
+					onclick={() => requestPlay()}
+				><span class="ps-live" class:ps-live-xr={$willEnterXR}>
+					<!-- 41b H7: the glyph says what a press does, as on desktop: the triangle, a headset for VR,
+					     the headset with A and R in its lenses for AR -->
+					{#if $willEnterAR}
+						<span class="ps-play-ar"><Icon name="tool:vr" size={24} /><span class="hud-play-lens" style="left: 29%">A</span><span class="hud-play-lens" style="left: 71%">R</span></span>
+					{:else if $willEnterXR}
+						<Icon name="tool:vr" size={24} />
+					{:else}
+						<Icon name="play" size={24} fill="currentColor" />
+					{/if}
+				</span></button>
 			{:else}
-				<Icon name="play" size={24} fill="currentColor" />
+				{@const act = ACTIONS[key]}
+				{@const n = act.badge?.() ?? 0}
+				<button
+					type="button"
+					class="ps-tab"
+					class:ps-held={drag?.key === key}
+					id={barId(key)}
+					data-bar-item={key}
+					data-tour={key === 'add' ? 'add' : key === 'more' ? 'tools' : undefined /* #31: the tools live in More at rest */}
+					aria-pressed={act.pressed ? act.pressed() : undefined}
+					aria-disabled={act.disabled?.() || undefined}
+					aria-label={withLabels ? undefined : act.label}
+					title={act.hint ?? (withLabels ? undefined : act.label)}
+					use:barHold={holdOpts(key, 'bar')}
+					onclick={() => runItem(key)}
+					oncontextmenu={openMoreFromBar}
+				>
+					<Icon name={act.icon} size={20} />{#if withLabels}<span class="ps-tab-lbl">{act.short ?? act.label}</span>{/if}
+					{#if n > 0}<span class="ps-nb" aria-label={`${n} unread`}>{n > 99 ? '99+' : n}</span>{/if}
+				</button>
 			{/if}
-		</span></button>
-		{#each bar.right as key (key)}{@render tab(key)}{/each}
+		{/each}
+		{#if drag?.over === 'bar'}
+			<span class="ps-caret" id="ps-bar-caret" aria-hidden="true" style:left="{drag.caret}px"></span>
+		{/if}
 	</nav>
 
 	{#if dockOn}
-		<div class="ps-dockgrip" id="ps-dock-grip" style:bottom="calc(var(--ps-bar-h) + {dockShown - 24}px)">
+		<!-- 42 I5: with More ▸ "Grab handle" off the grip is a thin invisible band ON the panel's top
+		     edge (12 px in, 2 px out — clear of the tab row above), which still drags -->
+		<div class="ps-dockgrip" id="ps-dock-grip" data-bare={$phoneGrabHandle ? undefined : ''} style:bottom="calc(var(--ps-bar-h) + {dockShown - ($phoneGrabHandle ? 24 : 12)}px)">
 			<SheetGrip label="dock" height={dockShown} min={160} max={dockMax} surface={dockPanels} onresize={dockResize} onclose={dockClose} />
 		</div>
 	{/if}
@@ -725,86 +876,85 @@
 					type="button"
 					class="ps-handle"
 					id="ps-sheet-handle"
+					style:height="{STRIP_H}px"
 					data-sheet-grip
 					aria-label={`Sheet height: ${detent}. Tap to change, drag down to close.`}
 					onkeydown={handleKey}
-				><span class="ps-grabber" aria-hidden="true"></span></button>
+				>{#if $phoneGrabHandle}<span class="ps-grabber" aria-hidden="true"></span>{/if}</button>
 			</div>
 			{#if titled}
 				<div class="ps-head">
-					{#if top === 'more' && editingBar}
-						<!-- 41b H6: the editor is a page OF More — its header says so, and "More" goes back -->
-						<h2 class="ps-title ps-crumbs">
-							<button type="button" class="ps-crumb" id="ps-more-crumb" title="Back to More" onclick={() => (editingBar = false)}>More</button>
-							<Icon name="chevron-right" size={16} />
-							<span class="ps-crumb-here">Edit bar…</span>
-						</h2>
-					{:else}
-						<h2 class="ps-title">{HOSTS[top][1]}</h2>
-					{/if}
+					<h2 class="ps-title">{HOSTS[top][1]}</h2>
 					<button type="button" class="ps-close" id="ps-sheet-close" aria-label={`Close ${HOSTS[top][1]}`} onclick={() => closeKind(top)}><Icon name="x" size={20} /></button>
 				</div>
 			{/if}
-			{#if top === 'more' && editingBar}
-				<div class="ps-body" id="ps-edit-bar" use:minimalScroll>
-					<p class="ps-hint">Pick up to {MAX_SLOTS} for the bar on this device. Press and hold any item on the bar — Play too — to come back here; Play's menu moves it along the bar.</p>
-					<div class="ps-preview" aria-label="Bar preview">
-						{#each bar.left as key (key)}<span class="ps-pv"><Icon name={ACTIONS[key].icon} size={20} />{ACTIONS[key].label}</span>{/each}
-						<span class="ps-pv ps-pv-play"><Icon name="play" size={20} />Play</span>
-						{#each bar.right as key (key)}<span class="ps-pv"><Icon name={ACTIONS[key].icon} size={20} />{ACTIONS[key].label}</span>{/each}
-					</div>
-					<div class="ps-rows" role="group" aria-label="Bar slots">
-						{#each BAR_CATALOG as key (key)}
-							{@const on = $phoneBarSlots.includes(key)}
-							<button
-								type="button"
-								class="ps-row ps-pick"
-								id="ps-pick-{key}"
-								role="checkbox"
-								aria-checked={on}
-								aria-disabled={!on && $phoneBarSlots.length >= MAX_SLOTS}
-								onclick={() => editTap(key)}
-							>
-								<Icon name={ACTIONS[key].icon} size={20} /><span>{ACTIONS[key].label}</span>
-								<span class="ps-check" aria-hidden="true">{#if on}<Icon name="check" size={16} />{/if}</span>
-							</button>
-						{/each}
-					</div>
-					<div class="ps-edit-foot">
-						<button type="button" class="ps-btn" id="ps-bar-reset" disabled={$phoneBarSlots.join() === DEFAULT_BAR.join() && $phoneBarPlayAt == null} onclick={resetBar}>Reset to default</button>
-						<button type="button" class="ps-btn ps-btn-primary" id="ps-bar-done" onclick={() => (editingBar = false)}>Done</button>
-					</div>
-				</div>
-			{:else if top === 'more'}
-				<div class="ps-body" id="ps-more-sheet" use:minimalScroll>
+			{#if top === 'more'}
+				<!-- 42 I5: More is where the bar is arranged — every item here (and on the bar) is held and
+				     dragged to / from the bar while this sheet is open; a tap still runs it. -->
+				{#snippet tile(/** @type {string} */ key)}
+					{@const act = ACTIONS[key]}
+					{@const n = act.badge?.() ?? 0}
+					<button
+						type="button"
+						class="ps-tile"
+						class:ps-held={drag?.key === key && drag.from === 'more'}
+						id={tileId(key)}
+						data-more-item={key}
+						data-on-bar={$phoneBar.includes(key) ? '' : undefined}
+						aria-pressed={act.pressed ? act.pressed() : undefined}
+						aria-disabled={act.disabled?.() || undefined}
+						title={act.hint}
+						use:barHold={holdOpts(key, 'more')}
+						onclick={() => runItem(key)}
+					>
+						<span class="ps-gi" class:ps-gi-play={key === 'play'}><Icon name={act.icon} size={20} /></span>{act.label}
+						{#if n > 0}<span class="ps-nb ps-nb-tile">{n > 99 ? '99+' : n}</span>{/if}
+					</button>
+				{/snippet}
+				<div class="ps-body" id="ps-more-sheet" data-drop={drag?.over === 'more' && drag.from === 'bar' ? (drag.refused ? 'refused' : 'ok') : undefined} use:minimalScroll>
 					<h3 class="ps-sec">Windows</h3>
 					<div class="ps-tiles">
-						{#each TILES as key (key)}
-							{@const act = ACTIONS[key]}
-							{@const n = act.badge?.() ?? 0}
-							<button type="button" class="ps-tile" id="ps-tile-{key}" aria-pressed={act.pressed()} onclick={act.run}>
-								<span class="ps-gi"><Icon name={act.icon} size={20} /></span>{act.label}
-								{#if n > 0}<span class="ps-nb ps-nb-tile">{n > 99 ? '99+' : n}</span>{/if}
-							</button>
-						{/each}
+						{#each windowTiles as key (key)}{@render tile(key)}{/each}
 					</div>
-					<!-- NOTES-38 #31: what the strip offered with nothing selected lives here now -->
+					<!-- NOTES-38 #31: what the strip offered with nothing selected lives here; 42 I5: all of it -->
 					<h3 class="ps-sec">Edit</h3>
-					<div class="ps-rows">
-						<button type="button" class="ps-row" id="ps-more-undo" disabled={!$canUndo} onclick={() => undo()}><Icon name="undo-2" size={20} /><span>Undo</span></button>
-						<button type="button" class="ps-row" id="ps-more-redo" disabled={!$canRedo} onclick={() => redo()}><Icon name="redo-2" size={20} /><span>Redo</span></button>
-						<button type="button" class="ps-row" id="ps-more-multiselect" aria-pressed={$multiSelectMode} onclick={() => multiSelectMode.update((v) => !v)}><Icon name="square-dashed" size={20} /><span>Select multiple</span>{#if $multiSelectMode}<span class="ps-row-on">On</span>{/if}</button>
-						<button type="button" class="ps-row" id="ps-more-interact" aria-pressed={$editorMode === 'interact'} onclick={() => toggleEditorMode()}><Icon name="hand" size={20} /><span>Interact mode</span>{#if $editorMode === 'interact'}<span class="ps-row-on">On</span>{/if}</button>
+					<div class="ps-tiles">
+						{#each EDIT_ITEMS as key (key)}{@render tile(key)}{/each}
 					</div>
-					<h3 class="ps-sec">Tools &amp; view</h3>
-					<div class="ps-rows">
-						<button type="button" class="ps-row" id="ps-viewport-tools" onclick={viewportTools}><Icon name="wrench" size={20} /><span>Tools, snapping, view and camera…</span><Icon name="chevron-right" size={16} /></button>
-						<button type="button" class="ps-row" id="ps-stats" onclick={openStats}><Icon name="gauge" size={20} /><span>Statistics</span></button>
-						<button type="button" class="ps-row" id="ps-edit-bar-open" onclick={() => (editingBar = true)}><Icon name="pencil" size={20} /><span>Edit bar…</span><Icon name="chevron-right" size={16} /></button>
+					<h3 class="ps-sec">Tools &amp; View</h3>
+					<div class="ps-tiles">
+						{#each VIEW_ITEMS as key (key)}{@render tile(key)}{/each}
 					</div>
+					<h3 class="ps-sec">Show</h3>
+					<div class="ps-switches">
+						<div class="ps-switch">
+							<span class="ps-switch-txt"><span id="ps-switch-strip-l">Selection toolbar</span><span class="ps-switch-desc">Move, Rotate, Scale and Inspect over a selection</span></span>
+							<Toggle id="ps-switch-strip" labelledby="ps-switch-strip-l" bind:checked={$phoneSelectionStrip} />
+						</div>
+						<div class="ps-switch">
+							<span class="ps-switch-txt"><span id="ps-switch-tabs-l">Dock tab row</span><span class="ps-switch-desc">The tabs above docked windows</span></span>
+							<Toggle id="ps-switch-tabs" labelledby="ps-switch-tabs-l" bind:checked={$phoneDockTabs} />
+						</div>
+						<div class="ps-switch">
+							<span class="ps-switch-txt"><span id="ps-switch-grab-l">Grab handle</span><span class="ps-switch-desc">Off: drag the top edge to resize</span></span>
+							<Toggle id="ps-switch-grab" labelledby="ps-switch-grab-l" bind:checked={$phoneGrabHandle} />
+						</div>
+					</div>
+					<div class="ps-more-foot">
+						<button type="button" class="ps-btn" id="ps-bar-reset" disabled={$phoneBar.join() === DEFAULT_BAR.join()} onclick={resetBar}>Reset bar</button>
+					</div>
+					<!-- the how-to rides the sheet's bottom edge, right above the bar it talks about -->
+					<p class="ps-hint" id="ps-more-hint">Hold and drag items to or from the bar (up to {MAX_ITEMS})</p>
 				</div>
 			{/if}
 		</section>
+	{/if}
+
+	<!-- 42 I5: the held item follows the finger, lifted clear of it so it stays visible -->
+	{#if drag}
+		<div class="ps-ghost" id="ps-drag-ghost" data-key={drag.key} data-refused={drag.refused || undefined} style:left="{drag.x}px" style:top="{drag.y}px" aria-hidden="true">
+			<span class="ps-gi" class:ps-gi-play={drag.key === 'play'}><Icon name={ACTIONS[drag.key].icon} size={20} /></span>
+		</div>
 	{/if}
 
 	{#if playMenuAt}
@@ -914,15 +1064,6 @@
 		box-shadow: var(--shadow-window);
 		max-width: calc(100vw - 16px);
 	}
-	.ps-row:disabled {
-		opacity: 0.45;
-		cursor: default;
-	}
-	.ps-row-on {
-		margin-left: auto;
-		font-size: var(--fs-desc);
-		color: var(--accent-text);
-	}
 	.ps-cell {
 		display: inline-flex;
 		align-items: center;
@@ -1016,6 +1157,9 @@
 		z-index: calc(var(--z-dock) + 1); /* over its dock panel (--z-dock, 35), under every sheet */
 		background: transparent;
 	}
+	.ps-dockgrip[data-bare] {
+		height: 12px; /* the panel's 12 px top padding (phone.css .ps-no-grab) */
+	}
 	.ps-scrim {
 		position: fixed;
 		inset: 0 0 calc(76px + env(safe-area-inset-bottom, 0px)) 0; /* #32: the bar stays live */
@@ -1080,30 +1224,6 @@
 		min-width: 0;
 		margin: 0;
 		font: 600 17px var(--font-ui);
-	}
-	/* 41b H6: "More ▸ Edit bar…" — the first crumb is a link back */
-	.ps-crumbs {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		color: var(--text-muted);
-	}
-	.ps-crumb {
-		min-height: 44px;
-		padding: 0 6px;
-		margin-left: -6px;
-		border: 0;
-		border-radius: var(--radius-button, 8px);
-		background: transparent;
-		color: var(--accent-text);
-		font: inherit;
-		cursor: pointer;
-	}
-	.ps-crumb-here {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		color: var(--text);
 	}
 	.ps-play-ar {
 		position: relative;
@@ -1181,9 +1301,6 @@
 		left: auto;
 		right: 12px;
 	}
-	.ps-rows {
-		display: grid;
-	}
 	.ps-tab-lbl {
 		max-width: 100%;
 		overflow: hidden;
@@ -1194,55 +1311,6 @@
 		margin: 8px 4px 12px;
 		color: var(--text-muted);
 		font: 400 var(--fs-desc) var(--font-ui);
-	}
-	.ps-preview {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px;
-		margin: 0 4px 12px;
-	}
-	.ps-pv {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		height: 32px;
-		padding: 0 10px;
-		border-radius: var(--radius-pill, 999px);
-		border: 1px solid var(--border);
-		background: var(--surface-2);
-		color: var(--text-2);
-		font: 500 13px var(--font-ui);
-	}
-	.ps-pv-play {
-		background: var(--live);
-		border-color: var(--live);
-		color: var(--on-live);
-	}
-	.ps-pick[aria-checked='true'] {
-		color: var(--accent-text);
-	}
-	.ps-pick[aria-disabled='true'] {
-		opacity: 0.5;
-	}
-	.ps-check {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 22px;
-		height: 22px;
-		border-radius: 6px;
-		border: 1.5px solid var(--border-strong);
-	}
-	.ps-pick[aria-checked='true'] .ps-check {
-		background: var(--accent-fill);
-		border-color: var(--accent-fill);
-		color: var(--on-accent);
-	}
-	.ps-edit-foot {
-		display: flex;
-		justify-content: flex-end;
-		gap: 8px;
-		margin-top: 16px;
 	}
 	.ps-btn {
 		height: 44px;
@@ -1258,37 +1326,127 @@
 		opacity: 0.45;
 		cursor: default;
 	}
-	.ps-btn-primary {
-		border-color: transparent;
-		background: var(--accent-fill);
-		color: var(--on-accent);
-		font-weight: 600;
-	}
-	.ps-row {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		min-height: 48px;
-		padding: 0 8px;
-		border: 0;
-		border-radius: 10px;
-		background: transparent;
-		color: var(--text);
-		font: 400 var(--fs-body) var(--font-ui);
-		text-align: left;
-		cursor: pointer;
-	}
-	.ps-row > span {
-		flex: 1;
-	}
 	.ps-tab:hover,
 	.ps-cell:not(:disabled):hover,
 	.ps-tile:hover,
-	.ps-row:hover,
 	.ps-close:hover,
-	.ps-crumb:hover,
 	.ps-chip-main:hover {
 		background: var(--surface-hover);
+	}
+	/* ---- 42 I5: the bar past five items, and hold-and-drag ---------------------------------- */
+	/* icons-only: the icon centred in a 60 px tall cell (every cell stays >= 44 px wide at seven) */
+	.ps-bar[data-icons-only] .ps-tab {
+		gap: 0;
+	}
+	/* six or seven columns: Play's raised circle fits its narrower cell */
+	.ps-bar[data-dense] .ps-live {
+		width: 50px;
+		height: 50px;
+	}
+	.ps-tab[aria-disabled='true'] {
+		opacity: 0.4;
+	}
+	.ps-tile[aria-disabled='true'] .ps-gi {
+		opacity: 0.45;
+	}
+	/* an item that is on the bar wears a small accent dot in More */
+	.ps-tile[data-on-bar] .ps-gi::after {
+		content: '';
+		position: absolute;
+		top: -3px;
+		right: -3px;
+		width: 9px;
+		height: 9px;
+		border-radius: 50%;
+		background: var(--accent-fill);
+		border: 2px solid var(--surface-1);
+	}
+	.ps-gi {
+		position: relative;
+	}
+	.ps-gi-play {
+		background: var(--live);
+		border-color: var(--live);
+		color: var(--on-live);
+	}
+	/* the item being held stays in place, faded, while its ghost follows the finger */
+	.ps-held {
+		opacity: 0.35;
+	}
+	.ps-caret {
+		position: absolute;
+		top: 10px;
+		bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+		width: 3px;
+		margin-left: -1.5px;
+		border-radius: 2px;
+		background: var(--accent);
+		pointer-events: none;
+	}
+	.ps-bar[data-drop='refused'] .ps-caret {
+		background: var(--ink-bad);
+	}
+	.ps-bar[data-drop] {
+		box-shadow: inset 0 2px 0 var(--accent);
+	}
+	.ps-bar[data-drop='refused'] {
+		box-shadow: inset 0 2px 0 var(--ink-bad);
+	}
+	/* a bar item held over More: dropping it here takes it off the bar */
+	.ps-body[data-drop] {
+		outline: 2px dashed var(--accent);
+		outline-offset: -6px;
+		border-radius: 14px;
+	}
+	.ps-body[data-drop='refused'] {
+		outline-color: var(--ink-bad);
+	}
+	.ps-ghost {
+		position: fixed;
+		z-index: var(--z-portal);
+		transform: translate(-50%, calc(-100% - 18px));
+		pointer-events: none;
+		filter: drop-shadow(0 6px 14px color-mix(in srgb, var(--text) 30%, transparent));
+	}
+	.ps-ghost .ps-gi {
+		border-color: var(--accent);
+	}
+	.ps-ghost[data-refused] .ps-gi {
+		border-color: var(--ink-bad);
+	}
+	.ps-switches {
+		display: grid;
+		gap: 2px;
+	}
+	.ps-switch {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		min-height: 52px;
+		padding: 0 8px;
+	}
+	.ps-switch-txt {
+		display: grid;
+		flex: 1;
+		min-width: 0;
+		font: 400 var(--fs-body) var(--font-ui);
+		color: var(--text);
+	}
+	.ps-switch-desc {
+		font-size: var(--fs-desc);
+		color: var(--text-muted);
+	}
+	.ps-more-foot {
+		margin: 12px 4px 8px;
+	}
+	#ps-more-hint {
+		position: sticky;
+		bottom: -16px; /* the body's bottom padding: the line sits on the sheet's edge */
+		margin: 0 -12px -16px;
+		padding: 8px 16px calc(8px + 2px);
+		border-top: 1px solid var(--border);
+		background: var(--surface-1);
+		text-align: center;
 	}
 	:global(.ps button:focus-visible) {
 		outline: 2px solid var(--accent);

@@ -132,7 +132,7 @@ input.tp-check:disabled {
 @media (max-width: 600px) {
 	/* 41 G1: the corner buttons are two STACKS now (Controls.svelte); the stack lifts as one */
 	.hud-stack {
-		bottom: 74px;
+		bottom: calc(var(--hud-stack-lift, 0px) + 74px);
 	}
 }
 /* A4: on narrow screens the top-right chrome (avatar/peers) drops to its own row
@@ -145,8 +145,8 @@ input.tp-check:disabled {
    cover those buttons (z:1000). When Connect is centred (not docked) the drawer keeps
    its default top-16 / lower z, so it stays BELOW the profile icon. (Narrow = sheet.) */
 @media (min-width: 641px) {
+	/* 42 I3: the column's top under a docked bar is the sidebar bus's (--sb-<side>-top) */
 	:root.connect-docked #inspector {
-		top: calc(var(--connect-bottom, 0px) + 4px) !important;
 		z-index: calc(var(--z-chrome-top) + 1) !important;
 	}
 }

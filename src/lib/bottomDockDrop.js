@@ -1,7 +1,7 @@
 import { isHeaderDrag } from './windowGrip';
-import { armDockMode, activateDock, DOCK_FAMILY } from './bottomDock';
+import { armDockMode, activateDock, canDockFloating } from './bottomDock';
 import { groupOfKey, headerTargetAt } from './windowTabs';
-import { dockAtStrip } from './dockMenu';
+import { dockAtStrip, canDockHere } from './dockMenu';
 
 // W7 — DRAG A FLOATING PANEL INTO THE BOTTOM DOCK.
 //
@@ -45,16 +45,16 @@ export function inBottomBand(y) {
 /**
  * Would the bottom dock actually TAKE a drop of `key` here? This is the question
  * docking.js must ask before standing its own edges down, and the `key` half is the
- * whole point of it: only a DOCK_FAMILY panel can become a tab, so yielding the band
+ * whole point of it: only a dockable panel can become a tab, so yielding the band
  * for anything else surrenders the bottom of BOTH side edges to a dock that was never
- * going to accept the window — the drop then does nothing at all. The object list is
- * exactly that case; it edge-docks and can never be a tab (measured: without the key
+ * going to accept the window — the drop then does nothing at all (measured: without the key
  * test, 2 of 3 `docking` runs went red on a right-edge drop that lands low, green on
- * base).
+ * base). 42 I6: the object list CAN be a tab now (hosted, `canDockHere`), so its bottom
+ * corners dock to the bottom like the Node editor's and the Explorer's.
  * @param {string} key @param {number} y @param {number=} x 41 G7: with x, the tab strip counts too
  */
 export function bottomDockWouldTake(key, y, x) {
-	if (!DOCK_FAMILY.includes(key)) return false;
+	if (!canDockHere(key)) return false;
 	return inBottomBand(y) || (typeof x === 'number' && !!dockStripTarget(x, y));
 }
 
@@ -174,7 +174,7 @@ function showZone(on) {
 }
 
 // touch: the same stance docking.js takes. A band drag has no hover feedback to read
-// and fights touch scrolling, and on a coarse pointer a DOCK_FAMILY panel is forced
+// and fights touch scrolling, and on a coarse pointer a dockable panel is forced
 // docked anyway unless the user opted into `mobileUndockAllowed` — so the window this
 // would act on usually does not exist. The header's "⇩ Dock" button stays the touch path.
 const isCoarse = () =>
@@ -191,7 +191,9 @@ const isCoarse = () =>
  *   `wants()` was false on every move and Flow Code could not be docked by drag at all.
  */
 export function bottomDockable(node, { key }) {
-	if (isCoarse() || !DOCK_FAMILY.includes(key)) return { destroy() {} };
+	// 42 I6: every floating window that can be a dock tab (FLOAT_DOCKABLE — the hosted ones too);
+	// the posture is asked per gesture, since a window can outlive a fold
+	if (isCoarse() || !canDockFloating(key)) return { destroy() {} };
 
 	let dragging = false;
 	// THE VERDICT IS TAKEN ON THE LAST MOVE, NEVER RE-DERIVED AT THE DROP. Three modules
@@ -208,6 +210,7 @@ export function bottomDockable(node, { key }) {
 		if (!isHeaderDrag(e.target) || e.button !== 0) return; // 36 F4: not on a header control
 		if (node.dataset?.docked) return; // edge-docked: docking.js's own drag undocks it first
 		if (groupOfKey(key)) return; // a tab group drags as one (TabStrips docks a group)
+		if (!canDockHere(key)) return; // 42 I6: a hosted window on a phone posture keeps floating
 		dragging = true;
 		armed = null;
 	};

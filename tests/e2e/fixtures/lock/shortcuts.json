@@ -1,5 +1,5 @@
 {
-	"recordedAt": "2026-10-06T14:42:16.479Z",
+	"recordedAt": "2026-10-14T04:09:04.924Z",
 	"registry": [
 		{
 			"id": "transform.move",
@@ -420,6 +420,36 @@
 			"label": "Toggle element snapping (vertex/face/surface targets)",
 			"kind": "action",
 			"when": false
+		},
+		{
+			"id": "view.cycle",
+			"keys": "Z",
+			"defaultKeys": "Z",
+			"group": "View",
+			"scope": "viewport",
+			"label": "Cycle view mode (Shaded / Shaded + AO / Wireframe)",
+			"kind": "action",
+			"when": false
+		},
+		{
+			"id": "view.focus",
+			"keys": "Ctrl+Space",
+			"defaultKeys": "Ctrl+Space",
+			"group": "View",
+			"scope": "global",
+			"label": "Focus mode — maximize the area under the pointer (the viewport alone, or a docked window filling the window); again to restore",
+			"kind": "action",
+			"when": false
+		},
+		{
+			"id": "view.focus-exit",
+			"keys": "Escape",
+			"defaultKeys": "Escape",
+			"group": "View",
+			"scope": "global",
+			"label": "Leave focus mode",
+			"kind": "fixed",
+			"when": true
 		},
 		{
 			"id": "voice.push-to-talk",
@@ -1020,16 +1050,6 @@
 			"label": "Race: back on the road",
 			"kind": "none",
 			"when": false
-		},
-		{
-			"id": "view.cycle",
-			"keys": "Z",
-			"defaultKeys": "Z",
-			"group": "View",
-			"scope": "viewport",
-			"label": "Cycle view mode (Shaded / Shaded + AO / Wireframe)",
-			"kind": "action",
-			"when": false
 		}
 	],
 	"routing": {
@@ -1061,10 +1081,12 @@
 			"Ctrl+Enter": "scene.play",
 			"Ctrl+G": null,
 			"Ctrl+I": null,
+			"Ctrl+K": "help.palette",
 			"Ctrl+S": "scene.save",
 			"Ctrl+Shift+G": null,
 			"Ctrl+Shift+S": "scene.checkpoint",
 			"Ctrl+Shift+Z": "history.redo-alt",
+			"Ctrl+Space": "view.focus",
 			"Ctrl+V": null,
 			"Ctrl+X": null,
 			"Ctrl+Y": "history.redo",
@@ -1106,6 +1128,7 @@
 			"Tab": "objects.edit-mesh",
 			"W": null,
 			"X": null,
+			"Z": "view.cycle",
 			"`": "panels.ai-prompt"
 		},
 		"nodes": {
@@ -1136,10 +1159,12 @@
 			"Ctrl+Enter": "scene.play",
 			"Ctrl+G": "nodes.group",
 			"Ctrl+I": null,
+			"Ctrl+K": "help.palette",
 			"Ctrl+S": "scene.save",
 			"Ctrl+Shift+G": "nodes.ungroup",
 			"Ctrl+Shift+S": "scene.checkpoint",
 			"Ctrl+Shift+Z": "history.redo-alt",
+			"Ctrl+Space": "view.focus",
 			"Ctrl+V": "nodes.paste",
 			"Ctrl+X": "nodes.cut",
 			"Ctrl+Y": "history.redo",
@@ -1181,6 +1206,7 @@
 			"Tab": "nodes.enter-group",
 			"W": null,
 			"X": "nodes.delete-x",
+			"Z": null,
 			"`": null
 		},
 		"uv": {
@@ -1211,10 +1237,12 @@
 			"Ctrl+Enter": "scene.play",
 			"Ctrl+G": null,
 			"Ctrl+I": null,
+			"Ctrl+K": "help.palette",
 			"Ctrl+S": "scene.save",
 			"Ctrl+Shift+G": null,
 			"Ctrl+Shift+S": "scene.checkpoint",
 			"Ctrl+Shift+Z": "history.redo-alt",
+			"Ctrl+Space": "view.focus",
 			"Ctrl+V": null,
 			"Ctrl+X": null,
 			"Ctrl+Y": "history.redo",
@@ -1256,6 +1284,7 @@
 			"Tab": null,
 			"W": null,
 			"X": null,
+			"Z": null,
 			"`": null
 		},
 		"animation": {
@@ -1286,10 +1315,12 @@
 			"Ctrl+Enter": "scene.play",
 			"Ctrl+G": null,
 			"Ctrl+I": null,
+			"Ctrl+K": "help.palette",
 			"Ctrl+S": "scene.save",
 			"Ctrl+Shift+G": null,
 			"Ctrl+Shift+S": "scene.checkpoint",
 			"Ctrl+Shift+Z": "history.redo-alt",
+			"Ctrl+Space": null,
 			"Ctrl+V": null,
 			"Ctrl+X": null,
 			"Ctrl+Y": "history.redo",
@@ -1331,6 +1362,7 @@
 			"Tab": null,
 			"W": null,
 			"X": null,
+			"Z": null,
 			"`": null
 		},
 		"shader": {
@@ -1361,10 +1393,12 @@
 			"Ctrl+Enter": "scene.play",
 			"Ctrl+G": null,
 			"Ctrl+I": null,
+			"Ctrl+K": "help.palette",
 			"Ctrl+S": "scene.save",
 			"Ctrl+Shift+G": null,
 			"Ctrl+Shift+S": "scene.checkpoint",
 			"Ctrl+Shift+Z": "history.redo-alt",
+			"Ctrl+Space": "view.focus",
 			"Ctrl+V": null,
 			"Ctrl+X": null,
 			"Ctrl+Y": "history.redo",
@@ -1406,6 +1440,7 @@
 			"Tab": null,
 			"W": null,
 			"X": null,
+			"Z": null,
 			"`": null
 		},
 		"hud": {
@@ -1436,10 +1471,12 @@
 			"Ctrl+Enter": "scene.play",
 			"Ctrl+G": null,
 			"Ctrl+I": null,
+			"Ctrl+K": "help.palette",
 			"Ctrl+S": "scene.save",
 			"Ctrl+Shift+G": null,
 			"Ctrl+Shift+S": "scene.checkpoint",
 			"Ctrl+Shift+Z": "history.redo-alt",
+			"Ctrl+Space": "view.focus",
 			"Ctrl+V": null,
 			"Ctrl+X": null,
 			"Ctrl+Y": "history.redo",
@@ -1481,6 +1518,7 @@
 			"Tab": null,
 			"W": null,
 			"X": null,
+			"Z": null,
 			"`": null
 		},
 		"text": {
@@ -1511,10 +1549,12 @@
 			"Ctrl+Enter": null,
 			"Ctrl+G": null,
 			"Ctrl+I": null,
+			"Ctrl+K": null,
 			"Ctrl+S": null,
 			"Ctrl+Shift+G": null,
 			"Ctrl+Shift+S": null,
 			"Ctrl+Shift+Z": null,
+			"Ctrl+Space": null,
 			"Ctrl+V": null,
 			"Ctrl+X": null,
 			"Ctrl+Y": null,
@@ -1556,6 +1596,7 @@
 			"Tab": null,
 			"W": null,
 			"X": null,
+			"Z": null,
 			"`": null
 		},
 		"modal": {
@@ -1586,10 +1627,12 @@
 			"Ctrl+Enter": null,
 			"Ctrl+G": null,
 			"Ctrl+I": null,
+			"Ctrl+K": "help.palette",
 			"Ctrl+S": null,
 			"Ctrl+Shift+G": null,
 			"Ctrl+Shift+S": null,
 			"Ctrl+Shift+Z": null,
+			"Ctrl+Space": null,
 			"Ctrl+V": null,
 			"Ctrl+X": null,
 			"Ctrl+Y": null,
@@ -1631,6 +1674,7 @@
 			"Tab": null,
 			"W": null,
 			"X": null,
+			"Z": null,
 			"`": null
 		}
 	}

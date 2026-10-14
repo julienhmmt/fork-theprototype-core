@@ -242,14 +242,33 @@ function dismiss(toast: any) {
     // 15-L: sticky info toasts carry the side effect their old bespoke close
     // button had (persist "seen", drop the restore snapshot)
     try { toast?.onDismiss?.(); } catch {}
-    $toastStore = $toastStore.filter((t) => t !== toast);
+    // 42 I11: an id'd card is updated IN PLACE (a new row object under the same id), so the
+    // object a timer or a button captured may have been replaced — the id still names it
+    const id = toast && typeof toast === 'object' ? toast.id : undefined;
+    $toastStore = $toastStore.filter((t) => t !== toast && !(id && t && typeof t === 'object' && t.id === id));
 }
 function autoDismiss(node: any, toast: any) {
     if (toast?.sticky) return {}; // 15-L: info prompts wait for the user
     if (toast?.kind === 'undo') return {}; // 37 R25: undoToast.js owns this one's lifetime
-    const id = setTimeout(() => dismiss(toast), typeof toast === 'string' ? 5000 : 15000);
-    return { destroy() { clearTimeout(id); } };
+    let current = toast;
+    const ms = typeof toast === 'string' ? 5000 : 15000;
+    let id = setTimeout(() => dismiss(current), ms);
+    return {
+        // 42 I12: an id'd card updated with NEW words gets its full time again to be read
+        update(next: any) {
+            const reworded = (next?.text ?? next) !== (current?.text ?? current);
+            current = next;
+            if (!reworded) return;
+            clearTimeout(id);
+            id = setTimeout(() => dismiss(current), ms);
+        },
+        destroy() { clearTimeout(id); }
+    };
 }
+/** 42 I11: the stack's each-key. An id'd card keeps ONE element across its in-place updates;
+ * keyed by the row OBJECT, every update unmounted it (fly out) and mounted a new one (fly in) —
+ * the unsaved-scene card "constantly shows/hides" while a peer edited. */
+const toastKey = (t: any) => (t && typeof t === 'object' && t.id ? 'id:' + t.id : t);
 
 // 15-L: the restore prompt and the first-run notice used to be hand-rolled
 // <Toast> blocks — which is why they looked nothing like the other cards and
@@ -607,8 +626,9 @@ style="z-index: var(--z-toast-low); pointer-events: none;"
 
 <!-- keyed by the entry (dedupe keeps plain strings unique; action toasts are
      distinct objects): an UNKEYED each reuses rows here, so a neighbour's expiry
-     migrated text across nodes and svelte 5.5x left a stuck duplicate behind -->
-{#each visibleToasts as toast (toast)}
+     migrated text across nodes and svelte 5.5x left a stuck duplicate behind.
+     42 I11: an id'd card is keyed by its id, so an in-place update never re-mounts it -->
+{#each visibleToasts as toast (toastKey(toast))}
 {@render toastCard(toast)}
 {/each}
 {#if hiddenCount > 0}

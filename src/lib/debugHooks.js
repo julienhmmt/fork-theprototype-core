@@ -134,6 +134,11 @@ export const DEBUG_HOOKS = [
 	['nodeEditorActions', () => import('./nodeEditorActions')],
 	['themes', () => import('./themes')],
 	['phoneShell', () => import('./ui/phoneShell.js')],
+	// 42 I5: the phone bar list (phoneBar / setBar) and More's three chrome switches
+	['phoneBar', () => import('./ui/phoneBar.js')],
+	['phonePrefs', () => import('./ui/phonePrefs.js')],
+	// 42 I8/I9: the top-right / touch slots (toolbar-slots-42)
+	['toolbarSlots', () => import('./toolbarSlots')],
 	['textSelection', () => import('./textSelection')],
 	['vrRadialMenu', () => import('./vrRadialMenu')],
 	['vrBindings', () => import('./vr/bindings.js')],
@@ -156,6 +161,9 @@ export const DEBUG_HOOKS = [
 	['bottomDock', () => import('./bottomDock')],
 	['dockMenu', () => import('./dockMenu')],
 	['phoneDock', () => import('./phoneDock')],
+	// 42 I6/I14: the hosted dock tabs, focus mode
+	['dockHost', () => import('./dockHost')],
+	['focusMode', () => import('./focusMode')],
 	['explorerDrop', () => import('./explorerDrop')],
 	['assetShare', () => import('./assetShare')],
 	['soundRuntime', () => import('./soundRuntime')],
@@ -260,6 +268,7 @@ export const DEBUG_HOOKS = [
 	['uiLayouts', () => import('./uiLayouts')],
 	['undoToast', () => import('./undoToast')],
 	['docking', () => import('./docking')],
+	['sidebars', () => import('./sidebars')],
 	['editResume', () => import('./editResume')],
 	['moduleRequirements', () => import('./moduleRequirements')],
 	['hudDocs', () => import('./hudDocs')],
@@ -321,6 +330,8 @@ export const DEBUG_HOOKS = [
 	// 41b: the burger's Project actions setting + Save options (H14), the settings-row fit (H12)
 	['projectActions', () => import('./projectActions.js')],
 	['saveOptions', () => import('./saveOptions.js')],
+	// 42 I1: sticky panel headers
+	['panelHeaderPrefs', () => import('./panelHeaderPrefs.js')],
 	['rowFit', () => import('./ui/rowFit.js')],
 	['exportBoot', () => import('./export/exportBoot.js')],
 	['exportRuntime', () => import('./export/exportRuntime.js')],

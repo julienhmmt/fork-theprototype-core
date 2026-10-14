@@ -406,7 +406,8 @@ h.run(async () => {
 	await clickAdd();
 	await A.page.waitForTimeout(400);
 	let rows = await menuRows();
-	const reg = await A.page.evaluate(() => window.__stores.dockMenu.DOCK_WINDOWS.length);
+	// 42 I6: on a desktop the "+" also lists the floating windows the dock hosts (Objects, Statistics, …)
+	const reg = await A.page.evaluate(() => window.__stores.dockMenu.DOCK_WINDOWS.length + window.__stores.dockMenu.HOSTED_DOCK_WINDOWS.length);
 	h.check(rows.length === reg, `7.1 the ＋ menu lists every registry window (${rows.length} of ${reg})`);
 	const marked = await A.page.evaluate(() =>
 		[...document.querySelectorAll('[role="menuitem"].ctx-checked')].map((el) => el.querySelector('.flex-1')?.textContent.trim())

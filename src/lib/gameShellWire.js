@@ -16,13 +16,13 @@ import { exitPlay, embedMode } from './playMode';
 import { stopGameMusic } from './gameMusic';
 import { spawnDesktopPlayer, desktopSpawn, spawnEyePose } from './playSpawn';
 import { games } from './sceneTemplates';
-import { applyGameQuality } from './qualityGovernor';
+import { applyGameQuality, QUALITY_PRESET_LEVELS } from './qualityGovernor';
 
 /** @type {(() => void)[]} */
 let disposers = [];
 
-/** the level each quality preset pins (null = the governor decides) @type {Record<string, number | null>} */
-export const QUALITY_PRESET_LEVELS = { auto: null, high: 0, medium: 3, low: 7 };
+/** the level each quality preset pins (null = the governor decides) — one table, in the governor (42 I12) */
+export { QUALITY_PRESET_LEVELS };
 
 /** Install the seams + the live settings. Idempotent. */
 export function startGameShell() {

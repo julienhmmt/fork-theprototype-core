@@ -13,6 +13,7 @@
 	// the arithmetic lives and where it is tested.
 	import Icon from '../ui/Icon.svelte';
 	import { dragWindow } from '$lib/dragWindow';
+	import { bottomDockable } from '$lib/bottomDockDrop';
 	import { focusStack } from '$lib/windowFocus';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
 	import {
@@ -52,6 +53,7 @@
 		class="ui-panel tp-ui tp-window fixed flex flex-col overflow-hidden outline-hidden"
 		tabindex="-1"
 		use:dragWindow={{ key: 'statsWindow', defaultRect: { left: 120, top: 120 }, resizable: true }}
+		use:bottomDockable={{ key: 'stats' }}
 		use:focusStack={'stats'}
 		style="z-index: var(--z-window); width: 380px; height: 460px"
 	>

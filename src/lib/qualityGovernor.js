@@ -312,18 +312,29 @@ autoQuality.subscribe((on) => {
  * per-game choice outranks the device's auto switch (it is explicit), and releasing it puts
  * the governor back where the player found it. 31-perf's Quest-aware auto reads the same
  * store (feature-detect `gameQualityState`). */
-/** @type {number | null} */
+/** @type {number | null} the level held right now (the game's pin, else the device preset's) */
 let gameForcedLevel = null;
+/** @type {number | null} */
+let gamePin = null;
+/** @type {number | null} 42 I12: the device Quality preset's pin (null = Auto) */
+let presetPin = null;
+let presetName = 'auto';
 /** @type {import('svelte/store').Writable<{preset: string, level: number | null}>} */
 export const gameQualityState = writable({ preset: 'auto', level: null });
 
-/**
- * @param {number | null} level the level to hold, or null for Auto
- * @param {string} [preset] the setting's name, for the chip's reason line
- */
-export function applyGameQuality(level, preset = 'auto') {
-	const next = level === null || level === undefined || !Number.isFinite(Number(level)) ? null : Math.max(0, Math.min(MAX_LEVEL, Math.floor(Number(level))));
-	gameQualityState.set({ preset: String(preset), level: next });
+/** the level each quality preset pins (null = the governor decides) — a game's Quality setting
+ * and the device preset (42 I12) share the ladder @type {Record<string, number | null>} */
+export const QUALITY_PRESET_LEVELS = { auto: null, high: 0, medium: 3, low: 7 };
+
+/** @param {any} level @returns {number | null} */
+function pinOf(level) {
+	return level === null || level === undefined || !Number.isFinite(Number(level)) ? null : Math.max(0, Math.min(MAX_LEVEL, Math.floor(Number(level))));
+}
+
+/** Hold the pin in force: a game's (explicit, while it is played) outranks the device preset.
+ * @param {string} reason the reason a held level is published with */
+function applyPin(reason) {
+	const next = gamePin !== null ? gamePin : presetPin;
 	if (next === gameForcedLevel) return;
 	const was = gameForcedLevel;
 	gameForcedLevel = next;
@@ -331,16 +342,36 @@ export function applyGameQuality(level, preset = 'auto') {
 		// integrate (31-perf x 31-game-shell): the pin outranks the headset's entry floor
 		if (xr.active) governor.setFloor(0);
 		governor.setLevel(next, now());
-		publish(next, 'game quality: ' + preset);
+		publish(next, reason);
 	} else if (was !== null) {
 		// back to Auto inside a headset = the headset's auto: its entry floor again
 		const base = xr.active && get(autoQuality) ? XR_START_LEVEL : 0;
 		if (xr.active && get(autoQuality)) governor.setFloor(XR_START_LEVEL);
 		governor.setLevel(base, now());
 		governor.forget();
-		publish(base, 'game quality: auto');
+		publish(base, reason);
 	}
 }
+
+/**
+ * @param {number | null} level the level to hold, or null for Auto
+ * @param {string} [preset] the setting's name, for the chip's reason line
+ */
+export function applyGameQuality(level, preset = 'auto') {
+	const next = pinOf(level);
+	gameQualityState.set({ preset: String(preset), level: next });
+	gamePin = next;
+	applyPin(next !== null ? 'game quality: ' + preset : presetPin !== null ? 'quality preset: ' + presetName : 'game quality: auto');
+}
+
+/** 42 I12 — THE DEVICE QUALITY PRESET (Configure Scene ▸ Quality, Settings ▸ Scene ▸ Performance):
+ * Auto (the governor decides, the default) or High / Medium / Low pinned on the same ladder a
+ * game's Quality setting uses. LOCAL like every quality fact — saved on this device, never sent
+ * and never in a scene file. A game's own Quality setting wins while it is played.
+ * @type {import('svelte/store').Writable<'auto'|'high'|'medium'|'low'>} */
+export const qualityPreset = writable(
+	/** @type {any} */ (((v) => (v && v in QUALITY_PRESET_LEVELS ? v : 'auto'))(safeStorage.getItem('quality:preset')))
+);
 
 /** TEST-ONLY: feed a synthetic frame / long task at an explicit time, and reset. */
 export const governorForTest = {
@@ -521,3 +552,15 @@ export function phoneQuality() {
 export function phoneRefreshHz() {
 	return phone ? phoneHz : null;
 }
+
+// 42 I12: the device preset takes hold LAST — after a phone's lighter start, which it overrides
+// (a pinned level is never re-decided, so a start published after it would stick instead)
+let presetSeen = false;
+qualityPreset.subscribe((p) => {
+	const name = p in QUALITY_PRESET_LEVELS ? p : 'auto';
+	if (presetSeen) safeStorage.setItem('quality:preset', name);
+	presetSeen = true;
+	presetName = name;
+	presetPin = QUALITY_PRESET_LEVELS[name] ?? null;
+	applyPin(presetPin !== null ? 'quality preset: ' + name : 'quality preset: auto');
+});

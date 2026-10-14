@@ -1,5 +1,5 @@
 {
-	"recordedAt": "2026-10-11T14:04:47.021Z",
+	"recordedAt": "2026-10-14T04:08:19.752Z",
 	"settings": {
 		"Theme": {
 			"rows": [
@@ -148,6 +148,7 @@
 		},
 		"Lift the toolbar above docked panels": {
 			"rows": [
+				"Lift the corner buttons above docked panels",
 				"Lift the toolbar above docked panels"
 			],
 			"sections": [
@@ -456,11 +457,13 @@
 		"Rotate": {
 			"rows": [
 				"Grab style",
+				"Phone selection toolbar",
 				"Pivot point",
 				"Rotate",
 				"World grab snapping"
 			],
 			"sections": [
+				"Interface",
 				"Shortcuts",
 				"VR"
 			]
@@ -468,11 +471,13 @@
 		"Scale": {
 			"rows": [
 				"Grab style",
+				"Phone selection toolbar",
 				"Pivot point",
 				"Scale",
 				"World grab snapping"
 			],
 			"sections": [
+				"Interface",
 				"Shortcuts",
 				"VR"
 			]
@@ -1800,6 +1805,7 @@
 				"Placement preview",
 				"Preview triangle budget",
 				"Quality",
+				"Quality preset",
 				"Reduce quality when the scene is heavy",
 				"Reset line colours",
 				"Selection outline colour",
@@ -1939,9 +1945,11 @@
 		},
 		"Menu hand": {
 			"rows": [
-				"Menu hand"
+				"Menu hand",
+				"Phone grab handle"
 			],
 			"sections": [
+				"Interface",
 				"VR"
 			]
 		},
@@ -2295,10 +2303,14 @@
 				"Editor tour",
 				"Game sounds",
 				"Knocked-off idle",
+				"Lift the corner buttons above docked panels",
 				"Lift the toolbar above docked panels",
 				"Music",
 				"Object search in the right-click menu",
 				"Offer Enter VR in a headset browser",
+				"Phone dock tab row",
+				"Phone grab handle",
+				"Phone selection toolbar",
 				"Project actions",
 				"Reset tours",
 				"Show FPS and draw calls",
@@ -2307,6 +2319,7 @@
 				"Show system objects in the object list",
 				"Show the environment in the object list",
 				"Show tours automatically",
+				"Sticky panel headers",
 				"Theme",
 				"Toolbar always on top",
 				"Touch tools",
@@ -2377,6 +2390,7 @@
 				"Placeholder style",
 				"Placement preview",
 				"Preview triangle budget",
+				"Quality preset",
 				"Reduce quality when the scene is heavy",
 				"Reset line colours",
 				"Selection outline colour",
@@ -2519,6 +2533,7 @@
 				"Compress textures",
 				"Include VR button",
 				"Quality",
+				"Quality preset",
 				"Reduce quality when the scene is heavy",
 				"Show FPS",
 				"Show FPS and draw calls",
@@ -2635,11 +2650,13 @@
 		"rotate": {
 			"rows": [
 				"Grab style",
+				"Phone selection toolbar",
 				"Pivot point",
 				"Rotate",
 				"World grab snapping"
 			],
 			"sections": [
+				"Interface",
 				"Shortcuts",
 				"VR"
 			]
@@ -2864,10 +2881,14 @@
 				"Editor tour",
 				"Game sounds",
 				"Knocked-off idle",
+				"Lift the corner buttons above docked panels",
 				"Lift the toolbar above docked panels",
 				"Music",
 				"Object search in the right-click menu",
 				"Offer Enter VR in a headset browser",
+				"Phone dock tab row",
+				"Phone grab handle",
+				"Phone selection toolbar",
 				"Project actions",
 				"Reset tours",
 				"Show FPS and draw calls",
@@ -2876,6 +2897,7 @@
 				"Show system objects in the object list",
 				"Show the environment in the object list",
 				"Show tours automatically",
+				"Sticky panel headers",
 				"Theme",
 				"Toolbar always on top",
 				"Touch tools",
@@ -2903,12 +2925,16 @@
 				"Game sounds",
 				"Hold to open menu",
 				"Knocked-off idle",
+				"Lift the corner buttons above docked panels",
 				"Lift the toolbar above docked panels",
 				"Menu hand",
 				"Mesh generation",
 				"Music",
 				"Object search in the right-click menu",
 				"Offer Enter VR in a headset browser",
+				"Phone dock tab row",
+				"Phone grab handle",
+				"Phone selection toolbar",
 				"Project actions",
 				"Reset panel positions",
 				"Reset tours",
@@ -2920,6 +2946,7 @@
 				"Show system objects in the object list",
 				"Show the environment in the object list",
 				"Show tours automatically",
+				"Sticky panel headers",
 				"Theme",
 				"Toolbar always on top",
 				"Touch tools",
@@ -3009,6 +3036,7 @@
 				"Fly 3x faster",
 				"Fly down / up",
 				"Fly the camera (horizontal)",
+				"Focus mode — maximize the area under the pointer (the viewport alone, or a docked window filling the window); again to restore",
 				"Focus selected object",
 				"Frame all nodes",
 				"Frame all nodes (Home)",
@@ -3018,6 +3046,7 @@
 				"HUD editor: show / bring to front / hide",
 				"Invert the selection (any mode)",
 				"Keyboard cheat sheet (every scope; the focused one first)",
+				"Leave focus mode",
 				"Leave isolation (double-click view)",
 				"Leave the group you are in",
 				"Loop cut (faces)",
@@ -3126,6 +3155,7 @@
 				"Placement preview",
 				"Preview triangle budget",
 				"Project actions",
+				"Quality preset",
 				"Reduce quality when the scene is heavy",
 				"Reset line colours",
 				"Selection outline colour",
@@ -3396,6 +3426,7 @@
 				"Fly 3x faster",
 				"Fly down / up",
 				"Fly the camera (horizontal)",
+				"Focus mode — maximize the area under the pointer (the viewport alone, or a docked window filling the window); again to restore",
 				"Focus selected object",
 				"Frame all nodes",
 				"Frame all nodes (Home)",
@@ -3405,6 +3436,7 @@
 				"HUD editor: show / bring to front / hide",
 				"Invert the selection (any mode)",
 				"Keyboard cheat sheet (every scope; the focused one first)",
+				"Leave focus mode",
 				"Leave isolation (double-click view)",
 				"Leave the group you are in",
 				"Loop cut (faces)",
@@ -3506,6 +3538,7 @@
 				"Fly 3x faster",
 				"Fly down / up",
 				"Fly the camera (horizontal)",
+				"Focus mode — maximize the area under the pointer (the viewport alone, or a docked window filling the window); again to restore",
 				"Focus selected object",
 				"Frame all nodes",
 				"Frame all nodes (Home)",
@@ -3515,6 +3548,7 @@
 				"HUD editor: show / bring to front / hide",
 				"Invert the selection (any mode)",
 				"Keyboard cheat sheet (every scope; the focused one first)",
+				"Leave focus mode",
 				"Leave isolation (double-click view)",
 				"Leave the group you are in",
 				"Loop cut (faces)",
@@ -3616,6 +3650,7 @@
 				"Fly 3x faster",
 				"Fly down / up",
 				"Fly the camera (horizontal)",
+				"Focus mode — maximize the area under the pointer (the viewport alone, or a docked window filling the window); again to restore",
 				"Focus selected object",
 				"Frame all nodes",
 				"Frame all nodes (Home)",
@@ -3625,6 +3660,7 @@
 				"HUD editor: show / bring to front / hide",
 				"Invert the selection (any mode)",
 				"Keyboard cheat sheet (every scope; the focused one first)",
+				"Leave focus mode",
 				"Leave isolation (double-click view)",
 				"Leave the group you are in",
 				"Loop cut (faces)",
@@ -3910,6 +3946,7 @@
 				"Explorer: show / bring to front / hide",
 				"Flow Code: show / bring to front / hide",
 				"HUD editor: show / bring to front / hide",
+				"Lift the corner buttons above docked panels",
 				"Lift the toolbar above docked panels",
 				"Node editor mouse",
 				"Node editor opens",
@@ -3919,6 +3956,7 @@
 				"Reverse trackpad pan",
 				"Shader editor: show / bring to front / hide",
 				"Spatial voice",
+				"Sticky panel headers",
 				"Toggle AI prompt bar",
 				"Toggle chat",
 				"Tool dock: show / hide (Node editor, Explorer, Animation, UV, Shader, HUD…)",
@@ -3957,9 +3995,11 @@
 				"Menu hand",
 				"My hand model",
 				"Peer hands",
+				"Phone grab handle",
 				"Statistics card"
 			],
 			"sections": [
+				"Interface",
 				"VR"
 			]
 		},
@@ -4038,9 +4078,11 @@
 				"Colocation probe",
 				"Download shared files automatically",
 				"Enable assistant",
+				"Focus mode — maximize the area under the pointer (the viewport alone, or a docked window filling the window); again to restore",
 				"Ghost hands",
 				"Height",
 				"Hold to move vertex",
+				"Lift the corner buttons above docked panels",
 				"Loop select (faces: again = perpendicular; edges: the chain)",
 				"Mesh generation",
 				"Placeholder style",
@@ -4245,6 +4287,7 @@
 				"Overrides — this device",
 				"Physics",
 				"Play",
+				"Quality",
 				"Saved views",
 				"Scene look",
 				"Scene track (shared)",
@@ -4257,6 +4300,9 @@
 				"This device",
 				"View",
 				"Viewport — this device"
+			],
+			"quality": [
+				"Quality"
 			],
 			"environment": [
 				"Components",
@@ -4427,7 +4473,9 @@
 				"Scene look",
 				"Shader materials"
 			],
-			"shadow": [],
+			"shadow": [
+				"Quality"
+			],
 			"material": [
 				"Overrides — this device",
 				"Physics",

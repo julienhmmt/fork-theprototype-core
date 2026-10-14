@@ -5,6 +5,56 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.33.0 — Your 1.32 review: sidebars your way, a phone bar you arrange, and focus mode 🎯
+
+Everything from your review of the 1.32 preview.
+
+### 🖥️ Sidebars on the desktop
+
+- 🗂️ **One sidebar per side, panels as tabs**: Configure Scene / Properties, Objects and any window docked to an edge
+  share their side's sidebar as tabs — opening one brings its tab forward instead of a second column. **Drag a tab to
+  the other side** to dock it there (the side lights up), or drop a floating window on a sidebar to add it as a tab.
+- ↕️ **Full height**: the button in a sidebar's header runs it from the top edge to the bottom edge — that corner's
+  buttons slide inward and the bottom dock gets narrower beside it. The main menu always opens above sidebars.
+- 🔒 **Panel headers can scroll away**: a lock in the Properties and Configure Scene headers keeps the name and
+  *Filter properties* on top (the default) or lets them scroll with the properties — per panel, on desktop and phone
+  (**Settings ▸ Interface ▸ Sticky panel headers**).
+- 🛠️ A pinned Properties panel no longer slides when you select after deselecting.
+
+### 📱 The phone bar, arranged from More
+
+- 👆 **Press and hold any item in More and drag it onto the bar** — or along it, or off it. Play too: off the bar it
+  waits in More ▸ Windows. *Edit bar…* is gone; a 1.32 bar carries over.
+- ➕ **Up to seven items** (icons only past five on a narrow phone). More gains **Inspect, Move, Rotate, Scale,
+  Statistics, Tools & View and Focus mode**, all placeable on the bar.
+- 🎚️ **Show switches** at the bottom of More: *Selection toolbar*, *Dock tab row* and *Grab handle* (the edge still
+  resizes without it).
+- 🛠️ The burger menu's **Save options** open full screen, with no gap on the right.
+
+### 🪟 Windows, the dock and focus mode
+
+- 📥 **Every floating window docks by dropping it on the dock's tab row** — exactly where the marker shows, the window
+  see-through while you aim. Objects, Statistics, the Live profiler, Chat and the AI assistant dock too.
+- ↔️ **Floating windows overlap the dock** and resize past its top edge.
+- 🎯 **Focus mode — Ctrl+Space**: the 3D view alone, or the docked window under the mouse filling the screen. Esc or
+  Ctrl+Space brings everything back; also **View ▸ Focus mode**, a dock tab's menu, or **More ▸ Focus mode** on a phone.
+
+### 🧰 The toolbar
+
+- ✋ **Edit positions reaches the top-right icons** (notes, notifications, peers) **and the touch tools** (undo, redo,
+  multi-select); each corner holds up to **four** buttons, with one **+** for the next place.
+- ⬆️ **Lift corner buttons above docked panels** (off by default), next to *Always on top* in the toolbar's menus.
+- 💾 **Workspace layouts keep the toolbar** — its buttons, corners and position — with the desktop and the phone bar
+  kept separately in one layout.
+- 🏷️ The menus say **Pivot** and **Microphone**.
+
+### 🌊 Quality and notices
+
+- 🎛️ **Configure Scene starts with a Quality preset** (Auto / High / Medium / Low, this device) plus the automatic
+  quality, shadow and model switches.
+- 🔔 **One** auto-quality notice instead of stacked ones, and the unsaved-scene notice no longer flickers while a peer
+  edits.
+
 ## 1.32.0 — Your 1.31 review, fixed: sheets that swipe away, tidy docks and a reef that swims 🐠
 
 Everything you flagged in 1.31 and in the 1.32 preview, fixed — plus an Image editor and a real reef in the Aquarium.

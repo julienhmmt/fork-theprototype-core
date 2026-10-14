@@ -23,6 +23,7 @@
 	import UiButton from '../ui/Button.svelte';
 	import MenuButton from './inspector/MenuButton.svelte';
 	import InsToggle from './inspector/InsToggle.svelte';
+	import SceneQualitySection from './inspector/SceneQualitySection.svelte'; // 42 I12
 	import HdriSection from './scene/HdriSection.svelte'; // 37-hdri
 	import PhysicsFloats from '../sim/PhysicsFloats.svelte'; // 36-sim I1
 	import FluidEmitterSection from '../sim/FluidEmitterSection.svelte'; // 36-fb F23
@@ -33,6 +34,7 @@
 	import SheetGrip from '../ui/SheetGrip.svelte';
 	import { saveSheetH } from '$lib/ui/sheetDrag.js';
 	import { phoneSheetMaxH } from '$lib/ui/phoneShell.js';
+	import { inspectorSide, sidebarShown, sidebarTabs, memberPlacement } from '$lib/sidebars'; // 42 I2/I3
 	import Segmented from '../ui/Segmented.svelte';
 	import ParticleMotionRows from '../fx/ParticleMotionRows.svelte';
 	import ColorPicker, { ChromeVariant } from 'svelte-awesome-color-picker';
@@ -330,9 +332,19 @@
 	// list are TABS of one dock, so opening one no longer closes the other ("one bottom sheet at a
 	// time" was the rule while each was a sheet of its own — $lib/phoneDock).
 	// SHEET = slide UP from below; side drawer = fly in from the right (horizontal).
+	// 42 I3/I4: a wide screen's Inspector is a TAB of its side's column ($lib/sidebars): it takes the
+	// column's place from the CSS bus, hides while another tab of the side is in front, and slides
+	// only when its side was EMPTY — opening onto (or closing off) a column that stays on screen is a
+	// tab change, and a tab change is instant.
+	const insSide = $derived($inspectorSide);
+	const insCovered = $derived(!sheetMode && $sidebarShown[insSide] !== 'inspector' && $sidebarTabs[insSide].includes('inspector'));
+	const columnShared = $derived($sidebarTabs[insSide].some((k) => k !== 'inspector'));
 	const insTransition = $derived(
-		sheetMode ? { y: 500, duration: 240, easing: sineIn } : transitionParamsRight
+		sheetMode
+			? { y: 500, duration: 240, easing: sineIn }
+			: { ...transitionParamsRight, x: insSide === 'left' ? -transitionParamsRight.x : transitionParamsRight.x, duration: columnShared ? 0 : transitionParamsRight.duration }
 	);
+	const insPlacement = $derived(sheetMode ? drawerStyle : memberPlacement(insSide) + ' z-index: calc(var(--z-dock) - 1)');
 
 	// On a narrow/folded screen this drawer is a bottom SHEET (see #inspector in ui.css)
 	// with a top drag handle to adjust height — mirrors the scene-notes sheet. Persisted.
@@ -1617,7 +1629,9 @@
      chrome (fixed inset-e-0 top-16 w-80 + fly) exactly. -->
 {#if !$inspectorClose}
 <div
-	style={drawerStyle + '; --inspector-h: ' + inspectorH + 'px'}
+	style={insPlacement + '; --inspector-h: ' + inspectorH + 'px'}
+	data-sidebar-side={sheetMode ? null : insSide}
+	data-sidebar-hidden={insCovered ? '' : null}
 	transition:fly={insTransition}
 	class={'tp-ui ins-shell fixed inset-e-0 top-16 z-(--z-side-panel) w-80 overflow-y-auto p-4 pt-0' + (bottomRounded ? ' ins-rounded-bl' : '')}
 	use:minimalScroll
@@ -1701,12 +1715,15 @@
 			icon="sun"
 			badge="Scene"
 			filter
+			panel="scene"
 			pinned={$inspectorPinned}
 			onpin={() => inspectorPinned.update((v) => !v)}
 			onclose={() => inspectorClose.set(true)}
 		/>
 
 		<div class="flex flex-col gap-3">
+			<!-- 42 I12: the device Quality preset is the TOP of Configure Scene -->
+			<SceneQualitySection />
 			<Section variant="panel" label="Environment" badge="Shared">
 				<!-- 38 R5: the presets are Chips in the one accent; a press re-applies the
 				     preset even when it is already selected, exactly as the old buttons did -->
@@ -2957,6 +2974,7 @@
 			title="Properties"
 			icon="package"
 			badge="Module content"
+			panel="properties"
 			pinned={$inspectorPinned}
 			onpin={() => inspectorPinned.update((v) => !v)}
 			onclose={() => inspectorClose.set(true)}
@@ -2976,6 +2994,7 @@
 			icon="box"
 			badge={multiCount ? `${multiCount} objects` : $selectedObject.type}
 			filter
+			panel="properties"
 			pinned={$inspectorPinned}
 			onpin={() => inspectorPinned.update((v) => !v)}
 			onclose={() => inspectorClose.set(true)}
@@ -4594,6 +4613,25 @@
 	}
 	.ins-rounded-bl {
 		border-bottom-left-radius: var(--radius-window);
+	}
+	/* 42 I3: in a sidebar column the tab header sits on top (square join), and a LEFT column mirrors
+	   the edges; a full-height column runs flush to the bottom edge */
+	.ins-shell[data-sidebar-side] {
+		border-top-left-radius: 0;
+		border-top: 0;
+	}
+	.ins-shell[data-sidebar-side='left'] {
+		border-left: 0;
+		border-right: 1px solid var(--border);
+	}
+	.ins-shell[data-sidebar-side='left'].ins-rounded-bl {
+		border-bottom-left-radius: 0;
+		border-bottom-right-radius: var(--radius-window);
+	}
+	:global(:root.sb-full-left) .ins-shell[data-sidebar-side='left'],
+	:global(:root.sb-full-right) .ins-shell[data-sidebar-side='right'] {
+		border-bottom-left-radius: 0;
+		border-bottom-right-radius: 0;
 	}
 	.ins-shell {
 		padding-inline: 14px;
