@@ -16,6 +16,7 @@
 	import { inspectorFilter, inspectorScrollTo } from '../../stores/appStore';
 	import Icon from './Icon.svelte';
 	import Badge from './Badge.svelte';
+	import { fieldClip, openSectionScope, settle } from '$lib/fieldMenu';
 
 	/**
 	 * P6: `aliases` are OLD deep-link names this section still answers to. A section's
@@ -23,7 +24,13 @@
 	 * menus, other components and suites — the 21-G1 rule is that the word may change and
 	 * the identifier may not, so a rename lists what it used to be called instead of
 	 * hunting every caller (and silently missing one).
-	 * @type {{label?: string, aliases?: string[], collapsible?: boolean, open?: boolean, variant?: 'legacy'|'card'|'panel', badge?: string, children?: any}}
+	 *
+	 * 43 J3: `clip` — the section header's copy / paste ($lib/fieldMenu). Inside the Inspector
+	 * every non-card section copies and pastes the rows it shows; `clip` adds what a section
+	 * knows beyond its rows: `{count(), pasteAll(values)}` ("Paste to all selected" through a
+	 * section-specific write) or `{count(), fans: true}` (its rows already fan over the
+	 * selection, so a paste IS a paste to all). `clip={false}` opts a section out.
+	 * @type {{label?: string, aliases?: string[], collapsible?: boolean, open?: boolean, variant?: 'legacy'|'card'|'panel', badge?: string, children?: any, clip?: any}}
 	 */
 	let {
 		label = '',
@@ -32,9 +39,33 @@
 		open = $bindable(true),
 		variant = 'legacy',
 		badge = '',
-		children = null
+		children = null,
+		clip = undefined
 	} = $props();
 	const isCard = $derived(variant === 'card');
+
+	// 43 J3: rows inside join this section's clipboard registry (a Settings card stays out)
+	// svelte-ignore state_referenced_locally
+	const registry = variant === 'card' ? null : openSectionScope();
+	/** @returns {any} */
+	function sectionClip() {
+		if (!registry || clip === false) return null;
+		return {
+			section: true,
+			name: label,
+			fields: () => registry.fields(),
+			count: clip?.count,
+			pasteAll: clip?.pasteAll,
+			fans: clip?.fans,
+			// a collapsed section has no rows mounted: open it, then copy or paste
+			prepare: async () => {
+				if (showContent) return;
+				if (collapsed) toggle();
+				open = true;
+				await settle();
+			}
+		};
+	}
 
 	const LS = typeof localStorage !== 'undefined' ? localStorage : null;
 	// persisted collapse, keyed by the section label (static per instance — a
@@ -137,13 +168,13 @@
 {:else if variant === 'panel'}
 	<section class="tp-ui sec-panel" class:hidden={filtering && !match} bind:this={root}>
 		{#if collapsible && !filtering}
-			<button type="button" class="sec-panel-head" aria-expanded={showContent} onclick={toggle}>
+			<button type="button" class="sec-panel-head" aria-expanded={showContent} onclick={toggle} use:fieldClip={sectionClip}>
 				<span class="sec-chev" class:sec-chev-open={showContent} aria-hidden="true"><Icon name="chevron-right" size={16} /></span>
 				<span class="sec-title ui-section-label">{label}</span>
 				{#if badge}<Badge tone="scope" text={badge} />{/if}
 			</button>
 		{:else}
-			<div class="sec-panel-head sec-static">
+			<div class="sec-panel-head sec-static" use:fieldClip={sectionClip}>
 				<span class="sec-title ui-section-label">{label}</span>
 				{#if badge}<Badge tone="scope" text={badge} />{/if}
 			</div>
@@ -160,6 +191,7 @@
 		<button
 			class="ui-section-label flex w-full items-center justify-between hover:text-text-2"
 			onclick={toggle}
+			use:fieldClip={sectionClip}
 		>
 			<span>{label}</span>
 			<span class="text-text-faint">{showContent ? '−' : '+'}</span>
