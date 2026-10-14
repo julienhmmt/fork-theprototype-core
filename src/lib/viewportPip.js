@@ -1,4 +1,6 @@
 import { writable, get } from 'svelte/store';
+import * as THREE from 'three';
+import { objectsGroup, selectedObjects } from '../stores/sceneStore';
 
 // 43 K5 — THE VIEWPORT PiP. While a docked window is maximized to the FULL window (focus mode
 // 'dock' at full height, $lib/focusMode) the 3D view is covered, so it comes back as a
@@ -51,6 +53,40 @@ export const viewportPipClosed = writable(false);
 /** the PiP's own camera + controls while it is open (the window publishes them; the keymap's PiP
  *  scope and the suites read them) @type {import('svelte/store').Writable<{camera: any, controls: any} | null>} */
 export const viewportPipView = writable(null);
+
+/** is the viewport PiP up (the keymap's `pip` rows ask) */
+export function viewportPipOpen() {
+	return !!get(viewportPipView);
+}
+
+/**
+ * F inside the PiP: frame the selection with the PiP's OWN camera (the editor camera stays put) —
+ * same rule as the viewport's F: keep the viewing direction, fit the selection's bounds.
+ * @returns {boolean} false when nothing was framed
+ */
+export function framePipSelection() {
+	const view = get(viewportPipView);
+	const group = /** @type {any} */ (get(objectsGroup));
+	const uuids = get(selectedObjects) ?? [];
+	if (!view || !group || !uuids.length) return false;
+	const box = new THREE.Box3();
+	for (const uuid of uuids) {
+		const object = group.getObjectByProperty('uuid', uuid);
+		if (object) box.expandByObject(object);
+	}
+	if (box.isEmpty()) return false;
+	const sphere = box.getBoundingSphere(new THREE.Sphere());
+	const { camera, controls } = view;
+	const fov = THREE.MathUtils.degToRad(camera.fov || 50);
+	const distance = THREE.MathUtils.clamp((Math.max(sphere.radius, 0.05) / Math.sin(fov / 2)) * 1.1, 0.5, 500);
+	const direction = camera.position.clone().sub(controls?.target ?? sphere.center).normalize();
+	if (!Number.isFinite(direction.x) || direction.lengthSq() < 1e-6) direction.set(0, 0.5, 1).normalize();
+	camera.position.copy(sphere.center).add(direction.multiplyScalar(distance));
+	controls?.target.copy(sphere.center);
+	camera.lookAt(sphere.center);
+	controls?.update();
+	return true;
+}
 
 /** a new focus session: parked, shown */
 export function resetViewportPipSession() {

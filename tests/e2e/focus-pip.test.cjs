@@ -21,6 +21,9 @@
 //   8  Esc: the sidebars come back exactly (visible, pinned width), the dock back to its height, the editor
 //      camera where it was; the next maximize shows the PiP again
 //   9  the camera preview (16-Q4) resizes by its corner too: aspect kept, height remembered
+//  10  the PiP is a second VIEWPORT: F frames the selection with the PiP camera, clicks select / deselect,
+//      W/E/R (and the viewport's G) arm the gizmo modes without flying the editor camera, W then a drag on
+//      the gizmo IN the PiP moves the selected object (one undo step), Delete deletes
 //
 // Counterfactual: on origin/feat/42-int the dock stops 72 px below the top and 320 px short of the right
 // edge (the pinned column's room), there is no PiP, and the camera preview has no grip.
@@ -92,17 +95,22 @@ h.run(async () => {
 		storage: { flowCodeDocked: 'true', flowDockHeight: '300', 'sidebar:full:right': 'true', theme: THEME }
 	});
 	const page = P.page;
-	// something to look at in the PiP
-	await S(page, async () => {
+	// something to look at in the PiP (and to select / move in it)
+	const boxUuid = await S(page, async () => {
 		const s = window.__stores;
 		s.commandsHandler.sceneCommand('/create Box 2 2 2');
 		await new Promise((r) => setTimeout(r, 400));
-		s.deselectObject?.();
+		let g;
+		s.objectsGroup.subscribe((v) => (g = v))();
+		const box = g.children[g.children.length - 1];
+		box.userData.physics = { mode: 'static' };
+		s.objectActions.deselectObject();
 		s.inspectorKind?.set?.('scene');
 		s.inspectorClose.set(false);
 		s.flowCodeClose.set(false);
 		await new Promise((r) => setTimeout(r, 700));
 		s.bottomDock.activateDock('flowcode');
+		return box.uuid;
 	});
 	await page.waitForTimeout(1500);
 
@@ -203,6 +211,132 @@ h.run(async () => {
 	const box6 = (await look(page)).pip;
 	h.check(box6 && box6.l === big.pip.l && box6.t === big.pip.t, '6.4 ...nor did the PiP window (a body drag is the picture\'s, not the frame\'s)');
 
+	// ---- 10. the PiP is a second VIEWPORT: select, the transform keys, the gizmo ---------------------
+	const sel = () => store(page, 'selectedObjects');
+	const boxPos = () =>
+		S(page, (u) => {
+			let g;
+			window.__stores.objectsGroup.subscribe((v) => (g = v))();
+			return g.getObjectByProperty('uuid', u).position.toArray().map((n) => +n.toFixed(3));
+		}, boxUuid);
+	/** the box's centre, projected through the PiP camera to page pixels */
+	const boxInPip = () =>
+		S(page, (u) => {
+			const THREE = window.__stores.objectsGroup && null;
+			let g;
+			window.__stores.objectsGroup.subscribe((v) => (g = v))();
+			const obj = g.getObjectByProperty('uuid', u);
+			const view = (() => {
+				let v;
+				window.__stores.viewportPip.viewportPipView.subscribe((x) => (v = x))();
+				return v;
+			})();
+			const c = document.querySelector('#viewport-pip canvas').getBoundingClientRect();
+			const p = obj.getWorldPosition(obj.position.clone()).project(view.camera);
+			return { x: Math.round(c.left + ((p.x + 1) / 2) * c.width), y: Math.round(c.top + ((1 - p.y) / 2) * c.height), _: THREE };
+		}, boxUuid);
+	// F first, with the box selected from the outside, so it fills the PiP for the clicks below
+	await S(page, (u) => window.__stores.objectActions.selectObject(u), boxUuid);
+	await page.waitForTimeout(300);
+	const tgtBefore = (await S(page, () => window.__stores.viewportPip.viewportPipDebug())).camera.target;
+	const mainBeforeF = await camPose(page);
+	const pipNow = (await look(page)).pip;
+	await page.mouse.move(pipNow.l + 40, pipNow.b - 30); // the pointer over the PiP gives it the keyboard
+	await page.mouse.click(pipNow.l + 40, pipNow.b - 30, { button: 'middle' });
+	await page.keyboard.press('f');
+	await page.waitForTimeout(500);
+	const tgtF = (await S(page, () => window.__stores.viewportPip.viewportPipDebug())).camera.target;
+	const centre = await boxPos();
+	h.check(tgtF && tgtF.every((v, i) => Math.abs(v - centre[i]) < 0.05) && JSON.stringify(tgtF) !== JSON.stringify(tgtBefore), `10.1 F over the PiP frames the selection with the PiP camera (target ${JSON.stringify(tgtBefore)} -> ${JSON.stringify(tgtF?.map((n) => +n.toFixed(2)))})`);
+	h.check(JSON.stringify(await camPose(page)) === JSON.stringify(mainBeforeF), '10.2 ...the editor camera did not move (F in the PiP is the PiP\'s)');
+	// a click on empty space deselects, a click on the box selects it
+	await page.mouse.click(pipNow.l + 30, pipNow.t + 40);
+	await page.waitForTimeout(300);
+	const afterEmpty = await sel();
+	const bp = await boxInPip();
+	await page.mouse.click(bp.x, bp.y);
+	await page.waitForTimeout(400);
+	const afterBox = await sel();
+	h.check(afterEmpty.length === 0 && afterBox.length === 1 && afterBox[0] === boxUuid, `10.3 clicks in the PiP select: empty space deselects, the box selects it (${afterEmpty.length} -> ${JSON.stringify(afterBox)})`);
+	// the transform keys, over the PiP
+	await page.keyboard.press('r');
+	const mR = await store(page, 'transformMode');
+	await page.keyboard.press('e');
+	const mE = await store(page, 'transformMode');
+	await page.keyboard.press('g');
+	const mG = await store(page, 'transformMode');
+	const mainBeforeW = await camPose(page);
+	await page.keyboard.press('e');
+	await page.keyboard.down('w');
+	await page.waitForTimeout(400);
+	await page.keyboard.up('w');
+	const mW = await store(page, 'transformMode');
+	h.check(mR === 'scale' && mE === 'rotate' && mG === 'translate' && mW === 'translate', `10.4 over the PiP W/E/R arm Move/Rotate/Scale and G (the viewport's row) Move too (R ${mR}, E ${mE}, G ${mG}, W ${mW})`);
+	h.check(JSON.stringify(await camPose(page)) === JSON.stringify(mainBeforeW), '10.5 ...and holding W there does not fly the editor camera');
+	// the gizmo: find a point on its X handle through the PiP camera, then drag it
+	const handle = await S(page, () => {
+		let tc, view;
+		window.__stores.TControls.subscribe((v) => (tc = v))();
+		window.__stores.viewportPip.viewportPipView.subscribe((v) => (view = v))();
+		const c = document.querySelector('#viewport-pip canvas');
+		const r = c.getBoundingClientRect();
+		const o = tc.object.getWorldPosition(tc.object.position.clone());
+		const p0 = o.clone().project(view.camera);
+		const p1 = o.clone().add({ x: 1, y: 0, z: 0, isVector3: true }).project(view.camera);
+		const dx = p1.x - p0.x;
+		const dy = p1.y - p0.y;
+		const len = Math.hypot(dx, dy) || 1;
+		for (let t = 0.02; t < 1.2; t += 0.01) {
+			const x = p0.x + (dx / len) * t;
+			const y = p0.y + (dy / len) * t;
+			tc.pointerHover({ x, y, button: 0 });
+			if (tc.axis === 'X') return { x: Math.round(r.left + ((x + 1) / 2) * r.width), y: Math.round(r.top + ((1 - y) / 2) * r.height), cameraIsPip: tc.camera === view.camera, dom: tc.domElement === c };
+		}
+		return { cameraIsPip: tc.camera === view.camera, dom: tc.domElement === c };
+	});
+	h.check(handle.cameraIsPip && handle.dom, `10.6 the transform gizmo is handed the PiP's camera and canvas while it is up (${JSON.stringify(handle)})`);
+	const pos0 = await boxPos();
+	const pipCam0 = (await S(page, () => window.__stores.viewportPip.viewportPipDebug())).camera.position;
+	if (handle.x) {
+		await page.mouse.move(handle.x, handle.y);
+		await page.waitForTimeout(100);
+		await page.mouse.down();
+		await page.mouse.move(handle.x + 60, handle.y + 4, { steps: 10 });
+		await page.mouse.up();
+		await page.waitForTimeout(500);
+	}
+	const pos1 = await boxPos();
+	h.check(!!handle.x && Math.abs(pos1[0] - pos0[0]) > 0.2 && Math.abs(pos1[1] - pos0[1]) < 0.01 && Math.abs(pos1[2] - pos0[2]) < 0.01, `10.7 W then a drag on the gizmo in the PiP moves the selected object along X (${JSON.stringify(pos0)} -> ${JSON.stringify(pos1)})`);
+	const pipCam1 = (await S(page, () => window.__stores.viewportPip.viewportPipDebug())).camera.position;
+	h.check(pipCam1.every((v, i) => Math.abs(v - pipCam0[i]) < 1e-3), '10.8 ...and the PiP view did NOT orbit with that drag (the gizmo owns the press)');
+	await page.keyboard.press('Control+z');
+	await page.waitForTimeout(500);
+	const pos2 = await boxPos();
+	h.check(pos2.every((v, i) => Math.abs(v - pos0[i]) < 0.01), `10.9 ...ONE undo step puts it back (${JSON.stringify(pos2)})`);
+	// Delete over the PiP deletes the selection (the viewport's row)
+	const doomed = await S(page, async () => {
+		const s = window.__stores;
+		s.commandsHandler.sceneCommand('/create Sphere');
+		await new Promise((r) => setTimeout(r, 400));
+		let g;
+		s.objectsGroup.subscribe((v) => (g = v))();
+		const o = g.children[g.children.length - 1];
+		o.position.set(3, 1, 0);
+		s.objectsGroup.update((v) => v);
+		s.objectActions.selectObject(o.uuid);
+		return o.uuid;
+	});
+	await page.waitForTimeout(300);
+	await page.mouse.move(pipNow.l + 40, pipNow.b - 30);
+	await page.keyboard.press('Delete');
+	await page.waitForTimeout(600);
+	const gone = await S(page, (u) => {
+		let g;
+		window.__stores.objectsGroup.subscribe((v) => (g = v))();
+		return !g.getObjectByProperty('uuid', u);
+	}, doomed);
+	h.check(gone, '10.10 Delete over the PiP deletes the selected object');
+
 	// ---- 7. close; a dock resized down shows the real viewport ---------------------------------------
 	await page.click('#viewport-pip .pip-close');
 	await page.waitForTimeout(400);
@@ -230,6 +364,16 @@ h.run(async () => {
 	h.check(st.dock && Math.abs(st.dock.t - dockBefore.t) <= 2 && Math.abs(st.dock.r - dockBefore.r) <= 2, `8.2 ...the dock is back to its height and beside the pinned column (${JSON.stringify(st.dock)} vs ${JSON.stringify(dockBefore)})`);
 	h.check(!st.pip && (await S(page, () => window.__stores.pipViews.pipViewsDebug())).mainCovered === false, '8.3 ...no PiP, and the main frame draws again');
 	h.check(JSON.stringify(await camPose(page)) === JSON.stringify(pose0), '8.4 ...and the editor camera is where it was');
+	const back = await S(page, () => {
+		let tc, cam, r;
+		window.__stores.TControls.subscribe((v) => (tc = v))();
+		window.__stores.globalCamera.subscribe((v) => (cam = v))();
+		window.__stores.globalRenderer.subscribe((v) => (r = v))();
+		// threlte connects the gizmo to the canvas's WRAPPER (its `dom`), so "back" = that element again
+		const d = tc.domElement;
+		return { camera: tc.camera === cam, dom: !!d && d.isConnected && !d.closest('#viewport-pip') && (d === r.domElement || d.contains(r.domElement)) };
+	});
+	h.check(back.camera && back.dom, `8.4b ...and the gizmo is handed back to the editor camera and canvas (${JSON.stringify(back)})`);
 	const dockNow = st.dock;
 	await page.mouse.move(Math.round((dockNow.l + dockNow.r) / 2), Math.round((dockNow.t + dockNow.b) / 2));
 	await page.keyboard.press('Control+Space');

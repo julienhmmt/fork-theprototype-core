@@ -14,7 +14,12 @@
 	import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 	import { focusMode, fullDockHeight } from '$lib/focusMode';
 	import { dockHeight } from '$lib/bottomDock';
-	import { globalCamera, orbitControls } from '../../stores/sceneStore';
+	import { globalCamera, orbitControls, TControls } from '../../stores/sceneStore';
+	import { selectObject, deselectObject, topLevelObjectOf } from '$lib/objectActions';
+	import { sceneHits } from '$lib/scenePick';
+	import { pickStack, primaryIndex } from '$lib/selectThrough';
+	import { editorPass } from '$lib/pickPass';
+	import { HELPER_LAYER } from '$lib/helperLayer';
 	import { phoneShell } from '$lib/ui/phoneShell.js';
 	import { registerPipView, setMainViewCovered } from '$lib/pipViews';
 	import {
@@ -132,12 +137,105 @@
 			}
 		});
 		const ctl = controls;
+		const unhook = hookInput(el);
 		return () => {
+			unhook();
 			off();
 			ctl.dispose();
 			if (controls === ctl) controls = null;
 			viewportPipView.set(null);
 		};
+	}
+
+	/**
+	 * The PiP is a second VIEWPORT, not a picture of one: a click selects there, and the transform
+	 * gizmo works there. There is ONE TransformControls in the app and every gizmo rule hangs on that
+	 * instance (Scene.svelte: the undo entry per drag, the move broadcast, snapping, the multi-select
+	 * pivot, the edit proxies), so instead of a second gizmo the one gizmo is HANDED the PiP's camera
+	 * and canvas while the PiP is up — the main view is covered then (that is when the PiP shows), so
+	 * nothing else is aiming at it — and handed back on the way out.
+	 * @param {HTMLCanvasElement} el @returns {() => void}
+	 */
+	function hookInput(el) {
+		const tc = /** @type {any} */ ($TControls);
+		/** @type {{camera: any, dom: any} | null} */
+		let handed = null;
+		if (tc) {
+			handed = { camera: tc.camera, dom: tc.domElement };
+			tc.disconnect();
+			tc.camera = camera;
+			tc.connect(el);
+		}
+		/** @param {PointerEvent} e */
+		const ndc = (e) => {
+			const r = el.getBoundingClientRect();
+			return { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1, button: e.button };
+		};
+		// a press on a gizmo handle is the GIZMO's: the orbit stands down before OrbitControls sees the
+		// press (capture on the frame runs first). Hover is re-asked here, because a finger has none.
+		/** @param {PointerEvent} e */
+		const onCapture = (e) => {
+			if (e.target !== el || !tc?.object || !controls) return;
+			try {
+				tc.pointerHover?.(ndc(e));
+			} catch {
+				/* a gizmo with nothing to hover */
+			}
+			if (tc.axis) controls.enabled = false;
+		};
+		/** @param {{value: boolean}} e */
+		const onDragging = (e) => {
+			if (controls) controls.enabled = !e.value;
+		};
+		const onRelease = () => {
+			if (controls && !tc?.dragging) controls.enabled = true;
+		};
+		// a CLICK (a press that does not travel, not on the gizmo) selects what is under it
+		/** @type {{x: number, y: number, gizmo: boolean} | null} */
+		let down = null;
+		/** @param {PointerEvent} e */
+		const onDown = (e) => {
+			down = e.button === 0 && e.target === el ? { x: e.clientX, y: e.clientY, gizmo: !!tc?.axis } : null;
+		};
+		/** @param {PointerEvent} e */
+		const onUp = (e) => {
+			const d = down;
+			down = null;
+			if (!d || e.button !== 0 || d.gizmo || tc?.dragging) return;
+			if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
+			pickAt(ndc(e), e.shiftKey || e.ctrlKey || e.metaKey);
+		};
+		const frame = el.parentElement;
+		frame?.addEventListener('pointerdown', onCapture, true);
+		tc?.addEventListener('dragging-changed', onDragging);
+		el.addEventListener('pointerdown', onDown);
+		window.addEventListener('pointerup', onUp);
+		window.addEventListener('pointerup', onRelease, true);
+		return () => {
+			frame?.removeEventListener('pointerdown', onCapture, true);
+			tc?.removeEventListener('dragging-changed', onDragging);
+			el.removeEventListener('pointerdown', onDown);
+			window.removeEventListener('pointerup', onUp);
+			window.removeEventListener('pointerup', onRelease, true);
+			if (tc && handed) {
+				tc.disconnect();
+				tc.camera = handed.camera;
+				if (handed.dom) tc.connect(handed.dom);
+			}
+		};
+	}
+
+	const raycaster = new THREE.Raycaster();
+	raycaster.layers.enable(HELPER_LAYER);
+	/** the editor's pick, through the PiP's camera: the one scene pick + select-through, then select
+	 * @param {{x: number, y: number}} at NDC @param {boolean} additive */
+	function pickAt(at, additive) {
+		if (!camera) return;
+		raycaster.setFromCamera(new THREE.Vector2(at.x, at.y), camera);
+		const stack = pickStack(sceneHits(raycaster, { tinyProxies: true }), topLevelObjectOf, editorPass());
+		const chosen = stack.length ? stack[primaryIndex(stack)] : null;
+		if (chosen?.target) selectObject(chosen.target.uuid, false, additive);
+		else if (!additive) deselectObject();
 	}
 
 	// leaving focus mode forgets the PiP camera: the next maximize starts from the editor's view
