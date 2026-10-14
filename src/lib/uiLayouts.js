@@ -16,7 +16,7 @@ import {
 	chromeWrites
 } from './uiLayoutsCore';
 import { snapshotWorkspace, applyWorkspace, closeWorkspace } from './workspace';
-import { hudEditorClose, profilerClose, chatHidden, settingsOpen, floatingToolbar, toolbarAlwaysOnTop, hudStackLift, showRoomsButton } from '../stores/appStore';
+import { hudEditorClose, profilerClose, chatHidden, settingsOpen, floatingToolbar, toolbarAlwaysOnTop, hudStackLift, showRoomsButton, touchTools } from '../stores/appStore';
 import { phoneShell } from './ui/phoneShell';
 
 // 37 R14 — NAMED WORKSPACE LAYOUTS, the live half (the rules are in uiLayoutsCore).
@@ -193,6 +193,9 @@ function reloadDesktopChromePrefs() {
 	toolbarAlwaysOnTop.set(safeStorage.getItem('toolbarOnTop') === 'true');
 	hudStackLift.set(safeStorage.getItem('hudStackLift') === 'true');
 	showRoomsButton.set(safeStorage.getItem('showRoomsButton') !== 'false');
+	// 43 J12: absent (a layout saved before it was carried) leaves the device's own choice alone
+	const tt = safeStorage.getItem('touchTools');
+	if (tt !== null) touchTools.set(tt === 'true');
 }
 
 /** the burger menu's Layouts popover */

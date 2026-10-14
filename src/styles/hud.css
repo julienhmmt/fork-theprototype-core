@@ -615,3 +615,8 @@
 #hud-tr:not(:has(> :not([data-toolbar-portal]))):not(:has(> [data-toolbar-portal] > *)) {
 	display: none;
 }
+/* 43 J12: the row beside the logo (TouchTools.svelte) likewise draws nothing when it holds no button —
+   its natives are its own buttons, anything else sits in Controls' portal wrapper */
+#touch-tools:not(:has(> :not([data-toolbar-portal]))):not(:has(> [data-toolbar-portal] > *)) {
+	display: none;
+}

@@ -204,6 +204,60 @@ h.run(async () => {
 			await setBar(P, null, A);
 		}
 
+		if (want('j12')) {
+			// ---- J12: a MOUSE desktop arranges the row beside the logo and puts undo / redo / multi-select
+			// on the bar or in a corner (no touch emulated: hasTouch is off, pointer is fine) ----------------
+			const shown = (sel) => P.evaluate((s) => { const el = document.querySelector(s); return !!el && el.getClientRects().length > 0 && el.getBoundingClientRect().width > 0; }, sel);
+			const coarse = await P.evaluate(() => matchMedia('(pointer: coarse)').matches);
+			h.check(!coarse && (await flag(P, 'touchTools')) === false && !(await shown('#touch-tools')), T + 'premise: a mouse desktop, Touch tools off, nothing beside the logo');
+			await enterEdit(P);
+			const ph = await P.evaluate(() => [...document.querySelectorAll('#touch-tools [data-edit-wrap]')].map((el) => el.dataset.editWrap));
+			h.check((await shown('#touch-tools')) && ph.join() === 'undo,redo,multiselect', T + `J12: Edit positions draws the row beside the logo on a mouse desktop (${ph.join()})`);
+			await shot(P, `j12-edit-${theme}`);
+			const drag = async (from, to) => {
+				await P.mouse.move(from.x, from.y);
+				await P.mouse.down();
+				for (let i = 1; i <= 16; i++) await P.mouse.move(from.x + ((to.x - from.x) * i) / 16, from.y + ((to.y - from.y) * i) / 16);
+				await P.waitForTimeout(150);
+				await P.mouse.up();
+				await P.waitForTimeout(350);
+			};
+			// Undo onto the bar (just after its first cell), Multi-select into the right corner's "+"
+			const cells = await P.evaluate(() => [...document.querySelectorAll('#controls-pill .hud-bar-row [data-edit-slot]')].slice(0, 2).map((el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }));
+			await drag(await centre(P.locator('#touch-tools [data-edit-id="undo"]')), { x: (cells[0].x + cells[1].x) / 2, y: cells[0].y });
+			await drag(await centre(P.locator('#touch-tools [data-edit-id="multiselect"]')), await centre(P.locator('#hud-stack-right .hud-edit-add')));
+			const d = await P.evaluate(() => ({
+				bar: [...document.querySelectorAll('#controls-pill .hud-bar-row [data-edit-slot]')].map((el) => el.dataset.editWrap),
+				right: [...document.querySelectorAll('#hud-stack-right [data-edit-wrap]')].map((el) => el.dataset.editWrap),
+				touch: [...document.querySelectorAll('#touch-tools [data-edit-wrap]')].map((el) => el.dataset.editWrap)
+			}));
+			h.check(d.bar.includes('undo') && d.right.includes('multiselect') && d.touch.join() === 'redo', T + `J12: a mouse drags Undo onto the bar and Multi-select into a corner (${JSON.stringify(d)})`);
+			await clickAt(P, P.locator('#toolbar-edit-apply'));
+			h.check((await shown('#controls-pill #touch-undo')) && (await shown('#hud-stack-right #touch-multiselect')), T + 'J12: ✓ — Undo is a bar cell, Multi-select a corner button');
+			h.check((await flag(P, 'touchTools')) === true && (await shown('#touch-tools')) && (await P.locator('#touch-tools #touch-redo').count()) === 1, T + 'J12: the edited row beside the logo now shows (Redo), Touch tools switched on by the edit');
+			await clickAt(P, P.locator('#hud-stack-right #touch-multiselect'));
+			h.check((await flag(P, 'multiSelectMode')) === true, T + 'J12: Multi-select works from its corner with a mouse');
+			await clickAt(P, P.locator('#hud-stack-right #touch-multiselect'));
+			await shot(P, `j12-applied-${theme}`);
+			// a workspace layout carries it
+			const saved = await P.evaluate(() => window.__stores.uiLayouts.saveLayout('J12'));
+			const rec = await P.evaluate(() => JSON.parse(localStorage.getItem('uiLayouts')).find((l) => l.name === 'J12'));
+			h.check(saved.ok && rec?.chrome?.desktop?.touchTools === 'true' && String(rec?.chrome?.desktop?.controlsLayout).includes('undo'), T + 'J12: a saved layout carries the row and the placed buttons');
+			// the row emptied → no box (the J11 rule), and the setting stays as it was
+			await enterEdit(P);
+			await clickAt(P, P.locator('#touch-tools [data-edit-wrap="redo"] .hud-edit-remove'));
+			await clickAt(P, P.locator('#toolbar-edit-apply'));
+			h.check(!(await shown('#touch-tools')), T + 'J12: emptied, the row beside the logo draws nothing');
+			// apply the layout back
+			await P.evaluate(() => { window.__stores.touchTools.set(false); localStorage.removeItem('controlsLayout'); });
+			await P.evaluate((id) => window.__stores.uiLayouts.applyLayout(id), rec.id);
+			await P.waitForTimeout(700);
+			h.check((await shown('#controls-pill #touch-undo')) && (await shown('#touch-tools #touch-redo')) && (await flag(P, 'touchTools')) === true, T + 'J12: applying the layout brings back Undo on the bar and Redo beside the logo');
+			await P.evaluate((id) => window.__stores.uiLayouts.deleteLayout?.(id), rec.id).catch(() => {});
+			await P.evaluate(() => window.__stores.touchTools.set(false));
+			await setBar(P, null, A);
+		}
+
 		if (want('j8menu')) {
 			// ---- J8: no browser context menu anywhere on the toolbar box — a grid of right-clicks --------
 			// the points: EVERY gap between two cells (top, middle, bottom of the row), the bar's padding

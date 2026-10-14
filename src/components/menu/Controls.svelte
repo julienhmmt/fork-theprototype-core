@@ -1599,6 +1599,10 @@
 
 	function applyEditPositions() {
 		if (!editing) return;
+		// 43 J12: the row beside the logo is drawn in edit mode on every device; an edit that CHANGED it
+		// (added, moved or removed a button there) means "show this row", so a mouse user's Touch tools
+		// turns on — an edit that left it alone leaves the setting as it was
+		if (!$touchTools && editing.touch.join() !== controlsLayout.touch.join() && editing.touch.length) touchTools.set(true);
 		const next = fromPlacements(controlsLayout, editing);
 		editing = null;
 		editDrag = null;
@@ -3107,7 +3111,7 @@
 {#if !$phoneShell}
 	<div class="contents" data-toolbar-portal="top" use:portalTo={'#hud-tr'}>{@render group('top', stackTop, topExtras, 'hud-cell')}</div>
 {/if}
-{#if $touchTools && !$phoneShell}
+{#if ($touchTools || editing) && !$phoneShell}
 	<div class="contents" data-toolbar-portal="touch" use:portalTo={'#touch-tools'}>{@render group('touch', stackTouch, touchExtras, 'tt-btn')}</div>
 {/if}
 
