@@ -456,11 +456,13 @@
 		"Rotate": {
 			"rows": [
 				"Grab style",
+				"Phone selection toolbar",
 				"Pivot point",
 				"Rotate",
 				"World grab snapping"
 			],
 			"sections": [
+				"Interface",
 				"Shortcuts",
 				"VR"
 			]
@@ -468,11 +470,13 @@
 		"Scale": {
 			"rows": [
 				"Grab style",
+				"Phone selection toolbar",
 				"Pivot point",
 				"Scale",
 				"World grab snapping"
 			],
 			"sections": [
+				"Interface",
 				"Shortcuts",
 				"VR"
 			]
@@ -1940,9 +1944,11 @@
 		},
 		"Menu hand": {
 			"rows": [
-				"Menu hand"
+				"Menu hand",
+				"Phone grab handle"
 			],
 			"sections": [
+				"Interface",
 				"VR"
 			]
 		},
@@ -2300,6 +2306,9 @@
 				"Music",
 				"Object search in the right-click menu",
 				"Offer Enter VR in a headset browser",
+				"Phone dock tab row",
+				"Phone grab handle",
+				"Phone selection toolbar",
 				"Project actions",
 				"Reset tours",
 				"Show FPS and draw calls",
@@ -2639,11 +2648,13 @@
 		"rotate": {
 			"rows": [
 				"Grab style",
+				"Phone selection toolbar",
 				"Pivot point",
 				"Rotate",
 				"World grab snapping"
 			],
 			"sections": [
+				"Interface",
 				"Shortcuts",
 				"VR"
 			]
@@ -2872,6 +2883,9 @@
 				"Music",
 				"Object search in the right-click menu",
 				"Offer Enter VR in a headset browser",
+				"Phone dock tab row",
+				"Phone grab handle",
+				"Phone selection toolbar",
 				"Project actions",
 				"Reset tours",
 				"Show FPS and draw calls",
@@ -2914,6 +2928,9 @@
 				"Music",
 				"Object search in the right-click menu",
 				"Offer Enter VR in a headset browser",
+				"Phone dock tab row",
+				"Phone grab handle",
+				"Phone selection toolbar",
 				"Project actions",
 				"Reset panel positions",
 				"Reset tours",
@@ -3965,9 +3982,11 @@
 				"Menu hand",
 				"My hand model",
 				"Peer hands",
+				"Phone grab handle",
 				"Statistics card"
 			],
 			"sections": [
+				"Interface",
 				"VR"
 			]
 		},

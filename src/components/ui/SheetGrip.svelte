@@ -18,8 +18,12 @@
 	//              (sheetDrag's nested-scroll hand-off). Default: the grip's nearest
 	//              `position: fixed` ancestor — every phone sheet is one — so a list inside
 	//              scrolls and, at its top, a downward drag moves the sheet.
+	//
+	// 42 I5: More ▸ "Grab handle" off (phone only) makes the bar BARE — no pill, no tap-to-full /
+	// back, a thinner zone — and it still drags: the invisible edge the user asked to keep.
 	import { sheetDrag } from '$lib/ui/sheetDrag.js';
-	import { phoneSheetMaxH, PHONE_SHEET_MIN } from '$lib/ui/phoneShell.js';
+	import { phoneSheetMaxH, PHONE_SHEET_MIN, phoneShellActive } from '$lib/ui/phoneShell.js';
+	import { phoneGrabHandle } from '$lib/ui/phonePrefs.js';
 
 	/** @type {{height: number, min?: number, max?: number, dismissible?: boolean, label?: string, class?: string, inset?: number, surface?: () => (Element|null|undefined)[], onresize?: (h: number, done: boolean) => void, onclose?: () => void} & Record<string, any>} */
 	let { height, min = PHONE_SHEET_MIN, max = 0, dismissible = true, label = 'sheet', class: cls = '', inset = 0, surface = undefined, onresize, onclose, ...rest } = $props();
@@ -37,14 +41,17 @@
 
 	const room = $derived(max || $phoneSheetMaxH || (typeof window === 'undefined' ? 600 : window.innerHeight - 140));
 	const lo = $derived(Math.min(min, room));
-	/** a tap on the bar: all the way up, or back to the min from there */
+	const bare = $derived($phoneShellActive && !$phoneGrabHandle);
+	/** a tap on the bar: all the way up, or back to the min from there (not on a bare edge) */
 	function tap() {
+		if (bare) return;
 		onresize?.(height < room - 1 ? room : lo, true);
 	}
 </script>
 
 <div
 	class="tp-ui sg {cls}"
+	data-bare={bare ? '' : undefined}
 	style:margin-inline={inset ? `-${inset}px` : null}
 	data-sheet-grip-zone
 	bind:this={zone}
@@ -68,7 +75,7 @@
 		class="sg-handle"
 		data-sheet-grip
 		aria-label={`Resize ${label}. Drag down to close; arrow keys change the height.`}
-	><span class="sg-grabber" aria-hidden="true"></span></button>
+	>{#if !bare}<span class="sg-grabber" aria-hidden="true"></span>{/if}</button>
 </div>
 
 <style>
@@ -96,6 +103,10 @@
 		background: transparent;
 		cursor: inherit;
 		touch-action: none;
+	}
+	.sg[data-bare],
+	.sg[data-bare] .sg-handle {
+		height: 12px;
 	}
 	.sg-grabber {
 		width: 40px;

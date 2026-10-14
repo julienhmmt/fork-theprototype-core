@@ -391,6 +391,20 @@
 :root.phone-shell #notes-drawer {
 	bottom: var(--ps-bar-h) !important;
 }
+/* 42 I5 — More ▸ "Dock tab row" off: the docked windows' tab row and its + / minimize chrome go,
+   and the panel takes that row's room (the bar and More still switch views) */
+:root.phone-shell.ps-no-dock-tabs .tp-dock-panel .dt-row,
+:root.phone-shell.ps-no-dock-tabs .tp-dock-panel .dt-chrome {
+	display: none !important;
+}
+:root.phone-shell.ps-no-dock-tabs .tp-dock-panel {
+	max-height: var(--ps-sheet-max, calc(100vh - var(--ps-bar-h) - 64px)) !important;
+}
+/* 42 I5 — More ▸ "Grab handle" off: no grab bar over the dock's top edge, only PhoneShell's thin
+   invisible band (#ps-dock-grip[data-bare]) that still resizes it */
+:root.phone-shell.ps-no-grab .tp-dock-panel {
+	padding-top: 12px !important;
+}
 :root.phone-shell.ps-add-open .ctx-scroll {
 	bottom: var(--ps-bar-h) !important;
 	padding-bottom: 10px !important;

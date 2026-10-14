@@ -332,8 +332,9 @@
 	</div>
 </div>
 
-<!-- the dock's OWN chrome, pinned to the right edge of the dock (= of the window) -->
-<div class="absolute -top-6 right-3 z-20 flex">
+<!-- the dock's OWN chrome, pinned to the right edge of the dock (= of the window); 42 I5: `dt-chrome`
+     is how phone.css hides it with the tab row (More ▸ "Dock tab row" off) -->
+<div class="dt-chrome absolute -top-6 right-3 z-20 flex">
 	<div class="tp-ui tp-dtabs tp-dtabs-slim">
 		<!-- 40 F8: undock lives HERE, left of "minimize the dock", not inside each docked window.
 		     It undocks the ACTIVE tab (or, per Settings, every tab as one tabbed window). A phone
