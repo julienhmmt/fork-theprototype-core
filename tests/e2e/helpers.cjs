@@ -151,6 +151,25 @@ async function setupPage(browser, name, options = {}) {
 	return { ctx, page, id };
 }
 
+/**
+ * `setupPage` for a LATE page while `others` are already up. Every page in one headless browser
+ * renders software GL continuously, so on a loaded e2e box a third page's boot was starved past
+ * 90 s by the two already drawing (43-tests: script-nodes, invite-link-live). The others' DRAWING
+ * is paused through the app's own overload-guard pause (`overloadGuard.pauseRendering` — what the
+ * app does itself when frames freeze) for the length of the boot, and resumed after: their
+ * sessions, sockets and stores keep running, only the frames stop. Use it only where the suite
+ * does not assert on what those pages draw during the boot.
+ * @param {any} browser @param {string} name @param {any[]} others @param {any=} options
+ */
+async function setupPageQuiet(browser, name, others, options = {}) {
+	for (const peer of others) await peer.page.evaluate(() => window.__stores.overloadGuard.pauseRendering('e2e: another page boots'));
+	try {
+		return await setupPage(browser, name, options);
+	} finally {
+		for (const peer of others) await peer.page.evaluate(() => window.__stores.overloadGuard.resumeRendering()).catch(() => {});
+	}
+}
+
 /** Connect `from` to `to` (approve on `to`), then let the mesh settle. */
 async function connect(from, to, settleMs = 9000) {
 	await step(from, 'fill the peer id', () =>
@@ -960,4 +979,4 @@ function envelopeDelta(a, b) {
 	return { maxDelta, meanDelta: n ? sum / n : 0, worstSlice };
 }
 
-module.exports = { URL, GPU_ARGS, check, launch, setupPage, connect, leavePlay, eventually, projectPoint, freshReload, answerRestore, closePeer, finish, run, installModule, moduleZipPath, makeCollectibleChains, pageErrors, grabFrame, centeredClip, frameDelta, framePixelsOffColor, AUDIO_ARGS, audioMetrics, renderOffline, envelopeDelta };
+module.exports = { URL, GPU_ARGS, check, launch, setupPage, setupPageQuiet, connect, leavePlay, eventually, projectPoint, freshReload, answerRestore, closePeer, finish, run, installModule, moduleZipPath, makeCollectibleChains, pageErrors, grabFrame, centeredClip, frameDelta, framePixelsOffColor, AUDIO_ARGS, audioMetrics, renderOffline, envelopeDelta };

@@ -51,7 +51,7 @@ h.run(async () => {
 	const browser = await h.launch();
 	const A = await h.setupPage(browser, 'A');
 	const B = await h.setupPage(browser, 'B');
-	const C = await h.setupPage(browser, 'C');
+	const C = await h.setupPageQuiet(browser, 'C', [A, B]);
 	const urlBefore = B.page.url();
 
 	// ---- 1. paste A's id into B's open tab: B dials, A approves, no navigation -----
@@ -108,7 +108,7 @@ h.run(async () => {
 	// D on a CUSTOM config (the self-hosted box spelled out), E on the public cloud
 	const custom = { mode: 'custom', custom: { host: 'peerjs.theprototype.app', port: 443, path: '/peerjs', secure: true } };
 	const D = await h.setupPage(browser, 'D', { storage: { peerServerConfig: JSON.stringify(custom) } });
-	const E = await h.setupPage(browser, 'E', { storage: { peerServerConfig: JSON.stringify({ mode: 'public' }) } });
+	const E = await h.setupPageQuiet(browser, 'E', [D], { storage: { peerServerConfig: JSON.stringify({ mode: 'public' }) } });
 	h.check((await serverKind(D)) === 'custom' && (await serverKind(E)) === 'public', `premise: D on a custom server, E on the public cloud (${await serverKind(D)}, ${await serverKind(E)})`);
 	await paste(D, '#' + E.id + '~srv=public');
 	await D.page.waitForTimeout(400);

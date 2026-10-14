@@ -160,7 +160,7 @@ h.run(async () => {
 	);
 	h.check(bDef2?.name === 'Wobble2', 'def edit replicated to B');
 
-	const C = await h.setupPage(browser, 'C');
+	const C = await h.setupPageQuiet(browser, 'C', [A, B]);
 	await h.connect(C, A);
 	// the defs arrive on the HANDSHAKE (C asks `getnodedefs`, A answers once its connection back
 	// to C is open) — read once right after connect it raced that answer on a loaded box. Wait
