@@ -16,9 +16,18 @@
 	//                 calls the SAME onchange — the SliderRow shape, redrawn
 	//   control       a snippet in the middle column instead (swatches, a select, a toggle)
 	//   valueBox      false = no DragRow (a control-only row: "Sky / ground" swatches)
+	//
+	// 43 J3 — COPY / PASTE / RESET ($lib/fieldMenu). Inside the Inspector's scope a VALUE-BOX
+	// row answers right-click, a long press and hovered Ctrl+C / Ctrl+V on its own: the value
+	// is `value`, a paste goes through `onchange` (one undo step), `resetValue` is the default.
+	// A control row says what it holds with `clip` ({kind: 'vector'|'color'|'enum'|'bool',
+	// get, set, reset?, unit?, options?}); `clip={false}` opts a row out; `clipKey` is the
+	// row's name in a copied section when its label is not (multi-select's "Origin").
+	// Every such row joins its Section, which is what "Copy section" copies.
 	import DragRow from './DragRow.svelte';
+	import { claimFieldScope, fieldClip, fieldClipScope } from '$lib/fieldMenu';
 
-	/** @type {{label?: string, labelFor?: string, value?: number, step?: number, snap?: number, decimals?: number, min?: number, max?: number, unit?: 'length'|'angle'|'angleDeg'|'', mixed?: boolean, disabled?: boolean, nodrag?: boolean, id?: string, ariaLabel?: string, title?: string, slider?: boolean, sliderMin?: number, sliderMax?: number, sliderStep?: number, valueBox?: boolean, onchange?: (next: number) => void, onscrubstart?: () => void, onscrubend?: () => void, control?: import('svelte').Snippet} & Record<string, any>} */
+	/** @type {{label?: string, labelFor?: string, value?: number, step?: number, snap?: number, decimals?: number, min?: number, max?: number, unit?: 'length'|'angle'|'angleDeg'|'', mixed?: boolean, disabled?: boolean, nodrag?: boolean, id?: string, ariaLabel?: string, title?: string, slider?: boolean, sliderMin?: number, sliderMax?: number, sliderStep?: number, valueBox?: boolean, onchange?: (next: number) => void, onscrubstart?: () => void, onscrubend?: () => void, control?: import('svelte').Snippet, clip?: any, clipKey?: string, resetValue?: number} & Record<string, any>} */
 	let {
 		label = '',
 		labelFor = undefined,
@@ -44,8 +53,37 @@
 		onscrubstart = () => {},
 		onscrubend = () => {},
 		control = undefined,
+		clip = undefined,
+		clipKey = undefined,
+		resetValue = undefined,
 		...rest
 	} = $props();
+
+	// 43 J3: what this row holds, for the field menu (null = not a clipboard field)
+	const scope = fieldClipScope();
+	/** @returns {any} */
+	function clipSpec() {
+		if (clip === false) return null;
+		if (clip) return { name: ariaLabel || label, key: clipKey, ...clip };
+		if (!valueBox || !scope?.enabled) return null;
+		return {
+			kind: 'number',
+			name: ariaLabel || label,
+			key: clipKey,
+			get: () => value,
+			set: (/** @type {number} */ next) => onchange(next),
+			reset: resetValue,
+			unit,
+			min,
+			max,
+			disabled
+		};
+	}
+	$effect(() => scope?.section?.add(clipSpec));
+	// a row that answers for itself claims the fields drawn inside it (its value box, a
+	// vector's three axes): they must not join the section a second time
+	// svelte-ignore state_referenced_locally
+	if (clip !== false && (clip || (valueBox && scope?.enabled))) claimFieldScope();
 
 	const sMin = $derived(sliderMin ?? (Number.isFinite(min) ? min : 0));
 	const sMax = $derived(sliderMax ?? (Number.isFinite(max) ? max : 1));
@@ -67,7 +105,7 @@
 	}
 </script>
 
-<div class="tp-ui pr" class:pr-no-middle={!hasMiddle} class:pr-no-value={!valueBox} class:pr-disabled={disabled} {...rest}>
+<div class="tp-ui pr" class:pr-no-middle={!hasMiddle} class:pr-no-value={!valueBox} class:pr-disabled={disabled} {...rest} use:fieldClip={clipSpec}>
 	{#if labelFor || (valueBox && id)}
 		<label class="pr-label" for={labelFor ?? id}>{label}</label>
 	{:else}

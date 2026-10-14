@@ -15,7 +15,7 @@
 	// unchanged (SPEC §0).
 	import PropRow from './PropRow.svelte';
 
-	/** @type {{label?: string, value?: number, min?: number, max?: number, step?: number, decimals?: number, id?: string, mixed?: boolean, onchange?: (next: number) => void}} */
+	/** @type {{label?: string, value?: number, min?: number, max?: number, step?: number, decimals?: number, id?: string, mixed?: boolean, onchange?: (next: number) => void, resetValue?: number, clipKey?: string}} */
 	let {
 		label = '',
 		value = 0,
@@ -27,7 +27,10 @@
 		// 17-D1: pass-through so a multi-selection with differing values shows a
 		// dash in the box (the range thumb still sits on the primary's value)
 		mixed = false,
-		onchange = () => {}
+		onchange = () => {},
+		// 43 J3: the default the field menu's Reset puts back, and the row's name in a copied section
+		resetValue = undefined,
+		clipKey = undefined
 	} = $props();
 </script>
 
@@ -43,5 +46,7 @@
 	{step}
 	snap={step * 10}
 	ariaLabel={label}
+	{resetValue}
+	{clipKey}
 	onchange={(next) => onchange(next)}
 />

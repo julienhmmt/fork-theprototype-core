@@ -263,7 +263,9 @@ export function parseClipboard(text) {
 				sectionName = m[1].trim();
 				continue;
 			}
-			value[m[1].trim()] = classify(rest.replace(/^["']|["']$/g, '')).value;
+			// keep the TEXT of a number/vector so a unit suffix ("12cm") survives to coerce
+			const c = classify(rest.replace(/^["']|["']$/g, ''));
+			value[m[1].trim()] = c.kind === 'number' || c.kind === 'vector' || c.kind === 'list' ? rest : c.value;
 		}
 		return { kind: 'section', value, name: sectionName };
 	}
@@ -374,7 +376,7 @@ export function coerce(clip, target) {
  * does not have are skipped (reported), keys that are there but the wrong shape refuse the
  * whole paste: a section paste is one undo step, so it is all or nothing.
  * @param {Clip} clip @param {Target} target
- * @returns {{ok: true, value: Record<string, any>, skipped: string[]} | {ok: false, reason: string}}
+ * @returns {{ok: true, value: Record<string, any>, raw: Record<string, any>, skipped: string[]} | {ok: false, reason: string}}
  */
 export function coerceSection(clip, target) {
 	const keys = target.keys ?? {};
@@ -386,6 +388,8 @@ export function coerceSection(clip, target) {
 	else return { ok: false, reason: `The clipboard holds ${holds(clip)} — paste it on a row, not the ${label} header` };
 	/** @type {Record<string, any>} */
 	const value = {};
+	/** @type {Record<string, any>} */
+	const raw = {};
 	const skipped = [];
 	for (const [k, v] of Object.entries(source)) {
 		const match = Object.entries(keys).find(([key, spec]) => [key, spec.label ?? '', ...(spec.aliases ?? [])].some((n) => normKey(n) === normKey(k)));
@@ -397,9 +401,10 @@ export function coerceSection(clip, target) {
 		const res = coerce({ ...classifyJson(v), name: k }, { ...spec, name: key });
 		if (!res.ok) return { ok: false, reason: `${spec.label ?? key}: ${res.reason}` };
 		value[key] = res.value;
+		if (res.raw !== undefined) raw[key] = res.raw;
 	}
 	if (!Object.keys(value).length) return { ok: false, reason: `Nothing in the clipboard matches ${label}` };
-	return { ok: true, value, skipped };
+	return { ok: true, value, raw, skipped };
 }
 
 /** Text straight to a field value (parse + coerce). @param {string} text @param {Target} target */

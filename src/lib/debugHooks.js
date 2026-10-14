@@ -263,6 +263,7 @@ export const DEBUG_HOOKS = [
 	['shaderTextures', () => import('./shaderTextures')],
 	['shaderCatalog', () => import('./shaderCatalog')],
 	['units', () => import('./units')],
+	['fieldMenu', () => import('./fieldMenu')],
 	['postBackends', () => import('./postBackends')],
 	['workspace', () => import('./workspace')],
 	['uiLayouts', () => import('./uiLayouts')],
