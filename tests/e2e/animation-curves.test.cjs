@@ -1649,17 +1649,21 @@ h.run(async () => {
 
 	await A.page.evaluate(() => {
 		/** @type {any} */ (window).__ctx2 = [];
-		// bubble phase on window: this runs AFTER every direct listener, so it reports
-		// whether anything actually cancelled the default
+		// CAPTURE phase on window, and the verdict read AFTER dispatch. A bubble-phase
+		// listener used to report here, but the dock chrome now stops the event on its way
+		// up (stopPropagation, default left to the pane's own blocker), so the bubble
+		// listener saw NOTHING and the check read an empty list as "not cancelled". Keeping
+		// the event and asking `defaultPrevented` once dispatch is over is the same question
+		// — did anything cancel the browser menu? — without depending on propagation.
 		window.addEventListener('contextmenu', (e) => {
 			const el = /** @type {any} */ (e.target);
 			/** @type {any} */ (window).__ctx2.push({
-				prevented: e.defaultPrevented,
+				ev: e,
 				tag: el?.tagName,
 				onMenu: !!el?.closest?.('[role="menu"]'),
 				inPane: !!el?.closest?.('#animation-dock, #animation-window')
 			});
-		});
+		}, true);
 	});
 
 	// a real right-click on a key HANDLE in the graph. Take a handle with a REAL
@@ -1685,7 +1689,9 @@ h.run(async () => {
 	);
 	await A.page.mouse.click(keyDot.x, keyDot.y, { button: 'right' });
 	await A.page.waitForTimeout(300);
-	const onKeyEvents = await A.page.evaluate(() => /** @type {any} */ (window).__ctx2);
+	const onKeyEvents = await A.page.evaluate(() =>
+		/** @type {any} */ (window).__ctx2.map((/** @type {any} */ x) => ({ tag: x.tag, onMenu: x.onMenu, inPane: x.inPane, prevented: x.ev.defaultPrevented }))
+	);
 	h.check(
 		onKeyEvents.length > 0 && onKeyEvents.every((/** @type {any} */ e) => e.prevented),
 		`right-clicking a graph KEY cancels the browser menu (${onKeyEvents
@@ -1704,7 +1710,9 @@ h.run(async () => {
 	h.check(!!menuSpot, 'the open menu has a surface to right-click');
 	await A.page.mouse.click(menuSpot.x, menuSpot.y, { button: 'right' });
 	await A.page.waitForTimeout(300);
-	const onMenuEvents = await A.page.evaluate(() => /** @type {any} */ (window).__ctx2);
+	const onMenuEvents = await A.page.evaluate(() =>
+		/** @type {any} */ (window).__ctx2.map((/** @type {any} */ x) => ({ tag: x.tag, onMenu: x.onMenu, inPane: x.inPane, prevented: x.ev.defaultPrevented }))
+	);
 	h.check(
 		onMenuEvents.length > 0 && onMenuEvents.every((/** @type {any} */ e) => e.prevented),
 		`right-clicking OUR MENU cancels it too (${onMenuEvents

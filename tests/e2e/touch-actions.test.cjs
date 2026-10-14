@@ -264,6 +264,9 @@ h.run(async () => {
 	// before and after the reload
 	await h.freshReload(A);
 	await page.waitForTimeout(800);
+	// 41 G16: "Restore previous session?" is a blocking modal after a reload of a page that
+	// autosaved objects — answer it (the snapshot stays saved) or every click lands on it
+	await h.answerRestore(A);
 	await allowFlying(page);
 	await page.evaluate(() => {
 		window.__stores.settingsSection.set('touch');
@@ -295,6 +298,9 @@ h.run(async () => {
 	h.check(!!saved.games.untitled?.items['btn:up'], `the layout is saved for this game (${Object.keys(saved.games)})`);
 	await h.freshReload(A);
 	await allowFlying(page);
+	// 41 G16: "Restore previous session?" is a blocking modal after a reload of a page that
+	// autosaved objects — answer it (the snapshot stays saved) or every click lands on it
+	await h.answerRestore(A);
 	await page.locator('#ps-play:visible, #play-button:visible').first().click(); // 38 R9: the phone shell's Play below 640px
 	await h.eventually(() => locked(page), (v) => v === true, 'play again after the reload');
 	await h.eventually(() => rectOf(page, '#touch-btn-up'), (r) => !!r && Math.abs(r.x - dragged.x) < 6 && Math.abs(r.y - dragged.y) < 6 && Math.abs(r.w - 110) < 2, 'after a RELOAD the Up button is where it was dragged, at the new size', 5000);

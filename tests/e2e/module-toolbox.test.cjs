@@ -214,7 +214,14 @@ h.run(async () => {
 		const r = el?.getBoundingClientRect();
 		return {
 			isSheet: !!el?.classList.contains('tbx-sheet'),
-			hasGrabber: !!el?.querySelector('.tbx-sheet-grab'),
+			// 40 F1 (58db817): the grab bar is the shared ui/SheetGrip (one gesture for every
+			// sheet) inside .tbx-sheet-resize — the toolbox's own .tbx-sheet-grab went away.
+			// Asserted LAID OUT, not just present: the wrapper is display:none off a sheet.
+			hasGrabber: (() => {
+				const grip = el?.querySelector('.tbx-sheet-resize .sg-handle');
+				const gr = grip?.getBoundingClientRect();
+				return !!gr && gr.width > 0 && gr.height > 0;
+			})(),
 			width: r ? Math.round(r.width) : -1
 		};
 	});

@@ -189,6 +189,10 @@ h.run(async () => {
 	// A selection mode that survived a reload would silently change what the next tap
 	// does, so it is deliberately not persisted (the cluster's own on/off IS).
 	await h.freshReload(A);
+	// 41 G16: the reload offers "Restore previous session?" as a blocking MODAL (this page
+	// autosaved its boxes). Unanswered, its backdrop took the Edit Mesh clicks of sections 9
+	// and 10 — a face click "selected nothing" because it never reached the canvas
+	await h.answerRestore(A);
 	const afterReload = await A.page.evaluate(() => {
 		let mode, tools;
 		window.__stores.multiSelectMode.subscribe((v) => (mode = v))();

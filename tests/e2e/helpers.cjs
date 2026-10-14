@@ -269,6 +269,74 @@ async function freshReload(peer) {
 	await peer.page.waitForFunction(() => window.__stores && !!window.__stores.moduleSDK, { timeout: 30000 });
 }
 
+/**
+ * 41 G16 made "Restore previous session?" a TRUE modal (SessionPrompts.svelte): after a
+ * reload of a page that autosaved objects, every click lands on its backdrop until it is
+ * answered, so a suite that reloads and then clicks timed out at 30 s on the restore
+ * dialog. This answers it — `'dismiss'` (the default: the snapshot stays in storage) or
+ * `'restore'` — and waits for the modal to be GONE, not for a fixed time.
+ *
+ * Deterministic both ways: with no autosave snapshot in IndexedDB no offer can come, so
+ * it returns false at once; with one it waits for the offer (`autosave.restoreAvailable`),
+ * presses the real button and waits for the store to clear. A snapshot that never turns
+ * into an offer (auto-restore on, or the world already holds objects) returns false
+ * after `timeout`.
+ * @param {any} peer @param {'dismiss'|'restore'} [choice] @param {number} [timeout]
+ * @returns {Promise<boolean>} whether a restore question was answered
+ */
+async function answerRestore(peer, choice = 'dismiss', timeout = 10000) {
+	const page = peer.page;
+	const snapshot = await page.evaluate(
+		() =>
+			new Promise((resolve) => {
+				try {
+					const open = indexedDB.open('theprototype');
+					open.onerror = () => resolve(false);
+					open.onsuccess = () => {
+						const db = open.result;
+						if (!db.objectStoreNames.contains('snapshots')) return db.close(), resolve(false);
+						const get = db.transaction('snapshots', 'readonly').objectStore('snapshots').get('latest');
+						get.onsuccess = () => {
+							const v = get.result;
+							db.close();
+							resolve(!!v && (!!v.scene || !!v.nodes?.length));
+						};
+						get.onerror = () => (db.close(), resolve(false));
+					};
+				} catch {
+					resolve(false);
+				}
+			})
+	);
+	if (!snapshot) return false;
+	const offered = await page
+		.waitForFunction(
+			async () => {
+				const m = window.__stores?.autosave;
+				if (!m?.restoreAvailable) return false;
+				let v;
+				m.restoreAvailable.subscribe((x) => (v = x))();
+				return !!v;
+			},
+			null,
+			{ timeout, polling: 200 }
+		)
+		.then(() => true)
+		.catch(() => false);
+	if (!offered) return false;
+	await page.locator(choice === 'restore' ? '#restore-session-restore' : '#restore-session-dismiss').click({ timeout: 10000 });
+	await page.waitForFunction(
+		() => {
+			let v;
+			window.__stores.autosave.restoreAvailable.subscribe((x) => (v = x))();
+			return !v && !document.querySelector('#restore-session-modal[open]');
+		},
+		null,
+		{ timeout: 10000, polling: 100 }
+	);
+	return true;
+}
+
 /** Everything the page threw, for a suite that wants to assert on it.
  * @param {any} peer @returns {string[]} */
 function pageErrors(peer) {
@@ -872,4 +940,4 @@ function envelopeDelta(a, b) {
 	return { maxDelta, meanDelta: n ? sum / n : 0, worstSlice };
 }
 
-module.exports = { URL, GPU_ARGS, check, launch, setupPage, connect, leavePlay, eventually, projectPoint, freshReload, finish, run, installModule, moduleZipPath, makeCollectibleChains, pageErrors, grabFrame, centeredClip, frameDelta, framePixelsOffColor, AUDIO_ARGS, audioMetrics, renderOffline, envelopeDelta };
+module.exports = { URL, GPU_ARGS, check, launch, setupPage, connect, leavePlay, eventually, projectPoint, freshReload, answerRestore, finish, run, installModule, moduleZipPath, makeCollectibleChains, pageErrors, grabFrame, centeredClip, frameDelta, framePixelsOffColor, AUDIO_ARGS, audioMetrics, renderOffline, envelopeDelta };

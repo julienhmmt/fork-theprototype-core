@@ -53,8 +53,21 @@ h.run(async () => {
 			};
 		});
 
+	// a TALL pane first, so "it can travel most of the way down" has room to mean something.
+	// At the default 320px dock the pane is ~200px and the list (four clips) already starts a
+	// few px under its ceiling — a 900px drag then
+	// moved it 2px, and the travel check below read a full pane as a frozen grip. The SHORT
+	// pane (the report's own order) is driven separately at the end.
+	await A.page.evaluate(async () => {
+		window.__stores.bottomDock.dockHeight.set(560);
+		await new Promise((r) => setTimeout(r, 500));
+	});
 	const start = await geom();
 	h.check(!!start.grip && !!start.side, 'the clip list and its resize grip are rendered');
+	h.check(
+		start.side.bottom - start.grip.bottom > 120,
+		`premise: the tall pane leaves the list room to grow (${(start.side.bottom - start.grip.bottom).toFixed(0)}px below the grip, pane ${start.side.height.toFixed(0)})`
+	);
 	h.check(
 		start.grip.bottom <= start.side.bottom + 1,
 		`the grip starts inside the pane (${start.grip.bottom.toFixed(0)} vs ${start.side.bottom.toFixed(0)})`

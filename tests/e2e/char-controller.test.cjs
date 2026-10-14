@@ -493,10 +493,13 @@ h.run(async () => {
 		(d) => d.moveSpeed === 0.35,
 		'the `set` input WRITES it on the trigger stamp edge'
 	);
-	const readAfter = await values(A.page);
-	h.check(
-		Math.abs((readAfter.readout ?? -1) - 0.35) < 1e-6,
-		`and the other Move Speed node reads the new value, not its own param (${readAfter.readout})`
+	// the readout is a node VALUE, refreshed on the graph's next tick after the store write —
+	// read once, right after `moveSpeed` flipped, it raced that tick under load (0.1 = the
+	// value before). Waiting for it still fails if it keeps reading its own 0.1 param.
+	await h.eventually(
+		() => values(A.page).then((v) => v.readout ?? null),
+		(r) => r !== null && Math.abs(r - 0.35) < 1e-6,
+		'and the other Move Speed node reads the new value, not its own param'
 	);
 	const fast = await travel(A.page, 'KeyW', WINDOW);
 	const speedRatio = fast.moved / slow.moved;
