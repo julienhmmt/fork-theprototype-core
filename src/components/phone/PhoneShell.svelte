@@ -79,6 +79,7 @@
 	import { undo, redo, canUndo, canRedo } from '$lib/history';
 	import { setTransformMode, toggleEditorMode } from '$lib/objectActions';
 	import { phoneBarTap, openPhoneTab, closePhoneTab, phoneDockShown } from '$lib/phoneDock';
+	import { toggleViewportFocus } from '$lib/focusMode';
 	import { requestPlay, willEnterXR, willEnterAR, playAsItems } from '$lib/playMode';
 	import { visibleDockKey, DOCK_TITLES, dockMinimized, dockHeight } from '$lib/bottomDock';
 	import { micActive, pttActive, toggleMic } from '$lib/voiceChat';
@@ -579,6 +580,12 @@
 		phoneSheet.set(null);
 		statsOpen.set(true);
 	}
+	// 42 I14: More ▸ Focus mode — the phone's way in (no Ctrl+Space); the sheet closes first so the
+	// viewport is what maximizes, and the "Exit focus" pill is the way back
+	function enterFocusMode() {
+		phoneSheet.set(null);
+		toggleViewportFocus();
+	}
 </script>
 
 <svelte:window onresize={() => (viewportH = window.innerHeight)} />
@@ -800,6 +807,7 @@
 					<div class="ps-rows">
 						<button type="button" class="ps-row" id="ps-viewport-tools" onclick={viewportTools}><Icon name="wrench" size={20} /><span>Tools, snapping, view and camera…</span><Icon name="chevron-right" size={16} /></button>
 						<button type="button" class="ps-row" id="ps-stats" onclick={openStats}><Icon name="gauge" size={20} /><span>Statistics</span></button>
+						<button type="button" class="ps-row" id="ps-focus-mode" onclick={enterFocusMode}><Icon name="maximize-2" size={20} /><span>Focus mode</span></button>
 						<button type="button" class="ps-row" id="ps-edit-bar-open" onclick={() => (editingBar = true)}><Icon name="pencil" size={20} /><span>Edit bar…</span><Icon name="chevron-right" size={16} /></button>
 					</div>
 				</div>

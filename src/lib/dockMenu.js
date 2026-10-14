@@ -14,6 +14,7 @@ import { get } from 'svelte/store';
 import { activateDock, armDockMode, armDockModes, dockOccupants, dockTabs, moveDockTab, visibleDockKey, undockButtonMode, placeDockTabs, canDockFloating, DOCK_TITLES, DOCK_ICONS, PHONE_DOCK_TABS, HOSTED_DOCK_TABS } from './bottomDock';
 import { phoneShell } from './ui/phoneShell.js';
 import { queueMerge } from './windowTabs';
+import { maximizeDockTab } from './focusMode';
 
 // The dock's "+" add-a-view menu, in ONE place. The docked tab strip
 // (DockTabs.svelte) and the FLOATING Node editor's header "+" (Flow.svelte) each
@@ -271,6 +272,12 @@ export function dockTabItems(key) {
 			tooltip: `Take ${title} out of the dock`,
 			action: () => armDockMode(key, false)
 		});
+	// 42 I14: focus mode's touch/pointer way in for a docked window — the tab fills the window
+	items.push({
+		label: 'Maximize (focus mode)',
+		tooltip: `Show ${title} alone, filling the window — Esc, Ctrl+Space or "Exit focus" restores`,
+		action: () => maximizeDockTab(key)
+	});
 	items.push({
 		label: 'Close',
 		tooltip: `Close ${title} (it leaves the dock; nothing else is touched)`,
