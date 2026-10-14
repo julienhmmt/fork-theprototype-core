@@ -54,7 +54,18 @@ h.run(async () => {
 	// dragging the strip background moves the whole group — pressed just right of the last tab (42 I6:
 	// a group of dockable windows carries a "Dock all tabs" button at the strip's right end now)
 	const strip = await A.page.locator('.tab-strip').boundingBox();
-	const px = await A.page.evaluate(() => Math.round(Math.max(...[...document.querySelectorAll('.tab-strip .tab-note')].map((t) => t.getBoundingClientRect().right)) + 12));
+	const px = await A.page.evaluate(() => {
+		// a tab is its .tp-dtab-group (the name AND its own ✕); the strip's own buttons follow the spacer
+		const tabsRight = Math.max(...[...document.querySelectorAll('.tab-strip .tp-dtab-group')].map((t) => t.getBoundingClientRect().right));
+		const own = [...document.querySelectorAll('.tab-strip > button')].map((b) => b.getBoundingClientRect().left);
+		const btnLeft = own.length ? Math.min(...own) : tabsRight + 24;
+		return Math.round((tabsRight + btnLeft) / 2);
+	});
+	const under = await A.page.evaluate(([x, y]) => {
+		const el = document.elementFromPoint(x, y);
+		return el ? `${el.tagName.toLowerCase()}#${el.id}.${String(el.className).split(' ').slice(0, 3).join('.')}` : null;
+	}, [px, strip.y + 16]);
+	h.check(!!under && !/button|tab-note|svg|path/.test(under), `premise: the press lands on the strip background (${under} at ${px},${Math.round(strip.y + 16)}, strip ${Math.round(strip.x)}..${Math.round(strip.x + strip.width)})`);
 	await A.page.mouse.move(px, strip.y + 16);
 	await A.page.mouse.down();
 	await A.page.mouse.move(px + 90, strip.y + 76, { steps: 8 });

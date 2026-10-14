@@ -19,6 +19,8 @@
 // Counterfactual: on origin/feat/41-int Ctrl+Space does nothing (no data-focus, every panel stays).
 // Run: APP_URL=https://localhost:5424/ npm run e2e -- focus-mode
 const h = require('./helpers.cjs');
+// THEME=light re-runs the same paths for the light-theme evidence shots
+const THEME = process.env.THEME || 'dark';
 
 const DESK = { viewport: { width: 1440, height: 900 } };
 const FOLDED = { viewport: { width: 390, height: 896 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2.9 };
@@ -93,7 +95,7 @@ async function openDock(page) {
 h.run(async () => {
 	const browser = await h.launch();
 	const out = process.env.OUT || '/tmp';
-	const P = await h.setupPage(browser, 'D', { context: DESK, storage: { flowDocked: 'true', explorerDocked: 'true', flowDockHeight: '300' } });
+	const P = await h.setupPage(browser, 'D', { context: DESK, storage: { flowDocked: 'true', explorerDocked: 'true', flowDockHeight: '300', theme: THEME } });
 	const page = P.page;
 	await openDock(page);
 	await S(page, () => window.__stores.objectListClose.set(false));
@@ -110,7 +112,7 @@ h.run(async () => {
 	await page.keyboard.press('Control+Space');
 	await page.waitForTimeout(500);
 	st = await scene(page);
-	await page.screenshot({ path: out + '/i14-viewport-focus-dark.png' });
+	await page.screenshot({ path: out + '/i14-viewport-focus-' + THEME + '.png' });
 	h.check(st.focus === 'viewport', `1.1 Ctrl+Space over the 3D view enters VIEWPORT focus (${st.focus})`);
 	h.check(!st.connect && !st.objects && !st.dock && !st.controls, `1.2 ...the Connect bar, the Controls, the Objects window and the dock are hidden (${JSON.stringify(st)})`);
 	h.check(st.canvas && st.canvas.height >= st.vh - 1 && st.canvas.width >= st.vw - 1, `1.3 ...the canvas fills the window (${JSON.stringify(st.canvas)})`);
@@ -141,7 +143,7 @@ h.run(async () => {
 	await page.keyboard.press('Control+Space');
 	await page.waitForTimeout(600);
 	st = await scene(page);
-	await page.screenshot({ path: out + '/i14-dock-focus-dark.png' });
+	await page.screenshot({ path: out + '/i14-dock-focus-' + THEME + '.png' });
 	h.check(st.focus === 'dock', `3.1 Ctrl+Space over the docked Explorer enters DOCK focus (${st.focus}, aimed at ${dockPt.id})`);
 	h.check(st.dock && st.dockBox.width === st.vw && st.dockBox.bottom === st.vh && st.dockBox.top < 100 && st.dockBox.height > st.vh - 100, `3.2 ...the docked window fills the window (${JSON.stringify(st.dockBox)}, was ${dockedH} tall)`);
 	h.check(!st.connect && !st.objects, '3.3 ...every other piece of chrome is hidden');
@@ -176,7 +178,7 @@ h.run(async () => {
 		const r = document.getElementById('object-list').getBoundingClientRect();
 		return { host: document.getElementById('object-list').getAttribute('data-pd-host'), top: Math.round(r.top), bottom: Math.round(r.bottom), width: Math.round(r.width), focus: document.documentElement.getAttribute('data-focus') };
 	});
-	await page.screenshot({ path: out + '/i14-hosted-objects-focus-dark.png' });
+	await page.screenshot({ path: out + '/i14-hosted-objects-focus-' + THEME + '.png' });
 	h.check(ol.focus === 'dock' && ol.host === 'shown' && ol.width === 1440 && ol.bottom === 900 && ol.top < 140, `4.1 the tab menu's "Maximize" fills the window with the docked Objects list (${JSON.stringify(ol)})`);
 	await page.click('#focus-exit button');
 	await page.waitForTimeout(500);
@@ -238,7 +240,7 @@ h.run(async () => {
 	await P.ctx.close();
 
 	// ---- 8. phone: More ▸ Focus mode, real touch ---------------------------------------------------
-	const Ph = await h.setupPage(browser, 'phone', { context: FOLDED });
+	const Ph = await h.setupPage(browser, 'phone', { context: FOLDED, storage: { theme: THEME } });
 	const pp = Ph.page;
 	await S(pp, () => window.__stores.phoneShell.phoneSheet.set('more'));
 	await pp.waitForTimeout(800);
@@ -254,7 +256,7 @@ h.run(async () => {
 		};
 		return { focus: document.documentElement.getAttribute('data-focus'), bar: vis('#ps-bar'), pill: vis('#focus-exit'), sheet: vis('#ps-more-sheet') };
 	});
-	await pp.screenshot({ path: out + '/i14-phone-focus-folded-dark.png' });
+	await pp.screenshot({ path: out + '/i14-phone-focus-folded-' + THEME + '.png' });
 	h.check(ph.focus === 'viewport' && !ph.bar && !ph.sheet && ph.pill, `8.1 More ▸ Focus mode on a folded N6: the phone bar and sheet are hidden, the pill shows (${JSON.stringify(ph)})`);
 	await pp.locator('#focus-exit button').tap();
 	await pp.waitForTimeout(600);

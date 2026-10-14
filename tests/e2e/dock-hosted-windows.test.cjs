@@ -21,6 +21,8 @@
 // docks) and the "+" has no Objects/Statistics/Chat rows. Real mouse throughout.
 // Run: APP_URL=https://localhost:5424/ npm run e2e -- dock-hosted-windows
 const h = require('./helpers.cjs');
+// THEME=light re-runs the same paths for the light-theme evidence shots
+const THEME = process.env.THEME || 'dark';
 
 const DESK = { viewport: { width: 1440, height: 900 } };
 const S = (page, fn, arg) => page.evaluate(fn, arg);
@@ -112,7 +114,7 @@ h.run(async () => {
 	const browser = await h.launch();
 	const P = await h.setupPage(browser, 'D', {
 		context: DESK,
-		storage: { flowDocked: 'true', explorerDocked: 'true', dockTabOrder: '["flow","explorer"]', flowDockHeight: '320' }
+		storage: { flowDocked: 'true', explorerDocked: 'true', dockTabOrder: '["flow","explorer"]', flowDockHeight: '320', theme: THEME }
 	});
 	const page = P.page;
 	const out = process.env.OUT || '/tmp';
@@ -127,7 +129,7 @@ h.run(async () => {
 	let gap = await gapPoint(page, 1);
 	await drag(page, await headerPoint(page, '#object-list'), gap, { hold: true });
 	let fb = await feedback(page, '#object-list');
-	await page.screenshot({ path: out + '/i6-objects-strip-caret-dark.png' });
+	await page.screenshot({ path: out + '/i6-objects-strip-caret-' + THEME + '.png' });
 	h.check(fb.caret && fb.caretX >= gap.lo && fb.caretX <= gap.hi, `1.1 over the strip a caret marks the slot between the two tabs (caret ${fb.caretX}, gap ${gap.lo}..${gap.hi})`);
 	h.check(fb.ghost && Math.abs(fb.opacity - 0.6) < 0.05, `1.2 ...the Objects window turns see-through (opacity ${fb.opacity})`);
 	h.check(fb.target && !fb.zone, `1.3 ...and the strip is outlined as the target (${JSON.stringify(fb)})`);
@@ -136,7 +138,7 @@ h.run(async () => {
 	h.check(JSON.stringify(await order(page)) === '["flow","objects","explorer"]', `1.4 released, it docks AT the caret: ${JSON.stringify(await order(page))}`);
 	h.check((await read(page, 'bottomDock.visibleDockKey')) === 'objects', '1.5 ...and is the tab in front');
 	let st = await hostState(page, '#object-list');
-	await page.screenshot({ path: out + '/i6-objects-docked-dark.png' });
+	await page.screenshot({ path: out + '/i6-objects-docked-' + THEME + '.png' });
 	h.check(st.host === 'shown' && st.visible && st.left === 0 && st.width === st.vw && st.bottom === st.vh && st.top > st.frameTop, `1.6 the Objects list fills the dock body, full width to the bottom edge (${JSON.stringify(st)})`);
 	h.check(!(await S(page, () => !!document.querySelector('.dock-drag-ghost') || !!document.getElementById('dock-strip-caret'))), '1.7 no drag feedback is left behind');
 	const rows = await S(page, () => document.querySelectorAll('#object-list [role="treeitem"], #object-list .obj-row, #object-list [data-uuid]').length);
@@ -190,7 +192,7 @@ h.run(async () => {
 	let ord = await order(page);
 	st = await hostState(page, '#stats-window');
 	h.check(ord[ord.length - 1] === 'stats' && st.host === 'shown' && st.width === st.vw, `5.2 Statistics docks at the end and fills the dock (${JSON.stringify(ord)}, ${JSON.stringify({ host: st.host, w: st.width })})`);
-	await page.screenshot({ path: out + '/i6-stats-docked-dark.png' });
+	await page.screenshot({ path: out + '/i6-stats-docked-' + THEME + '.png' });
 
 	// ---- 6. the "+" lists the hosted windows; Chat docks from it -------------------------------
 	await S(page, () => window.__stores.chatHidden.set(''));
@@ -199,7 +201,7 @@ h.run(async () => {
 	await page.locator('#dock-add-view:visible').first().click();
 	await page.waitForTimeout(300);
 	const rowsPlus = await S(page, () => [...document.querySelectorAll('[role="menu"] [role="menuitem"]')].map((e) => e.textContent.replace(/\s+/g, ' ').trim()));
-	await page.screenshot({ path: out + '/i6-dock-plus-hosted-dark.png' });
+	await page.screenshot({ path: out + '/i6-dock-plus-hosted-' + THEME + '.png' });
 	h.check(['Objects', 'Statistics', 'Live profiler', 'Chat', 'AI assistant'].every((t) => rowsPlus.some((r) => r.startsWith(t))), `6.1 the dock's "+" lists Objects, Statistics, Live profiler, Chat and AI assistant (${JSON.stringify(rowsPlus)})`);
 	h.check(rowsPlus.some((r) => /^Chat.*Dock/.test(r)), '6.2 ...the open floating Chat reads "Dock"');
 	await page.click('[role="menu"] [role="menuitem"]:has-text("Chat")');
