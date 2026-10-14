@@ -107,8 +107,10 @@
 				return;
 			}
 			// the sticky title + property filter sit ON TOP of the scroll area
+			// (42 I1: a header set to scroll away covers nothing — land the section at the top)
 			const sticky = scroller.querySelector('#drawer-label');
-			const pad = (sticky?.getBoundingClientRect().height ?? 0) + 8;
+			const covers = !!sticky && getComputedStyle(sticky).position === 'sticky';
+			const pad = (covers ? sticky.getBoundingClientRect().height : 0) + 8;
 			const delta = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top - pad;
 			if (Math.abs(delta) > 2) {
 				// instant, not smooth: a reflow mid-animation used to cancel it

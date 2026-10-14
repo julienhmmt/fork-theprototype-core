@@ -734,6 +734,26 @@ export function showToast(message, actions) {
   pushNotification(message, actions ? 'action' : 'info');
 }
 
+/**
+ * 42 I12: a transient toast that is ONE card per `id` — a second call while it is still up
+ * replaces its text and buttons IN PLACE (the stack keys an id'd card by its id, so it neither
+ * re-mounts nor stacks a twin) and restarts its timer. For a source that can speak several
+ * times in a row about one subject: the auto-quality notice used to stack a second "Lowered …"
+ * card a few seconds after the first. Every call still lands in the notification history.
+ * @param {string} id @param {string} message @param {{label: string, action: () => void}[]=} actions
+ */
+export function showToastById(id, message, actions) {
+  toastStore.update((list) => {
+    const row = { id, text: message, actions: actions ?? [] };
+    const at = list.findIndex((entry) => entry && typeof entry === 'object' && entry.id === id);
+    if (at === -1) return [...list, row];
+    const next = [...list];
+    next[at] = row;
+    return next;
+  });
+  pushNotification(message, actions?.length ? 'action' : 'info');
+}
+
 export function clearToast(toast) {
   toastStore.update((toast) => []);
 }

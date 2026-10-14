@@ -4,8 +4,10 @@
 	// rows it keeps under the same ids: what to save (Project / Scene, plus GLTF / JSON once shown),
 	// what a .tpscene and a .tp carry, and the two optional formats. The rows edit a DRAFT: the primary
 	// "Save" remembers the options AND saves with them; Cancel (Esc, the close button) forgets the draft.
-	// The inline max-width: ModalDialog's `width="sm"` loses to ui.css's !important 1200 px frame cap on
-	// desktop (pre-existing, every sm/md ModalDialog measures 1200 px — reported for 41b-int); inline wins.
+	// The width: ModalDialog's `width="sm"` loses to ui.css's !important 1200 px frame cap on desktop
+	// (pre-existing, every sm/md ModalDialog measures 1200 px), so it asks for `desktopWidth` — 42 I13:
+	// the inline `max-width … !important` it used before also beat the phone sheet's full width and left
+	// a gap on the right of a folded phone.
 	import ModalDialog from '../ui/ModalDialog.svelte';
 	import Section from '../ui/Section.svelte';
 	import SettingRow from '../ui/SettingRow.svelte';
@@ -58,7 +60,7 @@
 	title="Save options"
 	bind:open={$saveOptionsOpen}
 	width="sm"
-	style="max-width: min(520px, 94vw) !important"
+	desktopWidth="min(520px, 94vw)"
 	onkeydown={(/** @type {KeyboardEvent} */ e) => {
 		if (e.key === 'Escape') cancel();
 	}}

@@ -5,6 +5,7 @@
 		'show grid': ['grid', 'floor'],
 		'light helper length': ['helper', 'light', 'directional', 'spot'],
 		'show the simulation controls': ['simulation controls', 'physics', 'transport', 'sim'],
+		'quality preset': ['quality', 'performance', 'low', 'medium', 'high', 'graphics', 'fps'],
 		'shadow quality': ['shadows', 'performance'],
 		'reduce quality when the scene is heavy': ['performance', 'fps', 'lag', 'slow', 'governor'],
 		'simplify distant models': ['lod', 'performance'],
@@ -55,7 +56,7 @@
 	import { safeStorage } from '$lib/safeStorage';
 	import { lightHelperLength } from '$lib/lightHelpers';
 	import { shadowQuality } from '$lib/lightParams';
-	import { autoQuality } from '$lib/qualityGovernor';
+	import { autoQuality, qualityPreset } from '$lib/qualityGovernor';
 	import { lodEnabled } from '$lib/lod';
 	import { kitInstancingEnabled } from '$lib/kitInstancing';
 	import { spatialVoice } from '$lib/voiceChat';
@@ -80,6 +81,13 @@
 		{ value: 'low', label: 'Low' },
 		{ value: 'medium', label: 'Medium' },
 		{ value: 'high', label: 'High' }
+	];
+	// 42 I12: the device Quality preset (also the top of Configure Scene)
+	const PRESETS = [
+		{ value: 'auto', label: 'Auto' },
+		{ value: 'high', label: 'High' },
+		{ value: 'medium', label: 'Medium' },
+		{ value: 'low', label: 'Low' }
 	];
 	const ON_OPEN = [
 		{ value: 'ask', label: 'Ask' },
@@ -129,6 +137,9 @@
 	</Section>
 
 	<Section variant="card" label="Performance" badge="This device">
+		<SettingRow id="row-quality-preset" label="Quality preset" description="Auto lowers quality on its own when the scene is heavy; High, Medium and Low hold one level. A game’s own Quality setting wins while you play it." wide>
+			<Segmented id="quality-preset" label="Quality preset" options={PRESETS} value={$qualityPreset} onchange={(v) => qualityPreset.set(/** @type {any} */ (v))} />
+		</SettingRow>
 		<SettingRow id="row-shadow-quality" label="Shadow quality" description="Caps every light’s shadow map size here; per-light sizes still travel with the scene." wide>
 			<Segmented id="shadow-quality" label="Shadow quality" options={SHADOWS} value={$shadowQuality} onchange={(v) => shadowQuality.set(/** @type {any} */ (v))} />
 		</SettingRow>

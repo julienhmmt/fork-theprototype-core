@@ -23,6 +23,7 @@
 	import UiButton from '../ui/Button.svelte';
 	import MenuButton from './inspector/MenuButton.svelte';
 	import InsToggle from './inspector/InsToggle.svelte';
+	import SceneQualitySection from './inspector/SceneQualitySection.svelte'; // 42 I12
 	import HdriSection from './scene/HdriSection.svelte'; // 37-hdri
 	import PhysicsFloats from '../sim/PhysicsFloats.svelte'; // 36-sim I1
 	import FluidEmitterSection from '../sim/FluidEmitterSection.svelte'; // 36-fb F23
@@ -1701,12 +1702,15 @@
 			icon="sun"
 			badge="Scene"
 			filter
+			panel="scene"
 			pinned={$inspectorPinned}
 			onpin={() => inspectorPinned.update((v) => !v)}
 			onclose={() => inspectorClose.set(true)}
 		/>
 
 		<div class="flex flex-col gap-3">
+			<!-- 42 I12: the device Quality preset is the TOP of Configure Scene -->
+			<SceneQualitySection />
 			<Section variant="panel" label="Environment" badge="Shared">
 				<!-- 38 R5: the presets are Chips in the one accent; a press re-applies the
 				     preset even when it is already selected, exactly as the old buttons did -->
@@ -2957,6 +2961,7 @@
 			title="Properties"
 			icon="package"
 			badge="Module content"
+			panel="properties"
 			pinned={$inspectorPinned}
 			onpin={() => inspectorPinned.update((v) => !v)}
 			onclose={() => inspectorClose.set(true)}
@@ -2976,6 +2981,7 @@
 			icon="box"
 			badge={multiCount ? `${multiCount} objects` : $selectedObject.type}
 			filter
+			panel="properties"
 			pinned={$inspectorPinned}
 			onpin={() => inspectorPinned.update((v) => !v)}
 			onclose={() => inspectorClose.set(true)}

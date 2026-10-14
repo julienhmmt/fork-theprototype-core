@@ -61,6 +61,7 @@
 	import { peersAsClassic, knockedAfterSeconds, KNOCKED_AFTER_CHOICES } from '$lib/avatars/avatarState';
 	import WorkspaceLayoutsSettings from './WorkspaceLayoutsSettings.svelte'; // 37 R14
 	import UndockButtonSettings from './UndockButtonSettings.svelte'; // 40 F8
+	import PanelHeaderSettings from './PanelHeaderSettings.svelte'; // 42 I1
 	import { gameSoundVolume } from '$lib/gameSfx';
 	import { gameMusicVolume } from '$lib/gameMusic';
 	import { showWelcomeOnStart, showWhatsNewNotice, openWelcome } from '$lib/whatsNew';
@@ -261,6 +262,7 @@
 		</SettingRow>
 		<WorkspaceLayoutsSettings />
 		<UndockButtonSettings />
+		<PanelHeaderSettings />
 		<SettingRow id="row-touch-tools" label="Touch tools" description="Undo, Redo and Multi-select buttons beside the logo. On by default on phones.">
 			<Toggle id="setting-touch-tools" label="Touch tools" bind:checked={$touchTools} />
 		</SettingRow>

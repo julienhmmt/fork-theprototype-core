@@ -321,6 +321,8 @@ export const DEBUG_HOOKS = [
 	// 41b: the burger's Project actions setting + Save options (H14), the settings-row fit (H12)
 	['projectActions', () => import('./projectActions.js')],
 	['saveOptions', () => import('./saveOptions.js')],
+	// 42 I1: sticky panel headers
+	['panelHeaderPrefs', () => import('./panelHeaderPrefs.js')],
 	['rowFit', () => import('./ui/rowFit.js')],
 	['exportBoot', () => import('./export/exportBoot.js')],
 	['exportRuntime', () => import('./export/exportRuntime.js')],
