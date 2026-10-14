@@ -131,7 +131,15 @@ h.run(async () => {
 	await h.eventually(() => lastToasts(D), (t) => t.some((x) => /Could not reach nonexistent\.invalid:4443/.test(x)), 'an unreachable pinned server is reported by name', 30000);
 	await h.eventually(() => serverKind(D), (k) => k === 'public', 'D is back on the server it had (public)', 20000);
 	h.check((await pendingOut(D)).length === 0, 'and nothing was dialled');
-	await h.eventually(() => D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return !!p.peer?.open; }), (o) => o, 'the rebuilt link on the previous server opened', 20000);
+	// the rebuild re-registers on the PUBLIC cloud (an internet round trip, plus an id-collision
+	// retry when the cloud still holds D's registration from section 6) — 20 s was not always
+	// enough on a loaded box. The state is read whole so a red says where it stopped.
+	await h.eventually(
+		() => D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return { open: !!p.peer?.open, id: p.peer?.id ?? null, disconnected: !!p.peer?.disconnected, destroyed: !!p.peer?.destroyed, idRetries: p.idRetries ?? null }; }),
+		(o) => o.open,
+		'the rebuilt link on the previous server opened',
+		45000
+	);
 
 	// ---- 8. D2: Settings ▸ Connection "Apply" switches without a reload -------------
 	await D.page.evaluate((cfg) => {
