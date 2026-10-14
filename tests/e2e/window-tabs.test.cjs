@@ -51,11 +51,13 @@ h.run(async () => {
 	]);
 	h.check(displays2[0] === 'none' && displays2[1] !== 'none', 'tab switch swaps visibility');
 
-	// dragging the strip background moves the whole group
+	// dragging the strip background moves the whole group — pressed just right of the last tab (42 I6:
+	// a group of dockable windows carries a "Dock all tabs" button at the strip's right end now)
 	const strip = await A.page.locator('.tab-strip').boundingBox();
-	await A.page.mouse.move(strip.x + strip.width - 60, strip.y + 16);
+	const px = await A.page.evaluate(() => Math.round(Math.max(...[...document.querySelectorAll('.tab-strip .tab-note')].map((t) => t.getBoundingClientRect().right)) + 12));
+	await A.page.mouse.move(px, strip.y + 16);
 	await A.page.mouse.down();
-	await A.page.mouse.move(strip.x + strip.width - 60 + 90, strip.y + 76, { steps: 8 });
+	await A.page.mouse.move(px + 90, strip.y + 76, { steps: 8 });
 	await A.page.mouse.up();
 	await A.page.waitForTimeout(300);
 	const movedList = await A.page.locator('#object-list').boundingBox();

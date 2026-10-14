@@ -10,6 +10,7 @@ import {
 	HOSTED_DOCK_TABS,
 	PHONE_DOCK_TABS,
 	dockModeArm,
+	dockHeight,
 	activateDock,
 	forgetDockTab,
 	visibleDockKey,
@@ -101,7 +102,36 @@ export function setHostedDocked(key, docked) {
 	if (docked) {
 		HOSTED[key].open();
 		activateDock(key);
-	} else forgetDockTab(key);
+	} else {
+		forgetDockTab(key);
+		clearOfDock(key);
+	}
+}
+
+/** the last pointer release (a tab dragged off the strip ends in one) */
+let lastUp = { x: -1, at: 0 };
+/**
+ * A window leaving the dock reappears at its floating rect — which, for one that was DROPPED on the
+ * strip, is right over the dock (it was parked there by the drop). Put it back clear of the dock: just
+ * above the dock's top edge, and under the pointer horizontally when a drag ended a moment ago (a tab
+ * pulled off the strip lands where it was pulled to). The element's own drag code reads its position
+ * from the DOM when the next drag starts, so an inline move is the whole of it.
+ * @param {string} key
+ */
+function clearOfDock(key) {
+	if (typeof document === 'undefined') return;
+	const dockTop = window.innerHeight - get(dockHeight) - 24; // the strip rides 24px above the dock
+	requestAnimationFrame(() => {
+		const el = /** @type {HTMLElement|null} */ (document.querySelector(HOSTED[key].sel));
+		if (!el || el.hasAttribute('data-pd-host')) return;
+		const r = el.getBoundingClientRect();
+		if (!r.height || r.top < dockTop - 8) return; // already clear of the dock
+		const top = Math.max(64, dockTop - r.height - 8);
+		el.style.top = Math.round(top) + 'px';
+		if (Date.now() - lastUp.at < 600 && lastUp.x >= 0) {
+			el.style.left = Math.round(Math.min(Math.max(0, lastUp.x - 100), window.innerWidth - r.width)) + 'px';
+		}
+	});
 }
 
 /** open a hosted window docked and show it (the "+" row, a group's Dock button) @param {string} key */
@@ -116,6 +146,9 @@ export function startDockHost() {
 	started = true;
 	/** @type {(() => void)[]} */
 	const offs = [];
+	const onUp = (/** @type {PointerEvent} */ e) => (lastUp = { x: e.clientX, at: Date.now() });
+	window.addEventListener('pointerup', onUp, true);
+	offs.push(() => window.removeEventListener('pointerup', onUp, true));
 	// the arm every undock / dock route asks through (the tab menu's Undock row, a tab dragged
 	// out of the strip, a window dropped on the strip or the bottom edge): hosted keys have no
 	// component of their own to consume it, so this module does

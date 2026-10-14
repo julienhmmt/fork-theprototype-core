@@ -175,6 +175,8 @@ h.run(async () => {
 	await drag(page, tab, { x: 700, y: 250 });
 	st = await hostState(page, '#object-list');
 	h.check(!st.host && st.visible && st.width < 600, `4.2 dragged off the strip it floats again as its own window (${JSON.stringify({ host: st.host, w: st.width })})`);
+	const stripTop = await S(page, () => Math.round([...document.querySelectorAll('.dt-row')].map((r) => r.getBoundingClientRect()).find((b) => b.width > 0)?.top ?? innerHeight));
+	h.check(st.bottom <= stripTop && Math.abs(st.left + 100 - 700) <= 4, `4.2b ...clear of the dock (bottom ${st.bottom} <= strip ${stripTop}), under the pointer it was pulled to (left ${st.left})`);
 	h.check(!(await order(page)).includes('objects') && (await S(page, () => localStorage.getItem('objectListDocked'))) === 'false', `4.3 ...out of the strip, remembered floating (${JSON.stringify(await order(page))})`);
 
 	// ---- 5. Statistics on the bottom edge band: docks at the end ---------------------------------

@@ -860,6 +860,9 @@
 			const t = /** @type {any} */ (e.target);
 			if (e.button === 0 && isHeaderDrag(t)) {
 				moving = true;
+				// 42 I6: start from where the window IS — a tab tear-off or the dock (dockHost) may
+				// have placed it since the last drag
+				if (!grouped() && !node.dataset.docked) ({ left, top } = { left: node.offsetLeft, top: node.offsetTop });
 			}
 		});
 
