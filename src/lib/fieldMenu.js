@@ -451,7 +451,7 @@ export async function settle() {
 /** Every node the action is on -> its spec getter. The field for Ctrl+C / Ctrl+V is found
  *  from the element under the MOUSE at key time (the nearest ancestor that answers), so a
  *  row whose value boxes answer nothing still answers over its boxes.
- *  @type {WeakMap<Element, () => any>} */
+ *  @type {WeakMap<Element, (at?: any) => any>} */
 const answering = new WeakMap();
 /** the last mouse position (a touch has no hover) */
 let mouseAt = /** @type {{x: number, y: number} | null} */ (null);
@@ -461,10 +461,50 @@ let installed = false;
 function hoveredField() {
 	if (!mouseAt || typeof document === 'undefined') return null;
 	let el = /** @type {Element|null} */ (document.elementFromPoint(mouseAt.x, mouseAt.y));
+	const start = el;
 	while (el) {
-		const spec = answering.get(el)?.();
+		const spec = answering.get(el)?.(start);
 		if (spec) return { node: el, spec };
 		el = el.parentElement;
+	}
+	return null;
+}
+
+/**
+ * The fallback for fields drawn with NO clipboard support of their own (the sub-panels'
+ * colour swatches, a bare kit switch): a native `<input type="color">` and a kit Toggle
+ * (`button.tg[aria-pressed]`) answer through their own DOM — read the value, write it the way
+ * a person would (a value + input/change events, a click). The Inspector root carries it.
+ * They are not section members (only rows that register are), but copy / paste work.
+ * @param {EventTarget|null} [target] @returns {FieldSpec | null}
+ */
+export function nativeFieldSpec(target) {
+	const el = /** @type {any} */ (target instanceof Element ? target : null);
+	if (!el) return null;
+	const name = (/** @type {any} */ e) => e.getAttribute('aria-label') || e.title || nameNear(e) || 'Value';
+	if (el.tagName === 'INPUT' && el.type === 'color' && !el.disabled)
+		return {
+			kind: 'color',
+			name: name(el),
+			get: () => el.value,
+			set: (/** @type {string} */ hex) => {
+				if (el.value === hex) return;
+				el.value = hex;
+				el.dispatchEvent(new Event('input', { bubbles: true }));
+				el.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+		};
+	const toggle = el.closest?.('button.tg[aria-pressed]');
+	if (toggle && !toggle.disabled) {
+		const label = toggle.getAttribute('aria-labelledby');
+		return {
+			kind: 'bool',
+			name: (label && document.getElementById(label)?.textContent?.trim()) || name(toggle),
+			get: () => toggle.getAttribute('aria-pressed') === 'true',
+			set: (/** @type {boolean} */ on) => {
+				if ((toggle.getAttribute('aria-pressed') === 'true') !== !!on) toggle.click();
+			}
+		};
 	}
 	return null;
 }
@@ -567,7 +607,8 @@ const SLOP = 10;
 
 /**
  * Svelte action: copy / paste / reset on a field or a section header.
- * @param {HTMLElement} node @param {() => any} getSpec returns a FieldSpec, a SectionSpec or null
+ * @param {HTMLElement} node @param {(target?: EventTarget|null) => any} getSpec returns a FieldSpec, a SectionSpec or null
+ *   (it may look at the element the press or the hover started on — the root fallback does)
  */
 export function fieldClip(node, getSpec) {
 	install();
@@ -590,7 +631,7 @@ export function fieldClip(node, getSpec) {
 			e.stopPropagation();
 			return;
 		}
-		const s = spec?.();
+		const s = spec?.(e.target);
 		if (!s) return;
 		e.preventDefault();
 		e.stopPropagation(); // the innermost field wins (a row inside a section)
@@ -612,10 +653,10 @@ export function fieldClip(node, getSpec) {
 		// capture runs outermost first, so the LAST field that ANSWERS to stamp the event is the
 		// innermost — that one owns the press (a toggle inside a row; a vector row's axis boxes
 		// answer nothing, so the row keeps it)
-		if (spec?.()) /** @type {any} */ (e).__fieldClipOwner = node;
+		if (spec?.(e.target)) /** @type {any} */ (e).__fieldClipOwner = node;
 		timer = setTimeout(() => {
 			timer = null;
-			const s = spec?.();
+			const s = spec?.(target);
 			if (!s || /** @type {any} */ (e).__fieldClipOwner !== node) return;
 			swallow = open(startX, startY, itemsFor(node, s, target));
 			if (swallow) navigator.vibrate?.(10);
@@ -642,7 +683,7 @@ export function fieldClip(node, getSpec) {
 		e.preventDefault();
 		if (e.type === 'click') swallow = false;
 	}
-	answering.set(node, () => spec?.());
+	answering.set(node, (/** @type {any} */ at) => spec?.(at));
 
 	node.addEventListener('contextmenu', onContext);
 	node.addEventListener('pointerdown', onDown, true);
@@ -651,7 +692,7 @@ export function fieldClip(node, getSpec) {
 	node.addEventListener('pointerup', onUp, true);
 	node.addEventListener('click', onUp, true);
 	return {
-		/** @param {() => any} next */
+		/** @param {(target?: EventTarget|null) => any} next */
 		update(next) {
 			spec = next;
 		},
