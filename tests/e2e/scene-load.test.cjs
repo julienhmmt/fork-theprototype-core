@@ -201,16 +201,23 @@ h.run(async () => {
 	await throttle(CPU);
 	// timed INSIDE the page, click to the first frame that shows the menu: Playwright's own round
 	// trips to a CPU x6 page cost seconds and would measure the harness
+	// it also reports whether a scene load was still running AT THE FRAME the menu showed — read
+	// afterwards (after the Escape + 800 ms teardown) a fast load had already ended, and the check
+	// called a menu that opened mid-load "inconclusive" (red under --exclusive, 43-tests proofX)
 	const menuTime = async () => {
-		const ms = await page.evaluate(
+		const { ms, loading } = await page.evaluate(
 			() =>
 				new Promise((resolve) => {
 					const t0 = performance.now();
 					/** @type {HTMLElement} */ (document.querySelector('#logo-menu')).click();
 					const poll = () => {
 						const m = document.querySelector('#open-templates');
-						if (m && m.getBoundingClientRect().height > 0) return resolve(Math.round(performance.now() - t0));
-						if (performance.now() - t0 > 8000) return resolve(-1);
+						if (m && m.getBoundingClientRect().height > 0) {
+							/** @type {any} */ let job;
+							window.__stores.sceneLoader.sceneLoad.subscribe((v) => (job = v))();
+							return resolve({ ms: Math.round(performance.now() - t0), loading: !!job });
+						}
+						if (performance.now() - t0 > 8000) return resolve({ ms: -1, loading: false });
 						requestAnimationFrame(poll);
 					};
 					requestAnimationFrame(poll);
@@ -219,14 +226,13 @@ h.run(async () => {
 		await page.keyboard.press('Escape').catch(() => {});
 		await page.locator('#logo-menu').click().catch(() => {});
 		await page.waitForTimeout(800);
-		return ms;
+		return { ms, loading };
 	};
 	await menuTime(); // first open mounts the menu once
-	const idleMenu = await menuTime();
+	const idleMenu = (await menuTime()).ms;
 	await open(castleUrl);
 	await h.eventually(() => page.evaluate(() => !!document.querySelector('#scene-load-bar')), (v) => v, '2.0 (premise) a load is under way (the bar is up)', 30000);
-	const menuUp = await menuTime();
-	const stillLoading = !!(await sceneState(page, null)).job;
+	const { ms: menuUp, loading: stillLoading } = await menuTime();
 	h.check(menuUp >= 0 && menuUp < Math.max(400, idleMenu * 2) && stillLoading, `2.1 the logo menu opens in ${menuUp} ms while the scene is still loading (${idleMenu} ms with nothing loading; ${stillLoading ? 'still loading' : 'load had ENDED - inconclusive'})`);
 	await throttle(1);
 	await watch({ marker: 'Castle gate', done: whole }, '2.2 that load still completes');
