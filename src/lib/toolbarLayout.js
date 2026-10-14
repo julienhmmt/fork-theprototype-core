@@ -458,3 +458,50 @@ export function stepItem(p, id, key) {
 export function unplacedIds(/** @type {Placements} */ p, /** @type {string[]} */ roster) {
 	return roster.filter((id) => id !== PLAY && !isHole(id) && !placeRegion(p, id));
 }
+
+// ── 43 J10: TOOLBAR OVERFLOW ──────────────────────────────────────────────────────────────────
+// When the bar lacks room (a wide pinned sidebar, every button enabled on a laptop), the cells that
+// do not fit fold into an overflow "»" whose menu holds them — the Office / VS Code / Figma toolbar
+// rule — and come back by themselves as room returns. It is DERIVED, never stored: the user's
+// enabled set (`order`/`hidden`, the corners) is not touched, so shrinking a sidebar again is all it
+// takes to unfold. PRIORITY IS THE USER'S ORDER, read right to left: the cell at the far right of the
+// bar folds first, the next one after it, and Play (the well) never folds. The trailing "…" is the
+// lowest priority of all: once anything folds it is the "»" that ends the bar (its menu closes with
+// "Customize toolbar…"), so a folded bar is never wider than one that still had its "…".
+
+/**
+ * @typedef {object} FoldMetrics   every width in px, measured off the live bar
+ * @property {number} [budget]  the room the bar may take (absent / Infinity / NaN = no limit)
+ * @property {number} chrome  the bar's own padding + border
+ * @property {number} cell    one button cell
+ * @property {number} well    Play's well
+ * @property {number} gap     the gap between two cells (and before a trailing control)
+ * @property {number} tail    what a trailing control adds after the row: the gap, the separator and
+ *                            one cell — the "…" while nothing folds, the "»" once anything does
+ * @property {boolean} more   the record shows the "…"
+ */
+
+/** the bar's width for a row of cells and an optional trailing control @param {string[]} ids @param {FoldMetrics} m @param {boolean} trailing */
+export function barWidth(ids, m, trailing) {
+	const cells = ids.reduce((sum, id) => sum + (id === PLAY ? m.well : m.cell), 0);
+	return m.chrome + cells + Math.max(0, ids.length - 1) * m.gap + (trailing ? m.tail : 0);
+}
+
+/**
+ * Split the visual row into what stays on the bar and what folds into "»".
+ * @param {string[]} row  the visual row (PLAY included once)
+ * @param {FoldMetrics} m
+ * @returns {{ shown: string[], folded: string[] }}  `folded` keeps the bar's left → right order
+ */
+export function foldToFit(row, m) {
+	if (!((m.budget ?? NaN) > 0) || barWidth(row, m, m.more) <= (m.budget ?? Infinity)) return { shown: [...row], folded: [] };
+	const shown = [...row];
+	/** @type {string[]} */
+	const folded = [];
+	for (let i = shown.length - 1; i >= 0 && barWidth(shown, m, true) > (m.budget ?? Infinity); i--) {
+		if (shown[i] === PLAY) continue;
+		folded.unshift(shown[i]);
+		shown.splice(i, 1);
+	}
+	return { shown, folded };
+}

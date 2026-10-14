@@ -584,3 +584,26 @@
 #controls-pill.hud-editing:has(.hud-edit-more) {
 	padding-right: 28px;
 }
+/* 43 J8: Edit positions shows EVERY item, so its bar WRAPS into the band beside the open sidebars
+   (Controls sets the band as the bar's max-width and places it inside the band) instead of running
+   under a sidebar; the hint above wraps to the bar's width */
+#controls-pill.hud-editing {
+	height: auto;
+	min-height: var(--hud-bar-h);
+	min-width: 0;
+	padding-top: 4px;
+	padding-bottom: 4px;
+}
+#controls-pill.hud-editing .hud-bar-row {
+	flex-wrap: wrap;
+	justify-content: center;
+	row-gap: 6px;
+	height: auto;
+	min-width: 0;
+}
+#controls-pill.hud-editing .hud-edit-hint {
+	white-space: normal;
+	width: max-content;
+	max-width: 100%;
+	text-align: center;
+}

@@ -83,8 +83,11 @@
 		stepItem,
 		unplacedIds,
 		regionOf,
-		canPlace
+		canPlace,
+		foldToFit
 	} from '$lib/toolbarLayout';
+	// 43 J8/J10: where the sidebars are (a pinned column bounds the bar; any open one bounds Edit positions)
+	import { geometry as sidebarGeometry } from '$lib/sidebars';
 	import type { ToolbarLayout, LayoutConfig, Placements, Region } from '$lib/toolbarLayout';
 	import { pivotMode, pivotParentAvailable } from '$lib/multiTransform'; // 37 R1: the toolbar Pivot cell
 	import { VRButton, XRButton } from '@threlte/xr'
@@ -1492,6 +1495,8 @@
 	// (the record keeps it; the Inspector and the object menu still set the pivot there) —
 	// the multiselect lane's own fallback (QUESTIONS-37-multiselect #1).
 	const NARROW_BAR = 440;
+	/** 43 J10: at or below this the bar's cells SHARE the width (hud.css, max-width 520px) — no folding */
+	const FOLD_MIN_VW = 520;
 	// 41 G23: the SERVER's width until mounted (see the hydration note above)
 	let viewportW = $state(1280);
 	onMount(() => {
@@ -1500,13 +1505,26 @@
 		window.addEventListener('resize', read);
 		return () => window.removeEventListener('resize', read);
 	});
-	const visibleCells = $derived.by(() =>
-		controlsLayout.collapsed
-			? [{ id: SPACER }]
-			: visualIds()
-					.filter((id) => !(id === 'pivot' && viewportW < NARROW_BAR))
-					.map((id) => ({ id }))
-	);
+	// 43 J10: THE OVERFLOW. What does not fit the room the bar has (`barRoom`, measured with the track:
+	// the viewport less a pinned sidebar and the corner stacks on its row) folds into "»", right to left
+	// by the user's order, Play never ($lib/toolbarLayout `foldToFit`). Derived, never stored — the
+	// enabled set stays what the user chose, so room coming back unfolds by itself. Off while Edit
+	// positions runs (it shows every item, wrapping) and on a phone-width bar (its cells shrink instead).
+	const foldPlan = $derived.by(() => {
+		if (controlsLayout.collapsed) return { shown: [SPACER], folded: [] as string[] };
+		const row = visualIds().filter((id) => !(id === 'pivot' && viewportW < NARROW_BAR));
+		if (editing || viewportW <= FOLD_MIN_VW || !barRoom.ok) return { shown: row, folded: [] as string[] };
+		return foldToFit(row, {
+			...barMetrics,
+			// a px of slack: the arithmetic is in whole layout px, the browser's in fractions of one
+			budget: barRoom.right - barRoom.left - 1,
+			// the "…" is drawn only on a wide window (hud.css hides it below 720 px)
+			more: controlsLayout.more !== false && viewportW >= 720
+		});
+	});
+	const visibleCells = $derived(foldPlan.shown.map((id) => ({ id })));
+	/** the cells folded into "»", in the bar's left → right order */
+	const folded = $derived(foldPlan.folded);
 
 	/** A cell press. It needs no "was that a drag?" guard of its own: a move that ends
 	 *  here has already armed `swallowNextClick`, so this handler is simply not reached
@@ -1895,6 +1913,8 @@
 	// menu on screen at a time.
 	let toolbarMenu: { x: number; y: number; id: string } | null = $state(null);
 	let customizeMenu: { x: number; y: number } | null = $state(null);
+	/** 43 J10: the "»" menu of the cells that do not fit */
+	let overflowMenu: { x: number; y: number } | null = $state(null);
 
 	// 41 G1: a LONG PRESS opens the same menu on touch, by its own timer. Android raises a
 	// `contextmenu` for a held finger and iOS never does (the W1 hatch existed for exactly that),
@@ -1907,6 +1927,7 @@
 		const openAt = (x: number, y: number) => {
 			playMenu = null;
 			customizeMenu = null;
+			overflowMenu = null;
 			lastMenuAt = { x, y };
 			toolbarMenu = { x, y, id };
 		};
@@ -2419,12 +2440,21 @@
 	const EDGE_MARGIN = 8; // breathing room against a neighbour and against the viewport
 	const SNAP_PX = 24; // how near the middle still counts as the middle
 	const DRAG_SLOP = 6; // travel that turns a press into a move
+	const EDIT_APPLY_OVERHANG = 18; // 43 J8: how far Edit positions' ✓ reaches past the bar's right edge (hud.css)
 
 	/** the reachable band for the bar's CENTRE, in client px. `ok` is false when the
 	 *  track is narrower than the bar itself (a phone with the buttons beside it): there
 	 *  is then no position to choose, so the bar centres and the move gesture stands
 	 *  down rather than offering a drag that cannot go anywhere. */
 	let track = $state({ min: 0, max: 0, mid: 0, ok: false });
+	/** 43 J8/J10: the band the bar may occupy (client px) — the viewport less the edge margins, a PINNED
+	 *  sidebar and any corner button on the bar's row. `ok` once measured. */
+	let barRoom = $state({ left: 0, right: 0, ok: false });
+	/** 43 J10: the widths the overflow arithmetic needs, read off the live bar (hud.css owns them) */
+	let barMetrics = $state({ chrome: 14, cell: 38, well: 56, gap: 2, tail: 47 });
+	/** 43 J8: Edit positions' band — the viewport less EVERY open sidebar and the corners — and the edit
+	 *  bar's width in it; the bar wraps to that width and slides only as far as it must to stay inside */
+	let editPlace: { left: number; right: number; w: number } | null = $state(null);
 	/** the live centre while a gesture runs; null the rest of the time, so the stored
 	 *  fraction is the only source once it ends */
 	let dragCentre: number | null = $state(null);
@@ -2448,6 +2478,19 @@
 		const vw = window.innerWidth;
 		let left = EDGE_MARGIN;
 		let right = vw - EDGE_MARGIN;
+		// 43 J8: THE SIDEBARS. A PINNED column runs to the bottom edge, so the bar may never cross it —
+		// a drag, Move toolbar and the overflow budget all stop at its edge; while Edit positions runs,
+		// EVERY open column does (the user's "next to the sidebar, not on top of it"). The geometry is
+		// 42 sidebars' store (`$lib/sidebars`), the same numbers its columns are drawn from.
+		const sb = get(sidebarGeometry);
+		if (sb?.wide) {
+			if (sb.left.shown && (sb.left.full || editing)) left = Math.max(left, sb.leftX + sb.left.w + EDGE_MARGIN);
+			if (sb.right.shown && (sb.right.full || editing)) right = Math.min(right, vw - sb.right.w - EDGE_MARGIN);
+		}
+		// the bar's ROW is its bottom bar-height: a wrapped edit bar is taller, and reading its whole box
+		// would let a corner button ABOVE the row narrow the band it wraps into (and so on)
+		const rowH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hud-bar-h')) || pill.height;
+		const rowTop = Math.max(pill.top, pill.bottom - rowH);
 		const found: HTMLElement[] = [];
 		for (const el of TOOLBAR_NEIGHBOURS.flatMap((sel) => [...document.querySelectorAll<HTMLElement>(sel)])) {
 			found.push(el);
@@ -2457,10 +2500,23 @@
 			// and that one rule is why the <=600px lift needs no breakpoint of its own
 			// here: at that width chat / AI / mic / "+" have moved ABOVE this row, so
 			// they stop clamping and the bar gets the full width — measured, not coded.
-			if (r.bottom <= pill.top || r.top >= pill.bottom) continue;
+			if (r.bottom <= rowTop || r.top >= pill.bottom) continue;
 			if ((r.left + r.right) / 2 < vw / 2) left = Math.max(left, r.right + EDGE_MARGIN);
 			else right = Math.min(right, r.left - EDGE_MARGIN);
 		}
+		observeNeighbours(nav, found);
+		if (editing) {
+			// 43 J8: the edit bar wraps into this band (its max-width) and is placed inside it; the normal
+			// bar's track is left as it was — the edit bar is not the bar it describes
+			// the round ✓ overhangs the bar's top-right corner (hud.css): keep room for it inside the band
+			const next = { left, right: right - EDIT_APPLY_OVERHANG, w: pill.width };
+			if (!editPlace || next.left !== editPlace.left || next.right !== editPlace.right || Math.abs(next.w - editPlace.w) >= 0.5) editPlace = next;
+			if (typeof window !== 'undefined') (window as any).__toolbarTrack = { ...track, room: barRoom, editPlace, folded };
+			return;
+		}
+		if (editPlace) editPlace = null;
+		measureBarMetrics(nav);
+		if (left !== barRoom.left || right !== barRoom.right || !barRoom.ok) barRoom = { left, right, ok: right - left > 0 };
 		const half = pill.width / 2;
 		const min = left + half;
 		const max = right - half;
@@ -2474,9 +2530,12 @@
 		// COMPUTED, beside what a suite can see for itself in the rendered rects. It is
 		// what turned "the armed move commits 21px off" from a guess into one reading.
 		if (typeof window !== 'undefined')
-			(window as any).__toolbarTrack = { ...track, centre: pillCentre, posX: controlsLayout.posX };
-		// re-observe only when the SET of neighbours changed — `observe()` fires an
-		// initial callback per element, so re-attaching on every measurement would spin
+			(window as any).__toolbarTrack = { ...track, centre: pillCentre, posX: controlsLayout.posX, room: barRoom, folded, metrics: barMetrics };
+	}
+
+	/** re-observe only when the SET of neighbours changed — `observe()` fires an initial callback per
+	 *  element, so re-attaching on every measurement would spin */
+	function observeNeighbours(nav: HTMLElement, found: HTMLElement[]) {
 		const key = found.map((el) => el.id).join(',');
 		if (trackRO && key !== observedKey) {
 			observedKey = key;
@@ -2484,6 +2543,31 @@
 			trackRO.observe(nav); // the bar's own width changes when cells hide/collapse
 			for (const el of found) trackRO.observe(el);
 		}
+	}
+
+	/** 43 J10: the widths `foldToFit` adds up, read from the live bar and hud.css's own tokens (a touch
+	 *  screen's cells are 44 px, a mouse's 38) — nothing here is a copy of a CSS number */
+	function measureBarMetrics(nav: HTMLElement) {
+		const px = (v: string) => parseFloat(v) || 0;
+		const root = getComputedStyle(document.documentElement);
+		const cs = getComputedStyle(nav);
+		const row = nav.querySelector('.hud-bar-row');
+		const cell = px(root.getPropertyValue('--hud-cell')) || 38;
+		const fab = px(root.getPropertyValue('--hud-fab')) || 44;
+		const gap = row ? px(getComputedStyle(row).columnGap) : 2;
+		const navGap = px(cs.columnGap);
+		const sep = nav.querySelector('.hud-sep');
+		const sepW = sep ? sep.getBoundingClientRect().width + px(getComputedStyle(sep).marginLeft) + px(getComputedStyle(sep).marginRight) : 5;
+		const next = {
+			chrome: px(cs.paddingLeft) + px(cs.paddingRight) + px(cs.borderLeftWidth) + px(cs.borderRightWidth),
+			cell,
+			well: fab + 12,
+			gap,
+			// the trailing control (the "…", or the "»" once anything folds): gap, separator, gap, one cell
+			tail: navGap + sepW + navGap + cell
+		};
+		const m = barMetrics;
+		if (next.chrome !== m.chrome || next.cell !== m.cell || next.well !== m.well || next.gap !== m.gap || next.tail !== m.tail) barMetrics = next;
 	}
 
 	onMount(() => {
@@ -2524,6 +2608,11 @@
 		void stackRight;
 		void $floatingToolbar;
 		void $bottomInset;
+		// 43 J5/J8/J10: a sidebar pinned, opened, resized or moved moves the band; the lift moves the
+		// corner stacks into it or out of it; entering / leaving Edit positions swaps which band applies
+		void $sidebarGeometry;
+		void $hudStackLift;
+		void editing;
 		tick().then(measureTrack);
 	});
 
@@ -2717,12 +2806,48 @@
 	 * `left` is emitted only once the track has been MEASURED — before that (SSR, the
 	 * first paint) the `start-1/2` class is the honest answer. */
 	const pillZClass = $derived($toolbarAlwaysOnTop ? 'z-(--z-hud)' : 'z-(--z-chrome)');
+	/** 43 J8: where the EDIT bar's centre goes — the bar's own centre, slid only as far as it must to
+	 *  sit wholly inside the band beside the open sidebars (the user's "it can be moved a bit") */
+	const editCentre = $derived.by(() => {
+		if (!editing || !editPlace) return null;
+		const room = editPlace.right - editPlace.left;
+		const half = Math.min(editPlace.w, room) / 2;
+		const lo = editPlace.left + half;
+		const hi = editPlace.right - half;
+		return lo > hi ? (editPlace.left + editPlace.right) / 2 : Math.max(lo, Math.min(hi, pillCentre));
+	});
 	const pillStyle = $derived(
 		($floatingToolbar ? 'bottom: calc(var(--bottom-inset, 0px) + 16px);' : 'bottom: 16px;') +
-			(track.mid > 0 ? ` left: ${Math.round(pillCentre)}px;` : '') +
+			(editCentre != null
+				? ` left: ${Math.round(editCentre)}px; max-width: ${Math.max(0, Math.floor(editPlace!.right - editPlace!.left))}px;`
+				: track.mid > 0
+					? ` left: ${Math.round(pillCentre)}px;`
+					: '') +
 			' touch-action: none;' +
 			(movingBar ? ' cursor: grabbing;' : '')
 	);
+
+	// ── 43 J10: the "»" and its menu ────────────────────────────────────────────────────────────
+	function openOverflow(e: MouseEvent) {
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		toolbarMenu = null;
+		customizeMenu = null;
+		playMenu = null;
+		overflowMenu = { x: Math.round(r.left), y: Math.round(r.top) };
+	}
+	/** the folded cells, each doing what its cell does (its armed / open state as the row's check),
+	 *  then the way into Customize — the "…" that folded first lives here */
+	function overflowItems() {
+		return [
+			{ section: 'More buttons' },
+			...folded.map((id) => {
+				const btn = BUTTONS[id];
+				return { key: id, label: labelOf(id), icon: btn.iconName ?? btn.icon, checked: btn.tint() === ICON_ON, tooltip: btn.title, action: () => runCell(id) };
+			}),
+			{ section: '' },
+			{ key: '__customize', label: 'Customize toolbar…', tooltip: 'Choose which buttons the bar shows — the ones that do not fit wait here', action: () => openCustomize() }
+		];
+	}
 
 </script>
 
@@ -2887,6 +3012,13 @@
 				<button type="button" class="hud-edit-remove" tabindex="-1" title="Remove" aria-label="Remove {MORE_LABEL}" use:onPress={() => editRemove(MORE)}><Icon name="minus" size={16} aria-hidden="true" /></button>
 			</div>
 		{/if}
+	{:else if !controlsLayout.collapsed && folded.length}
+		<!-- 43 J10: the buttons that do not fit wait in "»" (right to left by the user's order, Play never);
+		     once anything folds it ends the bar in place of the "…", and its menu closes with Customize -->
+		<span class="hud-sep" aria-hidden="true"></span>
+		<button id="toolbar-overflow" type="button" class="hud-cell" class:on={overflowMenu !== null} data-folded={folded.join(',')} title="More buttons — {folded.length} {folded.length === 1 ? 'does' : 'do'} not fit" aria-label="More buttons ({folded.length})" aria-haspopup="menu" aria-expanded={overflowMenu !== null} use:onPress={openOverflow} use:cellMenu={BAR}
+			><Icon name="chevrons-right" size={20} aria-hidden="true" /></button
+		>
 	{:else if !controlsLayout.collapsed && controlsLayout.more !== false}
 		<!-- 38 R8 (design page): the bar's own "…" opens Customize toolbar — the same checklist as
 		     the right-click menu's last row. Outside the cell row on purpose: the roster suites read
@@ -3044,6 +3176,10 @@
 		sizeKey="toolbarcell"
 		on:close={() => (toolbarMenu = null)}
 	/>
+{/if}
+
+{#if overflowMenu}
+	<ContextMenu x={overflowMenu.x} y={overflowMenu.y} items={overflowItems()} sizeKey="toolbaroverflow" on:close={() => (overflowMenu = null)} />
 {/if}
 
 {#if customizeMenu}

@@ -271,6 +271,8 @@ export const DEBUG_HOOKS = [
 	['sidebars', () => import('./sidebars')],
 	// 43 J9: dismissible tips (the phone More sheet's drag how-to) + Reset tips
 	['tips', () => import('./tips')],
+	// 43: the layout reloaders (a suite swaps the stored toolbar without reloading the page)
+	['uiLayoutsCore', () => import('./uiLayoutsCore')],
 	['editResume', () => import('./editResume')],
 	['moduleRequirements', () => import('./moduleRequirements')],
 	['hudDocs', () => import('./hudDocs')],
