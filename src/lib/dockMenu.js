@@ -91,7 +91,8 @@ export const PHONE_DOCK_WINDOWS = [
 	{ key: 'objects', tooltip: 'Every object in the scene, as a tree', phone: true },
 	{ key: 'notes', tooltip: 'The scene’s notes, grouped by label', phone: true },
 	{ key: 'layouts', tooltip: 'Save and switch named workspace layouts', phone: true },
-	{ key: 'scene', tooltip: 'Sky, light, physics, grid and the rest of the scene’s settings', phone: true }
+	{ key: 'scene', tooltip: 'Sky, light, physics, grid and the rest of the scene’s settings', phone: true },
+	{ key: 'stats', tooltip: 'Scene budget: draw calls, triangles, textures and memory', phone: true }
 ];
 /**
  * 42 I6 — the floating windows the dock HOSTS on a wider screen ($lib/dockHost): the "+" offers

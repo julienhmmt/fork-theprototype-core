@@ -81,7 +81,7 @@
 	import { selectedObjects, transformMode, editorMode } from '../../stores/sceneStore';
 	import { undo, redo, canUndo, canRedo } from '$lib/history';
 	import { setTransformMode, toggleEditorMode } from '$lib/objectActions';
-	import { phoneBarTap, openPhoneTab, closePhoneTab, phoneDockShown } from '$lib/phoneDock';
+	import { phoneBarTap, openPhoneTab, closePhoneTab, phoneDockShown, phoneTabsOpen } from '$lib/phoneDock';
 	import { toggleViewportFocus } from '$lib/focusMode';
 	import { requestPlay, willEnterXR, willEnterAR, playAsItems } from '$lib/playMode';
 	import { visibleDockKey, DOCK_TITLES, dockMinimized, dockHeight } from '$lib/bottomDock';
@@ -490,7 +490,8 @@
 		add: { label: 'Add', icon: 'plus', run: () => add() },
 		// 41b H1/H5: Objects, Configure Scene and Notes are dock tabs — the bar shows / minimizes them
 		objects: { label: 'Objects', icon: 'list', run: fromMore(() => phoneBarTap('objects')), pressed: () => $visibleDockKey === 'objects' && !$dockMinimized },
-		stats: { label: 'Statistics', short: 'Stats', icon: 'gauge', run: () => toggleStats(), pressed: () => $statsOpen },
+		// 43 J1: Statistics is a dock tab too (a floating window only where undocking is allowed)
+		stats: { label: 'Statistics', short: 'Stats', icon: 'gauge', run: fromMore(() => phoneBarTap('stats')), pressed: () => ($visibleDockKey === 'stats' && !$dockMinimized) || ($statsOpen && !$phoneTabsOpen.stats) },
 		chat: {
 			label: 'Chat',
 			icon: 'message-square',
@@ -595,11 +596,6 @@
 		phoneSheet.set(null);
 		const c = canvasCenter();
 		tick().then(() => $viewportMenuOpener?.(c.x, c.y, false));
-	}
-	function toggleStats() {
-		const open = $statsOpen;
-		phoneSheet.set(null);
-		statsOpen.set(!open);
 	}
 	/** a long press / right-click on a bar item (41b H6: the way to More, and so to the bar) @param {MouseEvent} e */
 	function openMoreFromBar(e) {
