@@ -137,7 +137,11 @@ async function setupPage(browser, name, options = {}) {
 	// Absent means an unchanged URL, so every existing caller is untouched.
 	await page.goto(URL + (options.hash ?? ''), { waitUntil: 'domcontentloaded', timeout: 60000 });
 	await page.waitForTimeout(4000);
-	await page.waitForFunction(() => window.__stores && !!window.__stores.moduleSDK, { timeout: 30000 });
+	// 43-tests: a THIRD page in one browser boots in ~50 s on a loaded e2e box (two pages already
+	// rendering software GL starve it: logs/p1-probe6.log — no error, no crash, just slow), so the
+	// old 30 s cap killed every three-peer suite (invite-link-live, script-nodes) at `setupPage(C)`.
+	// This waits for the same state; it only stops calling a slow boot a dead one.
+	await page.waitForFunction(() => window.__stores && !!window.__stores.moduleSDK, { timeout: 90000 });
 	const id = await page.evaluate(
 		() => new Promise((r) => window.__stores.peers.subscribe((p) => r(p?.peer?.id))())
 	);
