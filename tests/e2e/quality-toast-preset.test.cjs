@@ -72,8 +72,14 @@ h.run(async () => {
 	await page.waitForTimeout(1200); // the notice batches a drop's writes for 400 ms
 	const c1 = await cards(page);
 	h.check(c1.length === 1 && /^Lowered .+ to keep it smooth$/.test(c1[0]), `1.1 the first drop is announced (${JSON.stringify(c1)})`);
-	const d2 = await page.evaluate(() => /** @type {any} */ (window).__qdrive(6000, 60, true));
-	h.check(d2.moves.length === 1 && d2.level > d1.level, `1.2 (premise) seconds on, the next step lowers something new (${d1.level} -> ${d2.moves.join(',')})`);
+	// 42-int: the ladder (qualityGovernorCore STEPS) lowers a NEW toggle only at levels 1 shadows, 2 resolution,
+	// 4 AO, 6 the scene look — a loaded box can land the first drive on 2, and 2 -> 3 (resolution 85 -> 72 %)
+	// rightly announces nothing new. Drive one step at a time until a step crosses a new toggle.
+	const NEW_TOGGLE = [1, 2, 4, 6];
+	const crossesNew = (/** @type {number} */ a, /** @type {number} */ b) => NEW_TOGGLE.some((l) => l > a && l <= b);
+	let d2 = await page.evaluate(() => /** @type {any} */ (window).__qdrive(6000, 60, true));
+	for (let i = 0; i < 2 && d2.moves.length === 1 && !crossesNew(d1.level, d2.level); i++) d2 = await page.evaluate(() => /** @type {any} */ (window).__qdrive(6000, 60, true));
+	h.check(d2.moves.length === 1 && crossesNew(d1.level, d2.level), `1.2 (premise) seconds on, a later step lowers something new (${d1.level} -> ${d2.moves.join(',')})`);
 	await page.waitForTimeout(1200);
 	const c2 = await cards(page);
 	console.log('cards after two drops', JSON.stringify(c1), '->', JSON.stringify(c2));
