@@ -436,14 +436,22 @@ h.run(async () => {
 		`with room on a 1280px window it stays a ROW (${JSON.stringify(placement.wide)})`
 	);
 
-	// shrink the window until there is genuinely no room, and check it stacks + aligns
-	await A.page.setViewportSize({ width: 420, height: 800 });
+	// narrow the window until there is genuinely no room, and check it stacks + aligns. NOT below
+	// 640px any more: 38 R9's phone shell takes that width over (its own bar; this cluster is
+	// display:none there — logs/r1-p-probe7.log), so 420px measured a hidden element. At 900px
+	// the undocked Connect pill (centred, ~444px) starts left of where a three-button row beside
+	// the logo would end — the same "no room" the measurement exists for, on the desktop layout.
+	await A.page.setViewportSize({ width: 900, height: 800 });
 	await A.page.waitForTimeout(700);
 	const narrow = await A.page.evaluate(() => {
 		const tools = document.querySelector('#touch-tools')?.getBoundingClientRect();
 		const logo = document.querySelector('#logo-menu')?.getBoundingClientRect();
+		const pill = document.querySelector('.connect-pill')?.getBoundingClientRect();
 		return tools && logo
 			? {
+					shell: document.documentElement.classList.contains('phone-shell'),
+					// the row would end at logo.right + 3 x 48 + 2 x 6 + the 24px gutter
+					noRoom: !!pill && pill.width > 0 && pill.left < logo.right + 3 * 48 + 2 * 6 + 24 && pill.top < logo.bottom,
 					stacked: tools.height > tools.width,
 					belowLogo: tools.y >= logo.bottom,
 					// centres of a 48px button at this inset vs the 44px HUD button at 16px
@@ -452,6 +460,7 @@ h.run(async () => {
 				}
 			: null;
 	});
+	h.check(!!narrow && !narrow.shell && narrow.noRoom, `premise: a desktop layout where the pill leaves no room for the row (${JSON.stringify(narrow)})`);
 	h.check(!!narrow?.stacked, `with no room it stacks vertically (${JSON.stringify(narrow)})`);
 	h.check(!!narrow?.belowLogo, "below the logo, not over it");
 	h.check(
@@ -540,33 +549,40 @@ h.run(async () => {
 	// out one fragment per line ("Round / Undo / , / Redo / and / Multi-select / …").
 	// A single block wrapper gives the cell ONE flex item and the inline content flows.
 	// This is a SettingRow bug, not a copy problem: every row with markup had it.
+	// 37-settings R21 moved the rows onto the kit SettingRow: the Touch tools row's description
+	// is plain text now (no markup left to break), and the kit's `.sr-desc` is a <p>, not the
+	// flex column the bug lived in. So the check goes where inline markup still IS — Settings ▸
+	// Explorer ▸ "Save name", whose description mixes <code> fragments with text — and asks the
+	// same two questions: is the description ONE flow (a non-flex block, or a flex cell with one
+	// item), and does it wrap as prose rather than one fragment per line?
 	const desc = await A.page.evaluate(async () => {
 		const w = window.__stores;
-		w.settingsSection.set('interface'); // rows only render inside an EXPANDED accordion
+		w.settingsSection.set('explorer');
 		w.settingsOpen.set(true);
 		await new Promise((r) => setTimeout(r, 1800));
-		const rows = [...document.querySelectorAll('.setting-row')];
-		const row = rows.find((r) => r.textContent.includes('Touch tools'));
-		if (!row) return { found: false, rows: rows.length };
-		const body = row.querySelector('.sr-desc-body');
+		const row = document.querySelector('#row-save-name');
+		if (!row) return { found: false, rows: document.querySelectorAll('.setting-row').length };
+		const body = row.querySelector('.sr-desc');
 		if (!body) return { found: true, wrapper: false };
+		const cs = getComputedStyle(body);
+		const flex = /flex|grid/.test(cs.display);
 		const rect = body.getBoundingClientRect();
-		const lh = parseFloat(getComputedStyle(body).lineHeight) || 16;
-		// how many INLINE fragments the description is built from — the count that used to
-		// become the line count
-		const fragments = body.querySelectorAll("strong, kbd, em, code").length;
+		const lh = parseFloat(cs.lineHeight) || 16;
+		const fragments = body.querySelectorAll('strong, kbd, em, code').length;
 		w.settingsOpen.set(false);
 		return {
 			found: true,
 			wrapper: true,
-			items: body.parentElement.childElementCount,
+			display: cs.display,
+			// a flex/grid description makes every element child its own item — the bug
+			items: flex ? body.childElementCount : 1,
 			lines: Math.round(rect.height / lh),
 			width: Math.round(rect.width),
 			fragments
 		};
 	});
-	h.check(desc.found && desc.wrapper, `the description is wrapped in one block (${JSON.stringify(desc)})`);
-	h.check(desc.items === 1, `so the flex cell has exactly ONE item (${desc.items})`);
+	h.check(desc.found && desc.wrapper, `the description is one block (${JSON.stringify(desc)})`);
+	h.check(desc.items === 1, `so it is ONE flow, not one flex item per fragment (${desc.items}, display ${desc.display})`);
 	h.check(desc.fragments >= 2, `and the row really does mix inline markup (premise: ${desc.fragments})`);
 	h.check(
 		desc.lines <= 4,

@@ -140,8 +140,10 @@ async function setupPage(browser, name, options = {}) {
 	// 43-tests: a THIRD page in one browser boots in ~50 s on a loaded e2e box (two pages already
 	// rendering software GL starve it: logs/p1-probe6.log — no error, no crash, just slow), so the
 	// old 30 s cap killed every three-peer suite (invite-link-live, script-nodes) at `setupPage(C)`.
-	// This waits for the same state; it only stops calling a slow boot a dead one.
-	await page.waitForFunction(() => window.__stores && !!window.__stores.moduleSDK, { timeout: 90000 });
+	// This waits for the same state; it only stops calling a slow boot a dead one. The options are
+	// the THIRD argument: passed second (as this line did) they are the page-function's `arg`, and
+	// Playwright's default 30 s applied whatever the number said.
+	await page.waitForFunction(() => window.__stores && !!window.__stores.moduleSDK, null, { timeout: 90000 });
 	const id = await page.evaluate(
 		() => new Promise((r) => window.__stores.peers.subscribe((p) => r(p?.peer?.id))())
 	);
@@ -585,6 +587,9 @@ async function leavePlay(peer) {
 function run(body) {
 	body().catch((error) => {
 		console.error('SCRIPT FAILED:', error.message);
+		// which line of which suite/helper threw — a Playwright timeout message alone does not say
+		const at = String(error?.stack ?? '').split('\n').filter((l) => /\.cjs:\d+/.test(l)).slice(0, 4);
+		if (at.length) console.error(at.join('\n'));
 		process.exit(1);
 	});
 }

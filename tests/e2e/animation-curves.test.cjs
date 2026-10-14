@@ -307,6 +307,16 @@ h.run(async () => {
 			ap.play(uuid);
 		}
 		await new Promise((r) => setTimeout(r, 400));
+		// posing and the playhead readout happen PER RENDERED FRAME, and a loaded e2e box draws
+		// software GL at ~4 fps (frames ~250 ms apart: 43-tests logs/p1-probe4.log), so 400 ms
+		// after Play there may have been one frame, at t≈0. Wait (bounded) until both objects
+		// have been driven; one never driven still reads as not moved below.
+		const driven = () => {
+			let hd;
+			ap.playheads.subscribe((v) => (hd = v))();
+			return ids.every((uuid) => g.getObjectByProperty('uuid', uuid).position.y > 0.01 && (hd[uuid] ?? 0) > 0);
+		};
+		for (let waited = 0; waited < 5000 && !driven(); waited += 50) await new Promise((r) => setTimeout(r, 50));
 		let pb;
 		ap.playback.subscribe((v) => (pb = v))();
 		let heads;

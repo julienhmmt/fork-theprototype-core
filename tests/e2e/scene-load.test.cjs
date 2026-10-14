@@ -135,7 +135,7 @@ h.run(async () => {
 	const fresh = async ({ keepRestore = false } = {}) => {
 		if (cdp) await throttle(1).catch(() => {});
 		await page.reload({ waitUntil: 'domcontentloaded' });
-		await page.waitForFunction(() => window.__stores && !!window.__stores.moduleSDK, { timeout: 60000 });
+		await page.waitForFunction(() => window.__stores && !!window.__stores.moduleSDK, null, { timeout: 60000 });
 		await page.waitForTimeout(1500);
 		await page.evaluate(PROBE);
 		if (!keepRestore) await page.evaluate(() => window.__stores.autosave.dismissRestore());
