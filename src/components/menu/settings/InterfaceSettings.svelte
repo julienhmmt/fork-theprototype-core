@@ -241,7 +241,7 @@
 		<SettingRow id="row-tours-reset" label="Reset tours" description="Forgets which tours you have seen and turns automatic tours back on.">
 			<Button id="setting-tours-reset" size="sm" variant="outline" onclick={resetAllTours}>Reset</Button>
 		</SettingRow>
-		<SettingRow id="row-tips-reset" label="Reset tips" description="Shows the small how-to tips you closed with their × again.">
+		<SettingRow id="row-tips-reset" label="Reset tips" description="Shows the small how-to tips again — each one hides itself once you have done what it explains.">
 			<Button id="setting-tips-reset" size="sm" variant="outline" disabled={!$dismissedTips.length} onclick={resetTips}>Reset</Button>
 		</SettingRow>
 	</Section>

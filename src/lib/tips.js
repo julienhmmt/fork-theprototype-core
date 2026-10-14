@@ -1,5 +1,6 @@
-// 43 J9 — DISMISSIBLE TIPS. A tip is a one-line how-to the app shows until the person closes it
-// with its ×; the dismissal is remembered on this device, and Settings ▸ Interface ▸ "Reset tips"
+// 43 J9 — TIPS THAT RETIRE THEMSELVES. A tip is a one-line how-to the app shows until the person has
+// DONE what it explains (orchestrator, roadmap 43: no ×) — the More sheet's drag tip retires on the
+// first bar edit. The retirement is remembered on this device, and Settings ▸ Interface ▸ "Reset tips"
 // brings every tip back (the "Reset tours" row's sibling). LOCAL: a tip is guidance for whoever is
 // holding this screen, so it never replicates, never saves into a scene and never undoes.
 //
@@ -27,7 +28,7 @@ dismissedTips.subscribe((ids) => {
 	else safeStorage.removeItem(KEY);
 });
 
-/** close a tip for good (until Reset tips) @param {string} id */
+/** retire a tip for good (until Reset tips) @param {string} id */
 export function dismissTip(id) {
 	dismissedTips.update((ids) => (ids.includes(id) ? ids : [...ids, id]));
 }

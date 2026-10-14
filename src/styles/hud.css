@@ -607,3 +607,11 @@
 	max-width: 100%;
 	text-align: center;
 }
+/* 43 J11: a top-right group with nothing in it draws NO empty glass square. Its children are the
+   natives Users.svelte places (notes, the bell, the peers trigger — the trigger only while someone is
+   connected) and Controls' portal wrapper (`[data-toolbar-portal]`, display: contents) holding any other
+   button placed there; with none of either the box goes. In Edit positions the wrapper holds the
+   group's placeholders and its "+", so the group is always there as a drop / add target. */
+#hud-tr:not(:has(> :not([data-toolbar-portal]))):not(:has(> [data-toolbar-portal] > *)) {
+	display: none;
+}

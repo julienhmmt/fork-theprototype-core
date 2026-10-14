@@ -172,6 +172,38 @@ h.run(async () => {
 			await shot(P, `j2-more-back-${theme}`);
 		}
 
+		if (want('j11')) {
+			// ---- J11: Edit positions empties the top-right group → no empty glass box left of the profile ----
+			const shown = (sel) => P.evaluate((s) => { const el = document.querySelector(s); return !!el && el.getClientRects().length > 0 && el.getBoundingClientRect().width > 0; }, sel);
+			h.check(await shown('#hud-tr'), T + 'premise: the top-right group is drawn (notes, notifications)');
+			await enterEdit(P);
+			for (let i = 0; i < 4; i++) {
+				const rm = P.locator('#hud-tr [data-edit-wrap] .hud-edit-remove').first();
+				if (!(await rm.count())) break;
+				await clickAt(P, rm);
+			}
+			h.check((await P.locator('#hud-tr [data-edit-wrap]').count()) === 0, T + 'premise: every top-right placeholder removed');
+			h.check((await shown('#hud-tr')) && (await P.locator('#hud-tr .hud-edit-add').count()) === 1, T + 'J11: in Edit positions the emptied group still shows, as a "+" target');
+			await shot(P, `j11-edit-empty-${theme}`);
+			await clickAt(P, P.locator('#toolbar-edit-apply'));
+			const tr = await stored(P);
+			h.check(Array.isArray(tr?.top) && tr.top.length === 0, T + `premise: the record holds an empty top-right group (${JSON.stringify(tr?.top)})`);
+			h.check(!(await shown('#hud-tr')), T + 'J11: applied, the empty group draws NO box left of the profile');
+			const avatar = await rect(P, '#avatar-menu');
+			const hit = await P.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('#hud-tr'), [avatar.left - 40, avatar.top + avatar.height / 2]);
+			h.check(!hit, T + 'J11: …nothing of it is left where it was');
+			await shot(P, `j11-empty-${theme}`);
+			// back in Edit positions it is a target again; "+" puts Scene notes back
+			await enterEdit(P);
+			h.check(await shown('#hud-tr'), T + 'J11: Edit positions shows the group again');
+			await clickAt(P, P.locator('#hud-tr .hud-edit-add'));
+			await P.locator('[role="menu"] [role="menuitem"]', { hasText: 'Scene notes' }).first().click();
+			await P.waitForTimeout(300);
+			await clickAt(P, P.locator('#toolbar-edit-apply'));
+			h.check((await shown('#hud-tr')) && (await shown('#notes-toggle')), T + 'J11: with a button placed again the group is back');
+			await setBar(P, null, A);
+		}
+
 		if (want('j8menu')) {
 			// ---- J8: no browser context menu anywhere on the toolbar box — a grid of right-clicks --------
 			// the points: EVERY gap between two cells (top, middle, bottom of the row), the bar's padding
@@ -535,16 +567,45 @@ h.run(async () => {
 			await P.locator('#ps-more').tap();
 			await P.waitForTimeout(600);
 			h.check(await P.locator('#ps-more-hint').isVisible(), T + 'premise: More shows "Hold and drag items…"');
-			const x = P.locator('#ps-more-hint-close');
-			h.check((await x.count()) === 1 && (await x.isVisible()), T + 'J9: the tip carries an ×');
-			const box = await x.boundingBox();
-			h.check(!!box && box.width >= 40 && box.height >= 40, T + `J9: …a finger-sized one (${box && Math.round(box.width)}×${box && Math.round(box.height)})`);
+			h.check((await P.locator('#ps-more-hint button').count()) === 0, T + 'J9: the tip has no × (it retires by itself)');
 			await shot(P, `j9-tip-${theme}`);
-			await x.tap();
+			// a bar change that is not the person's (a workspace layout writing the bar) leaves it
+			await P.evaluate(() => window.__stores.phoneBar.setBar(['add', 'objects', 'play', 'explorer', 'more']));
 			await P.waitForTimeout(300);
-			h.check((await P.locator('#ps-more-hint').count()) === 0, T + 'J9: tapping × closes the tip');
-			h.check((await P.evaluate(() => localStorage.getItem('tipsDismissed') ?? '')).includes('phone-more-drag'), T + 'J9: …and remembers it');
-			await shot(P, `j9-tip-closed-${theme}`);
+			h.check(await P.locator('#ps-more-hint').isVisible(), T + 'J9: a bar written by the app (not an edit) keeps the tip');
+			// the person drags a More tile onto the bar (REAL touch): the tip has done its job
+			const cdp = await P.context().newCDPSession(P);
+			const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }] });
+			await P.evaluate(() => { window.__stores.toastStore.set([]); window.__stores.phoneShell.setPhoneDetent('more', 'half'); });
+			await P.waitForTimeout(400);
+			const pts = await P.evaluate(() => {
+				const tile = document.querySelector('#ps-more-sheet [data-more-item="stats"]') ?? document.querySelector('#ps-more-sheet [data-more-item]');
+				tile.scrollIntoView({ block: 'center' });
+				const t = tile.getBoundingClientRect();
+				const items = [...document.querySelectorAll('#ps-bar [data-bar-item]')].map((el) => el.getBoundingClientRect());
+				return { key: tile.dataset.moreItem, from: { x: t.x + t.width / 2, y: t.y + t.height / 2 }, to: { x: (items[0].right + items[1].left) / 2, y: items[0].top + items[0].height / 2 } };
+			});
+			const before = await P.evaluate(() => [...document.querySelectorAll('#ps-bar [data-bar-item]')].map((b) => b.dataset.barItem));
+			await touch('touchStart', pts.from.x, pts.from.y);
+			await P.waitForTimeout(650);
+			for (let i = 1; i <= 14; i++) {
+				await touch('touchMove', pts.from.x + ((pts.to.x - pts.from.x) * i) / 14, pts.from.y + ((pts.to.y - pts.from.y) * i) / 14);
+				await P.waitForTimeout(25);
+			}
+			await P.waitForTimeout(120);
+			await touch('touchEnd');
+			await P.waitForTimeout(600);
+			const after = await P.evaluate(() => [...document.querySelectorAll('#ps-bar [data-bar-item]')].map((b) => b.dataset.barItem));
+			h.check(after.includes(pts.key) && !before.includes(pts.key), T + `premise: a finger dragged "${pts.key}" from More onto the bar (${before.join()} → ${after.join()})`);
+			if ((await P.evaluate(() => window.__stores.phoneShell && (() => { let v; window.__stores.phoneShell.phoneSheet.subscribe((x) => (v = x))(); return v; })())) !== 'more') {
+				await P.locator('#ps-more').tap();
+				await P.waitForTimeout(600);
+			}
+			h.check((await P.locator('#ps-more-hint').count()) === 0, T + 'J9: after the first bar edit the tip is gone');
+			h.check((await P.evaluate(() => localStorage.getItem('tipsDismissed') ?? '')).includes('phone-more-drag'), T + 'J9: …and remembered');
+			await shot(P, `j9-tip-retired-${theme}`);
+			await P.evaluate(() => window.__stores.phoneShell.phoneSheet.set(null));
+			await P.waitForTimeout(300);
 			await h.freshReload(A);
 			await P.locator('#restore-session-dismiss').tap({ timeout: 4000 }).catch(() => {});
 			await P.locator('#ps-more').tap();
@@ -563,7 +624,7 @@ h.run(async () => {
 			await reset.scrollIntoViewIfNeeded().catch(() => {});
 			await reset.tap();
 			await P.waitForTimeout(300);
-			h.check((await P.evaluate(() => localStorage.getItem('tipsDismissed'))) === null && (await reset.isDisabled()), T + 'J9: Reset tips forgets the closed tips (and greys out)');
+			h.check((await P.evaluate(() => localStorage.getItem('tipsDismissed'))) === null && (await reset.isDisabled()), T + 'J9: Reset tips forgets the retired tips (and greys out)');
 			await P.evaluate(() => window.__stores.settingsOpen.set(false));
 			await P.waitForTimeout(500);
 			await P.locator('#ps-more').tap();
