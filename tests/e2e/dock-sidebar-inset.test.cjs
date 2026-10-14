@@ -18,10 +18,11 @@ h.run(async () => {
 		const win = document.querySelector('#object-list');
 		window.__stores.closeMenu.set(true); // menu closed -> no sidebar
 		await new Promise((r) => setTimeout(r, 120));
-		const closedLeft = parseFloat(win.style.left) || 0;
+		// 42 I3: the column's x is a CSS var now (--sb-left-x), so read the rendered edge
+		const closedLeft = win.getBoundingClientRect().left;
 		window.__stores.closeMenu.set(false); // menu open -> sidebar shown
 		await new Promise((r) => setTimeout(r, 200));
-		const openLeft = parseFloat(win.style.left) || 0;
+		const openLeft = win.getBoundingClientRect().left;
 		const sb = document.querySelector('.app-sidebar');
 		const sbRight = sb ? sb.getBoundingClientRect().right : 0;
 		return { docked: win.dataset.docked, closedLeft, openLeft, sbRight };

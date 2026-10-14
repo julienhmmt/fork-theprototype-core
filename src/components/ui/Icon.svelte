@@ -190,6 +190,7 @@
 		Type,
 		Undo2,
 		Ungroup,
+		UnfoldVertical, // 42 I2: a sidebar's Full-height pin
 		Unlink,
 		Upload,
 		UserLock,
@@ -404,6 +405,7 @@
 		type: Type,
 		'undo-2': Undo2,
 		ungroup: Ungroup,
+		'unfold-vertical': UnfoldVertical,
 		unlink: Unlink,
 		upload: Upload,
 		'user-lock': UserLock,

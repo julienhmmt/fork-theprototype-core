@@ -28,6 +28,10 @@
 }
 /* a bottom-docked view: flush with the screen edges, the dock's top line only */
 .tp-dock-panel {
+	/* 42 I2: a FULL-HEIGHT sidebar ($lib/sidebars) runs to the bottom edge, and the dock gets narrower
+	   by its width — the dock sits beside it, never under it (0px whenever no side is pinned) */
+	left: var(--sb-dock-left, 0px);
+	right: var(--sb-dock-right, 0px);
 	background: var(--surface-1);
 	color: var(--text);
 	border: 0;
@@ -459,4 +463,25 @@
 	background: var(--accent);
 	box-shadow: 0 0 0 1px var(--surface-1);
 	pointer-events: none;
+}
+
+/* 42 I3 — ONE SIDEBAR PER SIDE ($lib/sidebars): only the tab in front of a side's column renders */
+[data-sidebar-hidden] {
+	display: none !important;
+}
+/* the drop highlight while a window or a sidebar tab is dragged to a side: the whole column when
+   the drop adds a tab to it, the edge band when it opens the column */
+.sb-drop-zone {
+	position: fixed;
+	z-index: calc(var(--z-chrome) + 2);
+	pointer-events: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in srgb, var(--accent) 22%, transparent);
+	border: 2px dashed var(--accent);
+	border-radius: var(--radius-window);
+	color: var(--text);
+	font-size: var(--fs-desc);
+	font-weight: 600;
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { geometry as sidebarGeometry } from '$lib/sidebars'; // 42 I2
 	import { micActive, pttActive, toggleMic, speakingPeers } from '$lib/voiceChat';
 	import { peerColor } from '$lib/lockControl';
 	import Icon from '../ui/Icon.svelte';
@@ -163,6 +164,13 @@
 		}
 	});
 
+	// 42 I2: a FULL-HEIGHT sidebar slides the corner chrome inward (a 0.2 s CSS transition) —
+	// measure where it ENDS, not where it is mid-slide
+	$effect(() => {
+		$sidebarGeometry; // track
+		const t = setTimeout(measureDock, 260);
+		return () => clearTimeout(t);
+	});
 	// re-measure after any layout-affecting change (state, drawer, viewport)
 	$effect(() => {
 		connState; // track content-width changes

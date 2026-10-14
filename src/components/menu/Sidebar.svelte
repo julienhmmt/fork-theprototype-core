@@ -362,7 +362,11 @@
 	   scoped rule beats every utility — which theme.css's !important remap used to hide) */
 	.burger {
 		top: 8px;
-		left: 8px;
+		/* 42 I2: a FULL-HEIGHT left sidebar takes the corner — the logo slides inward by its width */
+		left: calc(8px + var(--sb-dock-left, 0px));
+		transition:
+			left 0.2s ease,
+			transform 150ms;
 		/* .burger is position:absolute in menu.css — that already anchors .update-dot */
 	}
 	/* unseen-update cue: a small accent dot on the logo corner + on the menu row */
@@ -398,7 +402,9 @@
 		   LARGE viewport (100vh), and a docked bar or a phone's URL bar left the last rows
 		   below the screen where no swipe could bring them back */
 		top: var(--side-top, 64px);
-		left: 8px;
+		/* 42 I2: opens from the logo — beside a full-height left sidebar, and on --z-popover, above
+		   every sidebar either way */
+		left: calc(8px + var(--sb-dock-left, 0px));
 		z-index: var(--z-popover);
 		/* size to the widest row so wider-font themes (e.g. 8-bit) never overflow
 		   the panel and overlap the scene; clamped so it stays compact */
