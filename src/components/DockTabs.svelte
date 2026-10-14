@@ -112,7 +112,7 @@
 	 * @param {string} key @param {number} x @param {number} y @param {boolean} out @param {string|null} join
 	 */
 	function paintOut(key, x, y, out, join) {
-		const side = out && !join && !$phoneShell && canDockFloating(key) ? sideAt(x, y) : null;
+		const side = out && !join && !$phoneShell && canDockFloating(key) ? sideAt(x, y, { except: key }) : null;
 		sideKey = side;
 		if (side) showDropTarget({ kind: 'side', side, tab: sideOpen(side, key) }, { id: 'dock-tab-side-zone' });
 		else if (out && !join && canUndockTab(key)) showDropTarget({ kind: 'float', x: Math.max(0, x - 120), y: Math.max(0, y - 12), w: 360, h: 280 }, { id: 'dock-tab-side-zone' });

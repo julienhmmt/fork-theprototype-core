@@ -273,8 +273,10 @@ export function dockTabItems(key) {
 			tooltip: `Take ${title} out of the dock`,
 			action: () => armDockMode(key, false)
 		});
-	// 43 J4: any dock tab can move into a sidebar column on a wider screen (the phone has none)
-	if (!get(phoneShell) && canDockFloating(key) && sideMover)
+	// 43 J4: any dock tab can move into a sidebar column on a wider screen (the phone has none; a
+	// touch screen keeps windows out of the side columns — docking.js stands down on a coarse pointer)
+	const coarse = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
+	if (!get(phoneShell) && !coarse && canDockFloating(key) && sideMover)
 		for (const side of /** @type {const} */ (['left', 'right']))
 			items.push({
 				label: `Move to the ${side} sidebar`,

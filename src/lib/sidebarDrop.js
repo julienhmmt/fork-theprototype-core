@@ -45,15 +45,19 @@ export function sideOpen(side, except) {
 }
 
 /**
- * Which side's column is the pointer over? Over the column's box when the side is open, over the
- * box it WOULD open as when it is empty (same width, from the edge) — plus the edge band either way.
- * @param {number} x @param {number} y @returns {Side|null}
+ * Which side's column is the pointer over? Over the column's box when the side is open, and the
+ * edge band either way. `emptyBox` also counts the box an EMPTY side would open as (same width, from
+ * the edge) — a sidebar TAB heading for the other side gets that generous reach (42 I3's half-screen
+ * drag, kept inside a column's width); a bottom-dock tab or a floating window, whose likelier wish in
+ * the viewport is to float, reaches an empty side at its edge only (docking.js's 44px rule).
+ * @param {number} x @param {number} y @param {{emptyBox?: boolean, except?: string}} [opts] @returns {Side|null}
  */
-export function sideAt(x, y) {
+export function sideAt(x, y, opts = {}) {
 	for (const side of /** @type {Side[]} */ (['left', 'right'])) {
 		const { x0, w, top } = columnBox(side);
 		const onEdge = side === 'left' ? x < EDGE : x > window.innerWidth - EDGE;
-		if (onEdge || (x >= x0 && x <= x0 + w && y >= top)) return side;
+		const box = opts.emptyBox || sideOpen(side, opts.except);
+		if (onEdge || (box && x >= x0 && x <= x0 + w && y >= top)) return side;
 	}
 	return null;
 }
@@ -71,7 +75,7 @@ export function tabDropTarget({ x, y, key, from, canFloat, canDock, size }) {
 		const dockTop = window.innerHeight - Math.max(EDGE, get(bottomInset) || 0);
 		if (inBottomBand(y) || y >= dockTop) return { kind: 'dock', strip: null };
 	}
-	const side = sideAt(x, y);
+	const side = sideAt(x, y, { emptyBox: true, except: key });
 	if (side === from) return null; // its own column: it stays
 	if (side) return { kind: 'side', side, tab: sideOpen(side, key) };
 	if (!canFloat) return null;
