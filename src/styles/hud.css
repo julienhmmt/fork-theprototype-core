@@ -268,6 +268,20 @@
 		bottom: calc(var(--hud-stack-lift, 0px) + 74px + var(--hud-stack-right-n, 2) * (var(--hud-fab) + 4px) + 4px);
 	}
 }
+/* 43 J5: lifted, a stack also keeps clear of a PINNED (full-height) sidebar on its side — it slides
+   inward by the column's width, and the sim transport riding the right stack with it.
+   `--sb-dock-left/-right` is a pinned, shown column's width, else 0px ($lib/sidebars publishes it),
+   and the vertical lift is the dock's VISIBLE height (`--bottom-inset` reads 0 while the dock is
+   hidden or minimized), so a hidden dock drops the stacks back to the floor beside the sidebar. */
+:root.hud-stacks-lifted .hud-stack-left {
+	left: calc(16px + var(--sb-dock-left, 0px));
+}
+:root.hud-stacks-lifted .hud-stack-right {
+	right: calc(16px + var(--sb-dock-right, 0px));
+}
+:root.hud-stacks-lifted #sim-controls {
+	right: calc(16px + var(--sb-dock-right, 0px));
+}
 .hud-edit-item {
 	position: relative;
 	touch-action: none;
