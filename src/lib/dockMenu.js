@@ -272,6 +272,14 @@ export function dockTabItems(key) {
 			tooltip: `Take ${title} out of the dock`,
 			action: () => armDockMode(key, false)
 		});
+	// 43 J4: any dock tab can move into a sidebar column on a wider screen (the phone has none)
+	if (!get(phoneShell) && canDockFloating(key) && sideMover)
+		for (const side of /** @type {const} */ (['left', 'right']))
+			items.push({
+				label: `Move to the ${side} sidebar`,
+				tooltip: `Dock ${title} in the ${side} sidebar, as one of its tabs`,
+				action: () => moveToSidebar(key, side)
+			});
 	// 42 I14: focus mode's touch/pointer way in for a docked window — the tab fills the window
 	items.push({
 		label: 'Maximize (focus mode)',
@@ -284,6 +292,21 @@ export function dockTabItems(key) {
 		action: () => closeDockView(key)
 	});
 	return items;
+}
+
+/**
+ * 43 J4 — how a dock tab moves to a SIDEBAR column: docking.js registers `dockToSide` (it reaches
+ * this module through bottomDockDrop, so the seam runs this way round).
+ * @type {((key: string, side: 'left'|'right') => boolean) | null}
+ */
+let sideMover = null;
+/** @param {((key: string, side: 'left'|'right') => boolean) | null} fn */
+export function registerSideMover(fn) {
+	sideMover = fn;
+}
+/** move a window into a sidebar column (false: it cannot live there) @param {string} key @param {'left'|'right'} side */
+export function moveToSidebar(key, side) {
+	return !!sideMover?.(key, side);
 }
 
 /**

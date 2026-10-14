@@ -191,9 +191,12 @@ const isCoarse = () =>
  *   `wants()` was false on every move and Flow Code could not be docked by drag at all.
  */
 export function bottomDockable(node, { key }) {
+	// 43 J4: every window that can be a bottom-dock tab can be a SIDEBAR tab too — docking.js's edge
+	// action rides along (it stands itself down on a coarse pointer, and twice-wired is once)
+	const side = canDockFloating(key) ? (sideDockable?.(node, { key }) ?? null) : null;
 	// 42 I6: every floating window that can be a dock tab (FLOAT_DOCKABLE — the hosted ones too);
 	// the posture is asked per gesture, since a window can outlive a fold
-	if (isCoarse() || !canDockFloating(key)) return { destroy() {} };
+	if (isCoarse() || !canDockFloating(key)) return { destroy: () => side?.destroy() };
 
 	let dragging = false;
 	// THE VERDICT IS TAKEN ON THE LAST MOVE, NEVER RE-DERIVED AT THE DROP. Three modules
@@ -205,6 +208,7 @@ export function bottomDockable(node, { key }) {
 	// agree with the feedback the user was looking at, which is the honest contract.
 	/** @type {null | {strip: ReturnType<typeof dockStripTarget>} | {band: true}} */
 	let armed = null;
+	let stripGhost = false;
 	/** @param {any} e */
 	const down = (e) => {
 		if (!isHeaderDrag(e.target) || e.button !== 0) return; // 36 F4: not on a header control
@@ -233,7 +237,10 @@ export function bottomDockable(node, { key }) {
 		armed = verdict(e);
 		const strip = armed && 'strip' in armed ? armed.strip : null;
 		showDockCaret(strip);
-		ghostWindows([node], !!strip);
+		// 43 J4: only take back a ghost THIS target made — the side-dock target (docking.js, the same
+		// gesture) ghosts the window too, and a blanket clear here un-ghosted it on every move
+		if (strip || stripGhost) ghostWindows([node], !!strip);
+		stripGhost = !!strip;
 		showZone(!!armed && 'band' in armed);
 	};
 	const up = () => {
@@ -269,6 +276,18 @@ export function bottomDockable(node, { key }) {
 			window.removeEventListener('pointerup', up);
 			window.removeEventListener('pointercancel', cancel);
 			if (dragging) cancel();
+			side?.destroy();
 		}
 	};
+}
+
+/**
+ * 43 J4 — docking.js's edge-dock action, registered here at its module load (it imports this
+ * module, so the seam runs this way round): `bottomDockable` wires it on every window it wires.
+ * @type {((node: any, opts: {key: string}) => {destroy(): void}) | null}
+ */
+let sideDockable = null;
+/** @param {((node: any, opts: {key: string}) => {destroy(): void}) | null} fn */
+export function setSideDockable(fn) {
+	sideDockable = fn;
 }

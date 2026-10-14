@@ -1,8 +1,14 @@
+import { get } from 'svelte/store';
 import { isHeaderDrag } from './windowGrip';
-import { bottomDockWouldTake } from './bottomDockDrop';
+import { bottomDockWouldTake, setSideDockable, ghostWindows } from './bottomDockDrop';
 import { safeStorage } from './safeStorage';
 import { onLayoutRestore } from './uiLayoutsCore';
 import { reportMember, sidebarShown, sidebarTabs, setDockMover, activateSidebarTab } from './sidebars';
+import { showDropTarget } from './sidebarDrop';
+import { canDockFloating, armDockMode, dockOccupants, forgetDockTab, HOSTED_DOCK_TABS } from './bottomDock';
+import { hostedDocked, setHostedDocked } from './dockHost';
+import { registerSideMover } from './dockMenu';
+import { groupOfKey, removeFromGroup } from './windowTabs';
 
 // Docking lite (phase 81L). Drag a window near the left/right screen edge to dock it as a
 // full-height panel (--z-chrome tier); drag its header away to float it again.
@@ -18,6 +24,15 @@ import { reportMember, sidebarShown, sidebarTabs, setDockMover, activateSidebarT
 // Inspector was open. Dropping a window on an occupied edge (or on the column itself) now adds
 // a tab; a stored 81.4 pair restores as two tabs, and its old `dockSplit:<side>` share is
 // simply no longer read.
+//
+// 43 J4 — ANY DOCKABLE WINDOW CAN BE A SIDEBAR TAB. `use:dockable` used to be wired on three
+// windows (Objects, the Node editor, the Explorer); every window that can be a bottom-dock tab
+// (FLOAT_DOCKABLE: the nine editors with a docked layout and the five hosted windows) is
+// side-dockable now through ONE seam — `bottomDockable` (bottomDockDrop.js) also runs this action
+// (`setSideDockable` below), so no window component had to change. A window moves between the two
+// docks through `dockToSide` (out of the bottom dock first) and the sidebar tab's "Move to the
+// bottom dock" (undock here, then the bottom dock's own arm). The drag feedback is the one drop
+// model's ($lib/sidebarDrop), painted above every panel.
 
 const EDGE = 44; // px from a screen edge that counts as a dock drop
 
@@ -122,6 +137,7 @@ function dock(key, side) {
 	}
 	if (from) docked[from] = docked[from].filter((k) => k !== key);
 	else rememberFloat(entry);
+	if (!from && groupOfKey(key)) removeFromGroup(key); // a tab group member leaves it for the column
 	docked[side] = [...docked[side].filter((k) => k !== key), key];
 	persist();
 	apply(key);
@@ -131,6 +147,54 @@ function dock(key, side) {
 
 // the sidebar tab drag moves a docked window to the other side
 setDockMover((key, side) => (sideOf(key) ? dock(key, side) : false));
+
+/** is this window a bottom-dock tab right now (docked AND open there)? @param {string} key */
+function inBottomDock(key) {
+	if (HOSTED_DOCK_TABS.includes(key)) return !!get(hostedDocked)[key];
+	return !!get(dockOccupants)[key]?.present;
+}
+
+/**
+ * 43 J4 — put a window in a side's column, from wherever it is: floating (a plain dock), already on
+ * a side (a move), or a BOTTOM-DOCK tab — which leaves the bottom dock first. A hosted window
+ * (Objects, Statistics, …) keeps one element, so it docks the moment it leaves the bottom frame; an
+ * editor re-renders its floating layout when it leaves the bottom dock (`armDockMode`), and that
+ * window docks itself here as it mounts, because its side is written down FIRST (`apply` on mount).
+ * @param {string} key @param {'left'|'right'} side @returns {boolean}
+ */
+export function dockToSide(key, side) {
+	if (!canDockFloating(key) || isCoarse()) return false;
+	if (inBottomDock(key)) {
+		if (HOSTED_DOCK_TABS.includes(key)) setHostedDocked(key, false);
+		else {
+			for (const s of /** @type {const} */ (['left', 'right'])) docked[s] = docked[s].filter((k) => k !== key);
+			docked[side] = [...docked[side], key];
+			persist();
+			forgetDockTab(key);
+			armDockMode(key, false);
+			return true;
+		}
+	}
+	if (registry.has(key)) return dock(key, side);
+	// not mounted (closed): remembered for when it opens
+	for (const s of /** @type {const} */ (['left', 'right'])) docked[s] = docked[s].filter((k) => k !== key);
+	docked[side] = [...docked[side], key];
+	persist();
+	return true;
+}
+registerSideMover(dockToSide);
+
+/**
+ * 43 J4 — the size a side-docked window will float at (where it floated before it joined the
+ * column), for the "Float here" highlight. null = not docked / never floated.
+ * @param {string} key @returns {{w: number, h: number}|null}
+ */
+export function floatSizeOf(key) {
+	const r = registry.get(key)?.prevRect;
+	const w = parseFloat(r?.width);
+	const h = parseFloat(r?.height);
+	return Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0 ? { w, h } : null;
+}
 
 /** @param {string} key @param {number=} x @param {number=} y */
 export function undock(key, x, y) {
@@ -186,32 +250,13 @@ onLayoutRestore(() => {
 	if (!isCoarse()) applyAll();
 });
 
-/** the column a drop would join: the edge band, or anywhere over a SHOWN column
- * @type {any} */ let zoneEl = null;
-/** @param {{side: 'left'|'right', column: boolean} | null} target */
-function showZone(target) {
-	if (!target) {
-		zoneEl?.remove();
-		zoneEl = null;
-		return;
-	}
-	if (!zoneEl) {
-		zoneEl = document.createElement('div');
-		zoneEl.id = 'dock-zone';
-		zoneEl.className = 'sb-drop-zone';
-		document.body.appendChild(zoneEl);
-	}
-	const { side, column } = target;
-	zoneEl.dataset.side = side;
-	zoneEl.dataset.tab = column ? 'true' : 'false';
-	// an occupied side highlights its whole column (the window becomes one of its tabs); an
-	// empty one shows the edge band the column will open from
-	zoneEl.style.top = `var(--sb-${side}-top, 64px)`;
-	zoneEl.style.bottom = `var(--sb-${side}-bottom, 0px)`;
-	zoneEl.style.width = column ? `var(--sb-${side}-w, 320px)` : '80px';
-	zoneEl.style.left = side === 'left' ? (column ? 'var(--sb-left-x, 0px)' : '0px') : 'auto';
-	zoneEl.style.right = side === 'right' ? '0px' : 'auto';
-	zoneEl.textContent = column ? 'Add as tab' : '';
+/** the column a drop would join: the edge band, or anywhere over a SHOWN column. 43 J4: painted by
+ * the one drop model ($lib/sidebarDrop) — above every panel and the dragged window, which goes
+ * see-through while it is over a target (41 G7's ghost) — so a drop on an open sidebar is never silent.
+ * @param {{side: 'left'|'right', column: boolean} | null} target @param {any=} node */
+function showZone(target, node) {
+	showDropTarget(target ? { kind: 'side', side: target.side, tab: target.column } : null, { id: 'dock-zone' });
+	ghostWindows([node], !!target);
 }
 
 // touch / limited-width devices: edge side-docking is disabled — there isn't the
@@ -228,6 +273,8 @@ sidebarTabs.subscribe((v) => (tabsNow = v));
  * @param {any} node @param {{key: string}} options
  */
 export function dockable(node, { key }) {
+	// 43 J4: a window may be wired twice (its own `use:dockable` + bottomDockable's seam) — once is enough
+	if (registry.get(key)?.node === node) return { destroy() {} };
 	/** @type {any} */
 	const entry = { node, prevRect: null, present: false, observer: null };
 	registry.set(key, entry);
@@ -237,7 +284,7 @@ export function dockable(node, { key }) {
 	if (isCoarse()) {
 		return {
 			destroy() {
-				registry.delete(key);
+				if (registry.get(key) === entry) registry.delete(key);
 			}
 		};
 	}
@@ -302,7 +349,7 @@ export function dockable(node, { key }) {
 	/** @param {any} e */
 	const move = (e) => {
 		if (!dragging) return;
-		showZone(targetAt(e));
+		showZone(targetAt(e), node);
 	};
 	/** @param {any} e */
 	const up = (e) => {
@@ -318,13 +365,19 @@ export function dockable(node, { key }) {
 
 	return {
 		destroy() {
+			if (dragging) showZone(null);
 			node.removeEventListener('pointerdown', down, true);
 			window.removeEventListener('pointermove', move);
 			window.removeEventListener('pointerup', up);
 			entry.observer?.disconnect();
+			// a member that unmounts is no longer a tab (its persisted side survives for its return) —
+			// unless a fresh instance of the same window has already taken its key
+			if (registry.get(key) !== entry) return;
 			registry.delete(key);
-			// a member that unmounts is no longer a tab (its persisted side survives for its return)
 			if (sideOf(key)) reportMember(key, sideOf(key), false);
 		}
 	};
 }
+
+// 43 J4: every bottom-dockable window is side-dockable (bottomDockDrop's seam)
+setSideDockable(dockable);

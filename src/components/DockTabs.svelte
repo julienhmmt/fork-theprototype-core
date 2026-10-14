@@ -41,7 +41,9 @@
 	// what the tab's right-click menu already offered in words, which is what keeps the
 	// feature reachable on a device that cannot drag.
 	import { dockTabs, bottomDockActive, activateDock, dockMinimized, reorderDockTabs, armDockMode, undockButtonMode } from '$lib/bottomDock';
-	import { dockAddItems, dockTabItems, closeDockView, undockFromDock, undockInto, canUndockTab } from '$lib/dockMenu';
+	import { dockAddItems, dockTabItems, closeDockView, undockFromDock, undockInto, canUndockTab, moveToSidebar } from '$lib/dockMenu';
+	import { sideAt, sideOpen, showDropTarget } from '$lib/sidebarDrop';
+	import { canDockFloating } from '$lib/bottomDock';
 	import { windowAt, nodeOf } from '$lib/windowTabs';
 	import { phoneShell } from '$lib/ui/phoneShell.js';
 	import { mobileUndockAllowed } from '../stores/appStore.js';
@@ -100,6 +102,22 @@
 	let dropOut = $state(false);
 	/** 40 F10: the floating window a drag released out of the strip would JOIN as a tab */
 	let joinKey = $state(/** @type {string|null} */ (null));
+	/** 43 J4: the sidebar column a drag released out of the strip would JOIN as a tab */
+	let sideKey = /** @type {'left'|'right'|null} */ (null);
+	/**
+	 * 43 J4 — the one drop model ($lib/sidebarDrop) for a tab pulled out of the strip: over a side's
+	 * column it joins that sidebar ("Move to the left side" / "Add as tab"), elsewhere it floats
+	 * ("Float here") unless a floating window under the pointer takes it as a tab (40 F10's own
+	 * outline). Wider screens only — the phone has no sidebars.
+	 * @param {string} key @param {number} x @param {number} y @param {boolean} out @param {string|null} join
+	 */
+	function paintOut(key, x, y, out, join) {
+		const side = out && !join && !$phoneShell && canDockFloating(key) ? sideAt(x, y) : null;
+		sideKey = side;
+		if (side) showDropTarget({ kind: 'side', side, tab: sideOpen(side, key) }, { id: 'dock-tab-side-zone' });
+		else if (out && !join && canUndockTab(key)) showDropTarget({ kind: 'float', x: Math.max(0, x - 120), y: Math.max(0, y - 12), w: 360, h: 280 }, { id: 'dock-tab-side-zone' });
+		else showDropTarget(null);
+	}
 	/** @param {string|null} key */
 	function markJoin(key) {
 		if (key === joinKey) return;
@@ -157,6 +175,7 @@
 				e.clientY < strip.top - OUT_MARGIN ||
 				e.clientY > strip.bottom + OUT_MARGIN;
 			markJoin(dropOut ? windowAt(e.clientX, e.clientY, dragKey ?? undefined) : null);
+			paintOut(pending.key, e.clientX, e.clientY, dropOut, joinKey);
 			dropIndex = rects.filter((r) => e.clientX > r.left + r.width / 2).length;
 			const at = dropIndex < rects.length ? rects[dropIndex].left : rects[rects.length - 1].right;
 			dropX = at - strip.left + scroll;
@@ -169,12 +188,15 @@
 			const dragged = dragKey;
 			const out = dropOut;
 			const join = out ? windowAt(e.clientX, e.clientY, dragged ?? undefined) : null;
+			const side = sideKey;
 			cleanup();
 			if (!state || !dragged) return; // never travelled: the click activates the tab
 			draggedAt = performance.now();
 			// 41b H1: a phone content tab has nowhere to float — dragged clear of the strip it
 			// simply stays (it still reorders inside the strip). 42 I6: a hosted window docked on a
 			// wider screen (the Objects list) floats out like any other tab (`canUndockTab`)
+			// 43 J4: released over a sidebar column it joins that side (the editor leaves the dock first)
+			if (out && !join && side && moveToSidebar(dragged, side)) return;
 			if ((join || out) && !canUndockTab(dragged)) return;
 			if (join) {
 				// 40 F10: dropped onto/into a floating window — it joins that window as a tab
@@ -198,6 +220,8 @@
 			dragKey = null;
 			dropOut = false;
 			markJoin(null);
+			sideKey = null;
+			showDropTarget(null);
 			window.removeEventListener('pointermove', move);
 			window.removeEventListener('pointerup', up);
 			window.removeEventListener('pointercancel', cancel);
