@@ -1046,6 +1046,12 @@
 	// 41: the record is `$lib/toolbarLayout`'s `ToolbarLayout` (+ `left`/`right` corner stacks and
 	// `seen`, the ids it has placed — see that file)
 	type ControlsLayout = ToolbarLayout;
+	/** 43 J2: the bar's trailing "…" (Customize toolbar) as an edit/menu id — not a cell of the row */
+	const MORE = '__more';
+	/** 43 J8: the bar's own box (a gap between cells, the padding, a corner stack's gap) as a menu id */
+	const BAR = '__bar';
+	/** the name menus print for the "…" */
+	const MORE_LABEL = '… (Customize toolbar)';
 	// 30 P1: `pressed` makes the cell a TOGGLE — it renders as a real <button> carrying
 	// aria-pressed (a <p> cannot: the attribute is not supported on its role)
 	const PIVOT_NAMES: Record<string, string> = { median: 'Median point', active: 'Active object', individual: 'Individual origins', parent: 'Parent origin' };
@@ -1569,7 +1575,7 @@
 		playMenu = null;
 		if (toolbarGrab.active()) toolbarGrab.cancel();
 		editing = placements(controlsLayout, HOME_ONLY);
-		editFocus = focusId && (focusId === SPACER || regionOf(controlsLayout, focusId)) ? focusId : null;
+		editFocus = focusId && (focusId === SPACER || (focusId === MORE && controlsLayout.more) || regionOf(controlsLayout, focusId)) ? focusId : null;
 		tick().then(() => focusEditItem(editFocus ?? visualIds()[0]));
 	}
 
@@ -1603,6 +1609,12 @@
 	/** the red "−": take the item off (a bar item leaves a "+" in its place until ✓) */
 	function editRemove(id: string) {
 		if (!editing || id === SPACER) return;
+		if (id === MORE) {
+			// 43 J2: the "…" leaves the bar like any item; the end "+" offers it back
+			editing = { ...editing, more: false };
+			if (editFocus === id) editFocus = null;
+			return;
+		}
 		const region = placeRegion(editing, id);
 		editing = placeRemove(editing, id, { hole: region === 'bar' });
 		if (editFocus === id) editFocus = null;
@@ -1620,10 +1632,27 @@
 		const draft = editing;
 		// 42 I9: only what may go THERE (the bell and the peers trigger only in the top-right group)
 		const free = unplacedIds(draft, ROSTER_IDS).filter((id) => canPlace(draft, id, target.hole ? 'bar' : target.region));
-		if (!free.length)
+		// 43 J2: a removed "…" comes back from any of the bar's "+" (it always sits at the bar's end)
+		const moreBack = draft.more === false && (target.hole || target.region === 'bar');
+		if (!free.length && !moreBack)
 			return [{ label: 'Every button is placed', tooltip: 'Remove one with its red "−" first', disabled: true }];
 		return [
 			{ section: 'Place a button' },
+			...(moreBack
+				? [
+						{
+							label: MORE_LABEL,
+							icon: 'ellipsis',
+							tooltip: 'The bar\'s own menu button — it always sits at the end of the bar',
+							action: () => {
+								if (!editing) return;
+								editing = { ...editing, more: true };
+								editFocus = MORE;
+								tick().then(() => focusEditItem(MORE));
+							}
+						}
+					]
+				: []),
 			...free.map((id) => ({
 				label: labelOf(id),
 				icon: BUTTONS[id].iconName ?? BUTTONS[id].icon,
@@ -1737,7 +1766,7 @@
 	let editGesture: { id: string; x: number; y: number; dragging: boolean } | null = null;
 	function editGestureMove(e: PointerEvent) {
 		const g = editGesture;
-		if (!g || !editing) return;
+		if (!g || !editing || g.id === MORE) return; // 43 J2: the "…" is removable, not movable
 		if (!g.dragging && Math.abs(e.clientX - g.x) + Math.abs(e.clientY - g.y) < DRAG_SLOP) return;
 		e.preventDefault();
 		g.dragging = true;
@@ -1915,6 +1944,9 @@
 		};
 		const down = (e: PointerEvent) => {
 			if (e.pointerType === 'mouse' || editing) return;
+			// 43 J8: the bar's own box opens its menu only from a GAP — a press on a cell is that
+			// cell's (its own timer runs), and this listener sees it only because it bubbles
+			if (id === BAR && (e.target as Element | null)?.closest?.('button, p')) return;
 			stop();
 			from = { x: e.clientX, y: e.clientY };
 			const at = from;
@@ -1983,9 +2015,13 @@
 	 *  is why `id` may be null: the FAB is not a roster entry, so it is never offered
 	 *  "Hide button" and its Move left / Move right walk the well instead. */
 	function toolbarTail(id: string | null) {
+		// 43 J2/J8: two ids that are not cells of the row — the trailing "…" (MORE) and the bar's own
+		// box (BAR: a gap between cells, the padding, a corner stack's gap). Neither walks the row,
+		// so neither is offered Move left / Move right; only the "…" can be hidden.
+		const special = id === MORE || id === BAR;
 		// a plain `const` the closures below capture: TS does not carry a narrowing of
 		// a PARAMETER into a nested arrow, so `id!` or a cast would be the alternative
-		const target = id ?? '';
+		const target = special ? '' : (id ?? '');
 		// the FAB is the WELL on the visual row, so both kinds of cell ask the same
 		// question of the same sequence — one rule, no second index arithmetic
 		const cell = target || SPACER;
@@ -1998,9 +2034,9 @@
 			{
 				label: 'Edit positions',
 				tooltip: 'Drag the buttons into place, remove them with − or add with + — ✓ applies, Escape cancels',
-				action: () => enterEditPositions(target || SPACER)
+				action: () => enterEditPositions(id === MORE ? MORE : target || (special ? null : SPACER))
 			},
-			{
+			...(special ? [] : [{
 				label: 'Move left',
 				tooltip: target
 					? 'One place left — past the play button when it is next'
@@ -2015,7 +2051,16 @@
 					: 'Move the play button one place right',
 				disabled: collapsed || at < 0 || at >= seq.length - 1,
 				action: () => moveCell(cell, 1)
-			},
+			}]),
+			...(id === MORE
+				? [
+						{
+							label: 'Hide button',
+							tooltip: 'Take the "…" off the bar — Customize toolbar (any button\'s right-click menu) brings it back',
+							action: () => setLayout({ more: false })
+						}
+					]
+				: []),
 			...(target
 				? [
 						{
@@ -2091,6 +2136,8 @@
 	}
 
 	function cellMenuItems(id: string) {
+		// 43: the "…" and the bar's own box carry the Toolbar rows alone
+		if (id === MORE || id === BAR) return toolbarTail(id);
 		const head: any[] = [];
 		if (id === 'flow') {
 			// This used to carry the dock's shared "+" list (`dockAddItems`) as an
@@ -2228,6 +2275,25 @@
 				};
 			});
 		};
+		/** 43 J2: the "…" row — a checkbox like any button's, its arrows greyed because it always sits
+		 *  at the bar's end */
+		const moreRow = () => {
+			const on = controlsLayout.more !== false;
+			return {
+				key: MORE,
+				label: MORE_LABEL,
+				checked: on,
+				keepOpen: true,
+				tooltip: on
+					? 'Take the "…" off the bar — this list stays one right-click away on any button'
+					: 'Put the "…" back at the end of the bar',
+				action: () => setLayout({ more: !on }),
+				rowActions: [
+					{ icon: 'chevron-up', label: 'Move … up', tooltip: 'The "…" always sits at the end of the bar', disabled: true },
+					{ icon: 'chevron-down', label: 'Move … down', tooltip: 'The "…" always sits at the end of the bar', disabled: true }
+				]
+			};
+		};
 		/** the reorder pair for a row that is ON the bar */
 		const arrows = (id: string, at: number, title: string) => [
 			{
@@ -2276,6 +2342,7 @@
 					rowActions: arrows(id, at, labelOf(id))
 				};
 			}),
+			...(controlsLayout.more !== false ? [moreRow()] : []),
 			// Everything the roster knows that is not on the bar — the buttons hidden from
 			// the six defaults AND the optional dock views, which is what makes those
 			// discoverable at all. A row here has no place in the bar yet, so it has no
@@ -2286,9 +2353,10 @@
 			...(controlsLayout.right.length ? [{ section: 'Right corner' }, ...cornerRows('right')] : []),
 			...(controlsLayout.top.length ? [{ section: 'Top right' }, ...groupRows('top')] : []),
 			...(controlsLayout.touch.length ? [{ section: $touchTools ? 'Touch tools' : 'Touch tools (shown while Touch tools is on)' }, ...groupRows('touch')] : []),
-			...(offBar.length
+			...(offBar.length || controlsLayout.more === false
 				? [
 						{ section: 'Not on the bar' },
+						...(controlsLayout.more === false ? [moreRow()] : []),
 						...offBar.map((id) => ({
 							key: id,
 							label: labelOf(id),
@@ -2691,6 +2759,7 @@
 	class:hud-editing={editing !== null}
 	style={pillStyle}
 	use:toolbarDrag
+	use:cellMenu={BAR}
 >
 	<div class="hud-bar-row">
 		{#if editing}
@@ -2807,12 +2876,25 @@
 			><Icon name="check" size={20} aria-hidden="true" /></button
 		>
 		<p class="hud-edit-hint" id="toolbar-edit-hint" role="status">Drag to arrange · − removes · + adds · ✓ applies · Esc cancels</p>
-	{:else if !controlsLayout.collapsed}
+		{#if editing.more !== false}
+			<!-- 43 J2: the "…" in edit mode — removable with its "−" (or Delete) like any item; it stays
+			     the bar's last control, so it is not a drag handle, and the end "+" brings it back -->
+			<span class="hud-sep hud-bar-more" aria-hidden="true"></span>
+			<div class="hud-cell hud-edit-item hud-edit-more hud-bar-more" data-edit-wrap={MORE}>
+				<button type="button" class="hud-edit-grip" data-edit-id={MORE} title={MORE_LABEL} aria-label="{MORE_LABEL} — Delete removes it"
+					><Icon name="ellipsis" size={20} aria-hidden="true" /></button
+				>
+				<button type="button" class="hud-edit-remove" tabindex="-1" title="Remove" aria-label="Remove {MORE_LABEL}" use:onPress={() => editRemove(MORE)}><Icon name="minus" size={16} aria-hidden="true" /></button>
+			</div>
+		{/if}
+	{:else if !controlsLayout.collapsed && controlsLayout.more !== false}
 		<!-- 38 R8 (design page): the bar's own "…" opens Customize toolbar — the same checklist as
 		     the right-click menu's last row. Outside the cell row on purpose: the roster suites read
-		     the row's children as the bar's cells. Hidden on a narrow window (hud.css). -->
+		     the row's children as the bar's cells. Hidden on a narrow window (hud.css).
+		     43 J2: removable like any item (`more` in the record), and its right-click opens the
+		     toolbar menu like every cell's. -->
 		<span class="hud-sep hud-bar-more" aria-hidden="true"></span>
-		<button id="toolbar-customize" type="button" class="hud-cell hud-bar-more" title="Customize toolbar…" aria-label="Customize toolbar" use:openCustomizeOnClick
+		<button id="toolbar-customize" type="button" class="hud-cell hud-bar-more" title="Customize toolbar…" aria-label="Customize toolbar" use:openCustomizeOnClick use:cellMenu={MORE}
 			><Icon name="ellipsis" size={20} aria-hidden="true" /></button
 		>
 	{/if}
@@ -2823,7 +2905,7 @@
      entries now, stacked bottom → top, at most three a side. Under the bottom dock's z-tier as
      before, so an open flow editor / Explorer covers them. -->
 {#snippet stack(side: 'left' | 'right', list: string[])}
-	<div id="hud-stack-{side}" class="tp-ui hud-stack hud-stack-{side}" class:hud-editing={editing !== null} role="group" aria-label="{side === 'left' ? 'Left' : 'Right'} corner buttons">
+	<div id="hud-stack-{side}" class="tp-ui hud-stack hud-stack-{side}" class:hud-editing={editing !== null} role="group" aria-label="{side === 'left' ? 'Left' : 'Right'} corner buttons" use:cellMenu={BAR}>
 		{#if editing}
 			{#each stackSlots(list) as id (id)}
 				{#if id.startsWith('__empty:')}

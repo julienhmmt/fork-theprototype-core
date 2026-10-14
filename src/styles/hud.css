@@ -560,3 +560,13 @@
 #connect-status {
 	margin: 0 4px 0 8px;
 }
+/* 43 J2: the "…" placeholder in Edit positions is removable, not draggable */
+.hud-edit-more,
+.hud-edit-more .hud-edit-grip {
+	cursor: default;
+}
+/* …and it is the edit bar's last item, so the round ✓ (top right of the bar) would sit on its "−":
+   the bar keeps room for the ✓ beyond it */
+#controls-pill.hud-editing:has(.hud-edit-more) {
+	padding-right: 28px;
+}
