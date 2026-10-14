@@ -1,5 +1,5 @@
 {
-	"recordedAt": "2026-10-14T04:09:04.924Z",
+	"recordedAt": "2026-10-14T20:16:48.202Z",
 	"registry": [
 		{
 			"id": "transform.move",
@@ -449,6 +449,46 @@
 			"scope": "global",
 			"label": "Leave focus mode",
 			"kind": "fixed",
+			"when": true
+		},
+		{
+			"id": "pip.move",
+			"keys": "W",
+			"defaultKeys": "W",
+			"group": "Viewport picture-in-picture",
+			"scope": "pip",
+			"label": "Move (translate) — in the viewport PiP",
+			"kind": "action",
+			"when": true
+		},
+		{
+			"id": "pip.rotate",
+			"keys": "E",
+			"defaultKeys": "E",
+			"group": "Viewport picture-in-picture",
+			"scope": "pip",
+			"label": "Rotate — in the viewport PiP",
+			"kind": "action",
+			"when": true
+		},
+		{
+			"id": "pip.scale",
+			"keys": "R",
+			"defaultKeys": "R",
+			"group": "Viewport picture-in-picture",
+			"scope": "pip",
+			"label": "Scale — in the viewport PiP",
+			"kind": "action",
+			"when": true
+		},
+		{
+			"id": "pip.frame",
+			"keys": "F",
+			"defaultKeys": "F",
+			"group": "Viewport picture-in-picture",
+			"scope": "pip",
+			"label": "Frame the selection with the PiP's camera",
+			"kind": "action",
 			"when": true
 		},
 		{
