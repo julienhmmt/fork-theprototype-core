@@ -52,6 +52,8 @@
 	import Toggle from '../ui/Toggle.svelte';
 	import ContextMenu from '../ContextMenu.svelte';
 	import { safeStorage } from '$lib/safeStorage';
+	// 43 J9: the More sheet's how-to hides itself once the person has edited the bar (Settings ▸ Reset tips)
+	import { tipShown, dismissTip, TIP_PHONE_MORE } from '$lib/tips';
 	import { showChoiceEx } from '$lib/confirmDialog';
 	import { hudIsGame } from '$lib/hudDocs';
 	import { testPlay } from '$lib/gamePresence';
@@ -89,6 +91,7 @@
 	import { aiReady } from '$lib/ai/providers';
 	import { canvasCenter } from '$lib/canvasRect';
 	import { statsOpen } from '$lib/sceneBudget';
+	const moreTipShown = tipShown(TIP_PHONE_MORE);
 
 	// ---- the <html> class + the sheet geometry --------------------------------------
 	let viewportH = $state(typeof window === 'undefined' ? 844 : window.innerHeight);
@@ -439,8 +442,8 @@
 					]
 				: []),
 			{ section: 'Bar' },
-			{ label: 'Move left', tooltip: 'Move Play one place left on the bar', disabled: at <= 0, action: () => setBar(moveItem($phoneBar, 'play', -1)) },
-			{ label: 'Move right', tooltip: 'Move Play one place right on the bar', disabled: at < 0 || at >= list.length - 1, action: () => setBar(moveItem($phoneBar, 'play', 1)) },
+			{ label: 'Move left', tooltip: 'Move Play one place left on the bar', disabled: at <= 0, action: () => editBar(moveItem($phoneBar, 'play', -1)) },
+			{ label: 'Move right', tooltip: 'Move Play one place right on the bar', disabled: at < 0 || at >= list.length - 1, action: () => editBar(moveItem($phoneBar, 'play', 1)) },
 			{ label: 'Arrange the bar…', tooltip: 'Open More — press and hold any item to drag it to or from the bar', action: () => phoneSheet.set('more') }
 		];
 	}
@@ -589,6 +592,13 @@
 			if (!answer && !$phoneBar.includes('more')) setBar(before);
 		});
 	}
+	/** 43 J9: a bar edit the PERSON made (an item dragged on, off or along, Play moved) — the More tip
+	 *  has done its job once they have, so it hides itself for good (Settings ▸ Reset tips) */
+	function editBar(/** @type {string[]} */ list) {
+		const before = $phoneBar.join();
+		setBar(list);
+		if ($phoneBar.join() !== before) dismissTip(TIP_PHONE_MORE);
+	}
 	function resetBar() {
 		setBar(DEFAULT_BAR);
 	}
@@ -656,12 +666,12 @@
 		if (d.over === 'bar') {
 			const res = placeItem(before, d.key, d.at);
 			if (res.refused === 'full') showToast(`The bar holds ${MAX_ITEMS} — drag one off first`);
-			else setBar(res.list);
+			else editBar(res.list);
 		} else if (d.over === 'more' && d.from === 'bar') {
 			const res = removeItem(before, d.key);
 			if (res.refused === 'last') showToast('The bar keeps at least one item');
 			else {
-				setBar(res.list);
+				editBar(res.list);
 				if (d.key === 'more') moreHint(before);
 			}
 		}
@@ -940,7 +950,9 @@
 						<button type="button" class="ps-btn" id="ps-bar-reset" disabled={$phoneBar.join() === DEFAULT_BAR.join()} onclick={resetBar}>Reset bar</button>
 					</div>
 					<!-- the how-to rides the sheet's bottom edge, right above the bar it talks about -->
-					<p class="ps-hint" id="ps-more-hint">Hold and drag items to or from the bar (up to {MAX_ITEMS})</p>
+					{#if $moreTipShown}
+						<p class="ps-hint" id="ps-more-hint">Hold and drag items to or from the bar (up to {MAX_ITEMS})</p>
+					{/if}
 				</div>
 			{/if}
 		</section>

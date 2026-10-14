@@ -18,7 +18,9 @@ import {
 	unplacedIds,
 	regionOf,
 	fillHole,
-	isHole
+	isHole,
+	foldToFit,
+	barWidth
 } from '../../src/lib/toolbarLayout.js';
 
 const ROSTER = ['move', 'rotate', 'scale', 'pivot', 'mode', 'objects', 'flow', 'explorer', 'animation', 'uv', 'shader', 'hud', 'ai', 'add', 'chat', 'mic'];
@@ -336,5 +338,72 @@ describe('42 I9: five regions', () => {
 			expect(once.top.length).toBeLessThanOrEqual(SIDE_MAX);
 			expect(normalizeLayout(once, C42)).toEqual(once);
 		}
+	});
+});
+
+describe('43 J10: foldToFit (the overflow "»")', () => {
+	// a mouse bar: 38 px cells, a 56 px well, 2 px gaps, 14 px of padding + border, a 47 px tail
+	const M = { chrome: 14, cell: 38, well: 56, gap: 2, tail: 47, more: true };
+	const row = ['move', 'rotate', 'scale', PLAY, 'objects', 'flow', 'explorer', 'animation'];
+	it('folds nothing while the bar fits, "…" included', () => {
+		const w = barWidth(row, M, true);
+		expect(foldToFit(row, { ...M, budget: w })).toEqual({ shown: row, folded: [] });
+		expect(foldToFit(row, { ...M, budget: Infinity }).folded).toEqual([]);
+		expect(foldToFit(row, { ...M, budget: NaN }).folded).toEqual([]);
+	});
+	it('folds right to left by the user order, and the "»" then ends the bar', () => {
+		const w = barWidth(row, M, true);
+		// one px short: the "»" takes the "…"'s place, so ONE cell has to go
+		const one = foldToFit(row, { ...M, budget: w - 1 });
+		expect(one.folded).toEqual(['animation']);
+		expect(barWidth(one.shown, M, true)).toBeLessThanOrEqual(w - 1);
+		const three = foldToFit(row, { ...M, budget: w - 3 * 40 });
+		expect(three.folded).toEqual(['flow', 'explorer', 'animation']);
+		expect(three.shown).toEqual(['move', 'rotate', 'scale', PLAY, 'objects']);
+	});
+	it('crosses Play to the cells on its left only when the right side is empty — Play never folds', () => {
+		const tiny = foldToFit(row, { ...M, budget: barWidth([PLAY, 'move'], M, true) });
+		expect(tiny.shown).toEqual(['move', PLAY]);
+		expect(tiny.folded).toEqual(['rotate', 'scale', 'objects', 'flow', 'explorer', 'animation']);
+		const none = foldToFit(row, { ...M, budget: 10 });
+		expect(none.shown).toEqual([PLAY]);
+		expect(none.folded.length).toBe(row.length - 1);
+	});
+	it('a bar with no "…" fits one cell more, and once it must fold the "»" costs a cell', () => {
+		const noMore = { ...M, more: false };
+		const fits = barWidth(row, noMore, false);
+		expect(foldToFit(row, { ...noMore, budget: fits }).folded).toEqual([]);
+		expect(foldToFit(row, { ...noMore, budget: fits - 1 }).folded).toEqual(['explorer', 'animation']);
+	});
+	it('is monotonic: more room never folds more', () => {
+		let last = Infinity;
+		for (let budget = 100; budget <= 700; budget += 7) {
+			const n = foldToFit(row, { ...M, budget }).folded.length;
+			expect(n).toBeLessThanOrEqual(last);
+			last = n;
+		}
+	});
+});
+
+describe('43 J2: the "…" in the record', () => {
+	const cfg = { order: ['move', 'objects'], spacer: 1, left: [], right: [], isKnown: (/** @type {string} */ id) => ['move', 'objects'].includes(id) };
+	it('is shown unless the record says more: false, and survives placements', () => {
+		expect(normalizeLayout({ order: ['move'] }, cfg).more).toBe(true);
+		const off = normalizeLayout({ order: ['move', 'objects'], more: false }, cfg);
+		expect(off.more).toBe(false);
+		expect(normalizeLayout(off, cfg)).toEqual(off);
+		expect(fromPlacements(off, placements(off)).more).toBe(false);
+		expect(fromPlacements(off, { ...placements(off), more: true }).more).toBe(true);
+	});
+});
+
+describe('43 K3: the Connect pill in the record', () => {
+	const cfg = { order: ['move'], spacer: 1, left: [], right: [], isKnown: (/** @type {string} */ id) => id === 'move' };
+	it('is shown unless the record says connect: false, and survives placements', () => {
+		expect(normalizeLayout({ order: ['move'] }, cfg).connect).toBe(true);
+		const off = normalizeLayout({ order: ['move'], connect: false }, cfg);
+		expect(off.connect).toBe(false);
+		expect(fromPlacements(off, placements(off)).connect).toBe(false);
+		expect(fromPlacements(off, { ...placements(off), connect: true }).connect).toBe(true);
 	});
 });

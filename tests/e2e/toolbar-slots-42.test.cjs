@@ -218,7 +218,9 @@ h.run(async () => {
 			const bell = await centre(P.locator('#hud-tr [data-edit-wrap="notifications"]'));
 			await mouseDrag(P, await centre(P.locator('#controls-pill [data-edit-wrap="explorer"]')), { x: bell.x + 16, y: bell.y });
 			// Scene notes from the group onto the bar's start
-			await mouseDrag(P, await centre(P.locator('#hud-tr [data-edit-wrap="notes"]')), await centre(P.locator('#controls-pill [data-edit-wrap="move"]')));
+			// (43: aimed at the bar's start "+" — a diagonal drag aimed at Move's centre enters the bar's band one
+			// step early, beside Move, and the live reorder rightly keeps it where it was dropped)
+			await mouseDrag(P, await centre(P.locator('#hud-tr [data-edit-wrap="notes"]')), await centre(P.locator('#toolbar-edit-add-start')));
 			d = await draft(P);
 			h.check(d.top.join() === 'notifications,explorer,peers' && d.bar[0] === 'notes' && !d.bar.includes('explorer'), T + `I9: buttons move between the bar and the top-right group both ways (${d.top.join()} / bar ${d.bar.slice(0, 3).join()})`);
 			// the bell is home-only: dragged onto the bar it stays home

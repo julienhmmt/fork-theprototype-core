@@ -83,8 +83,11 @@
 		stepItem,
 		unplacedIds,
 		regionOf,
-		canPlace
+		canPlace,
+		foldToFit
 	} from '$lib/toolbarLayout';
+	// 43 J8/J10: where the sidebars are (a pinned column bounds the bar; any open one bounds Edit positions)
+	import { geometry as sidebarGeometry } from '$lib/sidebars';
 	import type { ToolbarLayout, LayoutConfig, Placements, Region } from '$lib/toolbarLayout';
 	import { pivotMode, pivotParentAvailable } from '$lib/multiTransform'; // 37 R1: the toolbar Pivot cell
 	import { VRButton, XRButton } from '@threlte/xr'
@@ -1046,6 +1049,15 @@
 	// 41: the record is `$lib/toolbarLayout`'s `ToolbarLayout` (+ `left`/`right` corner stacks and
 	// `seen`, the ids it has placed — see that file)
 	type ControlsLayout = ToolbarLayout;
+	/** 43 J2: the bar's trailing "…" (Customize toolbar) as an edit/menu id — not a cell of the row */
+	const MORE = '__more';
+	/** 43 J8: the bar's own box (a gap between cells, the padding, a corner stack's gap) as a menu id */
+	const BAR = '__bar';
+	/** the name menus print for the "…" */
+	const MORE_LABEL = '… (Customize toolbar)';
+	/** 43 K3: the Connect pill (top centre) as an edit/menu id — shown or hidden, never moved */
+	const CONNECT = '__connect';
+	const CONNECT_LABEL = 'Connect bar';
 	// 30 P1: `pressed` makes the cell a TOGGLE — it renders as a real <button> carrying
 	// aria-pressed (a <p> cannot: the attribute is not supported on its role)
 	const PIVOT_NAMES: Record<string, string> = { median: 'Median point', active: 'Active object', individual: 'Individual origins', parent: 'Parent origin' };
@@ -1486,6 +1498,8 @@
 	// (the record keeps it; the Inspector and the object menu still set the pivot there) —
 	// the multiselect lane's own fallback (QUESTIONS-37-multiselect #1).
 	const NARROW_BAR = 440;
+	/** 43 J10: at or below this the bar's cells SHARE the width (hud.css, max-width 520px) — no folding */
+	const FOLD_MIN_VW = 520;
 	// 41 G23: the SERVER's width until mounted (see the hydration note above)
 	let viewportW = $state(1280);
 	onMount(() => {
@@ -1494,13 +1508,26 @@
 		window.addEventListener('resize', read);
 		return () => window.removeEventListener('resize', read);
 	});
-	const visibleCells = $derived.by(() =>
-		controlsLayout.collapsed
-			? [{ id: SPACER }]
-			: visualIds()
-					.filter((id) => !(id === 'pivot' && viewportW < NARROW_BAR))
-					.map((id) => ({ id }))
-	);
+	// 43 J10: THE OVERFLOW. What does not fit the room the bar has (`barRoom`, measured with the track:
+	// the viewport less a pinned sidebar and the corner stacks on its row) folds into "»", right to left
+	// by the user's order, Play never ($lib/toolbarLayout `foldToFit`). Derived, never stored — the
+	// enabled set stays what the user chose, so room coming back unfolds by itself. Off while Edit
+	// positions runs (it shows every item, wrapping) and on a phone-width bar (its cells shrink instead).
+	const foldPlan = $derived.by(() => {
+		if (controlsLayout.collapsed) return { shown: [SPACER], folded: [] as string[] };
+		const row = visualIds().filter((id) => !(id === 'pivot' && viewportW < NARROW_BAR));
+		if (editing || viewportW <= FOLD_MIN_VW || !barRoom.ok) return { shown: row, folded: [] as string[] };
+		return foldToFit(row, {
+			...barMetrics,
+			// a px of slack: the arithmetic is in whole layout px, the browser's in fractions of one
+			budget: barRoom.right - barRoom.left - 1,
+			// the "…" is drawn only on a wide window (hud.css hides it below 720 px)
+			more: controlsLayout.more !== false && viewportW >= 720
+		});
+	});
+	const visibleCells = $derived(foldPlan.shown.map((id) => ({ id })));
+	/** the cells folded into "»", in the bar's left → right order */
+	const folded = $derived(foldPlan.folded);
 
 	/** A cell press. It needs no "was that a drag?" guard of its own: a move that ends
 	 *  here has already armed `swallowNextClick`, so this handler is simply not reached
@@ -1569,12 +1596,16 @@
 		playMenu = null;
 		if (toolbarGrab.active()) toolbarGrab.cancel();
 		editing = placements(controlsLayout, HOME_ONLY);
-		editFocus = focusId && (focusId === SPACER || regionOf(controlsLayout, focusId)) ? focusId : null;
+		editFocus = focusId && (focusId === SPACER || (focusId === MORE && controlsLayout.more) || regionOf(controlsLayout, focusId)) ? focusId : null;
 		tick().then(() => focusEditItem(editFocus ?? visualIds()[0]));
 	}
 
 	function applyEditPositions() {
 		if (!editing) return;
+		// 43 J12: the row beside the logo is drawn in edit mode on every device; an edit that CHANGED it
+		// (added, moved or removed a button there) means "show this row", so a mouse user's Touch tools
+		// turns on — an edit that left it alone leaves the setting as it was
+		if (!$touchTools && editing.touch.join() !== controlsLayout.touch.join() && editing.touch.length) touchTools.set(true);
 		const next = fromPlacements(controlsLayout, editing);
 		editing = null;
 		editDrag = null;
@@ -1603,6 +1634,18 @@
 	/** the red "−": take the item off (a bar item leaves a "+" in its place until ✓) */
 	function editRemove(id: string) {
 		if (!editing || id === SPACER) return;
+		if (id === CONNECT) {
+			// 43 K3: the Connect pill hides; the "+" left at the top centre brings it back
+			editing = { ...editing, connect: false };
+			if (editFocus === id) editFocus = null;
+			return;
+		}
+		if (id === MORE) {
+			// 43 J2: the "…" leaves the bar like any item; the end "+" offers it back
+			editing = { ...editing, more: false };
+			if (editFocus === id) editFocus = null;
+			return;
+		}
 		const region = placeRegion(editing, id);
 		editing = placeRemove(editing, id, { hole: region === 'bar' });
 		if (editFocus === id) editFocus = null;
@@ -1620,10 +1663,27 @@
 		const draft = editing;
 		// 42 I9: only what may go THERE (the bell and the peers trigger only in the top-right group)
 		const free = unplacedIds(draft, ROSTER_IDS).filter((id) => canPlace(draft, id, target.hole ? 'bar' : target.region));
-		if (!free.length)
+		// 43 J2: a removed "…" comes back from any of the bar's "+" (it always sits at the bar's end)
+		const moreBack = draft.more === false && (target.hole || target.region === 'bar');
+		if (!free.length && !moreBack)
 			return [{ label: 'Every button is placed', tooltip: 'Remove one with its red "−" first', disabled: true }];
 		return [
 			{ section: 'Place a button' },
+			...(moreBack
+				? [
+						{
+							label: MORE_LABEL,
+							icon: 'ellipsis',
+							tooltip: 'The bar\'s own menu button — it always sits at the end of the bar',
+							action: () => {
+								if (!editing) return;
+								editing = { ...editing, more: true };
+								editFocus = MORE;
+								tick().then(() => focusEditItem(MORE));
+							}
+						}
+					]
+				: []),
 			...free.map((id) => ({
 				label: labelOf(id),
 				icon: BUTTONS[id].iconName ?? BUTTONS[id].icon,
@@ -1665,7 +1725,7 @@
 	function onEditOutside(e: PointerEvent) {
 		if (!editing || editAddMenu) return;
 		const t = e.target as Element | null;
-		if (t?.closest?.('#controls-pill, .hud-stack, #hud-tr, #touch-tools, #toolbar-edit-ghost, [role="menu"]')) return;
+		if (t?.closest?.('#controls-pill, .hud-stack, #hud-tr, #touch-tools, #toolbar-edit-ghost, #connect-edit, [role="menu"]')) return;
 		cancelEditPositions();
 	}
 
@@ -1737,7 +1797,7 @@
 	let editGesture: { id: string; x: number; y: number; dragging: boolean } | null = null;
 	function editGestureMove(e: PointerEvent) {
 		const g = editGesture;
-		if (!g || !editing) return;
+		if (!g || !editing || g.id === MORE) return; // 43 J2: the "…" is removable, not movable
 		if (!g.dragging && Math.abs(e.clientX - g.x) + Math.abs(e.clientY - g.y) < DRAG_SLOP) return;
 		e.preventDefault();
 		g.dragging = true;
@@ -1801,6 +1861,22 @@
 		};
 	}
 
+	/** 43 K3: where the Connect pill sits, so Edit positions can outline it (measured on entering, and
+	 *  while editing on a resize) — null while the pill is hidden */
+	let connectRect: { left: number; top: number; width: number; height: number } | null = $state(null);
+	function measureConnect() {
+		const el = document.querySelector('.connect-pill') as HTMLElement | null;
+		const r = el?.getBoundingClientRect();
+		connectRect = r && r.width ? { left: r.left, top: r.top, width: r.width, height: r.height } : null;
+	}
+	$effect(() => {
+		if (!editing) return;
+		void editing.connect;
+		tick().then(measureConnect);
+		window.addEventListener('resize', measureConnect);
+		return () => window.removeEventListener('resize', measureConnect);
+	});
+
 	/** the edit button's label, for the a11y tree and the tooltip */
 	function editLabel(id: string) {
 		return labelOf(id);
@@ -1819,7 +1895,10 @@
 	const stackTop = $derived.by(() => (editing ? editing.top : controlsLayout.top));
 	const stackTouch = $derived.by(() => (editing ? editing.touch : controlsLayout.touch));
 	$effect(() => {
-		toolbarSlots.set({ top: [...stackTop], touch: [...stackTouch], editing: editing !== null });
+		// 43 K3: + whether the Connect pill shows (the draft's while editing — the pill hides the moment its
+		// "−" is pressed, and the "+" in its place brings it back)
+		const connect = editing ? editing.connect !== false : controlsLayout.connect !== false;
+		toolbarSlots.set({ top: [...stackTop], touch: [...stackTouch], editing: editing !== null, connect });
 	});
 	/** the buttons of a group Controls draws in it outside Edit positions (not the natives) */
 	const topExtras = $derived(stackTop.filter((id) => !TOP_NATIVE.includes(id)));
@@ -1866,6 +1945,8 @@
 	// menu on screen at a time.
 	let toolbarMenu: { x: number; y: number; id: string } | null = $state(null);
 	let customizeMenu: { x: number; y: number } | null = $state(null);
+	/** 43 J10: the "»" menu of the cells that do not fit */
+	let overflowMenu: { x: number; y: number } | null = $state(null);
 
 	// 41 G1: a LONG PRESS opens the same menu on touch, by its own timer. Android raises a
 	// `contextmenu` for a held finger and iOS never does (the W1 hatch existed for exactly that),
@@ -1878,6 +1959,7 @@
 		const openAt = (x: number, y: number) => {
 			playMenu = null;
 			customizeMenu = null;
+			overflowMenu = null;
 			lastMenuAt = { x, y };
 			toolbarMenu = { x, y, id };
 		};
@@ -1915,6 +1997,9 @@
 		};
 		const down = (e: PointerEvent) => {
 			if (e.pointerType === 'mouse' || editing) return;
+			// 43 J8: the bar's own box opens its menu only from a GAP — a press on a cell is that
+			// cell's (its own timer runs), and this listener sees it only because it bubbles
+			if (id === BAR && (e.target as Element | null)?.closest?.('button, p')) return;
 			stop();
 			from = { x: e.clientX, y: e.clientY };
 			const at = from;
@@ -1983,9 +2068,13 @@
 	 *  is why `id` may be null: the FAB is not a roster entry, so it is never offered
 	 *  "Hide button" and its Move left / Move right walk the well instead. */
 	function toolbarTail(id: string | null) {
+		// 43 J2/J8: two ids that are not cells of the row — the trailing "…" (MORE) and the bar's own
+		// box (BAR: a gap between cells, the padding, a corner stack's gap). Neither walks the row,
+		// so neither is offered Move left / Move right; only the "…" can be hidden.
+		const special = id === MORE || id === BAR;
 		// a plain `const` the closures below capture: TS does not carry a narrowing of
 		// a PARAMETER into a nested arrow, so `id!` or a cast would be the alternative
-		const target = id ?? '';
+		const target = special ? '' : (id ?? '');
 		// the FAB is the WELL on the visual row, so both kinds of cell ask the same
 		// question of the same sequence — one rule, no second index arithmetic
 		const cell = target || SPACER;
@@ -1998,9 +2087,9 @@
 			{
 				label: 'Edit positions',
 				tooltip: 'Drag the buttons into place, remove them with − or add with + — ✓ applies, Escape cancels',
-				action: () => enterEditPositions(target || SPACER)
+				action: () => enterEditPositions(id === MORE ? MORE : target || (special ? null : SPACER))
 			},
-			{
+			...(special ? [] : [{
 				label: 'Move left',
 				tooltip: target
 					? 'One place left — past the play button when it is next'
@@ -2015,7 +2104,16 @@
 					: 'Move the play button one place right',
 				disabled: collapsed || at < 0 || at >= seq.length - 1,
 				action: () => moveCell(cell, 1)
-			},
+			}]),
+			...(id === MORE
+				? [
+						{
+							label: 'Hide button',
+							tooltip: 'Take the "…" off the bar — Customize toolbar (any button\'s right-click menu) brings it back',
+							action: () => setLayout({ more: false })
+						}
+					]
+				: []),
 			...(target
 				? [
 						{
@@ -2091,6 +2189,8 @@
 	}
 
 	function cellMenuItems(id: string) {
+		// 43: the "…" and the bar's own box carry the Toolbar rows alone
+		if (id === MORE || id === BAR) return toolbarTail(id);
 		const head: any[] = [];
 		if (id === 'flow') {
 			// This used to carry the dock's shared "+" list (`dockAddItems`) as an
@@ -2228,6 +2328,25 @@
 				};
 			});
 		};
+		/** 43 J2: the "…" row — a checkbox like any button's, its arrows greyed because it always sits
+		 *  at the bar's end */
+		const moreRow = () => {
+			const on = controlsLayout.more !== false;
+			return {
+				key: MORE,
+				label: MORE_LABEL,
+				checked: on,
+				keepOpen: true,
+				tooltip: on
+					? 'Take the "…" off the bar — this list stays one right-click away on any button'
+					: 'Put the "…" back at the end of the bar',
+				action: () => setLayout({ more: !on }),
+				rowActions: [
+					{ icon: 'chevron-up', label: 'Move … up', tooltip: 'The "…" always sits at the end of the bar', disabled: true },
+					{ icon: 'chevron-down', label: 'Move … down', tooltip: 'The "…" always sits at the end of the bar', disabled: true }
+				]
+			};
+		};
 		/** the reorder pair for a row that is ON the bar */
 		const arrows = (id: string, at: number, title: string) => [
 			{
@@ -2276,6 +2395,7 @@
 					rowActions: arrows(id, at, labelOf(id))
 				};
 			}),
+			...(controlsLayout.more !== false ? [moreRow()] : []),
 			// Everything the roster knows that is not on the bar — the buttons hidden from
 			// the six defaults AND the optional dock views, which is what makes those
 			// discoverable at all. A row here has no place in the bar yet, so it has no
@@ -2286,9 +2406,20 @@
 			...(controlsLayout.right.length ? [{ section: 'Right corner' }, ...cornerRows('right')] : []),
 			...(controlsLayout.top.length ? [{ section: 'Top right' }, ...groupRows('top')] : []),
 			...(controlsLayout.touch.length ? [{ section: $touchTools ? 'Touch tools' : 'Touch tools (shown while Touch tools is on)' }, ...groupRows('touch')] : []),
-			...(offBar.length
+			// 43 K3: the Connect pill — shown or hidden, never moved
+			{ section: 'Top' },
+			{
+				key: CONNECT,
+				label: CONNECT_LABEL,
+				checked: controlsLayout.connect !== false,
+				keepOpen: true,
+				tooltip: controlsLayout.connect !== false ? 'Hide the Connect bar at the top of the screen' : 'Show the Connect bar at the top of the screen',
+				action: () => setLayout({ connect: controlsLayout.connect === false })
+			},
+			...(offBar.length || controlsLayout.more === false
 				? [
 						{ section: 'Not on the bar' },
+						...(controlsLayout.more === false ? [moreRow()] : []),
 						...offBar.map((id) => ({
 							key: id,
 							label: labelOf(id),
@@ -2351,12 +2482,21 @@
 	const EDGE_MARGIN = 8; // breathing room against a neighbour and against the viewport
 	const SNAP_PX = 24; // how near the middle still counts as the middle
 	const DRAG_SLOP = 6; // travel that turns a press into a move
+	const EDIT_APPLY_OVERHANG = 18; // 43 J8: how far Edit positions' ✓ reaches past the bar's right edge (hud.css)
 
 	/** the reachable band for the bar's CENTRE, in client px. `ok` is false when the
 	 *  track is narrower than the bar itself (a phone with the buttons beside it): there
 	 *  is then no position to choose, so the bar centres and the move gesture stands
 	 *  down rather than offering a drag that cannot go anywhere. */
 	let track = $state({ min: 0, max: 0, mid: 0, ok: false });
+	/** 43 J8/J10: the band the bar may occupy (client px) — the viewport less the edge margins, a PINNED
+	 *  sidebar and any corner button on the bar's row. `ok` once measured. */
+	let barRoom = $state({ left: 0, right: 0, ok: false });
+	/** 43 J10: the widths the overflow arithmetic needs, read off the live bar (hud.css owns them) */
+	let barMetrics = $state({ chrome: 14, cell: 38, well: 56, gap: 2, tail: 47 });
+	/** 43 J8: Edit positions' band — the viewport less EVERY open sidebar and the corners — and the edit
+	 *  bar's width in it; the bar wraps to that width and slides only as far as it must to stay inside */
+	let editPlace: { left: number; right: number; w: number } | null = $state(null);
 	/** the live centre while a gesture runs; null the rest of the time, so the stored
 	 *  fraction is the only source once it ends */
 	let dragCentre: number | null = $state(null);
@@ -2380,6 +2520,19 @@
 		const vw = window.innerWidth;
 		let left = EDGE_MARGIN;
 		let right = vw - EDGE_MARGIN;
+		// 43 J8: THE SIDEBARS. A PINNED column runs to the bottom edge, so the bar may never cross it —
+		// a drag, Move toolbar and the overflow budget all stop at its edge; while Edit positions runs,
+		// EVERY open column does (the user's "next to the sidebar, not on top of it"). The geometry is
+		// 42 sidebars' store (`$lib/sidebars`), the same numbers its columns are drawn from.
+		const sb = get(sidebarGeometry);
+		if (sb?.wide) {
+			if (sb.left.shown && (sb.left.full || editing)) left = Math.max(left, sb.leftX + sb.left.w + EDGE_MARGIN);
+			if (sb.right.shown && (sb.right.full || editing)) right = Math.min(right, vw - sb.right.w - EDGE_MARGIN);
+		}
+		// the bar's ROW is its bottom bar-height: a wrapped edit bar is taller, and reading its whole box
+		// would let a corner button ABOVE the row narrow the band it wraps into (and so on)
+		const rowH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hud-bar-h')) || pill.height;
+		const rowTop = Math.max(pill.top, pill.bottom - rowH);
 		const found: HTMLElement[] = [];
 		for (const el of TOOLBAR_NEIGHBOURS.flatMap((sel) => [...document.querySelectorAll<HTMLElement>(sel)])) {
 			found.push(el);
@@ -2389,10 +2542,23 @@
 			// and that one rule is why the <=600px lift needs no breakpoint of its own
 			// here: at that width chat / AI / mic / "+" have moved ABOVE this row, so
 			// they stop clamping and the bar gets the full width — measured, not coded.
-			if (r.bottom <= pill.top || r.top >= pill.bottom) continue;
+			if (r.bottom <= rowTop || r.top >= pill.bottom) continue;
 			if ((r.left + r.right) / 2 < vw / 2) left = Math.max(left, r.right + EDGE_MARGIN);
 			else right = Math.min(right, r.left - EDGE_MARGIN);
 		}
+		observeNeighbours(nav, found);
+		if (editing) {
+			// 43 J8: the edit bar wraps into this band (its max-width) and is placed inside it; the normal
+			// bar's track is left as it was — the edit bar is not the bar it describes
+			// the round ✓ overhangs the bar's top-right corner (hud.css): keep room for it inside the band
+			const next = { left, right: right - EDIT_APPLY_OVERHANG, w: pill.width };
+			if (!editPlace || next.left !== editPlace.left || next.right !== editPlace.right || Math.abs(next.w - editPlace.w) >= 0.5) editPlace = next;
+			if (typeof window !== 'undefined') (window as any).__toolbarTrack = { ...track, room: barRoom, editPlace, folded };
+			return;
+		}
+		if (editPlace) editPlace = null;
+		measureBarMetrics(nav);
+		if (left !== barRoom.left || right !== barRoom.right || !barRoom.ok) barRoom = { left, right, ok: right - left > 0 };
 		const half = pill.width / 2;
 		const min = left + half;
 		const max = right - half;
@@ -2406,9 +2572,12 @@
 		// COMPUTED, beside what a suite can see for itself in the rendered rects. It is
 		// what turned "the armed move commits 21px off" from a guess into one reading.
 		if (typeof window !== 'undefined')
-			(window as any).__toolbarTrack = { ...track, centre: pillCentre, posX: controlsLayout.posX };
-		// re-observe only when the SET of neighbours changed — `observe()` fires an
-		// initial callback per element, so re-attaching on every measurement would spin
+			(window as any).__toolbarTrack = { ...track, centre: pillCentre, posX: controlsLayout.posX, room: barRoom, folded, metrics: barMetrics };
+	}
+
+	/** re-observe only when the SET of neighbours changed — `observe()` fires an initial callback per
+	 *  element, so re-attaching on every measurement would spin */
+	function observeNeighbours(nav: HTMLElement, found: HTMLElement[]) {
 		const key = found.map((el) => el.id).join(',');
 		if (trackRO && key !== observedKey) {
 			observedKey = key;
@@ -2416,6 +2585,31 @@
 			trackRO.observe(nav); // the bar's own width changes when cells hide/collapse
 			for (const el of found) trackRO.observe(el);
 		}
+	}
+
+	/** 43 J10: the widths `foldToFit` adds up, read from the live bar and hud.css's own tokens (a touch
+	 *  screen's cells are 44 px, a mouse's 38) — nothing here is a copy of a CSS number */
+	function measureBarMetrics(nav: HTMLElement) {
+		const px = (v: string) => parseFloat(v) || 0;
+		const root = getComputedStyle(document.documentElement);
+		const cs = getComputedStyle(nav);
+		const row = nav.querySelector('.hud-bar-row');
+		const cell = px(root.getPropertyValue('--hud-cell')) || 38;
+		const fab = px(root.getPropertyValue('--hud-fab')) || 44;
+		const gap = row ? px(getComputedStyle(row).columnGap) : 2;
+		const navGap = px(cs.columnGap);
+		const sep = nav.querySelector('.hud-sep');
+		const sepW = sep ? sep.getBoundingClientRect().width + px(getComputedStyle(sep).marginLeft) + px(getComputedStyle(sep).marginRight) : 5;
+		const next = {
+			chrome: px(cs.paddingLeft) + px(cs.paddingRight) + px(cs.borderLeftWidth) + px(cs.borderRightWidth),
+			cell,
+			well: fab + 12,
+			gap,
+			// the trailing control (the "…", or the "»" once anything folds): gap, separator, gap, one cell
+			tail: navGap + sepW + navGap + cell
+		};
+		const m = barMetrics;
+		if (next.chrome !== m.chrome || next.cell !== m.cell || next.well !== m.well || next.gap !== m.gap || next.tail !== m.tail) barMetrics = next;
 	}
 
 	onMount(() => {
@@ -2456,6 +2650,11 @@
 		void stackRight;
 		void $floatingToolbar;
 		void $bottomInset;
+		// 43 J5/J8/J10: a sidebar pinned, opened, resized or moved moves the band; the lift moves the
+		// corner stacks into it or out of it; entering / leaving Edit positions swaps which band applies
+		void $sidebarGeometry;
+		void $hudStackLift;
+		void editing;
 		tick().then(measureTrack);
 	});
 
@@ -2649,12 +2848,48 @@
 	 * `left` is emitted only once the track has been MEASURED — before that (SSR, the
 	 * first paint) the `start-1/2` class is the honest answer. */
 	const pillZClass = $derived($toolbarAlwaysOnTop ? 'z-(--z-hud)' : 'z-(--z-chrome)');
+	/** 43 J8: where the EDIT bar's centre goes — the bar's own centre, slid only as far as it must to
+	 *  sit wholly inside the band beside the open sidebars (the user's "it can be moved a bit") */
+	const editCentre = $derived.by(() => {
+		if (!editing || !editPlace) return null;
+		const room = editPlace.right - editPlace.left;
+		const half = Math.min(editPlace.w, room) / 2;
+		const lo = editPlace.left + half;
+		const hi = editPlace.right - half;
+		return lo > hi ? (editPlace.left + editPlace.right) / 2 : Math.max(lo, Math.min(hi, pillCentre));
+	});
 	const pillStyle = $derived(
 		($floatingToolbar ? 'bottom: calc(var(--bottom-inset, 0px) + 16px);' : 'bottom: 16px;') +
-			(track.mid > 0 ? ` left: ${Math.round(pillCentre)}px;` : '') +
+			(editCentre != null
+				? ` left: ${Math.round(editCentre)}px; max-width: ${Math.max(0, Math.floor(editPlace!.right - editPlace!.left))}px;`
+				: track.mid > 0
+					? ` left: ${Math.round(pillCentre)}px;`
+					: '') +
 			' touch-action: none;' +
 			(movingBar ? ' cursor: grabbing;' : '')
 	);
+
+	// ── 43 J10: the "»" and its menu ────────────────────────────────────────────────────────────
+	function openOverflow(e: MouseEvent) {
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		toolbarMenu = null;
+		customizeMenu = null;
+		playMenu = null;
+		overflowMenu = { x: Math.round(r.left), y: Math.round(r.top) };
+	}
+	/** the folded cells, each doing what its cell does (its armed / open state as the row's check),
+	 *  then the way into Customize — the "…" that folded first lives here */
+	function overflowItems() {
+		return [
+			{ section: 'More buttons' },
+			...folded.map((id) => {
+				const btn = BUTTONS[id];
+				return { key: id, label: labelOf(id), icon: btn.iconName ?? btn.icon, checked: btn.tint() === ICON_ON, tooltip: btn.title, action: () => runCell(id) };
+			}),
+			{ section: '' },
+			{ key: '__customize', label: 'Customize toolbar…', tooltip: 'Choose which buttons the bar shows — the ones that do not fit wait here', action: () => openCustomize() }
+		];
+	}
 
 </script>
 
@@ -2691,6 +2926,7 @@
 	class:hud-editing={editing !== null}
 	style={pillStyle}
 	use:toolbarDrag
+	use:cellMenu={BAR}
 >
 	<div class="hud-bar-row">
 		{#if editing}
@@ -2807,12 +3043,32 @@
 			><Icon name="check" size={20} aria-hidden="true" /></button
 		>
 		<p class="hud-edit-hint" id="toolbar-edit-hint" role="status">Drag to arrange · − removes · + adds · ✓ applies · Esc cancels</p>
-	{:else if !controlsLayout.collapsed}
+		{#if editing.more !== false}
+			<!-- 43 J2: the "…" in edit mode — removable with its "−" (or Delete) like any item; it stays
+			     the bar's last control, so it is not a drag handle, and the end "+" brings it back -->
+			<span class="hud-sep hud-bar-more" aria-hidden="true"></span>
+			<div class="hud-cell hud-edit-item hud-edit-more hud-bar-more" data-edit-wrap={MORE}>
+				<button type="button" class="hud-edit-grip" data-edit-id={MORE} title={MORE_LABEL} aria-label="{MORE_LABEL} — Delete removes it"
+					><Icon name="ellipsis" size={20} aria-hidden="true" /></button
+				>
+				<button type="button" class="hud-edit-remove" tabindex="-1" title="Remove" aria-label="Remove {MORE_LABEL}" use:onPress={() => editRemove(MORE)}><Icon name="minus" size={16} aria-hidden="true" /></button>
+			</div>
+		{/if}
+	{:else if !controlsLayout.collapsed && folded.length}
+		<!-- 43 J10: the buttons that do not fit wait in "»" (right to left by the user's order, Play never);
+		     once anything folds it ends the bar in place of the "…", and its menu closes with Customize -->
+		<span class="hud-sep" aria-hidden="true"></span>
+		<button id="toolbar-overflow" type="button" class="hud-cell" class:on={overflowMenu !== null} data-folded={folded.join(',')} title="More buttons — {folded.length} {folded.length === 1 ? 'does' : 'do'} not fit" aria-label="More buttons ({folded.length})" aria-haspopup="menu" aria-expanded={overflowMenu !== null} use:onPress={openOverflow} use:cellMenu={BAR}
+			><Icon name="chevrons-right" size={20} aria-hidden="true" /></button
+		>
+	{:else if !controlsLayout.collapsed && controlsLayout.more !== false}
 		<!-- 38 R8 (design page): the bar's own "…" opens Customize toolbar — the same checklist as
 		     the right-click menu's last row. Outside the cell row on purpose: the roster suites read
-		     the row's children as the bar's cells. Hidden on a narrow window (hud.css). -->
+		     the row's children as the bar's cells. Hidden on a narrow window (hud.css).
+		     43 J2: removable like any item (`more` in the record), and its right-click opens the
+		     toolbar menu like every cell's. -->
 		<span class="hud-sep hud-bar-more" aria-hidden="true"></span>
-		<button id="toolbar-customize" type="button" class="hud-cell hud-bar-more" title="Customize toolbar…" aria-label="Customize toolbar" use:openCustomizeOnClick
+		<button id="toolbar-customize" type="button" class="hud-cell hud-bar-more" title="Customize toolbar…" aria-label="Customize toolbar" use:openCustomizeOnClick use:cellMenu={MORE}
 			><Icon name="ellipsis" size={20} aria-hidden="true" /></button
 		>
 	{/if}
@@ -2823,7 +3079,7 @@
      entries now, stacked bottom → top, at most three a side. Under the bottom dock's z-tier as
      before, so an open flow editor / Explorer covers them. -->
 {#snippet stack(side: 'left' | 'right', list: string[])}
-	<div id="hud-stack-{side}" class="tp-ui hud-stack hud-stack-{side}" class:hud-editing={editing !== null} role="group" aria-label="{side === 'left' ? 'Left' : 'Right'} corner buttons">
+	<div id="hud-stack-{side}" class="tp-ui hud-stack hud-stack-{side}" class:hud-editing={editing !== null} role="group" aria-label="{side === 'left' ? 'Left' : 'Right'} corner buttons" use:cellMenu={BAR}>
 		{#if editing}
 			{#each stackSlots(list) as id (id)}
 				{#if id.startsWith('__empty:')}
@@ -2893,8 +3149,26 @@
 {#if !$phoneShell}
 	<div class="contents" data-toolbar-portal="top" use:portalTo={'#hud-tr'}>{@render group('top', stackTop, topExtras, 'hud-cell')}</div>
 {/if}
-{#if $touchTools && !$phoneShell}
+{#if ($touchTools || editing) && !$phoneShell}
 	<div class="contents" data-toolbar-portal="touch" use:portalTo={'#touch-tools'}>{@render group('touch', stackTouch, touchExtras, 'tt-btn')}</div>
+{/if}
+
+{#if editing && !$phoneShell}
+	<!-- 43 K3: the Connect pill in Edit positions — outlined with a red "−" (it is shown / hidden, never
+	     moved); hidden, a "+" at the top centre brings it back. The outline covers the pill, so a press
+	     there is part of the edit, not a Connect click. -->
+	<div id="connect-edit" class="tp-ui">
+		{#if editing.connect !== false && connectRect}
+			<div class="hud-edit-item hud-edit-connect" data-edit-wrap={CONNECT} style="left: {connectRect.left}px; top: {connectRect.top}px; width: {connectRect.width}px; height: {connectRect.height}px">
+				<span class="hud-edit-grip" data-edit-id={CONNECT} title={CONNECT_LABEL}></span>
+				<button type="button" class="hud-edit-remove" tabindex="-1" title="Hide the Connect bar" aria-label="Hide the {CONNECT_LABEL}" use:onPress={() => editRemove(CONNECT)}><Icon name="minus" size={16} aria-hidden="true" /></button>
+			</div>
+		{:else if editing.connect === false}
+			<button type="button" id="connect-edit-add" class="hud-cell hud-edit-add hud-edit-connect-add" title="Show the Connect bar" aria-label="Show the {CONNECT_LABEL}" use:onPress={() => editing && (editing = { ...editing, connect: true })}
+				><Icon name="plus" size={16} aria-hidden="true" /><span>Connect</span></button
+			>
+		{/if}
+	</div>
 {/if}
 
 {#if editDrag}
@@ -2962,6 +3236,10 @@
 		sizeKey="toolbarcell"
 		on:close={() => (toolbarMenu = null)}
 	/>
+{/if}
+
+{#if overflowMenu}
+	<ContextMenu x={overflowMenu.x} y={overflowMenu.y} items={overflowItems()} sizeKey="toolbaroverflow" on:close={() => (overflowMenu = null)} />
 {/if}
 
 {#if customizeMenu}
