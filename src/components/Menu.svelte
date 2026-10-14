@@ -10,6 +10,7 @@
 	import Connect from './menu/Connect.svelte';
 	import Controls from './menu/Controls.svelte';
 	import Inspector from './menu/Inspector.svelte';
+	import SidebarStrips from './menu/SidebarStrips.svelte'; // 42 I2/I3
 	import MenuSidebar from './menu/Sidebar.svelte';
 	import TouchTools from './menu/TouchTools.svelte';
 	import MenuSettings from './menu/Settings.svelte';
@@ -63,6 +64,7 @@
 <Connect />
 <Controls />
 <Inspector />
+<SidebarStrips />
 <MenuSidebar />
 <TouchTools />
 <MenuSettings />

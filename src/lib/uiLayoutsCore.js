@@ -32,7 +32,7 @@ const EXACT = new Set([
 	...PANEL_PREFIXES.flatMap((p) => [p + 'Docked', p + 'WinW', p + 'WinH'])
 ]);
 /** key families that belong to the layout */
-const PREFIXES = ['win:', 'dockWidth:', 'dockSplit:'];
+const PREFIXES = ['win:', 'dockWidth:', 'dockSplit:', 'sidebarWidth:', 'sidebar:']; // 42 I2/I3: the sidebars' side / width / full height / tabs
 
 /** Is this stored key part of a workspace layout? @param {string} key */
 export function isLayoutKey(key) {

@@ -1,43 +1,35 @@
 import { isHeaderDrag } from './windowGrip';
-import { get } from 'svelte/store';
-import { inspectorClose, closeMenu } from '../stores/appStore';
 import { bottomDockWouldTake } from './bottomDockDrop';
 import { safeStorage } from './safeStorage';
 import { onLayoutRestore } from './uiLayoutsCore';
+import { reportMember, sidebarShown, sidebarTabs, setDockMover, activateSidebarTab } from './sidebars';
 
-// Docking lite (phase 81L). Drag a window near the left/right screen edge to
-// dock it as a full-height panel (--z-chrome tier); drag its header away to
-// float it again. With the Inspector drawer open, a right-docked panel offsets
-// inward as a second column.
+// Docking lite (phase 81L). Drag a window near the left/right screen edge to dock it as a
+// full-height panel (--z-chrome tier); drag its header away to float it again.
 // 21-H2: the Library drawer it also used to give way to no longer exists.
 //
-// 81.4 (v1.13) — EDGE SPLITS: an edge holds up to TWO windows, stacked. Dropping a
-// second floating window onto a docked panel (or onto that edge) splits the column
-// vertically; a draggable divider between them sets the share (persisted per side);
-// undocking either member collapses the split back to one full-height panel. The
-// quiz decision stands: splits are for DOCKED panels, tabbing (83) for floating ones
-// — `headerTargetAt` already excludes docked windows, so the two never compete. A
-// third window on a full edge is refused with the same wiggle as before.
+// 42 I3 — ONE SIDEBAR PER SIDE ($lib/sidebars). An edge is ONE column and every window docked
+// to it is a TAB of that column, beside the Inspector when it docks to the same side: only the
+// tab in front renders (`data-sidebar-hidden` on the others), the column's tab header + resize
+// grip are SidebarStrips.svelte's, and the column's geometry is the `--sb-*` CSS bus. This
+// RETIRES two older shapes, both of which put two things on screen where the user asked for
+// one: 81.4's vertical SPLIT (a second window on an edge stacked under the first, with a
+// divider) and the right-docked window that slid inward as a SECOND COLUMN while the
+// Inspector was open. Dropping a window on an occupied edge (or on the column itself) now adds
+// a tab; a stored 81.4 pair restores as two tabs, and its old `dockSplit:<side>` share is
+// simply no longer read.
 
 const EDGE = 44; // px from a screen edge that counts as a dock drop
-const TOP = 64; // below the topbar, like the drawers
-const DRAWER_WIDTH = 320;
-/** max windows stacked on one edge */
-const MAX_PER_SIDE = 2;
-/** half the divider's thickness, in px — each panel gives up this much */
-const GAP = 3;
-/** the smallest share either split panel may be dragged to */
-const MIN_RATIO = 0.15;
 
 /** @type {{left: string[], right: string[]}} */
 let docked = { left: [], right: [] };
 /** @type {Map<string, any>} */
-const registry = new Map(); // key -> {node, prevRect, handle, divider}
+const registry = new Map(); // key -> {node, prevRect, present, observer}
 
 /** @param {any} value a persisted side: a string (pre-81.4) or an array
  * @returns {string[]} */
 function sideList(value) {
-	if (Array.isArray(value)) return value.filter((k) => typeof k === 'string').slice(0, MAX_PER_SIDE);
+	if (Array.isArray(value)) return value.filter((k) => typeof k === 'string');
 	return typeof value === 'string' && value ? [value] : [];
 }
 
@@ -50,34 +42,6 @@ function persist() {
 	safeStorage.setItem('dockedWindows', JSON.stringify(docked));
 }
 
-/** @param {string} key */
-function widthOf(key) {
-	const value = parseInt(safeStorage.getItem('dockWidth:' + key) ?? '300');
-	return Math.min(Math.max(Number.isNaN(value) ? 300 : value, 250), Math.round(window.innerWidth * 0.4));
-}
-
-/** the TOP panel's share of a split column @param {'left'|'right'} side */
-function ratioOf(side) {
-	const value = parseFloat(safeStorage.getItem('dockSplit:' + side) ?? '0.5');
-	return Math.min(Math.max(Number.isNaN(value) ? 0.5 : value, MIN_RATIO), 1 - MIN_RATIO);
-}
-
-function drawerOpen() {
-	return get(inspectorClose) === false;
-}
-
-// A LEFT-docked panel starts at x:0, but the app-sidebar floats above it (z-hud >
-// z-drawer), covering the panel's topbar (dock/close) — worst on narrow screens
-// where the panel is thin. When the menu is open, inset the panel past the sidebar
-// so its buttons stay reachable (mirrors the right-side drawer offset).
-function leftInset() {
-	if (get(closeMenu) !== false) return 0; // menu closed = no sidebar
-	const el = typeof document !== 'undefined' ? document.querySelector('.app-sidebar') : null;
-	// fallback while the sidebar hasn't rendered yet (store fires before the DOM
-	// updates); the deferred re-apply below refines it to the exact width
-	return el ? Math.round(el.getBoundingClientRect().right) + 8 : 228;
-}
-
 /** @param {string} key @returns {'left'|'right'|null} */
 function sideOf(key) {
 	if (docked.left.includes(key)) return 'left';
@@ -86,7 +50,7 @@ function sideOf(key) {
 }
 export { sideOf as dockSideOf };
 
-/** the keys stacked on a side, top first @param {'left'|'right'} side */
+/** the keys docked to a side, in docking order @param {'left'|'right'} side */
 export function dockedOn(side) {
 	return [...docked[side]];
 }
@@ -95,13 +59,9 @@ function applyAll() {
 	for (const [key] of registry) apply(key);
 }
 
-/** re-lay out every member of one side @param {'left'|'right'} side */
-function applySide(side) {
-	for (const key of docked[side]) apply(key);
-}
-
-/** the usable column: from TOP to the bottom dock, as a CSS length */
-const COLUMN = `(100vh - ${TOP}px - var(--bottom-inset, 0px))`;
+/** a docked window is a TAB only while it is open (the object list stays mounted and hides
+ *  itself with a class when closed) @param {any} node */
+const isPresent = (node) => !!node?.isConnected && !node.classList.contains('hidden');
 
 /** @param {string} key */
 function apply(key) {
@@ -109,157 +69,68 @@ function apply(key) {
 	if (!entry) return;
 	const side = sideOf(key);
 	const { node } = entry;
+	entry.present = isPresent(node);
+	reportMember(key, side, entry.present);
 	if (!side) {
 		delete node.dataset.docked;
-		delete node.dataset.dockSlot;
-		entry.handle?.remove();
-		entry.handle = null;
-		entry.divider?.remove();
-		entry.divider = null;
+		delete node.dataset.sidebarHidden;
 		return;
 	}
-	// the column's width belongs to the SIDE: every member reads the top one's
-	// (the handle below writes all of them, so either panel's handle resizes the column)
-	const width = widthOf(docked[side][0] ?? key);
-	const stack = docked[side];
-	const slot = stack.indexOf(key); // 0 = top (or the only one), 1 = bottom
-	const split = stack.length > 1;
-	const r = ratioOf(side);
 	node.dataset.docked = side;
 	node.style.position = 'fixed';
 	node.style.maxWidth = 'none';
 	node.style.maxHeight = 'none';
-	node.style.width = width + 'px';
+	// the column's geometry is the sidebars' CSS bus: one place decides where the column is
+	node.style.left = side === 'left' ? 'var(--sb-left-x, 0px)' : 'auto';
+	node.style.right = side === 'right' ? '0px' : 'auto';
+	node.style.top = `calc(var(--sb-${side}-top, 64px) + var(--sb-strip-h, 30px))`;
+	node.style.width = `var(--sb-${side}-w, 320px)`;
+	node.style.height = `calc(100vh - var(--sb-${side}-top, 64px) - var(--sb-strip-h, 30px) - var(--sb-${side}-bottom, 0px))`;
 	node.style.zIndex = '30'; // z-ok: = --z-chrome; restored + compared as a number by docking/TabStrips
-	if (!split) {
-		delete node.dataset.dockSlot;
-		node.style.top = TOP + 'px';
-		// edge-docked windows end above a docked Flow/Explorer (105)
-		node.style.height = `calc(100vh - ${TOP}px - var(--bottom-inset, 0px))`;
-	} else if (slot === 0) {
-		node.dataset.dockSlot = 'top';
-		node.style.top = TOP + 'px';
-		node.style.height = `calc(${COLUMN} * ${r} - ${GAP}px)`;
-	} else {
-		node.dataset.dockSlot = 'bottom';
-		node.style.top = `calc(${TOP}px + ${COLUMN} * ${r} + ${GAP}px)`;
-		node.style.height = `calc(${COLUMN} * ${1 - r} - ${GAP}px)`;
-	}
-	const offset = side === 'right' && drawerOpen() ? DRAWER_WIDTH : 0;
-	node.style.left = side === 'left' ? leftInset() + 'px' : window.innerWidth - width - offset + 'px';
-	node.style.right = 'auto';
-	// inner-edge resize handle
-	if (!entry.handle) {
-		const handle = document.createElement('div');
-		handle.className = 'dock-resize resize-cue';
-		handle.style.cssText =
-			'position:absolute;top:0;bottom:0;width:6px;cursor:ew-resize;touch-action:none;z-index:5;';
-		handle.addEventListener('pointerdown', (e) => {
-			e.preventDefault();
-			e.stopPropagation();
-			handle.setPointerCapture(e.pointerId);
-			const startX = e.clientX;
-			const startWidth = node.offsetWidth;
-			const currentSide = sideOf(key);
-			const move = (/** @type {any} */ ev) => {
-				const delta = currentSide === 'left' ? ev.clientX - startX : startX - ev.clientX;
-				const next = Math.min(Math.max(250, startWidth + delta), Math.round(window.innerWidth * 0.4));
-				// the column is one width: write it for every member of the side
-				for (const k of currentSide ? docked[currentSide] : [key])
-					safeStorage.setItem('dockWidth:' + k, String(next));
-				if (currentSide) applySide(currentSide);
-				else apply(key);
-			};
-			const up = () => {
-				handle.removeEventListener('pointermove', move);
-				handle.removeEventListener('pointerup', up);
-			};
-			handle.addEventListener('pointermove', move);
-			handle.addEventListener('pointerup', up);
-		});
-		node.appendChild(handle);
-		entry.handle = handle;
-	}
-	entry.handle.style.left = side === 'left' ? 'auto' : '-3px';
-	entry.handle.style.right = side === 'left' ? '-3px' : 'auto';
-	// 81.4: the split DIVIDER hangs off the TOP panel's bottom edge
-	if (split && slot === 0) {
-		if (!entry.divider) {
-			const divider = document.createElement('div');
-			divider.className = 'dock-split-divider resize-cue';
-			// INSIDE the panel, hugging its bottom edge: every docked window is
-			// `overflow-hidden`, so a handle hung past the edge is clipped away and
-			// takes no pointer events at all (the width handle only works because half
-			// of its 6px sits inside). 7px is the same hot zone the width grip uses.
-			divider.style.cssText = 'position:absolute;left:0;right:0;bottom:0;height:7px;cursor:ns-resize;touch-action:none;z-index:5;';
-			divider.addEventListener('pointerdown', (e) => {
-				e.preventDefault();
-				e.stopPropagation();
-				divider.setPointerCapture(e.pointerId);
-				const currentSide = sideOf(key);
-				if (!currentSide) return;
-				const inset =
-					parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bottom-inset')) || 0;
-				const column = Math.max(1, window.innerHeight - TOP - inset);
-				const move = (/** @type {any} */ ev) => {
-					const next = Math.min(Math.max((ev.clientY - TOP) / column, MIN_RATIO), 1 - MIN_RATIO);
-					safeStorage.setItem('dockSplit:' + currentSide, String(Math.round(next * 1000) / 1000));
-					applySide(currentSide);
-				};
-				const up = () => {
-					divider.removeEventListener('pointermove', move);
-					divider.removeEventListener('pointerup', up);
-				};
-				divider.addEventListener('pointermove', move);
-				divider.addEventListener('pointerup', up);
-			});
-			node.appendChild(divider);
-			entry.divider = divider;
-		}
-	} else if (entry.divider) {
-		entry.divider.remove();
-		entry.divider = null;
-	}
+	// only the tab in front renders
+	if (get_shown()[side] === key) delete node.dataset.sidebarHidden;
+	else node.dataset.sidebarHidden = '';
 }
 
-/** wiggle a panel that refused a drop @param {string} occupantKey */
-function wiggle(occupantKey) {
-	const occupant = registry.get(occupantKey)?.node;
-	occupant?.animate(
-		[{ transform: 'translateX(0)' }, { transform: 'translateX(-8px)' }, { transform: 'translateX(8px)' }, { transform: 'translateX(0)' }],
-		{ duration: 220 }
-	);
+/** @type {Record<'left'|'right', string|null>} */
+let shownNow = { left: null, right: null };
+const get_shown = () => shownNow;
+sidebarShown.subscribe((v) => {
+	shownNow = v;
+	applyAll();
+});
+
+/** remember where a window floated before it joins a column @param {any} entry */
+function rememberFloat(entry) {
+	entry.prevRect = {
+		left: entry.node.style.left,
+		top: entry.node.style.top,
+		width: entry.node.style.width,
+		height: entry.node.style.height,
+		zIndex: entry.node.style.zIndex
+	};
 }
 
-/**
- * @param {string} key @param {'left'|'right'} side
- * @param {'top'|'bottom'=} slot where to land when the side already holds a window
- *   (81.4): default bottom
- */
-function dock(key, side, slot = 'bottom') {
+/** dock a window to a side, as that column's front tab @param {string} key @param {'left'|'right'} side */
+function dock(key, side) {
 	const entry = registry.get(key);
 	if (!entry) return false;
-	const stack = docked[side].filter((k) => k !== key);
-	if (stack.length >= MAX_PER_SIDE) {
-		wiggle(stack[stack.length - 1]);
-		return false;
-	}
 	const from = sideOf(key);
+	if (from === side) {
+		activateSidebarTab(key);
+		return true;
+	}
 	if (from) docked[from] = docked[from].filter((k) => k !== key);
-	if (!from || from !== side || entry.prevRect == null)
-		entry.prevRect = {
-			left: entry.node.style.left,
-			top: entry.node.style.top,
-			width: entry.node.style.width,
-			height: entry.node.style.height,
-			zIndex: entry.node.style.zIndex
-		};
-	docked[side] = slot === 'top' ? [key, ...stack] : [...stack, key];
+	else rememberFloat(entry);
+	docked[side] = [...docked[side].filter((k) => k !== key), key];
 	persist();
-	if (from && from !== side) applySide(from);
-	applySide(side);
+	apply(key);
+	activateSidebarTab(key);
 	return true;
 }
+
+// the sidebar tab drag moves a docked window to the other side
+setDockMover((key, side) => (sideOf(key) ? dock(key, side) : false));
 
 /** @param {string} key @param {number=} x @param {number=} y */
 export function undock(key, x, y) {
@@ -268,9 +139,10 @@ export function undock(key, x, y) {
 	docked[side] = docked[side].filter((k) => k !== key);
 	persist();
 	const entry = registry.get(key);
-	if (entry) releaseNode(entry, x, y);
-	// 81.4: the member left behind takes the whole column again
-	applySide(side);
+	if (entry) {
+		releaseNode(entry, x, y);
+		reportMember(key, null, false);
+	}
 }
 
 /** Hand a node that is no longer docked its floating geometry back.
@@ -278,25 +150,22 @@ export function undock(key, x, y) {
 function releaseNode(entry, x, y) {
 	const { node, prevRect } = entry;
 	delete node.dataset.docked;
+	delete node.dataset.sidebarHidden;
 	delete node.dataset.dockSlot;
-	entry.handle?.remove();
-	entry.handle = null;
-	entry.divider?.remove();
-	entry.divider = null;
 	node.style.height = prevRect?.height || '';
 	node.style.width = prevRect?.width || '';
 	node.style.maxWidth = '';
 	node.style.maxHeight = '';
+	node.style.right = '';
 	node.style.zIndex = prevRect?.zIndex || '40'; // z-ok: = --z-window, read back as a number
 	node.style.left = (x != null ? Math.max(0, x - 120) : parseFloat(prevRect?.left) || 200) + 'px';
 	node.style.top = (y != null ? Math.max(0, y - 12) : parseFloat(prevRect?.top) || 120) + 'px';
 }
 
-// 37 R14: a named workspace layout rewrote `dockedWindows` (and the widths/splits, which
-// are read live) — adopt the stored sides. A live window that leaves the column gets its
-// floating geometry back (its own dragWindow re-read then places it); one that joins a
-// column remembers where it floated, as a drag-dock does. Registered at module load, so
-// it runs BEFORE the windows' own re-reads.
+// 37 R14: a named workspace layout rewrote `dockedWindows` — adopt the stored sides. A live
+// window that leaves the column gets its floating geometry back (its own dragWindow re-read then
+// places it); one that joins a column remembers where it floated, as a drag-dock does.
+// Registered at module load, so it runs BEFORE the windows' own re-reads.
 onLayoutRestore(() => {
 	/** @type {{left: string[], right: string[]}} */
 	let next = { left: [], right: [] };
@@ -309,24 +178,17 @@ onLayoutRestore(() => {
 	for (const [key, entry] of registry) {
 		const before = was.left.includes(key) || was.right.includes(key);
 		const now = !!sideOf(key);
-		if (before && !now) releaseNode(entry);
-		else if (!before && now)
-			entry.prevRect = {
-				left: entry.node.style.left,
-				top: entry.node.style.top,
-				width: entry.node.style.width,
-				height: entry.node.style.height,
-				zIndex: entry.node.style.zIndex
-			};
+		if (before && !now) {
+			releaseNode(entry);
+			reportMember(key, null, false);
+		} else if (!before && now) rememberFloat(entry);
 	}
 	if (!isCoarse()) applyAll();
 });
 
-/** @type {any} */ let zoneEl = null;
-/**
- * @param {{side: 'left'|'right', split?: {node: any, slot: 'top'|'bottom'}} | null} target
- *   `split` = the docked panel the drop would share, and which half the new window takes
- */
+/** the column a drop would join: the edge band, or anywhere over a SHOWN column
+ * @type {any} */ let zoneEl = null;
+/** @param {{side: 'left'|'right', column: boolean} | null} target */
 function showZone(target) {
 	if (!target) {
 		zoneEl?.remove();
@@ -336,49 +198,39 @@ function showZone(target) {
 	if (!zoneEl) {
 		zoneEl = document.createElement('div');
 		zoneEl.id = 'dock-zone';
-		zoneEl.style.cssText = `position:fixed;z-index:calc(var(--z-chrome) - 1);pointer-events:none;background:rgb(37 99 235 / .25);border:2px dashed rgb(96 165 250 / .8);`;
+		zoneEl.className = 'sb-drop-zone';
 		document.body.appendChild(zoneEl);
 	}
-	const { side, split } = target;
-	if (split) {
-		// the half of the occupant the new window would take, with a label — the 83
-		// merge-target affordance, one drop kind over
-		const r = split.node.getBoundingClientRect();
-		zoneEl.dataset.split = split.slot;
-		zoneEl.style.top = (split.slot === 'top' ? r.top : r.top + r.height / 2) + 'px';
-		zoneEl.style.height = r.height / 2 + 'px';
-		zoneEl.style.bottom = 'auto';
-		zoneEl.style.left = r.left + 'px';
-		zoneEl.style.right = 'auto';
-		zoneEl.style.width = r.width + 'px';
-		zoneEl.textContent = '⊟ Split panel';
-		zoneEl.style.cssText +=
-			'display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:600;';
-	} else {
-		delete zoneEl.dataset.split;
-		zoneEl.textContent = '';
-		zoneEl.style.top = TOP + 'px';
-		zoneEl.style.bottom = '0';
-		zoneEl.style.height = 'auto';
-		zoneEl.style.width = '80px';
-		zoneEl.style.left = side === 'left' ? '0' : 'auto';
-		zoneEl.style.right = side === 'right' ? '0' : 'auto';
-	}
+	const { side, column } = target;
+	zoneEl.dataset.side = side;
+	zoneEl.dataset.tab = column ? 'true' : 'false';
+	// an occupied side highlights its whole column (the window becomes one of its tabs); an
+	// empty one shows the edge band the column will open from
+	zoneEl.style.top = `var(--sb-${side}-top, 64px)`;
+	zoneEl.style.bottom = `var(--sb-${side}-bottom, 0px)`;
+	zoneEl.style.width = column ? `var(--sb-${side}-w, 320px)` : '80px';
+	zoneEl.style.left = side === 'left' ? (column ? 'var(--sb-left-x, 0px)' : '0px') : 'auto';
+	zoneEl.style.right = side === 'right' ? '0px' : 'auto';
+	zoneEl.textContent = column ? 'Add as tab' : '';
 }
-
-let subscribed = false;
 
 // touch / limited-width devices: edge side-docking is disabled — there isn't the
 // horizontal room for a full-height side panel, and it fights touch scrolling.
 const isCoarse = () =>
 	typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
 
+/** the sides whose column is on screen right now */
+let tabsNow = { left: /** @type {string[]} */ ([]), right: /** @type {string[]} */ ([]) };
+sidebarTabs.subscribe((v) => (tabsNow = v));
+
 /**
  * svelte action: makes a floating window dockable to the screen edges.
  * @param {any} node @param {{key: string}} options
  */
 export function dockable(node, { key }) {
-	registry.set(key, { node, prevRect: null, handle: null, divider: null });
+	/** @type {any} */
+	const entry = { node, prevRect: null, present: false, observer: null };
+	registry.set(key, entry);
 	// On mobile, register only (so destroy() still cleans up) but wire NO edge-drag
 	// handlers and restore NO persisted side-dock — the window stays a normal floating
 	// window. The persisted desktop preference is left untouched.
@@ -389,20 +241,14 @@ export function dockable(node, { key }) {
 			}
 		};
 	}
-	if (!subscribed) {
-		subscribed = true;
-		// right-docked panels give way to the Inspector drawer
-		inspectorClose.subscribe(() => applyAll());
-		// left dock insets past the sidebar — re-apply next frame too, since the
-		// sidebar mounts AFTER the store fires (so it can be measured)
-		closeMenu.subscribe(() => {
-			applyAll();
-			requestAnimationFrame(applyAll);
-		});
-		window.addEventListener('resize', applyAll);
-	}
-	const restored = sideOf(key);
-	if (restored) applySide(restored); // restore a persisted dock (and re-share a split)
+	if (sideOf(key)) rememberFloat(entry);
+	apply(key); // restore a persisted dock (as a tab of its side)
+	// open / closed is a class on an always-mounted window (the object list): a tab comes and goes
+	// with it, and coming back brings it to the front (reportMember)
+	entry.observer = new MutationObserver(() => {
+		if (isPresent(node) !== entry.present) apply(key);
+	});
+	entry.observer.observe(node, { attributes: true, attributeFilter: ['class'] });
 
 	let dragging = false;
 	/** @param {any} e */
@@ -435,38 +281,23 @@ export function dockable(node, { key }) {
 	// dock" — the model the user was aiming at — not "make it a full-height side panel
 	// that happens to start below the dock". Asking here rather than there keeps the
 	// decision on the side that has to yield.
-	/** @param {any} e @returns {'left'|'right'|null} */
-	const edgeAt = (e) => {
+	/** @param {any} e @returns {{side: 'left'|'right', column: boolean} | null} */
+	const targetAt = (e) => {
 		// ...but only where the dock would really take THIS window. Yielding the band
 		// unconditionally hands the bottom of both side edges to a dock that cannot
 		// accept a non-DOCK_FAMILY panel, so the drop does nothing at all.
 		if (bottomDockWouldTake(key, e.clientY, e.clientX)) return null;
-		return e.clientX < EDGE ? 'left' : e.clientX > window.innerWidth - EDGE ? 'right' : null;
-	};
-	/** 81.4: the docked panel under the pointer (on a side with room), and which half
-	 * @param {any} e @returns {{side: 'left'|'right', node: any, slot: 'top'|'bottom'} | null} */
-	const splitAt = (e) => {
-		if (bottomDockWouldTake(key, e.clientY, e.clientX)) return null;
+		const root = getComputedStyle(document.documentElement);
 		for (const side of /** @type {const} */ (['left', 'right'])) {
-			const stack = docked[side].filter((k) => k !== key);
-			if (stack.length !== 1) continue;
-			const other = registry.get(stack[0])?.node;
-			if (!other?.isConnected) continue;
-			const r = other.getBoundingClientRect();
-			if (r.width === 0) continue;
-			const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-			const onEdge = edgeAt(e) === side;
-			if (!inside && !onEdge) continue;
-			return { side, node: other, slot: inside && e.clientY < r.top + r.height / 2 ? 'top' : 'bottom' };
+			const occupied = tabsNow[side].some((k) => k !== key);
+			const w = parseFloat(root.getPropertyValue(`--sb-${side}-w`)) || 320;
+			const x0 = side === 'left' ? parseFloat(root.getPropertyValue('--sb-left-x')) || 0 : window.innerWidth - w;
+			const top = parseFloat(root.getPropertyValue(`--sb-${side}-top`)) || 0;
+			const overColumn = occupied && e.clientX >= x0 && e.clientX <= x0 + w && e.clientY >= top;
+			const onEdge = side === 'left' ? e.clientX < EDGE : e.clientX > window.innerWidth - EDGE;
+			if (overColumn || onEdge) return { side, column: occupied };
 		}
 		return null;
-	};
-	/** @param {any} e @returns {{side: 'left'|'right', split?: {node: any, slot: 'top'|'bottom'}} | null} */
-	const targetAt = (e) => {
-		const split = splitAt(e);
-		if (split) return { side: split.side, split: { node: split.node, slot: split.slot } };
-		const side = edgeAt(e);
-		return side ? { side } : null;
 	};
 	/** @param {any} e */
 	const move = (e) => {
@@ -479,7 +310,7 @@ export function dockable(node, { key }) {
 		dragging = false;
 		showZone(null);
 		const target = targetAt(e);
-		if (target) dock(key, target.side, target.split?.slot ?? 'bottom');
+		if (target) dock(key, target.side);
 	};
 	node.addEventListener('pointerdown', down, true); // capture: beats dragWindow while docked
 	window.addEventListener('pointermove', move);
@@ -490,11 +321,10 @@ export function dockable(node, { key }) {
 			node.removeEventListener('pointerdown', down, true);
 			window.removeEventListener('pointermove', move);
 			window.removeEventListener('pointerup', up);
+			entry.observer?.disconnect();
 			registry.delete(key);
-			// a member that unmounts leaves its partner the column (the persisted
-			// pair survives for its return, since the layout is re-derived on apply)
-			const side = sideOf(key);
-			if (side) applySide(side);
+			// a member that unmounts is no longer a tab (its persisted side survives for its return)
+			if (sideOf(key)) reportMember(key, sideOf(key), false);
 		}
 	};
 }

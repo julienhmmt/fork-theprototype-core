@@ -260,6 +260,7 @@ export const DEBUG_HOOKS = [
 	['uiLayouts', () => import('./uiLayouts')],
 	['undoToast', () => import('./undoToast')],
 	['docking', () => import('./docking')],
+	['sidebars', () => import('./sidebars')],
 	['editResume', () => import('./editResume')],
 	['moduleRequirements', () => import('./moduleRequirements')],
 	['hudDocs', () => import('./hudDocs')],

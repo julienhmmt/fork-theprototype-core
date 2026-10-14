@@ -751,7 +751,8 @@
 
 <!-- when Connect docks to a full-width top bar, drop this corner chrome below it (plus
 	 its tab strip when pinned) so nothing overlaps — connectBarHeight is the bar's height -->
-<div class="top-right-chrome" style="position: fixed; right: 0px; z-index: var(--z-chrome-top); top: {$connectDocked ? $connectBarHeight + 'px' : '0px'};">
+<!-- 42 I2: a FULL-HEIGHT right sidebar takes the corner — the cluster slides inward by its width -->
+<div class="top-right-chrome" style="position: fixed; right: var(--sb-dock-right, 0px); transition: right 0.2s ease; z-index: var(--z-chrome-top); top: {$connectDocked ? $connectBarHeight + 'px' : '0px'};">
 	<!-- 38 R8: one glass group (styles/hud.css) — notes, notifications, peers — sitting just
 	     left of the profile circle, which keeps its own place (its dropdown is anchored to it) -->
 	<div class="tp-ui hud-glass hud-tr" style="position: absolute; top: 10px; right: 76px; z-index: 2;">

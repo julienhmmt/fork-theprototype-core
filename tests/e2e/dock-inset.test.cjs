@@ -264,7 +264,9 @@ h.run(async () => {
 		// drop by calling the action's path: pointer drag to x=2
 	});
 	const list = await A.page.locator('#object-list').boundingBox();
-	await A.page.mouse.move(list.x + 100, list.y + 8);
+	// grab the header's TITLE end: at x+100 sits its search field, which is not a drag handle (the
+	// drop never happened, and the two checks below read a floating list — red on 1.32.0 too)
+	await A.page.mouse.move(list.x + 24, list.y + 14);
 	await A.page.mouse.down();
 	await A.page.mouse.move(2, 300, { steps: 12 });
 	await A.page.mouse.up();

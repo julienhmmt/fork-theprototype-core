@@ -24,6 +24,7 @@ import { raiseWindow, isTopVisibleWindow } from './windowFocus';
 import { groupOfKey, activateTab } from './windowTabs';
 import { revealWindow } from './dragWindow';
 import { safeStorage } from './safeStorage';
+import { sidebarTabCovered, activateSidebarTab } from './sidebars';
 
 // ONE decision tree for the Controls panel buttons AND their keyboard shortcuts
 // (O / N). Before this module the Object list button had taskbar semantics
@@ -154,6 +155,11 @@ export function togglePanel(key) {
 	}
 
 	if (!isDockedPresent(key)) {
+		// 42 I3: open + docked to a SIDE but covered by another tab of that sidebar -> bring it forward
+		if (sidebarTabCovered(key)) {
+			activateSidebarTab(key);
+			return;
+		}
 		// 2. open + a member of a tab group that is showing a SIBLING tab
 		const group = groupOfKey(key);
 		if (group && group.active !== key) {

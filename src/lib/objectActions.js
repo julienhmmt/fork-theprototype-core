@@ -253,7 +253,7 @@ export function applySelectionSet(uuids, openProperties = false) {
 	// PINNED panel (follows every selection), or a panel already showing the
 	// selection. A plain viewport click alone no longer forces it open.
 	if (openProperties || get(inspectorPinned) || (!get(inspectorClose) && get(inspectorKind) === 'selection')) {
-		showSidebar('properties');
+		showSidebar('properties', { focus: !!openProperties }); // 42 I3: following the selection never steals a covered tab's place
 	}
 }
 
@@ -342,7 +342,7 @@ export function selectObject(uuid, openProperties = false, additive = false) {
 		if (controls && !get(isVRMode)) controls.detach();
 		selectedObject.set(object);
 		if (openProperties || get(inspectorPinned) || (!get(inspectorClose) && get(inspectorKind) === 'selection')) {
-			showSidebar('properties');
+			showSidebar('properties', { focus: !!openProperties });
 		}
 		return;
 	}
