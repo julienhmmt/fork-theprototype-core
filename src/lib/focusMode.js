@@ -56,13 +56,24 @@ export function areaAt(x, y) {
  * 'dock' fills the window by giving the dock the window's height for the duration: every docked
  * editor sizes its INSIDE from `dockHeight` too (the Explorer's shell, the Node editor's pane), so
  * stretching only the outer box left their content short. The height before is put back on exit.
- * The band above holds the exit pill (48px, 56 on touch) and the dock's own tab strip (24px).
+ *
+ * 43 K5 ("really full screen … this gap should cover the entire screen"): on the desktop layout the
+ * dock's own tab strip rides at the window's TOP edge and the panel takes everything below it — no
+ * band for the exit pill any more (the pill sits IN the strip row, FocusModeExit), and the pinned
+ * sidebars give their width back for the duration (windows.css "43 K5"). The phone shell keeps the
+ * 42 band: its dock host has no strip of its own to share.
  */
 let heightBefore = /** @type {number|null} */ (null);
-function fullDockHeight() {
+/** the dock tab strip's height (it hangs ABOVE the panel: DockTabs' `-top-6` row) */
+export const DOCK_STRIP_H = 24;
+export function fullDockHeight() {
 	if (typeof window === 'undefined') return 600;
-	const coarse = !!window.matchMedia?.('(pointer: coarse)').matches;
-	return Math.max(160, window.innerHeight - (coarse ? 56 : 48) - 24);
+	const phone = document.documentElement.classList.contains('phone-shell');
+	if (phone) {
+		const coarse = !!window.matchMedia?.('(pointer: coarse)').matches;
+		return Math.max(160, window.innerHeight - (coarse ? 56 : 48) - DOCK_STRIP_H);
+	}
+	return Math.max(160, window.innerHeight - DOCK_STRIP_H);
 }
 /** @param {FocusKind|null} kind */
 function sizeDock(kind) {
@@ -125,6 +136,12 @@ export function maximizeDockTab(key) {
 	enterFocus('dock');
 }
 
+/** leave 'dock' focus once the dock has STAYED empty for two frames (see the subscription) */
+function exitWhenDockStaysEmpty() {
+	const later = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (/** @type {any} */ fn) => setTimeout(fn, 16);
+	later(() => later(() => !get(visibleDockKey) && get(focusMode) === 'dock' && exitFocus()));
+}
+
 let started = false;
 /** wire the pointer tracker and the auto-exits (once, from the always-mounted chrome) */
 export function startFocusMode() {
@@ -141,7 +158,11 @@ export function startFocusMode() {
 		focusMode.subscribe(apply),
 		isLocked.subscribe((v) => v === true && exitFocus()),
 		anyModalOpen.subscribe((v) => v && exitFocus()),
-		visibleDockKey.subscribe((k) => !k && get(focusMode) === 'dock' && exitFocus()),
+		// 43 K5: SETTLED, not instant — entering 'dock' resizes the dock and hides the chrome, and
+		// every dock member re-reports itself on the way (measured: the occupants go present ->
+		// absent -> present inside one task), so an instant check left focus the moment it entered.
+		// Exit only when the dock is STILL empty two frames later.
+		visibleDockKey.subscribe((k) => !k && get(focusMode) === 'dock' && exitWhenDockStaysEmpty()),
 		dockMinimized.subscribe((m) => m && get(focusMode) === 'dock' && exitFocus())
 	];
 	return () => {

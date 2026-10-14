@@ -233,6 +233,9 @@ export const DEBUG_HOOKS = [
 	['cameraPreview', () => import('./cameraPreview')],
 	['addObjects', () => import('./addObjects')],
 	['cameraPip', () => import('./cameraPip')],
+	// 43 K5: the shared PiP renderer + the maximized dock's viewport PiP
+	['pipViews', () => import('./pipViews')],
+	['viewportPip', () => import('./viewportPip')],
 	['inputDevice', () => import('./inputDevice')],
 	['sceneTemplates', () => import('./sceneTemplates')],
 	['bvhPicking', () => import('./bvhPicking')],

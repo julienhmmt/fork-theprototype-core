@@ -35,4 +35,18 @@
 			top: var(--space-1);
 		}
 	}
+	/* 43 K5: a maximized docked window owns the whole window, its tab strip on the top edge — the pill
+	   rides IN that strip row, left of the strip's own window buttons (DockTabs' right-hand group),
+	   at the strip's height, instead of holding a band of its own above it */
+	:global(:root:not(.phone-shell)) .focus-exit[data-focus-kind='dock'] {
+		top: 0;
+		left: auto;
+		right: 96px;
+		translate: none;
+	}
+	:global(:root:not(.phone-shell)) .focus-exit[data-focus-kind='dock'] :global(.btn) {
+		height: 24px;
+		min-height: 24px;
+		padding-block: 0;
+	}
 </style>

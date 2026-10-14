@@ -51,11 +51,36 @@ export const pipTarget = derived(
 	}
 );
 
+/** the smallest a camera preview may be resized to (CSS px tall) — declared ABOVE the store that
+ * reads it at module evaluation (the TDZ rule) */
+export const PIP_MIN_HEIGHT = 90;
+/** 43 K5: the window is RESIZABLE now (its corner grip); the height the user chose is remembered
+ * (LOCAL, persisted — the width always follows the camera's framing aspect). null = PIP_HEIGHT.
+ * @type {import('svelte/store').Writable<number | null>} */
+export const pipHeight = writable(readPipHeight());
+function readPipHeight() {
+	try {
+		const v = Number(typeof localStorage !== 'undefined' ? localStorage.getItem('cameraPip:height') : NaN);
+		return Number.isFinite(v) && v >= PIP_MIN_HEIGHT ? v : null;
+	} catch {
+		return null;
+	}
+}
+pipHeight.subscribe((v) => {
+	try {
+		if (typeof localStorage === 'undefined') return;
+		if (v == null) localStorage.removeItem('cameraPip:height');
+		else localStorage.setItem('cameraPip:height', String(Math.round(v)));
+	} catch {
+		/* private mode: the size lives for the session */
+	}
+});
+
 /** Window size for a camera's framing (16:9 unless it declares otherwise).
- * @param {any} object */
-export function pipSize(object) {
+ * @param {any} object @param {number | null} [height] the user's height (null = the default) */
+export function pipSize(object, height = null) {
 	const ratio = aspectRatio(cameraSpec(object).aspect) || 16 / 9;
-	const h = PIP_HEIGHT;
+	const h = Math.max(PIP_MIN_HEIGHT, Math.round(height ?? PIP_HEIGHT));
 	return { w: Math.round(h * ratio), h };
 }
 
@@ -106,7 +131,12 @@ export function resetPipPosition() {
 	pipPosition.set(null);
 }
 
+/** 43 K5: back to the default size (the grip's double-click) */
+export function resetPipSize() {
+	pipHeight.set(null);
+}
+
 /** test/debug view */
 export function pipDebug() {
-	return { target: get(pipTarget), rect: get(pipRect), position: get(pipPosition) };
+	return { target: get(pipTarget), rect: get(pipRect), position: get(pipPosition), height: get(pipHeight) };
 }
