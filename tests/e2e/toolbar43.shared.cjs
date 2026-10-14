@@ -294,7 +294,8 @@ h.run(async () => {
 			await sidebar(P, { open: false });
 		}
 
-		if (want('j8clamp')) {
+		// the light pass is the LOOK (the shots); the clamp arithmetic is theme-free and ran in dark
+		if (want('j8clamp') && theme === 'dark') {
 			// ---- J8: the bar never crosses a pinned sidebar — a drag, Move toolbar's arrows ----------------
 			await P.evaluate(() => window.__stores.hudStackLift.set(true));
 			for (const side of ['right', 'left']) {
@@ -333,8 +334,8 @@ h.run(async () => {
 		if (want('j8edit')) {
 			// ---- J8: Edit positions lays its bar BESIDE an open sidebar (pinned or not), wrapping --------
 			await setBar(P, ALL_ON, A);
-			for (const pinned of [false, true]) {
-				for (const side of ['right', 'left']) {
+			for (const pinned of theme === 'dark' ? [false, true] : [false]) {
+				for (const side of theme === 'dark' ? ['right', 'left'] : ['right']) {
 					await sidebar(P, { side, full: pinned, w: 560 });
 					const g = await sbGeom(P);
 					const col = side === 'right' ? { left: 1440 - g.right.w, right: 1440 } : { left: g.leftX, right: g.leftX + g.left.w };
@@ -357,6 +358,7 @@ h.run(async () => {
 					await P.waitForTimeout(350);
 				}
 			}
+			if (theme === 'dark') {
 			// a bar parked hard right, then Edit positions with the right sidebar open: it slides only enough
 			await sidebar(P, { open: false });
 			await setBar(P, JSON.stringify({ ...JSON.parse(ALL_ON), posX: 1 }), A);
@@ -366,6 +368,7 @@ h.run(async () => {
 			h.check(bar.right <= 1440 - 400 + 1 && bar.right >= 1440 - 400 - 40, T + `J8: a bar parked right slides just clear of the sidebar (right edge ${Math.round(bar.right)}, sidebar at ${1440 - 400})`);
 			await P.keyboard.press('Escape');
 			await P.waitForTimeout(300);
+			}
 			await sidebar(P, { open: false });
 			await setBar(P, null, A);
 		}
