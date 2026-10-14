@@ -1092,9 +1092,19 @@ h.run(async () => {
 			s.objectActions.flyTo([w.x + 1.1, w.y + 0.9, w.z + 2.1], [w.x, w.y, w.z], 1);
 			return true;
 		}, id);
+	// 42-int: the 1 s flight can still be clustering the badges at 800 ms on a loaded box (seen on
+	// two 42 lanes and the union, never on a quiet run) — wait for badge #1 itself, up to 4 s
+	const badgeReady = async (page, number) => {
+		for (let i = 0; i < 20; i++) {
+			const ok = await page.evaluate((n) => [...document.querySelectorAll('.marker-badge')].some((b) => b.querySelector('.marker-num')?.textContent?.trim() === String(n)), number);
+			if (ok) return;
+			await page.waitForTimeout(200);
+		}
+	};
 	// default OFF: one click opens, exactly as before
 	await frameNote(A.page, id1);
 	await A.page.waitForTimeout(800);
+	await badgeReady(A.page, 1);
 	h.check(await clickBadge(A.page, 1), 'H11-D: found a marker to click');
 	await A.page.waitForTimeout(500);
 	h.check(
@@ -1138,6 +1148,7 @@ h.run(async () => {
 	// us to this note's SAVED pose, which was authored before the box moved)
 	await frameNote(A.page, id1);
 	await A.page.waitForTimeout(800);
+	await badgeReady(A.page, 1);
 	h.check(await clickBadge(A.page, 1, 'dblclick'), 'H11-D: found the marker to double-click');
 	await A.page.waitForTimeout(500);
 	h.check((await active(A.page))?.id === id1, 'H11-D: a double click opens the card');
