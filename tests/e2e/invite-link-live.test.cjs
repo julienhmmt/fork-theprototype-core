@@ -140,6 +140,9 @@ h.run(async () => {
 		'the rebuilt link on the previous server opened',
 		45000
 	);
+	// a red here is load-dependent (2 of 4 runs on a busy box) — print the net log so the next one says why
+	if (!(await D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return !!p.peer?.open; })))
+		console.log('  net log: ' + JSON.stringify(await D.page.evaluate(() => window.__stores.diagnostics.lines().filter((l) => /net|peer|signal/i.test(JSON.stringify(l))).slice(-15))));
 
 	// ---- 8. D2: Settings ▸ Connection "Apply" switches without a reload -------------
 	await D.page.evaluate((cfg) => {
