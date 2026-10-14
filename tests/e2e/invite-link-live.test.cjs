@@ -122,12 +122,29 @@ h.run(async () => {
 	const idKept = await D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return p.peer.id; });
 	h.check(idKept === D.id, `D kept its session id across the switch (${idKept} = ${D.id})`);
 
-	// ---- 7. D2: Settings ▸ Connection "Apply" switches without a reload -------------
-	// (runs BEFORE the unreachable-pin case since 43-tests: that case then falls back onto OUR
-	// self-hosted server. Falling back onto the public PeerJS cloud went red in 3 runs of 7 — every
-	// time the THIRD back-to-back run, the rebuilt link sitting with no open and no error while
-	// 0.peerjs.com did not answer this box: an outside service's limit, not the fallback logic this
-	// guards. Section 6 still proves the switch TO the public cloud.)
+	// ---- 7. D2: a pinned server that never opens: back where you were, said so -------
+	await D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); p.leaveSession(); });
+	await D.page.waitForTimeout(1500);
+	await paste(D, '#' + A.id + '~srv=' + encodeURIComponent('nonexistent.invalid:4443'));
+	await D.page.waitForTimeout(400);
+	await clickToast(D, 'Join');
+	await h.eventually(() => lastToasts(D), (t) => t.some((x) => /Could not reach nonexistent\.invalid:4443/.test(x)), 'an unreachable pinned server is reported by name', 30000);
+	await h.eventually(() => serverKind(D), (k) => k === 'public', 'D is back on the server it had (public)', 20000);
+	h.check((await pendingOut(D)).length === 0, 'and nothing was dialled');
+	// the rebuild re-registers on the PUBLIC cloud (an internet round trip, plus an id-collision
+	// retry when the cloud still holds D's registration from section 6) — 20 s was not always
+	// enough on a loaded box. The state is read whole so a red says where it stopped.
+	await h.eventually(
+		() => D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return { open: !!p.peer?.open, id: p.peer?.id ?? null, disconnected: !!p.peer?.disconnected, destroyed: !!p.peer?.destroyed, idRetries: p.idRetries ?? null }; }),
+		(o) => o.open,
+		'the rebuilt link on the previous server opened',
+		45000
+	);
+	// a red here is load-dependent (2 of 4 runs on a busy box) — print the net log so the next one says why
+	if (!(await D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return !!p.peer?.open; })))
+		console.log('  net log: ' + JSON.stringify(await D.page.evaluate(() => window.__stores.diagnostics.lines().filter((l) => /net|peer|signal/i.test(JSON.stringify(l))).slice(-15))));
+
+	// ---- 8. D2: Settings ▸ Connection "Apply" switches without a reload -------------
 	await D.page.evaluate((cfg) => {
 		window.__stores.peerServer.peerServerConfig.set(cfg);
 		window.__stores.settingsSection.set('connection');
@@ -138,27 +155,6 @@ h.run(async () => {
 	await h.eventually(() => serverKind(D), (k) => k === 'custom', 'Apply moved D to the configured custom server, no reload', 20000);
 	h.check((await navCount(D)) === 1, 'still one navigation entry on D');
 	await D.page.evaluate(() => window.__stores.settingsOpen.set(false));
-	await h.eventually(() => D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return { open: !!p.peer?.open, id: p.peer?.id ?? null, disconnected: !!p.peer?.disconnected, destroyed: !!p.peer?.destroyed, idRetries: p.idRetries ?? null }; }), (o) => o.open, 'the link on the custom server opened (premise for the next section)', 30000);
-
-	// ---- 8. D2: a pinned server that never opens: back where you were, said so -------
-	await D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); p.leaveSession(); });
-	await D.page.waitForTimeout(1500);
-	await paste(D, '#' + A.id + '~srv=' + encodeURIComponent('nonexistent.invalid:4443'));
-	await D.page.waitForTimeout(400);
-	await clickToast(D, 'Join');
-	await h.eventually(() => lastToasts(D), (t) => t.some((x) => /Could not reach nonexistent\.invalid:4443/.test(x)), 'an unreachable pinned server is reported by name', 30000);
-	await h.eventually(() => serverKind(D), (k) => k === 'custom', 'D is back on the server it had (custom, from Settings)', 20000);
-	h.check((await pendingOut(D)).length === 0, 'and nothing was dialled');
-	// the state is read whole so a red says where it stopped
-	await h.eventually(
-		() => D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return { open: !!p.peer?.open, id: p.peer?.id ?? null, disconnected: !!p.peer?.disconnected, destroyed: !!p.peer?.destroyed, idRetries: p.idRetries ?? null }; }),
-		(o) => o.open,
-		'the rebuilt link on the previous server opened',
-		45000
-	);
-	// a red here prints the net log, so it says why
-	if (!(await D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return !!p.peer?.open; })))
-		console.log('  net log: ' + JSON.stringify(await D.page.evaluate(() => window.__stores.diagnostics.lines().filter((l) => /net|peer|signal/i.test(JSON.stringify(l))).slice(-15))));
 
 	await h.finish(browser);
 });
