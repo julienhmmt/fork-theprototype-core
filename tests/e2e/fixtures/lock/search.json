@@ -1,5 +1,5 @@
 {
-	"recordedAt": "2026-10-11T14:04:47.021Z",
+	"recordedAt": "2026-10-13T22:59:26.152Z",
 	"settings": {
 		"Theme": {
 			"rows": [
@@ -1800,6 +1800,7 @@
 				"Placement preview",
 				"Preview triangle budget",
 				"Quality",
+				"Quality preset",
 				"Reduce quality when the scene is heavy",
 				"Reset line colours",
 				"Selection outline colour",
@@ -2307,6 +2308,7 @@
 				"Show system objects in the object list",
 				"Show the environment in the object list",
 				"Show tours automatically",
+				"Sticky panel headers",
 				"Theme",
 				"Toolbar always on top",
 				"Touch tools",
@@ -2377,6 +2379,7 @@
 				"Placeholder style",
 				"Placement preview",
 				"Preview triangle budget",
+				"Quality preset",
 				"Reduce quality when the scene is heavy",
 				"Reset line colours",
 				"Selection outline colour",
@@ -2519,6 +2522,7 @@
 				"Compress textures",
 				"Include VR button",
 				"Quality",
+				"Quality preset",
 				"Reduce quality when the scene is heavy",
 				"Show FPS",
 				"Show FPS and draw calls",
@@ -2876,6 +2880,7 @@
 				"Show system objects in the object list",
 				"Show the environment in the object list",
 				"Show tours automatically",
+				"Sticky panel headers",
 				"Theme",
 				"Toolbar always on top",
 				"Touch tools",
@@ -2920,6 +2925,7 @@
 				"Show system objects in the object list",
 				"Show the environment in the object list",
 				"Show tours automatically",
+				"Sticky panel headers",
 				"Theme",
 				"Toolbar always on top",
 				"Touch tools",
@@ -3126,6 +3132,7 @@
 				"Placement preview",
 				"Preview triangle budget",
 				"Project actions",
+				"Quality preset",
 				"Reduce quality when the scene is heavy",
 				"Reset line colours",
 				"Selection outline colour",
@@ -3919,6 +3926,7 @@
 				"Reverse trackpad pan",
 				"Shader editor: show / bring to front / hide",
 				"Spatial voice",
+				"Sticky panel headers",
 				"Toggle AI prompt bar",
 				"Toggle chat",
 				"Tool dock: show / hide (Node editor, Explorer, Animation, UV, Shader, HUD…)",
@@ -4245,6 +4253,7 @@
 				"Overrides — this device",
 				"Physics",
 				"Play",
+				"Quality",
 				"Saved views",
 				"Scene look",
 				"Scene track (shared)",
@@ -4257,6 +4266,9 @@
 				"This device",
 				"View",
 				"Viewport — this device"
+			],
+			"quality": [
+				"Quality"
 			],
 			"environment": [
 				"Components",
@@ -4427,7 +4439,9 @@
 				"Scene look",
 				"Shader materials"
 			],
-			"shadow": [],
+			"shadow": [
+				"Quality"
+			],
 			"material": [
 				"Overrides — this device",
 				"Physics",
