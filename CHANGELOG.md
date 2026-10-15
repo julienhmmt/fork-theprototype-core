@@ -5,6 +5,61 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.35.0 — Your 1.34 review: windows that move and dock anywhere, a dock that splits, and a toolbar you place 🪟
+
+Everything from your review of the 1.34 preview, plus four bugs the test clean-up found.
+
+### 🪟 Floating windows
+
+- ✋ **A floating window moves by any empty part of it**, not only its header — a click on a row or a button still does
+  what it did.
+- 🧲 **Every floating window docks by drag** — onto the dock's tab strip, the bottom edge or either sidebar, grouped or
+  not, with the mouse and on an unfolded phone by touch.
+- 📋 **A window menu** on a header or group tab (right-click, or a long press): Dock to bottom, Move to the left/right
+  sidebar, Float, Group with…, Bring to front, Reset size, Close.
+
+### 🗂️ The dock and the sidebars
+
+- ➕ **T opens an empty dock** with only its "+" when nothing is docked, and the empty dock takes a drop.
+- 🎯 **Every "+" lists every window**: one that is already open is ticked, says where it is and comes to the front there
+  — no second copy (the dock's "+" no longer docks or removes a window: Undock and Close stay on the tab and its menu).
+  **Ctrl/Cmd- or Shift-click** picks several without closing the menu.
+- 🗃️ **Sidebars get a "+" too**, stay open when you empty them, and **Ctrl+B / Ctrl+Alt+B** show and hide the left and
+  right sidebar (their tabs stay open).
+- ↔️ **The dock splits side by side**: a Split button (and Split right / Split with / Swap sides / Unsplit in the tab
+  menu) puts two windows in one "A / B" tab with a draggable divider; drag a tab onto a pane to swap it in. Splits are
+  remembered.
+- 📐 Docked Statistics, Chat, Shader editor, Objects, Live profiler and AI windows stop at a **Full-height sidebar** like
+  the editors do.
+
+### 🧰 The toolbar and the Connect bar
+
+- 👆 **Move toolbar works by touch**: drag the bar with a finger and lift to place it.
+- 🧩 **Edit positions arranges every button cluster** — the toolbar, both corner stacks, the buttons beside the logo, the
+  top-right group and the Connect bar: drag one anywhere, it snaps to edges, sidebars and other clusters and never
+  overlaps; **Rotate to vertical / horizontal**, Reset position, Reset all, Hide. Positions survive fold/unfold,
+  resizing and sidebars, and Layouts carry them.
+- 📌 **Connect: Pinned or Float**, from its drawer; a floating Connect bar with no room on the top row turns compact, and
+  a pinned one squares its corner beside an open sidebar. The buttons beside the logo follow a pinned left sidebar.
+
+### 🎯 Focus mode and Settings
+
+- 🖼️ **A Viewport button beside Exit focus** shows or hides the 3D preview without leaving focus mode — and focus mode
+  remembers your choice (shown by default).
+- ⚙️ **Opening Settings no longer closes** an open sidebar or docked windows.
+
+### 🐞 Fixed
+
+- 📊 Profiler: a selection counts exactly the frames you picked (a click is one frame, Shift+→ adds one).
+- 🔌 An invite link pinned to a server that cannot be reached brings you back online on your previous server within a
+  second — it could stay offline until a reload.
+- ⚡ Opening a big scene no longer stalls the window past 200 ms on a phone (the object list's icons are much cheaper).
+- 🔁 "ResizeObserver loop completed with undelivered notifications" no longer appears when the toolbar changes size
+  beside a pinned sidebar, or when a crowded top row turns the Connect bar compact.
+- 🧾 Typing with the Node editor open no longer floods the diagnostics log; a repeated identical line is counted (×N).
+- 🍔 Under a pinned Connect bar an open left sidebar starts below the logo, so the menu stays in reach (the unfolded
+  phone pins the bar by default now); in focus mode the Exit focus pill sits clear of the dock's new Split button.
+
 ## 1.34.0 — Your 1.33 review: copy and paste any value, a toolbar that fits, and a real full-screen focus 📋
 
 Everything from your review of the 1.33 preview.

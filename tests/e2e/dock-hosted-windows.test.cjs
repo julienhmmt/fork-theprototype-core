@@ -203,11 +203,18 @@ h.run(async () => {
 	const rowsPlus = await S(page, () => [...document.querySelectorAll('[role="menu"] [role="menuitem"]')].map((e) => e.textContent.replace(/\s+/g, ' ').trim()));
 	await page.screenshot({ path: out + '/i6-dock-plus-hosted-' + THEME + '.png' });
 	h.check(['Objects', 'Statistics', 'Live profiler', 'Chat', 'AI assistant'].every((t) => rowsPlus.some((r) => r.startsWith(t))), `6.1 the dock's "+" lists Objects, Statistics, Live profiler, Chat and AI assistant (${JSON.stringify(rowsPlus)})`);
-	h.check(rowsPlus.some((r) => /^Chat.*Dock/.test(r)), '6.2 ...the open floating Chat reads "Dock"');
+	// 44 M5: ONE registry rule — a window open anywhere is FOCUSED where it is by every "+" (the user's
+	// '+ ▸ Statistics opened a second copy in the dock'); docking a floating window is its drag / its menu
+	h.check(rowsPlus.some((r) => /^Chat.*Floating/.test(r)), '6.2 ...the open floating Chat reads "Floating"');
 	await page.click('[role="menu"] [role="menuitem"]:has-text("Chat")');
 	await page.waitForTimeout(1200);
 	st = await hostState(page, '#chat-window');
-	h.check((await order(page)).includes('chat') && st.host === 'shown' && st.width === st.vw, `6.3 "Chat" docks the floating chat and shows it (${JSON.stringify({ host: st.host, w: st.width })})`);
+	h.check(!(await order(page)).includes('chat') && st.host !== 'shown', `6.3 "Chat" brings the floating chat forward where it floats — it is not docked (${JSON.stringify({ host: st.host })})`);
+	// ...and docked the 41 G7 way instead (the Undock seam's twin: the dock arm), so section 7 reads as before
+	await S(page, () => window.__stores.bottomDock.armDockMode('chat', true));
+	await page.waitForTimeout(1200);
+	st = await hostState(page, '#chat-window');
+	h.check((await order(page)).includes('chat') && st.host === 'shown' && st.width === st.vw, `6.4 docked through the dock arm, Chat shows in the dock (${JSON.stringify({ host: st.host, w: st.width })})`);
 
 	// ---- 7. remembered: reopen and reload -------------------------------------------------------
 	await S(page, () => window.__stores.dockMenu.setDockViewShown('objects', true));

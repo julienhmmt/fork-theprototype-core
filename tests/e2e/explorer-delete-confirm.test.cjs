@@ -517,12 +517,17 @@ h.run(async () => {
 		// here — this app's modals are deliberately non-modal (dialog.show()) so the chrome
 		// above --z-modal stays clickable, and only the truly-modal ConfirmModal gets the
 		// aria-modal attribute the z-index remap keys on. Query the ELEMENT.
-		const heads = [...document.querySelectorAll('dialog[open] button')]
-			.filter((b) => /^(Explorer|Files)$/.test((b.textContent || '').trim()));
+		// 37-settings R21 (the roadmap-38 kit): Settings is a grouped NAV beside one page, not a
+		// stack of accordions — "expanded" is now the nav row marked as the current page AND that
+		// page actually laid out, holding the switches the strip talks about
+		const current = document.querySelector('#settings-nav [aria-current="page"]');
+		const page = [...document.querySelectorAll('#settings-sections > *')].find(
+			(p) => p.getBoundingClientRect().height > 0 && /recycle bin/i.test(p.textContent || '')
+		);
 		return {
 			open,
 			section,
-			expanded: heads.some((b) => b.getAttribute('aria-expanded') === 'true'),
+			expanded: /^(Explorer|Files)$/.test((current?.textContent || '').trim()) && !!page,
 			// the switches the strip's own words are about
 			hasRecycle: !!document.querySelector('dialog[open]')?.textContent?.match(/recycle bin/i)
 		};

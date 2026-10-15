@@ -20,9 +20,9 @@
 	import { tabbable, resizeGroup, tabGroups } from '$lib/windowTabs';
 	import { clampWinSize, clampResize, anchorOf } from '$lib/windowSize';
 	import { dockable } from '$lib/docking';
-	import { setDockOccupant, dockHeight, visibleDockKey, dockMinimized, activateDock, dockModeArm, forgetDockTab } from '$lib/bottomDock';
+	import { setDockOccupant, dockHeight, visibleDockKey, dockShownKeys, dockPaneOf, dockMinimized, activateDock, dockModeArm, forgetDockTab } from '$lib/bottomDock';
 	import { bottomDockable } from '$lib/bottomDockDrop';
-	import { dockAddItems } from '$lib/dockMenu';
+	import { dockAddItems, rebuildAfterPick } from '$lib/dockMenu';
 	import { fly } from 'svelte/transition';
 	import { safeStorage } from '$lib/safeStorage';
 	import { readPanelOpen } from '$lib/ui/handheldPanels.js';
@@ -126,7 +126,7 @@
 	});
 	// W2: a MINIMIZED dock renders nothing while every tab stays open (the occupant
 	// report above is untouched, so the strip comes back with its tabs intact)
-	const dockVisible = $derived($visibleDockKey === 'flow' && !$dockMinimized);
+	const dockVisible = $derived($dockShownKeys.includes('flow'));
 
 	// --- docked: top-edge resize (shared dock height, persisted by the store) ---
 	let resizing = $state(false);
@@ -188,6 +188,7 @@
 			id="flow-list"
 			transition:fly={{ y: 320, duration: 200 }}
 			class="tp-ui tp-dock-panel fixed inset-x-0 bottom-0 p-2 {dockVisible ? '' : 'hidden'}"
+			data-dock-pane={$dockPaneOf['flow']}
 			style="z-index: var(--z-dock); height: {$dockHeight}px"
 			data-key-scope="panel"
 			role="region"
@@ -273,5 +274,5 @@
 <NodeDesigner />
 
 {#if addMenu}
-	<ContextMenu x={addMenu.x} y={addMenu.y} items={addItems} on:close={() => (addMenu = null)} />
+	<ContextMenu x={addMenu.x} y={addMenu.y} items={addItems} on:close={() => (addMenu = null)} onpicked={() => rebuildAfterPick(() => addMenu && (addItems = dockAddItems({ exclude: ['flow'] })))} />
 {/if}

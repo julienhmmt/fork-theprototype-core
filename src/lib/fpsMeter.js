@@ -135,10 +135,14 @@ export function noteXrFrame(now = typeof performance !== 'undefined' ? performan
 	noteExternalFrame(now);
 }
 
-registerFrameObserver((ms) => {
+// 44 L1: the frame is stamped with sceneBudget's rAF timestamp — the clock `ms` was measured
+// on (36-fb-water F27) — not with performance.now() at callback time. Stamped with the
+// callback clock, a frame's span (t - ms, t] slid back by the callback's jitter into its
+// neighbour's, and a profiler selection of 4 frames counted 5.
+registerFrameObserver((ms, at) => {
 	if (presenting()) return; // the XR source owns a presenting session
 	lastXrAt = 0;
-	emitFrame(ms, 'desktop', typeof performance !== 'undefined' ? performance.now() : Date.now());
+	emitFrame(ms, 'desktop', Number.isFinite(at) ? at : typeof performance !== 'undefined' ? performance.now() : Date.now());
 	note(ms, 'desktop');
 });
 

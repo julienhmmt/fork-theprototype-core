@@ -10,9 +10,11 @@ import { safeStorage } from './safeStorage';
 // and controls — never a snapshot. The window is ViewportPip.svelte; this leaf holds its state so
 // the suites and the keymap reach it without importing a component.
 //
-// Size is remembered (LOCAL, persisted); position and "closed" last for the focus session: the
-// next maximize parks it bottom-right again and shows it again, the way the camera preview comes
-// back with its camera.
+// Size is remembered (LOCAL, persisted); position lasts for the focus session (the next maximize
+// parks it bottom-right again). 44 M15: OPEN/CLOSED is remembered too (LOCAL, persisted, default
+// open) — the user: "it should remember the state next time I enter focus mode (now it each time
+// shows preview even if closed, also it should be enabled by default as now)". The toggle beside
+// "Exit focus" (FocusModeExit) is the way back without leaving focus mode.
 
 const KEY = 'viewportPip:size';
 export const VIEWPORT_PIP_MIN_H = 120;
@@ -45,8 +47,22 @@ export function resetViewportPipSize() {
  * @type {import('svelte/store').Writable<{x: number, y: number} | null>} */
 export const viewportPipPosition = writable(null);
 
-/** closed for this focus session */
-export const viewportPipClosed = writable(false);
+const CLOSED_KEY = 'viewportPip:closed';
+/** closed by the user (LOCAL, persisted across focus sessions and reloads; absent = open) */
+export const viewportPipClosed = writable(safeStorage.getItem(CLOSED_KEY) === 'true');
+viewportPipClosed.subscribe((v) => {
+	if (v) safeStorage.setItem(CLOSED_KEY, 'true');
+	else safeStorage.removeItem(CLOSED_KEY);
+});
+
+/** show / hide the viewport PiP (the button beside "Exit focus") */
+export function toggleViewportPip() {
+	viewportPipClosed.update((v) => !v);
+}
+
+/** the PiP COULD show now: a docked window maximized to the full window, not the folded phone —
+ *  published by ViewportPip.svelte, which owns that measurement; the toggle shows only then */
+export const viewportPipAvailable = writable(false);
 
 /** the PiP's own camera + controls while it is open (the window publishes them; the keymap's PiP
  *  scope and the suites read them) @type {import('svelte/store').Writable<{camera: any, controls: any} | null>} */
@@ -86,10 +102,9 @@ export function framePipSelection() {
 	return true;
 }
 
-/** a new focus session: parked, shown */
+/** a new focus session: parked bottom-right (open or closed is the user's, and stays) */
 export function resetViewportPipSession() {
 	viewportPipPosition.set(null);
-	viewportPipClosed.set(false);
 }
 
 /** test/debug view */

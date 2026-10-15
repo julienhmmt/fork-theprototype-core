@@ -462,7 +462,7 @@ h.run(async () => {
 	h.check(!!other?.hash, 'premise: a second scene to hop to');
 	await A.page.evaluate((hash) => window.__stores.levels.travelToLevel(hash), lit.hash);
 	await A.page.waitForTimeout(2500);
-	h.check((await at(A))?.name === 'Lit', 'premise: we are standing in Lit, freshly loaded and untouched');
+	await h.eventually(() => at(A).then((l) => l?.name ?? null), (n) => n === 'Lit', 'premise: we are standing in Lit, freshly loaded and untouched', 20000);
 
 	const verdict = await A.page.evaluate(() => {
 		const s = window.__stores;
@@ -486,7 +486,15 @@ h.run(async () => {
 	await A.page.evaluate(() => window.__stores.confirmDialog.resolveConfirm(false));
 	await A.page.waitForTimeout(200);
 	await card(A, 'Other.tpscene').dblclick();
-	await A.page.waitForTimeout(2600);
+	// wait for the OPEN to land (or for a question to appear), not a fixed 2.6 s: under e2e
+	// load the open outran it and `currentLevel` still read null — red on 1.32.0 and green on
+	// a quiet box, i.e. timing. Either outcome ends the wait, so a wrong question is still seen.
+	await h.eventually(
+		async () => ({ dialog: await dialogOf(A), at: (await at(A))?.name ?? null }),
+		(v) => v.dialog !== null || v.at === 'Other',
+		'the open settles (premise)',
+		20000
+	);
 	h.check(
 		(await dialogOf(A)) === null,
 		'opening another scene with nothing changed asks NOTHING'
@@ -517,8 +525,10 @@ h.run(async () => {
 	// hop away and back, touching nothing
 	await A.page.evaluate((hash) => window.__stores.levels.travelToLevel(hash), other.hash);
 	await A.page.waitForTimeout(2500);
+	await h.eventually(() => at(A).then((l) => l?.name ?? null), (n) => n === 'Other', 'premise: the hop reached Other', 20000);
 	await A.page.evaluate((hash) => window.__stores.levels.travelToLevel(hash), lit.hash);
 	await A.page.waitForTimeout(2500);
+	await h.eventually(() => at(A).then((l) => l?.name ?? null), (n) => n === 'Lit', '...and came back to Lit (premise)', 20000);
 	const histAfter = await A.page.evaluate(() => {
 		let m;
 		window.__stores.projectManifest.projectManifest.subscribe((x) => (m = x))();

@@ -45,7 +45,7 @@
 	import { focusStack } from '$lib/windowFocus';
 	import { tabbable, resizeGroup, tabGroups } from '$lib/windowTabs';
 	import { clampWinSize, clampResize, anchorOf } from '$lib/windowSize';
-	import { setDockOccupant, dockHeight, visibleDockKey, dockMinimized, activateDock, dockModeArm, forgetDockTab } from '$lib/bottomDock';
+	import { setDockOccupant, dockHeight, visibleDockKey, dockShownKeys, dockPaneOf, dockMinimized, activateDock, dockModeArm, forgetDockTab } from '$lib/bottomDock';
 	import { bottomDockable } from '$lib/bottomDockDrop';
 	import { safeStorage } from '$lib/safeStorage';
 
@@ -182,7 +182,7 @@
 	});
 	// W2: a MINIMIZED dock renders nothing while every tab stays open (the occupant
 	// report above is untouched, so the strip comes back with its tabs intact)
-	const dockVisible = $derived($visibleDockKey === 'uv' && !$dockMinimized);
+	const dockVisible = $derived($dockShownKeys.includes('uv'));
 
 	// Arming the brush opens the Tool panel, so its colour + size are reachable
 	// without hunting for the tab (WindowShell's showSecondary is exactly this
@@ -2003,6 +2003,7 @@
 		<div
 			id="uv-dock"
 			class="fixed inset-x-0 bottom-0 tp-ui tp-dock-panel flex flex-col p-2 {dockVisible ? '' : 'hidden'}"
+			data-dock-pane={$dockPaneOf['uv']}
 			style="z-index: var(--z-dock); height: {$dockHeight}px"
 			data-key-scope="panel"
 			role="region"

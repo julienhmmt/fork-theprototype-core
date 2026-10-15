@@ -1,7 +1,7 @@
 import { get } from 'svelte/store';
-import { sidebarTabs } from './sidebars';
+import { sidebarTabs, sidebarVisible } from './sidebars';
 import { canDockFloating, bottomInset } from './bottomDock';
-import { dockStripTarget, inBottomBand, showDockCaret } from './bottomDockDrop';
+import { dockStripTarget, inBottomBand, overEmptyDock, showDockCaret } from './bottomDockDrop';
 
 // 43 J4 — ONE DROP-TARGET MODEL for a panel on the move: a SIDEBAR TAB dragged out of its strip
 // and a FLOATING WINDOW dragged by its header ask the same question here — where would this land —
@@ -39,9 +39,12 @@ export function columnBox(side) {
 	return { x0, w, top };
 }
 
-/** does this side have an open column (any tab)? @param {Side} side @param {string=} except */
+/** does this side have an open column — a tab other than `except`, or (44 M7) an EMPTY column kept open
+ * with its "+"? A hidden side (Ctrl+B) has no column on screen. @param {Side} side @param {string=} except */
 export function sideOpen(side, except) {
-	return get(sidebarTabs)[side].some((k) => k !== except);
+	if (!get(sidebarVisible)[side]) return false;
+	const tabs = get(sidebarTabs)[side];
+	return !tabs.length || tabs.some((k) => k !== except);
 }
 
 /**
@@ -82,6 +85,38 @@ export function tabDropTarget({ x, y, key, from, canFloat, canDock, size }) {
 	const w = size?.w ?? 360;
 	const h = size?.h ?? 320;
 	return { kind: 'float', x: Math.max(0, x - 120), y: Math.max(0, y - 12), w, h };
+}
+
+/**
+ * 44 M3 — where a FLOATING WINDOW dragged by its header (or its body, M1) lands. The tab model above with a
+ * window's own reach: the dock's tab strip (41 G7's caret) or the bottom edge band, then a side's open
+ * column or its edge band (docking.js's 44px rule — in the viewport a window's likelier wish is to stay
+ * where it is dropped, so an EMPTY side is reached at its edge only), else null: it stays floating there.
+ * The dock BODY is not a target (41 G7: a window must be able to pass over the dock). A header-merge
+ * target, which beats all of these, is the caller's to ask first (windowTabs.headerTargetAt). Used by an
+ * ungrouped window (bottomDockDrop's `bottomDockable`, every dockable window) and by a dragged window
+ * GROUP or torn-out group tab (TabStrips), so the two can no longer disagree.
+ * @param {{x: number, y: number, key: string, canDock: boolean, canSide: boolean}} q
+ * @returns {DropTarget|null}
+ */
+export function windowDropTarget({ x, y, key, canDock, canSide }) {
+	if (canDock) {
+		const strip = dockStripTarget(x, y);
+		if (strip) return { kind: 'dock', strip };
+		// 44 M5: the EMPTY dock's body takes a drop like the edge band
+		if (inBottomBand(y) || overEmptyDock(x, y)) return { kind: 'dock', strip: null };
+	}
+	if (canSide) {
+		const side = sideAt(x, y, { except: key });
+		if (side) return { kind: 'side', side, tab: sideOpen(side, key) };
+	}
+	return null;
+}
+
+/** the element id a window drag paints its target under — the ids suites have long addressed
+ * (`dock-zone` for a side, `bottom-dock-zone` for the bottom band) @param {DropTarget|null} t */
+export function windowDropZoneId(t) {
+	return t?.kind === 'side' ? 'dock-zone' : 'bottom-dock-zone';
 }
 
 /** can this panel be a floating window? (the Inspector cannot: its homes are the sidebars) @param {string} key */

@@ -8344,7 +8344,6 @@
 									"notifications": "notified: [\"Connected to self-hosted — your session id is unchanged.\"]"
 								},
 								"stores": {
-									"diagnostics.diagnosticsCount": "<changed>",
 									"notifications": "<object>",
 									"notificationsUnread": "<changed>"
 								},

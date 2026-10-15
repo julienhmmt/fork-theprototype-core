@@ -40,6 +40,7 @@ import { cycleViewMode } from './viewMode'; // 37 R18
 import { toggleFocusAtPointer, focusActive, exitFocus } from './focusMode'; // 42 I14 (a leaf: appStore/sceneStore/bottomDock)
 import { viewportPipOpen, framePipSelection } from './viewportPip'; // 43 K5 (a leaf: sceneStore + three)
 import { togglePanel, toggleDock } from './panelToggles';
+import { toggleSidebar } from './sidebars'; // 44 M7 (a leaf: app stores + safeStorage)
 // Phase 5: the play FAB's own entry point. playMode.js imports sceneStore +
 // svelte/store ONLY (it says so at the top of the file, and that is deliberate),
 // so this static edge adds nothing to shortcuts' subtree — which matters, because
@@ -430,6 +431,31 @@ export const shortcuts = [
 		// two ways back (the toolbar buttons are the other).
 		label: 'Tool dock: show / hide (Node editor, Explorer, Animation, UV, Shader, HUD…)',
 		action: () => toggleDock()
+	},
+	/*
+	 * 44 M7 — THE SIDEBARS, one key each (the user: "also add shortcuts to open left and right sidebars,
+	 * pick most appropriate ones according to DCC standards"): VS Code's pair, Ctrl+B / Ctrl+Alt+B
+	 * (Cmd on a Mac — comboOf folds Meta into Ctrl). Measured free: no registry row answered either
+	 * combo (conflictOf -> {shortcut: null, meshEdit: false}); the code workspace's own Ctrl+B /
+	 * Ctrl+Alt+B (its inner sidebars) keep working inside it, since the registry stands down while a
+	 * code editor holds the keyboard — the VS Code nesting, where the focused editor's own panes win.
+	 * Shown -> hidden (every tab stays open), hidden or never opened -> shown (empty: the "+").
+	 */
+	{
+		id: 'panels.sidebar-left',
+		keys: 'Ctrl+B',
+		group: 'Panels',
+		scope: 'global',
+		label: 'Left sidebar: show / hide',
+		action: () => toggleSidebar('left')
+	},
+	{
+		id: 'panels.sidebar-right',
+		keys: 'Ctrl+Alt+B',
+		group: 'Panels',
+		scope: 'global',
+		label: 'Right sidebar: show / hide',
+		action: () => toggleSidebar('right')
 	},
 	{
 		id: 'panels.explorer',

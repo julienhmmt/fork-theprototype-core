@@ -61,6 +61,15 @@
 	/** 36 U11: open already SEARCHING (the node editor's Shift+A / Space "add at cursor").
 	 *  Absent = byte-identical to before. */
 	export let startSearch: boolean = false;
+	/**
+	 * 44 M8 — MULTI-PICK. A row marked `multiPick: true` (the "+" window menus) runs on a plain click
+	 * and closes, like any row; Ctrl-click (Cmd on a Mac) or Shift-click — and Ctrl/Shift+Enter from the
+	 * keyboard — runs it and KEEPS THE MENU UP for the next pick, the checkbox-menu convention (the user:
+	 * "open multiple windows when press '+' … and click options while holding Ctrl or Shift"). This
+	 * callback is told after such a pick, so the owner can rebuild its rows (their checks and hints
+	 * change with every window opened). Absent = nothing is told; the menu stays up all the same.
+	 */
+	export let onpicked: ((item: any) => void) | null = null;
 
 	// 40 F1: on the phone every menu is a bottom sheet (phone.css), and the Add list is the
 	// one opened from the bar — so it wears the shared grab bar: drag to resize (remembered,
@@ -85,7 +94,12 @@
 	// It's portaled to <body>, measured + clamped into the viewport by `place`, and
 	// caps + scrolls vertically when too tall; submenus place themselves.
 
-	function run(item: any) {
+	/** 44 M8: does this press ask to keep picking? @param {any} item @param {any} e */
+	function multiPress(item: any, e?: MouseEvent | KeyboardEvent) {
+		return !!item?.multiPick && !!e && (e.ctrlKey || e.metaKey || e.shiftKey);
+	}
+
+	function run(item: any, e?: MouseEvent | KeyboardEvent) {
 		if (!item || item.disabled || item.children || item.section || item.header) return;
 		// 16-P2: `revealFilter` rows (the node editor's "Search nodes…") just show the
 		// filter row — the menu STAYS open and the input keeps the keyboard
@@ -95,7 +109,12 @@
 			inputEl?.focus({ preventScroll: true });
 			return;
 		}
+		const multi = multiPress(item, e);
 		item.action?.();
+		if (multi) {
+			onpicked?.(item);
+			return;
+		}
 		if (item.keepOpen) return;
 		dispatch('close');
 	}
@@ -227,12 +246,12 @@
 		return true;
 	}
 
-	function activate() {
+	function activate(e?: KeyboardEvent) {
 		// Enter with no explicit highlight runs the top hit (15-Q behavior)
 		const item = navRows[highlight] ?? (query ? navRows.find((entry) => !entry.disabled) : null);
 		if (!item || item.disabled) return;
 		if (openChildrenOf(item)) return;
-		run(item);
+		run(item, e);
 	}
 
 	function back() {
@@ -254,7 +273,7 @@
 			move(-1);
 			event.preventDefault();
 		} else if (event.key === 'Enter') {
-			activate();
+			activate(event);
 			event.preventDefault();
 		} else if (event.key === 'Escape') {
 			// Esc unwinds one step at a time: query → search mode → open submenu →

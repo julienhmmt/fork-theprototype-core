@@ -1,14 +1,14 @@
 import { get } from 'svelte/store';
 import { isHeaderDrag } from './windowGrip';
-import { bottomDockWouldTake, setSideDockable, ghostWindows } from './bottomDockDrop';
+import { setSideDockable } from './bottomDockDrop';
 import { safeStorage } from './safeStorage';
 import { onLayoutRestore } from './uiLayoutsCore';
-import { reportMember, sidebarShown, sidebarTabs, setDockMover, activateSidebarTab } from './sidebars';
-import { showDropTarget } from './sidebarDrop';
+import { reportMember, sidebarShown, setDockMover, activateSidebarTab } from './sidebars';
 import { canDockFloating, armDockMode, dockOccupants, forgetDockTab, HOSTED_DOCK_TABS } from './bottomDock';
 import { hostedDocked, setHostedDocked } from './dockHost';
 import { registerSideMover } from './dockMenu';
 import { groupOfKey, removeFromGroup } from './windowTabs';
+import { phoneShell } from './ui/phoneShell.js';
 
 // Docking lite (phase 81L). Drag a window near the left/right screen edge to dock it as a
 // full-height panel (--z-chrome tier); drag its header away to float it again.
@@ -33,8 +33,16 @@ import { groupOfKey, removeFromGroup } from './windowTabs';
 // docks through `dockToSide` (out of the bottom dock first) and the sidebar tab's "Move to the
 // bottom dock" (undock here, then the bottom dock's own arm). The drag feedback is the one drop
 // model's ($lib/sidebarDrop), painted above every panel.
-
-const EDGE = 44; // px from a screen edge that counts as a dock drop
+//
+// 44 M2/M3 — ONE GESTURE. A floating window dragged to a side used to be decided HERE (an edge/column
+// hit test of its own) while the same gesture's bottom-dock half was decided in bottomDockDrop.js, each
+// painting its own highlight. Both now ask the one drop model (`windowDropTarget`) in ONE place —
+// `bottomDockable`, which every dockable window wears — and a side drop lands through `dockToSide`
+// (dockMenu's side mover). What stays here: the registry, a persisted side, and dragging a side-docked
+// window back OUT by its header. And the touch stance moved from "a coarse pointer" to "a phone": the
+// unfolded N6 is a touch screen with room for a column (the user: "floating window should be possible to
+// add to a sidebar and move to dock for unfolded phone"). On a fold a side-docked window lets go of its
+// column without forgetting it — the phone has no sidebars — and takes it back on the unfold.
 
 /** @type {{left: string[], right: string[]}} */
 let docked = { left: [], right: [] };
@@ -82,11 +90,13 @@ const isPresent = (node) => !!node?.isConnected && !node.classList.contains('hid
 function apply(key) {
 	const entry = registry.get(key);
 	if (!entry) return;
-	const side = sideOf(key);
+	const side = phoneNow ? null : sideOf(key);
 	const { node } = entry;
 	entry.present = isPresent(node);
 	reportMember(key, side, entry.present);
 	if (!side) {
+		// a fold: the column it filled is gone — float where it floated before (its side is kept)
+		if (node.dataset.docked && sideOf(key)) releaseNode(entry);
 		delete node.dataset.docked;
 		delete node.dataset.sidebarHidden;
 		return;
@@ -107,11 +117,18 @@ function apply(key) {
 	else node.dataset.sidebarHidden = '';
 }
 
+/** the phone posture right now (no sidebars there) — declared above every subscriber that reads it */
+let phoneNow = false;
 /** @type {Record<'left'|'right', string|null>} */
 let shownNow = { left: null, right: null };
 const get_shown = () => shownNow;
 sidebarShown.subscribe((v) => {
 	shownNow = v;
+	applyAll();
+});
+phoneShell.subscribe((v) => {
+	if (v === phoneNow) return;
+	phoneNow = v;
 	applyAll();
 });
 
@@ -163,7 +180,7 @@ function inBottomDock(key) {
  * @param {string} key @param {'left'|'right'} side @returns {boolean}
  */
 export function dockToSide(key, side) {
-	if (!canDockFloating(key) || isCoarse()) return false;
+	if (!canDockFloating(key) || phoneNow) return false;
 	if (inBottomDock(key)) {
 		if (HOSTED_DOCK_TABS.includes(key)) setHostedDocked(key, false);
 		else {
@@ -247,26 +264,8 @@ onLayoutRestore(() => {
 			reportMember(key, null, false);
 		} else if (!before && now) rememberFloat(entry);
 	}
-	if (!isCoarse()) applyAll();
+	applyAll();
 });
-
-/** the column a drop would join: the edge band, or anywhere over a SHOWN column. 43 J4: painted by
- * the one drop model ($lib/sidebarDrop) — above every panel and the dragged window, which goes
- * see-through while it is over a target (41 G7's ghost) — so a drop on an open sidebar is never silent.
- * @param {{side: 'left'|'right', column: boolean} | null} target @param {any=} node */
-function showZone(target, node) {
-	showDropTarget(target ? { kind: 'side', side: target.side, tab: target.column } : null, { id: 'dock-zone' });
-	ghostWindows([node], !!target);
-}
-
-// touch / limited-width devices: edge side-docking is disabled — there isn't the
-// horizontal room for a full-height side panel, and it fights touch scrolling.
-const isCoarse = () =>
-	typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-
-/** the sides whose column is on screen right now */
-let tabsNow = { left: /** @type {string[]} */ ([]), right: /** @type {string[]} */ ([]) };
-sidebarTabs.subscribe((v) => (tabsNow = v));
 
 /**
  * svelte action: makes a floating window dockable to the screen edges.
@@ -278,16 +277,6 @@ export function dockable(node, { key }) {
 	/** @type {any} */
 	const entry = { node, prevRect: null, present: false, observer: null };
 	registry.set(key, entry);
-	// On mobile, register only (so destroy() still cleans up) but wire NO edge-drag
-	// handlers and restore NO persisted side-dock — the window stays a normal floating
-	// window. The persisted desktop preference is left untouched.
-	if (isCoarse()) {
-		return {
-			destroy() {
-				if (registry.get(key) === entry) registry.delete(key);
-			}
-		};
-	}
 	if (sideOf(key)) rememberFloat(entry);
 	apply(key); // restore a persisted dock (as a tab of its side)
 	// open / closed is a class on an always-mounted window (the object list): a tab comes and goes
@@ -297,78 +286,35 @@ export function dockable(node, { key }) {
 	});
 	entry.observer.observe(node, { attributes: true, attributeFilter: ['class'] });
 
-	let dragging = false;
 	/** @param {any} e */
 	const down = (e) => {
 		if (!isHeaderDrag(e.target) || e.button !== 0) return; // 36 F4: not on a header control
-		if (sideOf(key)) {
-			// docked: dragging the header away undocks and hands back to the
-			// window's own drag behavior on the NEXT gesture
-			e.stopImmediatePropagation();
-			const startX = e.clientX;
-			const startY = e.clientY;
-			const moveOut = (/** @type {any} */ ev) => {
-				if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 40) {
-					undock(key, ev.clientX, ev.clientY);
-					cleanup();
-				}
-			};
-			const cleanup = () => {
-				window.removeEventListener('pointermove', moveOut);
-				window.removeEventListener('pointerup', cleanup);
-			};
-			window.addEventListener('pointermove', moveOut);
-			window.addEventListener('pointerup', cleanup);
-			return;
-		}
-		dragging = true;
-	};
-	// W7 PRECEDENCE: the bottom-dock band beats an edge. The bottom-left corner is in
-	// both reaches at once, and a DOCK_FAMILY window dropped there means "put it in the
-	// dock" — the model the user was aiming at — not "make it a full-height side panel
-	// that happens to start below the dock". Asking here rather than there keeps the
-	// decision on the side that has to yield.
-	/** @param {any} e @returns {{side: 'left'|'right', column: boolean} | null} */
-	const targetAt = (e) => {
-		// ...but only where the dock would really take THIS window. Yielding the band
-		// unconditionally hands the bottom of both side edges to a dock that cannot
-		// accept a non-DOCK_FAMILY panel, so the drop does nothing at all.
-		if (bottomDockWouldTake(key, e.clientY, e.clientX)) return null;
-		const root = getComputedStyle(document.documentElement);
-		for (const side of /** @type {const} */ (['left', 'right'])) {
-			const occupied = tabsNow[side].some((k) => k !== key);
-			const w = parseFloat(root.getPropertyValue(`--sb-${side}-w`)) || 320;
-			const x0 = side === 'left' ? parseFloat(root.getPropertyValue('--sb-left-x')) || 0 : window.innerWidth - w;
-			const top = parseFloat(root.getPropertyValue(`--sb-${side}-top`)) || 0;
-			const overColumn = occupied && e.clientX >= x0 && e.clientX <= x0 + w && e.clientY >= top;
-			const onEdge = side === 'left' ? e.clientX < EDGE : e.clientX > window.innerWidth - EDGE;
-			if (overColumn || onEdge) return { side, column: occupied };
-		}
-		return null;
-	};
-	/** @param {any} e */
-	const move = (e) => {
-		if (!dragging) return;
-		showZone(targetAt(e), node);
-	};
-	/** @param {any} e */
-	const up = (e) => {
-		if (!dragging) return;
-		dragging = false;
-		showZone(null);
-		const target = targetAt(e);
-		if (target) dock(key, target.side);
+		if (!node.dataset.docked) return; // floating: bottomDockable owns the drop (44 M3)
+		// docked: dragging the header away undocks and hands back to the window's own drag
+		// behavior on the NEXT gesture
+		e.stopImmediatePropagation();
+		const startX = e.clientX;
+		const startY = e.clientY;
+		const moveOut = (/** @type {any} */ ev) => {
+			if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 40) {
+				undock(key, ev.clientX, ev.clientY);
+				cleanup();
+			}
+		};
+		const cleanup = () => {
+			window.removeEventListener('pointermove', moveOut);
+			window.removeEventListener('pointerup', cleanup);
+			window.removeEventListener('pointercancel', cleanup);
+		};
+		window.addEventListener('pointermove', moveOut);
+		window.addEventListener('pointerup', cleanup);
+		window.addEventListener('pointercancel', cleanup);
 	};
 	node.addEventListener('pointerdown', down, true); // capture: beats dragWindow while docked
-	window.addEventListener('pointermove', move);
-	window.addEventListener('pointerup', up);
 
 	return {
 		destroy() {
-			if (dragging) showZone(null);
 			node.removeEventListener('pointerdown', down, true);
-			window.removeEventListener('pointermove', move);
-			window.removeEventListener('pointerup', up);
 			entry.observer?.disconnect();
 			// a member that unmounts is no longer a tab (its persisted side survives for its return) —
 			// unless a fresh instance of the same window has already taken its key

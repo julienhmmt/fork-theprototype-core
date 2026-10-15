@@ -28,8 +28,11 @@ h.run(async () => {
 		const t = ap.addTrack(obj.uuid, 'pos.y', obj);
 		ap.updateKey(obj.uuid, t, 1, { t: 1, v: 2 });
 		ap.updateAnim(obj.uuid, { duration: 2, loop: 'loop' });
-		// a few clips, so the list has something to be tall for
-		for (const name of ['Walk', 'Run', 'Jump', 'Idle']) ap.createClip(obj.uuid, name);
+		// enough clips that the list's CONTENT is taller than any pane below: the list is
+		// `max-height: clipsH`, so a grip under a short list stops where the list ends, however
+		// far the ceiling is — four clips (~130px) filled the old ~200px pane but not a tall one
+		for (const name of ['Walk', 'Run', 'Jump', 'Idle', 'Crouch', 'Swim', 'Climb', 'Fall', 'Land', 'Roll', 'Wave', 'Sit', 'Stand', 'Turn L', 'Turn R', 'Dance'])
+			ap.createClip(obj.uuid, name);
 		s.objectActions.selectObject(obj.uuid, false);
 		s.animationClose.set(false);
 		s.bottomDock.activateDock('animation');
@@ -53,8 +56,20 @@ h.run(async () => {
 			};
 		});
 
+	// a TALL pane first, so "it can travel most of the way down" has room to mean something.
+	// At the default 320px dock the pane is ~200px and the list already starts a few px under
+	// its ceiling — a 900px drag then moved it 2px, and the travel check below read a full
+	// pane as a frozen grip. The SHORT pane (the report's own order) is driven at the end.
+	await A.page.evaluate(async () => {
+		window.__stores.bottomDock.dockHeight.set(560);
+		await new Promise((r) => setTimeout(r, 500));
+	});
 	const start = await geom();
 	h.check(!!start.grip && !!start.side, 'the clip list and its resize grip are rendered');
+	h.check(
+		start.side.bottom - start.grip.bottom > 120,
+		`premise: the tall pane leaves the list room to grow (${(start.side.bottom - start.grip.bottom).toFixed(0)}px below the grip, pane ${start.side.height.toFixed(0)})`
+	);
 	h.check(
 		start.grip.bottom <= start.side.bottom + 1,
 		`the grip starts inside the pane (${start.grip.bottom.toFixed(0)} vs ${start.side.bottom.toFixed(0)})`

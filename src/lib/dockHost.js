@@ -14,9 +14,10 @@ import {
 	activateDock,
 	forgetDockTab,
 	visibleDockKey,
-	dockMinimized
+	dockMinimized,
+	dockShownKeys
 } from './bottomDock';
-import { registerDockOpener, registerDockCloser, registerDockOpenState } from './dockMenu';
+import { registerDockOpener, registerDockCloser, registerDockOpenState, registerFloatOpener } from './dockMenu';
 import { groupOfKey, removeFromGroup } from './windowTabs';
 
 // 42 I6 — HOSTED DOCK TABS: the floating windows with no docked layout of their own — the
@@ -81,6 +82,12 @@ export const hostedTabsOpen = derived([phoneShell, hostedDocked, hostedOpenNow, 
 /** the hosted tab on screen in the wide posture (null: none, the dock minimized, or a phone) */
 export const hostedDockShown = derived([phoneShell, visibleDockKey, dockMinimized, hostedTabsOpen], ([$phone, $key, $min, $open]) =>
 	!$phone && !$min && $key && /** @type {any} */ ($open)[$key] ? $key : null
+);
+
+/** 44 M9: every hosted tab RENDERING in the wide posture — both halves of a split can be hosted
+ *  windows (Objects / Statistics), so a single "shown" key is not enough */
+export const hostedDockShownKeys = derived([phoneShell, dockShownKeys, hostedTabsOpen], ([$phone, $keys, $open]) =>
+	$phone ? [] : $keys.filter((k) => /** @type {any} */ ($open)[k])
 );
 
 /** @param {string} key */
@@ -166,6 +173,13 @@ export function startDockHost() {
 	);
 	for (const key of HOSTED_DOCK_TABS) {
 		offs.push(registerDockOpenState(key, () => HOSTED[key].isOpen(get(HOSTED[key].store))));
+		// 44 M7: a sidebar "+" opens it FLOATING (its column then takes it) — out of the dock first
+		offs.push(
+			registerFloatOpener(key, () => {
+				if (get(hostedDocked)[key]) setHostedDocked(key, false);
+				HOSTED[key].open();
+			})
+		);
 		// the Objects list's opener/closer are phoneDock's (posture-aware); the rest are ours
 		if (PHONE_DOCK_TABS.includes(key)) continue;
 		offs.push(registerDockOpener(key, () => dockHostedView(key)));

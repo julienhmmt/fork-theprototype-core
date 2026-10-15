@@ -18,14 +18,33 @@ h.run(async () => {
 	const before = A.id;
 	h.check(/^[0-9a-f]{5}$/.test(before), 'session id is 5 hex chars');
 
-	// Drive the collision the server would report. hasOpened is forced back to
-	// false because a live page has already opened its link — the retry only ever
-	// applies to an id that never got registered in the first place.
+	// 44 L2: the way BACK after a runtime switch. switchServer's rebuild resets `hasOpened`, and a
+	// collision with this page's OWN still-held registration then took the "fresh id" branch
+	// (invite-link-live §7: "ID … is taken" -> "session id collided — retrying"), so the invite
+	// link the user had copied died. Ours = the server this id opened on: the id is kept.
+	const own = await A.page.evaluate(async () => {
+		let pc;
+		window.__stores.peers.subscribe((p) => (pc = p))();
+		const first = pc.peer.id;
+		pc.hasOpened = false; // what a runtime switch's rebuild leaves behind
+		pc.peer.emit('error', { type: 'unavailable-id' });
+		for (let i = 0; i < 60 && !(pc.peer.open && pc.peer.id); i++) await new Promise((r) => setTimeout(r, 250));
+		const out = { first, id: pc.peer.id, open: pc.peer.open, retries: pc.idRetries };
+		pc.idRetries = 0;
+		return out;
+	});
+	h.check(own.id === own.first, `a collision with our OWN registration keeps the id, even after a switch reset hasOpened (${own.first} -> ${own.id})`);
+	h.check(own.open, 'and the link is open on it');
+
+	// Drive the collision the server would report. The page's id is forgotten as
+	// "registered on this server" (44 L2: that is `registeredOn`, no longer
+	// `hasOpened`) because a live page has already opened its link — a fresh id is
+	// only taken for an id that is not our own registration there.
 	const after = await A.page.evaluate(async () => {
 		let pc;
 		window.__stores.peers.subscribe((p) => (pc = p))();
 		const first = pc.peer.id;
-		pc.hasOpened = false;
+		pc.registeredOn.clear();
 		pc.peer.emit('error', { type: 'unavailable-id' });
 		// the rebuilt peer has to register with the server before it reports an id
 		for (let i = 0; i < 60; i++) {
@@ -46,7 +65,7 @@ h.run(async () => {
 		let pc;
 		window.__stores.peers.subscribe((p) => (pc = p))();
 		for (let i = 0; i < 6; i++) {
-			pc.hasOpened = false;
+			pc.registeredOn.clear();
 			pc.peer.emit('error', { type: 'unavailable-id' });
 			await new Promise((r) => setTimeout(r, 300));
 		}

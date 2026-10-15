@@ -2,9 +2,10 @@
 // stay inside the viewport, persist the position per `key` in localStorage.
 // Windows sit on the --z-window tier; the caller sets size and z-index.
 
-import { clampWinSize, clampResize, bottomReserve } from './windowSize';
+import { clampWinSize, clampResize, bottomReserve, registerSizeReset } from './windowSize';
 import { safeStorage } from './safeStorage';
 import { isHeaderDrag, startWindowDragGuard } from './windowGrip';
+import { bodyDrag } from './windowBodyDrag';
 import { onLayoutRestore } from './uiLayoutsCore';
 
 // 169: live reset registry — every draggable window (this action + the object
@@ -404,6 +405,9 @@ export function dragWindow(node, { key, defaultRect = {}, resizable = false, axi
 	node.addEventListener('pointermove', move);
 	node.addEventListener('pointerup', up);
 	node.addEventListener('pointercancel', cancel);
+	// 44 M1: an ungrouped floating window also moves by a press-and-drag on its body (windowBodyDrag
+	// hands the gesture to the header above once it travels)
+	const body = bodyDrag(node, { enabled: () => !suspended() });
 
 	// --- B7: opt-in resize grabber (bottom-right), Flow's corner-resize feel ---
 	/** @type {any} */
@@ -474,6 +478,9 @@ export function dragWindow(node, { key, defaultRect = {}, resizable = false, axi
 		});
 	}
 
+	// 44 M3: the header menu's "Reset size" is this grip's double-click
+	const unregisterSize = resizable ? registerSizeReset(node, () => resetSize()) : null;
+
 	/** Drop the persisted size, keeping the position (18-B). */
 	function resetSize() {
 		delete rect.w;
@@ -509,6 +516,7 @@ export function dragWindow(node, { key, defaultRect = {}, resizable = false, axi
 		destroy() {
 			unregisterReset();
 			unregisterReload();
+			unregisterSize?.();
 			// only if it is still OURS — a remount can register the new node before the old
 			// one tears down, and deleting blindly would strand the live window
 			if (revealers.get(key) === reveal) revealers.delete(key);
@@ -518,6 +526,7 @@ export function dragWindow(node, { key, defaultRect = {}, resizable = false, axi
 			vv?.removeEventListener?.('resize', onWindowResize);
 			vv?.removeEventListener?.('scroll', onWindowResize);
 			grabber?.remove();
+			body.destroy();
 			node.removeEventListener('pointerdown', down);
 			node.removeEventListener('pointermove', move);
 			node.removeEventListener('pointerup', up);

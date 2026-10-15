@@ -16,6 +16,24 @@ const h = require('./helpers.cjs');
 h.run(async () => {
 	const browser = await h.launch();
 	const A = await h.setupPage(browser, 'A');
+	// Playback poses objects PER RENDERED FRAME, and a loaded e2e box draws software GL at ~4 fps
+	// (frames ~250 ms apart: 43-tests logs/p1-probe4.log). A fixed "wait 300 ms, then read the
+	// pose" could therefore see no driven frame at all (y=0.00 — red 1 run in 3). `__settle(ms)`
+	// waits at least `ms` AND at least three animation frames, so on a quiet box it is the same
+	// wait and on a starved one the frames the check reads have really been drawn.
+	await A.page.evaluate(() => {
+		/** @type {any} */ (window).__settle = (/** @type {number} */ ms) =>
+			new Promise((resolve) => {
+				const t0 = performance.now();
+				let frames = 0;
+				const tick = () => {
+					frames++;
+					if (performance.now() - t0 >= ms && frames >= 3) resolve(undefined);
+					else requestAnimationFrame(tick);
+				};
+				requestAnimationFrame(tick);
+			});
+	});
 	await A.page.waitForFunction(() => !!window.__stores?.animationPreview, { timeout: 20000 });
 
 	/** make a box and return its uuid */
@@ -38,7 +56,7 @@ h.run(async () => {
 		const s = window.__stores;
 		const ap = s.animationPreview;
 		s.commandsHandler.sceneCommand('/create box');
-		await new Promise((r) => setTimeout(r, 200));
+		await /** @type {any} */ (window).__settle(200);
 		let g;
 		s.objectsGroup.subscribe((x) => (g = x))();
 		const obj = g.children[g.children.length - 1];
@@ -212,7 +230,7 @@ h.run(async () => {
 		const s = window.__stores;
 		const ap = s.animationPreview;
 		s.commandsHandler.sceneCommand('/create box');
-		await new Promise((r) => setTimeout(r, 200));
+		await /** @type {any} */ (window).__settle(200);
 		let g;
 		s.objectsGroup.subscribe((x) => (g = x))();
 		const obj = g.children[g.children.length - 1];
@@ -241,7 +259,7 @@ h.run(async () => {
 		const s = window.__stores;
 		const ap = s.animationPreview;
 		s.commandsHandler.sceneCommand('/create box');
-		await new Promise((r) => setTimeout(r, 200));
+		await /** @type {any} */ (window).__settle(200);
 		const THREE = s.THREE;
 		let g;
 		s.objectsGroup.subscribe((x) => (g = x))();
@@ -306,14 +324,24 @@ h.run(async () => {
 			ap.updateAnim(uuid, { duration: 2, loop: 'loop' });
 			ap.play(uuid);
 		}
-		await new Promise((r) => setTimeout(r, 400));
+		await /** @type {any} */ (window).__settle(400);
+		// posing and the playhead readout happen PER RENDERED FRAME, and a loaded e2e box draws
+		// software GL at ~4 fps (frames ~250 ms apart: 43-tests logs/p1-probe4.log), so 400 ms
+		// after Play there may have been one frame, at t≈0. Wait (bounded) until both objects
+		// have been driven; one never driven still reads as not moved below.
+		const driven = () => {
+			let hd;
+			ap.playheads.subscribe((v) => (hd = v))();
+			return ids.every((uuid) => g.getObjectByProperty('uuid', uuid).position.y > 0.01 && (hd[uuid] ?? 0) > 0);
+		};
+		for (let waited = 0; waited < 5000 && !driven(); waited += 50) await new Promise((r) => setTimeout(r, 50));
 		let pb;
 		ap.playback.subscribe((v) => (pb = v))();
 		let heads;
 		ap.playheads.subscribe((v) => (heads = v))();
 		const ys = ids.map((uuid) => g.getObjectByProperty('uuid', uuid).position.y);
 		for (const uuid of ids) ap.stop(uuid);
-		await new Promise((r) => setTimeout(r, 100));
+		await /** @type {any} */ (window).__settle(100);
 		const after = ids.map((uuid) => g.getObjectByProperty('uuid', uuid).position.y);
 		return {
 			playing: ids.filter((u) => pb[u]?.playing).length,
@@ -368,7 +396,7 @@ h.run(async () => {
 		s.objectActions.selectObject(id, false);
 		s.animationClose.set(false);
 		s.bottomDock.activateDock('animation');
-		await new Promise((r) => setTimeout(r, 400));
+		await /** @type {any} */ (window).__settle(400);
 		const svg = document.querySelector('#animation-timeline');
 		return {
 			svg: !!svg,
@@ -871,7 +899,7 @@ h.run(async () => {
 	);
 	const undoOne = await A.page.evaluate(async (id) => {
 		window.__stores.history.undo();
-		await new Promise((r) => setTimeout(r, 200));
+		await /** @type {any} */ (window).__settle(200);
 		return window.__stores.animationPreview.activeClip(id).tracks[0].keys.map((/** @type {any} */ k) => k.t);
 	}, first);
 	h.check(
@@ -1223,13 +1251,13 @@ h.run(async () => {
 		const times = ap.keyTimes(id);
 		ap.scrub(id, 0);
 		document.getElementById('animation-next-key')?.click();
-		await new Promise((r) => setTimeout(r, 200));
+		await /** @type {any} */ (window).__settle(200);
 		const afterNext = ap.playheadOf(id);
 		document.getElementById('animation-end')?.click();
-		await new Promise((r) => setTimeout(r, 200));
+		await /** @type {any} */ (window).__settle(200);
 		const atEnd = ap.playheadOf(id);
 		document.getElementById('animation-prev-key')?.click();
-		await new Promise((r) => setTimeout(r, 200));
+		await /** @type {any} */ (window).__settle(200);
 		const afterPrev = ap.playheadOf(id);
 		return { times, afterNext, atEnd, afterPrev, duration: ap.activeClip(id).duration };
 	}, first);
@@ -1252,7 +1280,7 @@ h.run(async () => {
 		ap.scrub(id, 1); // park at 1s
 		const from = ap.playheadOf(id);
 		ap.play(id, undefined, { from: 1 });
-		await new Promise((r) => setTimeout(r, 400));
+		await /** @type {any} */ (window).__settle(400);
 		const running = ap.playheadOf(id);
 		ap.stop(id);
 		const stopped = ap.playheadOf(id);
@@ -1278,7 +1306,7 @@ h.run(async () => {
 		ap.play(id);
 		const seen = [];
 		for (let i = 0; i < 8; i++) {
-			await new Promise((r) => setTimeout(r, 120));
+			await /** @type {any} */ (window).__settle(120);
 			seen.push(ap.playheadOf(id));
 		}
 		ap.stop(id);
@@ -1307,7 +1335,7 @@ h.run(async () => {
 		const before = document.querySelector('#animation-timeline')?.textContent ?? '';
 		const keysBefore = JSON.stringify(s.animationPreview.activeClip(id).tracks[0].keys);
 		document.getElementById('animation-fit')?.click();
-		await new Promise((r) => setTimeout(r, 150));
+		await /** @type {any} */ (window).__settle(150);
 		const fit = [...document.querySelectorAll('#animation-timeline text')].map((t) => t.textContent);
 		return { before, fit, keysBefore, keysAfter: JSON.stringify(s.animationPreview.activeClip(id).tracks[0].keys) };
 	}, first);
@@ -1340,7 +1368,7 @@ h.run(async () => {
 		const s = window.__stores;
 		const ap = s.animationPreview;
 		s.commandsHandler.sceneCommand('/create box');
-		await new Promise((r) => setTimeout(r, 250));
+		await /** @type {any} */ (window).__settle(250);
 		let g;
 		s.objectsGroup.subscribe((x) => (g = x))();
 		const obj = g.children[g.children.length - 1];
@@ -1362,7 +1390,7 @@ h.run(async () => {
 
 		// a light channel belongs to a light, a metalness channel to a material
 		s.commandsHandler.sceneCommand('/light point');
-		await new Promise((r) => setTimeout(r, 250));
+		await /** @type {any} */ (window).__settle(250);
 		s.objectsGroup.subscribe((x) => (g = x))();
 		const light = g.children.findLast((/** @type {any} */ c) => c.isLight);
 		return {
@@ -1404,7 +1432,7 @@ h.run(async () => {
 		const s = window.__stores;
 		const ap = s.animationPreview;
 		s.commandsHandler.sceneCommand('/create box');
-		await new Promise((r) => setTimeout(r, 250));
+		await /** @type {any} */ (window).__settle(250);
 		let g;
 		s.objectsGroup.subscribe((x) => (g = x))();
 		const obj = g.children[g.children.length - 1];
@@ -1422,11 +1450,11 @@ h.run(async () => {
 
 		ap.setActiveClip(obj.uuid, up);
 		ap.play(obj.uuid);
-		await new Promise((r) => setTimeout(r, 350));
+		await /** @type {any} */ (window).__settle(350);
 		const onUp = { y: obj.position.y, x: obj.position.x, clip: ap.transportOf(obj.uuid).clipId === up };
 		// now pick the other clip in the list
 		ap.setActiveClip(obj.uuid, side);
-		await new Promise((r) => setTimeout(r, 450));
+		await /** @type {any} */ (window).__settle(450);
 		const onSide = {
 			y: obj.position.y,
 			x: obj.position.x,
@@ -1457,7 +1485,7 @@ h.run(async () => {
 		const s = window.__stores;
 		const ap = s.animationPreview;
 		s.commandsHandler.sceneCommand('/create box');
-		await new Promise((r) => setTimeout(r, 250));
+		await /** @type {any} */ (window).__settle(250);
 		let g;
 		s.objectsGroup.subscribe((x) => (g = x))();
 		const obj = g.children[g.children.length - 1];
@@ -1468,12 +1496,12 @@ h.run(async () => {
 		ap.updateKey(obj.uuid, t, 1, { t: 1, v: 5 }, spin);
 		ap.updateAnim(obj.uuid, { duration: 1, loop: 'loop' }, spin);
 		ap.play(obj.uuid);
-		await new Promise((r) => setTimeout(r, 300));
+		await /** @type {any} */ (window).__settle(300);
 		const running = { y: obj.position.y, clip: ap.transportOf(obj.uuid).clipId === spin };
 
 		// make a brand-new clip WHILE it plays
 		const fresh = ap.createClip(obj.uuid, 'Fresh');
-		await new Promise((r) => setTimeout(r, 400));
+		await /** @type {any} */ (window).__settle(400);
 		const afterNew = {
 			transportOnFresh: ap.transportOf(obj.uuid).clipId === fresh,
 			playing: ap.transportOf(obj.uuid).playing,
@@ -1482,9 +1510,9 @@ h.run(async () => {
 
 		// and the same for a PRESET, which is also a new clip
 		ap.play(obj.uuid, spin);
-		await new Promise((r) => setTimeout(r, 300));
+		await /** @type {any} */ (window).__settle(300);
 		const preset = ap.applyPreset('turntable', obj.uuid, obj);
-		await new Promise((r) => setTimeout(r, 350));
+		await /** @type {any} */ (window).__settle(350);
 		const afterPreset = {
 			transportOnPreset: ap.transportOf(obj.uuid).clipId === preset.clipId,
 			y: obj.position.y
@@ -1511,7 +1539,7 @@ h.run(async () => {
 		const s = window.__stores;
 		const ap = s.animationPreview;
 		s.commandsHandler.sceneCommand('/create box');
-		await new Promise((r) => setTimeout(r, 300));
+		await /** @type {any} */ (window).__settle(300);
 		let g;
 		s.objectsGroup.subscribe((x) => (g = x))();
 		const obj = g.children[g.children.length - 1];
@@ -1523,7 +1551,7 @@ h.run(async () => {
 		ap.updateAnim(obj.uuid, { duration: 2, loop: 'loop' });
 		ap.setAutoKey(obj.uuid);
 		ap.scrub(obj.uuid, 1);
-		await new Promise((r) => setTimeout(r, 250));
+		await /** @type {any} */ (window).__settle(250);
 		return obj.uuid;
 	});
 	// drive the REAL Inspector rows: type a position, then change the colour
@@ -1572,10 +1600,10 @@ h.run(async () => {
 		const parked = { z: obj.position.z, head: ap.playheadOf(obj.uuid) };
 		// select something else, then come back — the frame must still be there
 		s.objectActions.selectObject(other, false);
-		await new Promise((r) => setTimeout(r, 400));
+		await /** @type {any} */ (window).__settle(400);
 		const away = { z: obj.position.z, head: ap.playheadOf(obj.uuid) };
 		s.objectActions.selectObject(obj.uuid, false);
-		await new Promise((r) => setTimeout(r, 300));
+		await /** @type {any} */ (window).__settle(300);
 		const back = { z: obj.position.z, head: ap.playheadOf(obj.uuid) };
 		void box;
 		return { parked, away, back };
@@ -1649,17 +1677,21 @@ h.run(async () => {
 
 	await A.page.evaluate(() => {
 		/** @type {any} */ (window).__ctx2 = [];
-		// bubble phase on window: this runs AFTER every direct listener, so it reports
-		// whether anything actually cancelled the default
+		// CAPTURE phase on window, and the verdict read AFTER dispatch. A bubble-phase
+		// listener used to report here, but the dock chrome now stops the event on its way
+		// up (stopPropagation, default left to the pane's own blocker), so the bubble
+		// listener saw NOTHING and the check read an empty list as "not cancelled". Keeping
+		// the event and asking `defaultPrevented` once dispatch is over is the same question
+		// — did anything cancel the browser menu? — without depending on propagation.
 		window.addEventListener('contextmenu', (e) => {
 			const el = /** @type {any} */ (e.target);
 			/** @type {any} */ (window).__ctx2.push({
-				prevented: e.defaultPrevented,
+				ev: e,
 				tag: el?.tagName,
 				onMenu: !!el?.closest?.('[role="menu"]'),
 				inPane: !!el?.closest?.('#animation-dock, #animation-window')
 			});
-		});
+		}, true);
 	});
 
 	// a real right-click on a key HANDLE in the graph. Take a handle with a REAL
@@ -1685,7 +1717,9 @@ h.run(async () => {
 	);
 	await A.page.mouse.click(keyDot.x, keyDot.y, { button: 'right' });
 	await A.page.waitForTimeout(300);
-	const onKeyEvents = await A.page.evaluate(() => /** @type {any} */ (window).__ctx2);
+	const onKeyEvents = await A.page.evaluate(() =>
+		/** @type {any} */ (window).__ctx2.map((/** @type {any} */ x) => ({ tag: x.tag, onMenu: x.onMenu, inPane: x.inPane, prevented: x.ev.defaultPrevented }))
+	);
 	h.check(
 		onKeyEvents.length > 0 && onKeyEvents.every((/** @type {any} */ e) => e.prevented),
 		`right-clicking a graph KEY cancels the browser menu (${onKeyEvents
@@ -1704,7 +1738,9 @@ h.run(async () => {
 	h.check(!!menuSpot, 'the open menu has a surface to right-click');
 	await A.page.mouse.click(menuSpot.x, menuSpot.y, { button: 'right' });
 	await A.page.waitForTimeout(300);
-	const onMenuEvents = await A.page.evaluate(() => /** @type {any} */ (window).__ctx2);
+	const onMenuEvents = await A.page.evaluate(() =>
+		/** @type {any} */ (window).__ctx2.map((/** @type {any} */ x) => ({ tag: x.tag, onMenu: x.onMenu, inPane: x.inPane, prevented: x.ev.defaultPrevented }))
+	);
 	h.check(
 		onMenuEvents.length > 0 && onMenuEvents.every((/** @type {any} */ e) => e.prevented),
 		`right-clicking OUR MENU cancels it too (${onMenuEvents

@@ -30,7 +30,7 @@
 	import { tabbable } from '$lib/windowTabs';
 	import DockTabs from '../DockTabs.svelte';
 	import { safeStorage } from '$lib/safeStorage';
-	import { setDockOccupant, dockHeight, visibleDockKey, dockMinimized, activateDock, dockModeArm, forgetDockTab } from '$lib/bottomDock';
+	import { setDockOccupant, dockHeight, visibleDockKey, dockShownKeys, dockPaneOf, dockMinimized, activateDock, dockModeArm, forgetDockTab } from '$lib/bottomDock';
 	import { bottomDockable } from '$lib/bottomDockDrop';
 	import { registerDockCloser } from '$lib/dockMenu';
 	import { explorerItems, hiddenItems, itemBlob } from '$lib/explorer';
@@ -725,7 +725,7 @@
 	});
 	// the tab ✕ asks first when there are unsaved edits, exactly like the header ✕
 	$effect(() => registerDockCloser('imageEditor', () => void close()));
-	const dockVisible = $derived($visibleDockKey === 'imageEditor' && !$dockMinimized);
+	const dockVisible = $derived($dockShownKeys.includes('imageEditor'));
 	let dockResizing = false;
 	const clampDockH = (/** @type {number} */ h) => Math.min(Math.max(h || 320, 200), Math.round(window.innerHeight * 0.8));
 	function startDockResize(/** @type {any} */ e) {
@@ -937,6 +937,7 @@
 		tabindex="-1"
 		use:ownKeys
 		class="tp-themed fixed inset-x-0 bottom-0 tp-ui tp-dock-panel flex flex-col p-2 outline-hidden {dockVisible ? '' : 'hidden'}"
+		data-dock-pane={$dockPaneOf['imageEditor']}
 		style="z-index: var(--z-dock); height: {$dockHeight}px; border-top: 1px solid var(--tp-line)"
 		data-key-scope="panel"
 		role="region"

@@ -830,8 +830,16 @@ h.run(async () => {
 	await page.keyboard.press('Space');
 	await page.waitForTimeout(400);
 
-	// the coarser pair
+	// the coarser pair — from the START, so a 5 s jump has room: from wherever the playing steps
+	// above left it (6.5 s of an 8 s tone on a slow run) the jump clamped at the end and read as
+	// 1.5 s. Home is asserted on its own below; here it only sets the stage.
+	await page.keyboard.press('Home');
+	await page.waitForTimeout(350);
 	const beforeUp = await audioAt();
+	h.check(
+		beforeUp !== null && ((await audioState())?.dur ?? 0) - beforeUp > 5,
+		'premise: more than five seconds left before the end (' + beforeUp + ')'
+	);
 	await page.keyboard.press('ArrowUp');
 	await page.waitForTimeout(350);
 	const afterUp = await audioAt();

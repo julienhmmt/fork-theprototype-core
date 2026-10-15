@@ -180,7 +180,7 @@ h.run(async () => {
 	});
 	await page.screenshot({ path: out + '/i14-hosted-objects-focus-' + THEME + '.png' });
 	h.check(ol.focus === 'dock' && ol.host === 'shown' && ol.width === 1440 && ol.bottom === 900 && ol.top < 140, `4.1 the tab menu's "Maximize" fills the window with the docked Objects list (${JSON.stringify(ol)})`);
-	await page.click('#focus-exit button');
+	await page.click('#focus-exit button:not(#focus-pip-toggle)'); // 44 M15: the Viewport toggle sits left of it
 	await page.waitForTimeout(500);
 	st = await scene(page);
 	h.check(!st.focus && st.connect, '4.2 the "Exit focus" pill restores');
@@ -258,7 +258,7 @@ h.run(async () => {
 	});
 	await pp.screenshot({ path: out + '/i14-phone-focus-folded-' + THEME + '.png' });
 	h.check(ph.focus === 'viewport' && !ph.bar && !ph.sheet && ph.pill, `8.1 More ▸ Focus mode on a folded N6: the phone bar and sheet are hidden, the pill shows (${JSON.stringify(ph)})`);
-	await pp.locator('#focus-exit button').tap();
+	await pp.locator('#focus-exit button:not(#focus-pip-toggle)').tap();
 	await pp.waitForTimeout(600);
 	const back = await S(pp, () => ({ focus: document.documentElement.getAttribute('data-focus'), bar: !!document.querySelector('#ps-bar') && document.querySelector('#ps-bar').getBoundingClientRect().height > 0 }));
 	h.check(!back.focus && back.bar, `8.2 tapping "Exit focus" brings the phone chrome back (${JSON.stringify(back)})`);

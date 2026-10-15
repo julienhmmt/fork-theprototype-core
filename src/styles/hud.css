@@ -645,3 +645,198 @@
 	border-radius: var(--radius-pill);
 	font: 500 var(--fs-body) var(--font-ui);
 }
+/* 44 M4: the armed Move toolbar's hint above the bar — with a Cancel (touch has no Escape) */
+.hud-move-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	pointer-events: auto;
+	padding-right: 4px;
+}
+.hud-move-cancel {
+	height: 22px;
+	padding: 0 10px;
+	border: 0;
+	border-radius: var(--radius-pill);
+	background: var(--surface-hover);
+	color: var(--text);
+	font: 600 var(--fs-badge, 11px) var(--font-ui);
+	cursor: pointer;
+}
+@media (pointer: coarse) {
+	.hud-move-cancel {
+		height: 32px;
+		padding: 0 14px;
+	}
+}
+/* 44 M13: in Edit positions the corner stacks sit beside any OPEN sidebar (Controls sets the class and the widths),
+   so their placeholders are never under a column — the edit bar (J8) and the row beside the logo do the same */
+:root.hud-edit-beside .hud-stack-left {
+	left: calc(16px + var(--sb-open-left, 0px));
+}
+:root.hud-edit-beside .hud-stack-right {
+	right: calc(16px + var(--sb-open-right, 0px));
+}
+
+/* ---- 44 M12b: THE CLUSTERS — placed, rotated, hidden (Controls' layoutClusters sets the classes + the px) ---- */
+:root.cl-left-placed #hud-stack-left.hud-stack,
+:root.cl-right-placed #hud-stack-right.hud-stack {
+	left: auto;
+	right: auto;
+	bottom: auto;
+}
+:root.cl-left-placed #hud-stack-left.hud-stack {
+	left: var(--cl-left-x);
+	top: var(--cl-left-y);
+}
+:root.cl-right-placed #hud-stack-right.hud-stack {
+	left: var(--cl-right-x);
+	top: var(--cl-right-y);
+}
+:root.cl-touch-placed #touch-tools {
+	left: var(--cl-touch-x);
+	top: var(--cl-touch-y);
+	transition: none;
+}
+/* Users.svelte places the group with an INLINE `position: absolute; top; right` — only !important beats inline */
+:root.cl-top-placed #hud-tr {
+	position: fixed !important;
+	left: var(--cl-top-x) !important;
+	top: var(--cl-top-y) !important;
+	right: auto !important;
+}
+:root.cl-connect-placed .connect-wrap {
+	left: var(--cl-connect-x);
+	top: var(--cl-connect-y);
+	right: auto;
+	transform: none;
+	transition: none;
+}
+/* rotated: the corner stacks lie in a row (each from its own corner), the rows stand in a column */
+:root.cl-left-rotated #hud-stack-left.hud-stack {
+	flex-direction: row;
+}
+:root.cl-right-rotated #hud-stack-right.hud-stack {
+	flex-direction: row-reverse;
+}
+:root.cl-top-rotated #hud-tr {
+	flex-direction: column;
+	height: auto;
+	padding: 5px 0;
+}
+:root.cl-touch-rotated #touch-tools {
+	flex-direction: column;
+}
+/* the vertical bar: a column of cells, Play's well as wide as the bar */
+:root.cl-bar-rotated #controls-pill {
+	flex-direction: column;
+	height: auto;
+	width: var(--hud-bar-h);
+	min-width: 0;
+	padding: 6px 0;
+}
+:root.cl-bar-rotated #controls-pill .hud-bar-row {
+	flex-direction: column;
+	height: auto;
+	width: 100%;
+}
+:root.cl-bar-rotated #controls-pill .hud-play-well {
+	width: 100%;
+	height: calc(var(--hud-fab) + 12px);
+}
+:root.cl-bar-rotated #controls-pill .hud-sep {
+	width: 22px;
+	height: 1px;
+	margin: 2px 0;
+}
+:root.cl-bar-rotated #controls-pill.hud-editing {
+	width: auto;
+	padding: 6px 4px;
+}
+:root.cl-bar-rotated #controls-pill.hud-editing .hud-bar-row {
+	flex-wrap: wrap;
+	max-height: calc(100vh - 96px);
+	width: auto;
+}
+:root.cl-bar-rotated #controls-pill .hud-edit-hint {
+	bottom: auto;
+	top: 50%;
+	left: calc(100% + 14px);
+	transform: translateY(-50%);
+}
+/* hidden: gone outside Edit positions, a faint placeholder inside it (its menu shows it again) */
+:root:not(.hud-edit-on).cl-left-hidden #hud-stack-left,
+:root:not(.hud-edit-on).cl-right-hidden #hud-stack-right,
+:root:not(.hud-edit-on).cl-touch-hidden #touch-tools,
+:root:not(.hud-edit-on).cl-top-hidden #hud-tr {
+	display: none;
+}
+:root.hud-edit-on.cl-left-hidden #hud-stack-left,
+:root.hud-edit-on.cl-right-hidden #hud-stack-right,
+:root.hud-edit-on.cl-touch-hidden #touch-tools,
+:root.hud-edit-on.cl-top-hidden #hud-tr {
+	opacity: 0.35;
+}
+/* the grip (Edit positions): a small pill a finger can take */
+.cl-grip {
+	position: fixed;
+	z-index: calc(var(--z-chrome-top) + 2);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 18px;
+	padding: 0;
+	transform: translate(-50%, -50%);
+	border: 1px solid var(--accent);
+	border-radius: var(--radius-pill);
+	background: var(--surface-1);
+	color: var(--accent-text);
+	box-shadow: var(--hud-shadow);
+	cursor: grab;
+	touch-action: none;
+}
+.cl-grip svg {
+	transform: rotate(90deg);
+}
+.cl-grip:hover,
+.cl-grip:focus-visible {
+	background: var(--accent-soft);
+	outline: none;
+}
+.cl-grip.cl-grip-hidden {
+	opacity: 0.6;
+	border-style: dashed;
+}
+@media (pointer: coarse) {
+	.cl-grip {
+		width: 40px;
+		height: 26px;
+	}
+}
+/* the snap guides */
+.cl-guide {
+	position: fixed;
+	z-index: calc(var(--z-chrome-top) + 1);
+	pointer-events: none;
+	border: 0 dashed var(--accent);
+}
+.cl-guide-x {
+	top: 0;
+	bottom: 0;
+	width: 0;
+	border-left-width: 1px;
+}
+.cl-guide-y {
+	left: 0;
+	right: 0;
+	height: 0;
+	border-top-width: 1px;
+}
+.cl-move-hint {
+	position: fixed;
+	bottom: auto;
+	top: 72px;
+	left: 50%;
+	z-index: calc(var(--z-chrome-top) + 3);
+}

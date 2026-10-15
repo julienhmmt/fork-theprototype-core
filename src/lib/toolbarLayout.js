@@ -35,7 +35,13 @@
 //                the bar's own menu button, so it is not an id of `order`: it can be taken off and
 //                put back like any item, never moved into the row or a corner
 //   connect      43 K3: the Connect pill (top centre) is shown — absent = true; removable / restorable
-//                in Edit positions and Customize, never moved
+//                in Edit positions and Customize
+//   clusters     44 M12b: per CLUSTER (the bar, the two corner stacks, the row beside the logo, the top-right
+//                group, the Connect pill) its free placement `{a, x, y}` — `x`/`y` the fraction (0..1) of the
+//                free span along each axis (0 = hugging the left / top edge, 1 = the right / bottom one), `a` the
+//                nearest of the nine anchors, for reading — plus `rotated` (turned 90° from its home orientation:
+//                the bar and the two rows go vertical, the corner stacks horizontal; never the Connect pill) and
+//                `hidden` (never the bar: Play lives there). Absent = at home, as before. See $lib/clusterPlace.
 //
 // 42 I9 — FIVE REGIONS, ONE RECORD. The bar and four STACKS (the two bottom corners, the
 // top-right group, the touch tools). A stack holds at most SIDE_MAX (four — the user's "if I
@@ -77,7 +83,39 @@ export const isHole = (id) => typeof id === 'string' && id.startsWith(HOLE + ':'
  * @property {string[]} seen
  * @property {boolean} more
  * @property {boolean} connect
+ * @property {Record<string, ClusterState>} [clusters]
  */
+/** @typedef {{ a?: string, x?: number, y?: number, rotated?: boolean, hidden?: boolean }} ClusterState */
+
+/** 44 M12b: the clusters a person can place, rotate and hide, in the order overlaps are settled */
+export const CLUSTERS = ['bar', 'left', 'right', 'touch', 'top', 'connect'];
+/** the nine anchors, by the fraction along each axis */
+export function anchorOf(/** @type {number} */ x, /** @type {number} */ y) {
+	const h = x < 1 / 3 ? 'left' : x > 2 / 3 ? 'right' : 'center';
+	const v = y < 1 / 3 ? 'top' : y > 2 / 3 ? 'bottom' : 'middle';
+	return v + '-' + h;
+}
+/** Turn any stored value into valid cluster states (unknown ids, non-numbers and empty entries dropped) */
+export function normalizeClusters(/** @type {unknown} */ raw) {
+	/** @type {Record<string, ClusterState>} */
+	const out = {};
+	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+	for (const id of CLUSTERS) {
+		const c = /** @type {any} */ (raw)[id];
+		if (!c || typeof c !== 'object') continue;
+		/** @type {ClusterState} */
+		const next = {};
+		if (typeof c.x === 'number' && Number.isFinite(c.x) && typeof c.y === 'number' && Number.isFinite(c.y)) {
+			next.x = Math.round(clamp(c.x, 0, 1) * 10000) / 10000;
+			next.y = Math.round(clamp(c.y, 0, 1) * 10000) / 10000;
+			next.a = anchorOf(next.x, next.y);
+		}
+		if (c.rotated === true && id !== 'connect') next.rotated = true;
+		if (c.hidden === true && id !== 'bar') next.hidden = true;
+		if (Object.keys(next).length) out[id] = next;
+	}
+	return out;
+}
 
 /**
  * @typedef {object} LayoutConfig
@@ -103,6 +141,7 @@ export const isHole = (id) => typeof id === 'string' && id.startsWith(HOLE + ':'
  * @property {Record<string, Region>} [home]  42: the home-only ids (copied from the config)
  * @property {boolean} [more]  43 J2: the trailing "…" is on the bar (absent = keep the record's)
  * @property {boolean} [connect]  43 K3: the Connect pill is shown (absent = keep the record's)
+ * @property {Record<string, ClusterState>} [clusters]  44 M12b: the clusters' placement (absent = keep the record's)
  */
 
 /** @param {unknown} v */
@@ -131,7 +170,8 @@ export function defaultLayout(cfg) {
 		touch: [...cfgStack(cfg, 'touch')],
 		seen: uniq([...cfg.order, ...STACKS.flatMap((s) => cfgStack(cfg, s))]),
 		more: true,
-		connect: true
+		connect: true,
+		clusters: {}
 	};
 }
 
@@ -178,6 +218,7 @@ export function normalizeLayout(raw, cfg) {
 	const collapsed = saved.collapsed === true;
 	const more = saved.more !== false;
 	const connect = saved.connect !== false;
+	const clusters = normalizeClusters(saved.clusters);
 	// 33 E1: a record that is still a SHIPPED default migrates to today's default bar (the
 	// corner stacks and `seen` it carries are kept — they are not part of the legacy rows)
 	if (isLegacyDefault(order, saved, cfg)) {
@@ -190,6 +231,7 @@ export function normalizeLayout(raw, cfg) {
 				posX,
 				more,
 				connect,
+				clusters,
 				...(keepSides ? { left: saved.left ?? fresh.left, right: saved.right ?? fresh.right, seen: saved.seen } : {})
 			},
 			{ ...cfg, legacyRows: [] }
@@ -238,7 +280,7 @@ export function normalizeLayout(raw, cfg) {
 	const spacerIndex = Number.isFinite(saved.spacerIndex)
 		? clamp(Math.round(saved.spacerIndex), 0, room)
 		: Math.min(cfg.spacer, room);
-	return { order, hidden, spacerIndex, collapsed, posX, left, right, top, touch, seen: [...seen].filter(known), more, connect };
+	return { order, hidden, spacerIndex, collapsed, posX, left, right, top, touch, seen: [...seen].filter(known), more, connect, clusters };
 }
 
 /** the bar buttons actually ON the bar, in bar order (Play's well is not one) */
@@ -353,6 +395,7 @@ export function placements(/** @type {ToolbarLayout} */ l, /** @type {Record<str
 		touch: [...stackOf(l, 'touch')],
 		more: l.more !== false,
 		connect: l.connect !== false,
+		clusters: normalizeClusters(l.clusters),
 		...(home ? { home } : {})
 	};
 }
@@ -375,7 +418,7 @@ export function fromPlacements(/** @type {ToolbarLayout} */ l, /** @type {Placem
 	const hidden = l.hidden.filter((id) => !placed.includes(id));
 	const order = [...shown, ...hidden];
 	const spacerIndex = clamp(bar.indexOf(PLAY), 0, shown.length);
-	return { ...l, order, hidden, spacerIndex, ...stacks, seen: uniq([...l.seen, ...placed]), more: typeof p.more === 'boolean' ? p.more : l.more !== false, connect: typeof p.connect === 'boolean' ? p.connect : l.connect !== false };
+	return { ...l, order, hidden, spacerIndex, ...stacks, seen: uniq([...l.seen, ...placed]), more: typeof p.more === 'boolean' ? p.more : l.more !== false, connect: typeof p.connect === 'boolean' ? p.connect : l.connect !== false, clusters: normalizeClusters(p.clusters ?? l.clusters) };
 }
 
 /** @param {Placements} p @param {string} id @returns {Placements} */

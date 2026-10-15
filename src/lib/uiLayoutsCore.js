@@ -37,6 +37,8 @@ const EXACT = new Set([
 	'bottomDockActive',
 	'flowDockHeight',
 	'dockTabOrder',
+	// 44 M9: the dock's side-by-side splits ($lib/bottomDock dockSplits)
+	'bottomDockSplits',
 	'windowTabGroups',
 	'objectListRect',
 	'profilerDockSized',

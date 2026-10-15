@@ -21,11 +21,14 @@
 	// box (top-edge resize, full width), rendered only while one of them is the tab in front.
 	import { onMount, tick } from 'svelte';
 	import DockTabs from '../DockTabs.svelte';
+	import ContextMenu from '../ContextMenu.svelte';
+	import { dockAddMenuAt, dockAddItems, rebuildAfterPick } from '$lib/dockMenu';
 	import EmptyState from '../ui/EmptyState.svelte';
 	import WorkspaceLayouts from '../menu/WorkspaceLayouts.svelte';
-	import { dockHeight } from '$lib/bottomDock';
+	import { dockHeight, dockEmptyShown, dockSplitView, dockPaneOf } from '$lib/bottomDock';
+	import DockSplit from '../DockSplit.svelte';
 	import { phoneDockShown, phoneTabsOpen, startPhoneDock } from '$lib/phoneDock';
-	import { HOSTED, hostedTabsOpen, hostedDockShown, startDockHost } from '$lib/dockHost';
+	import { HOSTED, hostedTabsOpen, hostedDockShown, hostedDockShownKeys, startDockHost } from '$lib/dockHost';
 	import { phoneShell } from '$lib/ui/phoneShell.js';
 	import { selectedObjects } from '../../stores/sceneStore';
 	import { inspectorKind } from '../../stores/appStore';
@@ -44,8 +47,22 @@
 	const anyOpen = $derived(Object.values($phoneTabsOpen).some(Boolean));
 	// 42 I6: a hosted window docked on a wider screen
 	const anyHosted = $derived(Object.values($hostedTabsOpen).some(Boolean));
+	// 44 M5: the EMPTY dock ("T" with nothing docked) is this frame too, on a wider screen — its strip
+	// with only the "+", and a helper line where a tab's body would be
+	const emptyDock = $derived(!$phoneShell && $dockEmptyShown);
+
+	// 44 M8 — THE DOCK'S "+" MENU, drawn here for every strip (`dockAddMenuAt`): Ctrl/Shift-click picks
+	// several windows and the rows rebuild after each pick (their checks and hints change)
+	let addItems = $state(/** @type {any[]} */ ([]));
+	$effect(() => {
+		if ($dockAddMenuAt) addItems = dockAddItems({ pane: $dockAddMenuAt.pane });
+	});
 	/** the tab in front, whichever posture hosts it */
-	const shownTab = $derived($phoneShell ? $phoneDockShown : $hostedDockShown);
+	const shownTab = $derived($phoneShell ? $phoneDockShown : ($hostedDockShownKeys[0] ?? $hostedDockShown));
+	// 44 M9 — a SPLIT with one hosted half: this frame is that half's pane (the other half is an
+	// editor's own frame, or the empty pane). Two hosted halves share one full-width frame, each
+	// element placed in its own pane by windows.css.
+	const framePane = $derived(!$phoneShell && $dockSplitView && $hostedDockShownKeys.length === 1 ? $dockPaneOf[$hostedDockShownKeys[0]] : undefined);
 	// Properties with nothing selected has nothing to show (the Inspector would show the last
 	// object, which the selection no longer holds): the frame says so instead
 	const nothingSelected = $derived(
@@ -70,11 +87,22 @@
 			if (!open[key]) continue;
 			const el = document.querySelector(sel);
 			if (!el) continue;
-			const on = shown === key && !(key === 'properties' && nothingSelected);
+			const on = ($phoneShell ? shown === key : $hostedDockShownKeys.includes(key)) && !(key === 'properties' && nothingSelected);
 			if (on || !want.has(el)) want.set(el, on ? 'shown' : 'hidden');
 		}
 		for (const el of document.querySelectorAll('[data-pd-host]')) if (!want.has(el)) el.removeAttribute('data-pd-host');
 		for (const [el, v] of want) if (el.getAttribute('data-pd-host') !== v) el.setAttribute('data-pd-host', v);
+		// 44 M9: which pane of a split each shown hosted window sits in (windows.css places it)
+		const panes = /** @type {Record<string, string>} */ ($phoneShell ? {} : $dockPaneOf);
+		for (const el of document.querySelectorAll('[data-pd-host-pane]')) {
+			el.removeAttribute('data-pd-host-pane');
+		}
+		for (const [key, sel] of Object.entries(hostOf)) {
+			const el = document.querySelector(sel);
+			if (!el) continue;
+			const pane = want.get(el) === 'shown' ? panes[key] : undefined;
+			if (pane) el.setAttribute('data-pd-host-pane', pane);
+		}
 	}
 	$effect(() => {
 		void $phoneShell;
@@ -82,6 +110,8 @@
 		void $phoneTabsOpen;
 		void $hostedTabsOpen;
 		void $hostedDockShown;
+		void $hostedDockShownKeys;
+		void $dockPaneOf;
 		void nothingSelected;
 		// an element may mount a frame after its store flips (the Inspector's fly-in, the object
 		// list's chunked tree): try now, after the flush, on the next frame and once more
@@ -149,14 +179,16 @@
 	});
 </script>
 
-{#if ($phoneShell && anyOpen) || (!$phoneShell && anyHosted)}
+{#if ($phoneShell && anyOpen) || (!$phoneShell && (anyHosted || emptyDock))}
 	<div
 		id="phone-dock"
-		class="tp-themed tp-ui tp-dock-panel pd-frame fixed inset-x-0 bottom-0 flex flex-col {shownTab ? '' : 'hidden'}"
+		class="tp-themed tp-ui tp-dock-panel pd-frame fixed inset-x-0 bottom-0 flex flex-col {shownTab || emptyDock ? '' : 'hidden'}"
 		style="z-index: var(--z-dock); height: {$dockHeight}px; border-top: 1px solid var(--tp-line)"
 		data-key-scope="panel"
 		data-phone-tab={shownTab ?? ''}
 		data-dock-host={$phoneShell ? 'phone' : 'wide'}
+		data-dock-empty={emptyDock ? 'true' : undefined}
+		data-dock-pane={framePane}
 		role="region"
 		aria-label="Docked panels"
 	>
@@ -179,11 +211,25 @@
 				<div class="pd-layouts" id="phone-dock-layouts" use:minimalScroll>
 					<WorkspaceLayouts idPrefix="layouts-menu" />
 				</div>
+			{:else if emptyDock}
+				<div id="dock-empty" class="pd-empty">Press + or drag a tab here</div>
 			{:else if nothingSelected}
 				<EmptyState id="phone-dock-no-selection" icon="sliders-horizontal" title="Nothing selected" description="Select an object to see its properties here." />
 			{/if}
 		</div>
 	</div>
+{/if}
+
+<DockSplit />
+
+{#if $dockAddMenuAt}
+	<ContextMenu
+		x={$dockAddMenuAt.x}
+		y={$dockAddMenuAt.y}
+		items={addItems}
+		onclose={() => dockAddMenuAt.set(null)}
+		onpicked={() => rebuildAfterPick(() => $dockAddMenuAt && (addItems = dockAddItems({ pane: $dockAddMenuAt.pane })))}
+	/>
 {/if}
 
 <style>
@@ -195,6 +241,17 @@
 		flex: 1;
 		flex-direction: column;
 		min-height: 0;
+	}
+	/* 44 M5: the empty dock's one quiet line (VS Code / Blender style), centred in the body */
+	.pd-empty {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-4);
+		color: var(--text-faint);
+		font-size: var(--fs-desc);
+		user-select: none;
 	}
 	.pd-layouts {
 		flex: 1;

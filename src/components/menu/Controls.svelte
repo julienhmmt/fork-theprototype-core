@@ -12,6 +12,7 @@
 	import { keyOf } from '$lib/keyOf';
 	import { setLastScope } from '$lib/keyScope';
 	import { isHeaderDrag, startWindowDragGuard } from '$lib/windowGrip';
+	import { bodyDrag } from '$lib/windowBodyDrag';
 	import { systemGroupNames } from '$lib/moduleSDK';
 	import { ENV_ROOT } from '$lib/environment';
 	import { flyTo } from '$lib/objectActions';
@@ -27,6 +28,11 @@
 	import * as THREE from 'three';
 	import { onMount, setContext, tick } from 'svelte';
 	import { createGesture } from '$lib/modalGrab';
+	// 44 M12b: free but anchored placement of the clusters + rotation
+	import { boxAt, fractionsOf, snapBox, nudgeFree, clampBox, overlaps } from '$lib/clusterPlace';
+	import type { Box, Guide } from '$lib/clusterPlace';
+	import { connectPinned, setConnectPinned } from '$lib/connectPin';
+	import { connectDocked, connectBarHeight } from '../../stores/appStore.js';
 	import { writable, get } from 'svelte/store';
 	import { shareObject } from '$lib/objectPermissions';
 	import Objects from './Objects.svelte';
@@ -51,10 +57,10 @@
 	import SimControls from './SimControls.svelte';
 	import { focusStack } from '$lib/windowFocus';
 	import { tabbable, groupRectOf, moveGroupOf, resizeGroup } from '$lib/windowTabs';
-	import { clampWinSize, clampResize, anchorOf } from '$lib/windowSize';
+	import { clampWinSize, clampResize, anchorOf, registerSizeReset } from '$lib/windowSize';
 	import { dockable } from '$lib/docking';
 	import { bottomDockable } from '$lib/bottomDockDrop';
-	import { visibleDockKey, dockOccupants, bottomInset, FLOW_FAMILY, armDockMode, DOCK_TITLES } from '$lib/bottomDock';
+	import { dockShownKeys, dockOccupants, bottomInset, FLOW_FAMILY, armDockMode, DOCK_TITLES } from '$lib/bottomDock';
 	import { togglePanel } from '$lib/panelToggles';
 	import { requestPlay, willEnterXR, willEnterAR, xrSessionFailed, playAsItems } from '$lib/playMode';
 	// 30 P2: Test play — the play button's right-click row beside the game chip's button
@@ -84,7 +90,9 @@
 		unplacedIds,
 		regionOf,
 		canPlace,
-		foldToFit
+		foldToFit,
+		CLUSTERS,
+		normalizeClusters
 	} from '$lib/toolbarLayout';
 	// 43 J8/J10: where the sidebars are (a pinned column bounds the bar; any open one bounds Edit positions)
 	import { geometry as sidebarGeometry } from '$lib/sidebars';
@@ -106,7 +114,8 @@
 	// floating window is shown.
 	// WHAT a click DOES now lives in $lib/panelToggles (`togglePanel`), one decision tree
 	// shared with the O / N keyboard shortcuts; only the icon TINT is decided here.
-	const flowDockVisible = $derived(FLOW_FAMILY.includes($visibleDockKey ?? ''));
+	// 44 M9: a split shows two dock views at once — either half counts as on screen
+	const flowDockVisible = $derived(FLOW_FAMILY.some((k) => $dockShownKeys.includes(k)));
 	const flowFloatingShown = $derived(!$flowGraphClose && !$dockOccupants.flow?.present);
 	const flowShown = $derived(flowDockVisible || flowFloatingShown);
 	// W8b: the Explorer's rule, generalised to every dock view the roster can carry —
@@ -119,7 +128,7 @@
 	// FLOW FAMILY, so any family tab counts as "its dock is on screen", which is a rule
 	// none of the others has.
 	const panelShown: Record<string, boolean> = $derived.by(() => {
-		const visible = $visibleDockKey ?? '';
+		const shownKeys = $dockShownKeys;
 		const occupants = $dockOccupants;
 		const closed: Record<string, boolean> = {
 			flowcode: $flowCodeClose,
@@ -133,7 +142,7 @@
 		};
 		const out: Record<string, boolean> = {};
 		for (const key of Object.keys(closed))
-			out[key] = !closed[key] && (visible === key || !occupants[key]?.present);
+			out[key] = !closed[key] && (shownKeys.includes(key) || !occupants[key]?.present);
 		return out;
 	});
 
@@ -798,6 +807,11 @@
 
 		let startX = 0;
 		let startY = 0;
+		// 44 M1: where in the window the pointer grabbed it — the window is placed at pointer - grab,
+		// so it stays under the pointer (a body drag hands over past its slop; summed movement deltas
+		// left the window those px behind for the rest of the gesture)
+		let grabX = 0;
+		let grabY = 0;
 		let startWidth = 0;
 		let startHeight = 0;
 
@@ -833,6 +847,7 @@
 		// already in viewport coordinates, so nothing else changes.
 		node.style.position = 'fixed';
 		node.style.userSelect = 'none';
+		bodyDrag(node); // 44 M1: a press-and-drag anywhere that is not a control moves it too
 		clampRect();
 		window.addEventListener('resize', clampRect);
 		// reveal: when the window is shown again after being shoved partly off-screen,
@@ -871,6 +886,8 @@
 				// 42 I6: start from where the window IS — a tab tear-off or the dock (dockHost) may
 				// have placed it since the last drag
 				if (!grouped() && !node.dataset.docked) ({ left, top } = { left: node.offsetLeft, top: node.offsetTop });
+				grabX = e.clientX - left;
+				grabY = e.clientY - top;
 			}
 		});
 
@@ -880,8 +897,8 @@
 					// move the whole tab group so its strip follows (not just this window)
 					moveGroupOf('objects', e.movementX, e.movementY);
 				} else {
-					left += e.movementX;
-					top += e.movementY;
+					left = e.clientX - grabX;
+					top = e.clientY - grabY;
 					// allow the window to be shoved PARTLY off-screen (a grabbable strip
 					// always stays; the header row stays at/below the top so it's never
 					// lost — reopening snaps it fully back on, see the reveal observer)
@@ -934,13 +951,18 @@
 		// 18-B: double-click the grip — back to the default size, position kept.
 		// A direct listener, like every other gesture in this action: the panel
 		// chrome swallows delegated events.
-		node.addEventListener('dblclick', (e: any) => {
-			if (!e.target?.classList?.contains('resize-handle') || grouped()) return;
+		const resetSize = () => {
+			if (grouped()) return;
 			({ w: width, h: height } = clampWinSize(OBJ_WIN_DEFAULT.w, OBJ_WIN_DEFAULT.h, OBJ_WIN_MIN));
 			node.style.width = `${width}px`;
 			node.style.height = `${height}px`;
 			persist();
+		};
+		node.addEventListener('dblclick', (e: any) => {
+			if (!e.target?.classList?.contains('resize-handle')) return;
+			resetSize();
 		});
+		registerSizeReset(node, resetSize); // 44 M3: the header menu's "Reset size"
 
 		// 169: Settings "Reset window positions" recentres the object list too
 		registerWindowReset(() => {
@@ -1699,7 +1721,8 @@
 
 	/** the keyboard, while editing — in CAPTURE so the editor's own arrows / Delete never see it */
 	function onEditKey(e: KeyboardEvent) {
-		if (!editing || editAddMenu) return;
+		// 44 M12b: an open cluster menu / an armed cluster move owns Escape (it closes / puts the cluster back)
+		if (!editing || editAddMenu || clusterMenu || clusterGrab.active()) return;
 		if (e.key === 'Escape') {
 			e.preventDefault();
 			e.stopPropagation();
@@ -1723,9 +1746,9 @@
 
 	/** a press outside the bar, the corners and the popup cancels (the user's "outside = cancel") */
 	function onEditOutside(e: PointerEvent) {
-		if (!editing || editAddMenu) return;
+		if (!editing || editAddMenu || clusterMenu || clusterGrab.active()) return;
 		const t = e.target as Element | null;
-		if (t?.closest?.('#controls-pill, .hud-stack, #hud-tr, #touch-tools, #toolbar-edit-ghost, #connect-edit, [role="menu"]')) return;
+		if (t?.closest?.('#controls-pill, .hud-stack, #hud-tr, #touch-tools, #toolbar-edit-ghost, #connect-edit, [role="menu"], [data-cluster-grip], #cluster-move-hint, .connect-wrap')) return;
 		cancelEditPositions();
 	}
 
@@ -1752,7 +1775,8 @@
 		for (const region of ['top', 'touch'] as const) {
 			const group = document.getElementById(region === 'top' ? 'hud-tr' : 'touch-tools');
 			if (!group || !inside(group) || id === SPACER || !editing || !canPlace(editing, id, region)) continue;
-			const column = region === 'touch' && group.classList.contains('tt-stacked');
+			// 44 M12b: a rotated group is a column too
+			const column = (region === 'touch' && group.classList.contains('tt-stacked')) || isVertical(region);
 			const others = [...group.querySelectorAll<HTMLElement>('[data-edit-wrap]')].filter((el) => el.dataset.editWrap !== id);
 			const index = others.filter((el) => {
 				const r = el.getBoundingClientRect();
@@ -1764,9 +1788,11 @@
 			const stack = document.getElementById(`hud-stack-${region}`);
 			if (!inside(stack) || id === SPACER || (editing && !canPlace(editing, id, region))) continue;
 			const others = [...(stack?.querySelectorAll<HTMLElement>('[data-edit-wrap]') ?? [])].filter((el) => el.dataset.editWrap !== id);
-			// bottom → top: an item sits ABOVE every other whose centre is below the pointer
+			// bottom → top: an item sits ABOVE every other whose centre is below the pointer. 44 M12b: rotated to a
+			// row, the left stack reads left → right from its corner and the right one right → left
 			const index = others.filter((el) => {
 				const r = el.getBoundingClientRect();
+				if (!isVertical(region)) return region === 'left' ? r.left + r.width / 2 < x : r.left + r.width / 2 > x;
 				return r.top + r.height / 2 > y;
 			}).length;
 			return { region, index };
@@ -1774,9 +1800,10 @@
 		const row = document.querySelector('#controls-pill .hud-bar-row');
 		if (!inside(row) || (editing && !canPlace(editing, id, 'bar'))) return null;
 		const others = [...(row?.querySelectorAll<HTMLElement>('[data-edit-slot]') ?? [])].filter((el) => el.dataset.editWrap !== id);
+		const barVertical = isVertical('bar');
 		const index = others.filter((el) => {
 			const r = el.getBoundingClientRect();
-			return r.left + r.width / 2 < x;
+			return barVertical ? r.top + r.height / 2 < y : r.left + r.width / 2 < x;
 		}).length;
 		return { region: 'bar', index };
 	}
@@ -1800,6 +1827,7 @@
 		if (!g || !editing || g.id === MORE) return; // 43 J2: the "…" is removable, not movable
 		if (!g.dragging && Math.abs(e.clientX - g.x) + Math.abs(e.clientY - g.y) < DRAG_SLOP) return;
 		e.preventDefault();
+		clearTimeout(holdTimer);
 		g.dragging = true;
 		editDrag = { id: g.id, x: e.clientX, y: e.clientY };
 		const target = editDropTarget(e.clientX, e.clientY, g.id);
@@ -1808,7 +1836,9 @@
 		if (placeRegion(p, g.id) === target.region && p[target.region].indexOf(g.id) === target.index) return; // already there
 		editing = placeAt(p, g.id, target.region, target.index);
 	}
+	let holdTimer = 0;
 	function editGestureEnd(e?: Event) {
+		clearTimeout(holdTimer);
 		window.removeEventListener('pointermove', editGestureMove);
 		window.removeEventListener('pointerup', editGestureEnd);
 		window.removeEventListener('pointercancel', editGestureEnd);
@@ -1838,6 +1868,26 @@
 			editGestureEnd();
 			editGesture = { id: current, x: e.clientX, y: e.clientY, dragging: false };
 			editFocus = current;
+			// 44 M12b: a finger held STILL opens the cluster's menu (a held finger that moves drags the button)
+			clearTimeout(holdTimer);
+			if (e.pointerType !== 'mouse') {
+				const at = { x: e.clientX, y: e.clientY };
+				const g = editGesture;
+				holdTimer = window.setTimeout(() => {
+					// decided on the NEXT frame: Chrome delivers a finger's pointermoves aligned to frames, so a busy
+					// frame (the edit loop measures every one) can hold back the moves that make this press a drag —
+					// the timer then won the race and the cluster menu ate the drag (toolbar-slots-42 I9, 3 in 7)
+					requestAnimationFrame(() => {
+						if (editGesture !== g || g.dragging) return;
+						const cid = clusterAt(node);
+						editGestureEnd();
+						if (cid) {
+							longPressAt = performance.now();
+							openClusterMenu(cid, at.x, at.y);
+						}
+					});
+				}, LONG_PRESS_MS);
+			}
 			window.addEventListener('pointermove', editGestureMove, { passive: false });
 			window.addEventListener('pointerup', editGestureEnd);
 			window.addEventListener('pointercancel', editGestureEnd);
@@ -1847,6 +1897,12 @@
 			if (!editing) return;
 			e.preventDefault();
 			e.stopPropagation();
+			// 44 M12b: a mouse right-click on a placeholder opens its cluster's menu (a touch contextmenu is the
+			// held finger — its own timer above decides)
+			const me = e as PointerEvent;
+			if (me.pointerType === 'touch' || performance.now() - longPressAt < 1200) return;
+			const cid = clusterAt(node);
+			if (cid) openClusterMenu(cid, me.clientX, me.clientY);
 		};
 		node.addEventListener('pointerdown', down);
 		node.addEventListener('contextmenu', menu);
@@ -1867,15 +1923,526 @@
 	function measureConnect() {
 		const el = document.querySelector('.connect-pill') as HTMLElement | null;
 		const r = el?.getBoundingClientRect();
-		connectRect = r && r.width ? { left: r.left, top: r.top, width: r.width, height: r.height } : null;
+		const next = r && r.width ? { left: r.left, top: r.top, width: r.width, height: r.height } : null;
+		const c = connectRect;
+		// reassigned only on a change (a $state write per frame would re-render the outline for nothing)
+		if (!next || !c || Math.abs(next.left - c.left) > 0.5 || Math.abs(next.top - c.top) > 0.5 || Math.abs(next.width - c.width) > 0.5 || Math.abs(next.height - c.height) > 0.5) connectRect = next;
 	}
+	// 44 M12: the outline FOLLOWS the pill. It was measured once on entering, and entering Edit positions is
+	// itself what moves the pill: the row beside the logo appears (J12), the walls change and the pill slides to
+	// its new centre on a 0.2 s transition — so the outline (and its "−") sat beside the pill, the reported gap.
+	// A ResizeObserver never fires for a box that only moves, so read it every frame while editing (cheap: one rect).
 	$effect(() => {
 		if (!editing) return;
 		void editing.connect;
-		tick().then(measureConnect);
-		window.addEventListener('resize', measureConnect);
-		return () => window.removeEventListener('resize', measureConnect);
+		let raf = 0;
+		let live = true;
+		const loop = () => {
+			if (!live) return;
+			measureConnect();
+			measureClusters();
+			raf = requestAnimationFrame(loop);
+		};
+		tick().then(loop);
+		return () => {
+			live = false;
+			cancelAnimationFrame(raf);
+		};
 	});
+
+	// ── 44 M12b: THE CLUSTERS — free but anchored placement, rotation, the cluster menu ───────────────
+	// The user: "Would you allow to move freely button clusters to adjust their placement …". Six clusters — the bar,
+	// the two bottom-corner stacks, the row beside the logo, the top-right group, the Connect pill (the logo and the
+	// profile stay where they are). In Edit positions each has a grip (drag it anywhere; it snaps to the screen's
+	// edges / centre lines, the sidebar edges and the other clusters, with guide lines) and a menu (right-click or a
+	// long press on it, a tap on its grip): Move, Rotate to vertical / horizontal (not the Connect pill — it has Pin to
+	// top row / Float), Reset position, Reset all positions, Hide cluster / Show all. A place is stored as the
+	// fraction of the free span along each axis ($lib/clusterPlace) in the record's `clusters`, so it keeps its
+	// relative place on another window, beside a sidebar or above the dock, and layouts carry it with the record.
+	// The AREA is the window less the pinned sidebars, the visible dock and a docked Connect bar; a placed cluster
+	// never overlaps another cluster, the logo or the profile — it is nudged to the nearest free spot.
+	const CLUSTER_SEL: Record<string, string> = {
+		bar: '#controls-pill',
+		left: '#hud-stack-left',
+		right: '#hud-stack-right',
+		touch: '#touch-tools',
+		top: '#hud-tr',
+		connect: '.connect-pill'
+	};
+	const CLUSTER_LABEL: Record<string, string> = {
+		bar: 'Toolbar',
+		left: 'Bottom-left buttons',
+		right: 'Bottom-right buttons',
+		touch: 'Buttons beside the logo',
+		top: 'Top-right buttons',
+		connect: 'Connect bar'
+	};
+	/** a cluster's home orientation (rotation turns it 90° from this) */
+	const HOME_VERTICAL: Record<string, boolean> = { bar: false, left: true, right: true, touch: false, top: false };
+	/** the chrome that never moves, and that a placed cluster keeps clear of */
+	const STATIC_SEL = ['#logo-menu', '#avatar-trigger'];
+	/** where a rotated (vertical) bar goes when it has no place of its own: the left edge, half way down */
+	const BAR_VERTICAL_HOME = { x: 0, y: 0.5 };
+
+	/** the clusters as drawn: the draft's while editing, the record's otherwise */
+	const liveClusters = $derived.by(() => normalizeClusters(editing ? (editing.clusters ?? {}) : (controlsLayout.clusters ?? {})));
+	/** a cluster drag in flight: which one and its live box (the engine draws it there, unsnapped by others) */
+	let clusterDrag: { id: string; box: Box } | null = $state(null);
+	let clusterGuides: Guide[] = $state([]);
+	/** the clusters' rects while Edit positions runs (grips are drawn from them) */
+	let clusterRects: Record<string, Box> = $state({});
+	/** the cluster menu */
+	let clusterMenu: { x: number; y: number; id: string } | null = $state(null);
+	/** which cluster the next gesture moves */
+	let grabId = 'bar';
+
+	const isRotated = (id: string, cl = liveClusters) => !!cl[id]?.rotated;
+	const isVertical = (id: string, cl = liveClusters) => (HOME_VERTICAL[id] ?? false) !== isRotated(id, cl);
+	/** a cluster with a place of its own (a pinned Connect pill lives on the top row, whatever it was given) */
+	function isPlaced(id: string, cl = liveClusters) {
+		const c = cl[id];
+		if (!c || typeof c.x !== 'number' || typeof c.y !== 'number') return false;
+		if (c.hidden) return false;
+		return id !== 'connect' || !$connectPinned;
+	}
+	const barPlaced = $derived(isPlaced('bar'));
+	function clusterEl(id: string) {
+		return typeof document === 'undefined' ? null : (document.querySelector(CLUSTER_SEL[id]) as HTMLElement | null);
+	}
+	const boxOf = (r: DOMRect): Box => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+	function shown(el: Element | null) {
+		const r = el?.getBoundingClientRect();
+		return r && r.width > 0 && r.height > 0 ? boxOf(r) : null;
+	}
+	/** the room a cluster may take: the window less the pinned sidebars, the visible dock and a docked Connect bar */
+	function clusterArea(): Box {
+		const g = get(sidebarGeometry);
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+		const inset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bottom-inset')) || 0;
+		return {
+			left: g?.wide ? g.dockLeft : 0,
+			right: vw - (g?.wide ? g.dockRight : 0),
+			top: get(connectDocked) ? get(connectBarHeight) : 0,
+			bottom: vh - inset
+		};
+	}
+	/** an open (unpinned) sidebar column — a snap target, not an obstacle (it may close) */
+	function openColumns(): Box[] {
+		const g = get(sidebarGeometry);
+		if (!g?.wide) return [];
+		const vh = window.innerHeight;
+		const out: Box[] = [];
+		if (g.left.shown && !g.left.full) out.push({ left: g.leftX, right: g.leftX + g.left.w, top: g.left.top, bottom: vh });
+		if (g.right.shown && !g.right.full) out.push({ left: window.innerWidth - g.right.w, right: window.innerWidth, top: g.right.top, bottom: vh });
+		return out;
+	}
+	function writePlace(id: string, box: Box | null) {
+		const root = document.documentElement;
+		root.classList.toggle(`cl-${id}-placed`, !!box);
+		if (!box) return;
+		root.style.setProperty(`--cl-${id}-x`, Math.round(box.left) + 'px');
+		root.style.setProperty(`--cl-${id}-y`, Math.round(box.top) + 'px');
+	}
+
+	/** THE LAYOUT PASS: classes for rotation / hidden, and every placed cluster's px from its fractions, nudged
+	 *  clear of the static chrome, the clusters at home and the ones placed before it (CLUSTERS order) */
+	function layoutClusters() {
+		if (typeof document === 'undefined') return;
+		const root = document.documentElement;
+		const cl = liveClusters;
+		root.classList.toggle('hud-edit-on', editing !== null);
+		for (const id of CLUSTERS) {
+			root.classList.toggle(`cl-${id}-rotated`, isRotated(id, cl));
+			root.classList.toggle(`cl-${id}-hidden`, !!cl[id]?.hidden && id !== 'connect');
+		}
+		const area = clusterArea();
+		const obstacles: Box[] = [];
+		for (const sel of STATIC_SEL) {
+			const b = shown(document.querySelector(sel));
+			if (b) obstacles.push(b);
+		}
+		for (const id of CLUSTERS) {
+			if (isPlaced(id, cl) || cl[id]?.hidden) continue;
+			const b = shown(clusterEl(id));
+			if (b) obstacles.push(b);
+		}
+		const boxes: Record<string, Box> = {};
+		for (const id of CLUSTERS) {
+			if (!isPlaced(id, cl)) {
+				writePlace(id, null);
+				continue;
+			}
+			if (clusterDrag?.id === id) {
+				writePlace(id, clusterDrag.box);
+				boxes[id] = clusterDrag.box;
+				continue;
+			}
+			const el = clusterEl(id);
+			if (!el || !el.offsetWidth) continue;
+			const size = { w: el.offsetWidth, h: el.offsetHeight };
+			const c = cl[id];
+			const box = nudgeFree(boxAt({ x: c.x!, y: c.y! }, size, area), area, [...obstacles, ...Object.values(boxes)]);
+			boxes[id] = box;
+			writePlace(id, box);
+		}
+		(window as any).__clusters = { area, boxes, clusters: cl };
+	}
+	$effect(() => {
+		void liveClusters;
+		void editing;
+		void $sidebarGeometry;
+		void $bottomInset;
+		void $connectDocked;
+		void $connectBarHeight;
+		void $connectPinned;
+		void visibleCells;
+		void stackLeft;
+		void stackRight;
+		void stackTop;
+		void stackTouch;
+		void viewportW;
+		tick().then(layoutClusters);
+		// once more after the sidebars' / Connect's own slides have landed
+		const t = setTimeout(layoutClusters, 280);
+		return () => clearTimeout(t);
+	});
+	// a cluster's SIZE changes with its buttons, a rotation, a peer connecting (the peers trigger) — re-place it
+	onMount(() => {
+		if (typeof ResizeObserver === 'undefined') return;
+		const ro = new ResizeObserver(() => layoutClusters());
+		let observed: Element[] = [];
+		const watch = () => {
+			const els = CLUSTERS.map((id) => clusterEl(id)).filter((el): el is HTMLElement => !!el);
+			if (els.length === observed.length && els.every((el, i) => el === observed[i])) return;
+			ro.disconnect();
+			observed = els;
+			for (const el of els) ro.observe(el);
+		};
+		watch();
+		const t = setInterval(watch, 1000);
+		window.addEventListener('resize', layoutClusters);
+		return () => {
+			clearInterval(t);
+			ro.disconnect();
+			window.removeEventListener('resize', layoutClusters);
+		};
+	});
+
+	/** write one cluster's state — into the draft while editing, else the record */
+	function setCluster(id: string, patch: Record<string, any> | null) {
+		const base = editing ? (editing.clusters ?? {}) : (controlsLayout.clusters ?? {});
+		const next: Record<string, any> = { ...base };
+		if (patch === null) delete next[id];
+		else {
+			const merged: Record<string, any> = { ...(base[id] ?? {}), ...patch };
+			for (const k of Object.keys(merged)) if (merged[k] === undefined || merged[k] === false) delete merged[k];
+			if (Object.keys(merged).length) next[id] = merged;
+			else delete next[id];
+		}
+		const clusters = normalizeClusters(next);
+		if (editing) editing = { ...editing, clusters };
+		else setLayout({ clusters });
+	}
+
+	/** what a drag snaps to: the other clusters, the static chrome and any open sidebar column */
+	function snapTargets(id: string): Box[] {
+		const out: Box[] = [];
+		for (const other of CLUSTERS) {
+			if (other === id || liveClusters[other]?.hidden) continue;
+			const b = shown(clusterEl(other));
+			if (b) out.push(b);
+		}
+		for (const sel of STATIC_SEL) {
+			const b = shown(document.querySelector(sel));
+			if (b) out.push(b);
+		}
+		return [...out, ...openColumns()];
+	}
+
+	/** THE CLUSTER MOVE — a drag on a grip (or the bar itself once it is placed), or armed from the menu (modal:
+	 *  follow the pointer, click to place; a finger drags and lifts, 44 M4). Absolute from the snapshot. */
+	const clusterGrab = createGesture({
+		snapshot: () => {
+			const id = grabId;
+			const box = shown(clusterEl(id));
+			if (!box) return null;
+			const area = clusterArea();
+			const targets = snapTargets(id);
+			// what it must not land on: the static chrome and the other VISIBLE clusters (not the sidebar columns)
+			const obstacles = targets.filter((b) => !openColumns().some((c) => c.left === b.left && c.right === b.right && c.top === b.top));
+			return { id, box, area, targets, obstacles };
+		},
+		start: () => {
+			armNudge = 0;
+		},
+		apply: (ctx) => {
+			const { id, box, area, targets } = ctx.snapshot;
+			const moved = clampBox({ left: box.left + ctx.dx, top: box.top + ctx.dy, right: box.right + ctx.dx, bottom: box.bottom + ctx.dy }, area);
+			const snapped = snapBox(moved, area, targets);
+			clusterDrag = { id, box: snapped.box };
+			clusterGuides = snapped.guides;
+			writePlace(id, snapped.box);
+			if (!isPlaced(id)) document.documentElement.classList.add(`cl-${id}-placed`);
+		},
+		revert: () => {
+			clusterDrag = null;
+			clusterGuides = [];
+			tick().then(layoutClusters);
+		},
+		end: (ctx, kept) => {
+			const d = clusterDrag;
+			clusterDrag = null;
+			clusterGuides = [];
+			if (!kept || !d) return;
+			if (ctx.event?.pointerType === 'mouse' || ctx.modal) swallowNextClick();
+			const { area, obstacles, id } = ctx.snapshot;
+			const free = nudgeFree(d.box, area, obstacles);
+			const f = fractionsOf(free, area);
+			setCluster(id, { x: f.x, y: f.y });
+			tick().then(layoutClusters);
+		},
+		onActive: (active, modal) => {
+			movingBar = active && grabId === 'bar';
+			movingCluster = active && modal ? grabId : null;
+		},
+		touchDrag: true,
+		rebase: (ctx) => {
+			if (clusterDrag) ctx.snapshot = { ...ctx.snapshot, box: clusterDrag.box };
+		},
+		passDown: (e) => !!(e.target as Element | null)?.closest?.('#cluster-move-cancel')
+	});
+	/** the cluster an armed (menu) move carries, for its hint */
+	let movingCluster: string | null = $state(null);
+	function armClusterMove(id: string, at: { x: number; y: number }) {
+		if (clusterGrab.active()) return;
+		grabId = id;
+		clusterGrab.begin({ clientX: at.x, clientY: at.y } as any, { modal: true });
+	}
+
+	/** which cluster an element is in (for a right-click / long press in Edit positions) */
+	function clusterAt(t: Element | null): string | null {
+		if (!t) return null;
+		if (t.closest('#connect-edit, .connect-wrap')) return 'connect';
+		for (const id of CLUSTERS) if (id !== 'connect' && t.closest(CLUSTER_SEL[id])) return id;
+		const grip = t.closest('[data-cluster-grip]') as HTMLElement | null;
+		return grip?.dataset.clusterGrip ?? null;
+	}
+	function openClusterMenu(id: string, x: number, y: number) {
+		toolbarMenu = null;
+		customizeMenu = null;
+		playMenu = null;
+		editAddMenu = null;
+		lastMenuAt = { x, y };
+		clusterMenu = { x, y, id };
+	}
+	function clusterMenuItems(id: string) {
+		const cl = liveClusters;
+		const placed = isPlaced(id, cl);
+		const anyPlaced = CLUSTERS.some((c) => isPlaced(c, cl)) || controlsLayout.posX != null;
+		const anyHidden = CLUSTERS.some((c) => (c === 'connect' ? editing?.connect === false : !!cl[c]?.hidden));
+		const vertical = isVertical(id, cl);
+		const items: any[] = [{ section: CLUSTER_LABEL[id] }];
+		items.push({
+			label: 'Move',
+			tooltip: id === 'connect' && $connectPinned
+				? 'The Connect bar is pinned to the top row — Float it first'
+				: 'Drag it anywhere — it snaps to the edges, the sidebars and the other clusters',
+			disabled: id === 'connect' && $connectPinned,
+			action: () => armClusterMove(id, lastMenuAt)
+		});
+		if (id !== 'connect')
+			items.push({
+				label: vertical ? 'Rotate to horizontal' : 'Rotate to vertical',
+				tooltip: vertical ? 'Lay its buttons out in a row' : 'Lay its buttons out in a column',
+				action: () => rotateCluster(id)
+			});
+		else
+			items.push({
+				label: $connectPinned ? 'Float' : 'Pin to top row',
+				tooltip: $connectPinned ? 'Float the Connect bar — it goes compact when the top row is full' : 'Give the Connect bar its own row along the top',
+				action: () => setConnectPinned()
+			});
+		items.push(
+			{
+				label: 'Reset position',
+				tooltip: 'Put it back where it started',
+				disabled: !placed && !(id === 'bar' && controlsLayout.posX != null),
+				action: () => resetClusterPosition(id)
+			},
+			{
+				label: 'Reset all positions',
+				tooltip: 'Put every cluster back where it started (rotations stay)',
+				disabled: !anyPlaced,
+				action: () => resetAllPositions()
+			},
+			{ section: '' },
+			id === 'connect'
+				? editing?.connect === false
+					? { label: 'Show cluster', action: () => editing && (editing = { ...editing, connect: true }) }
+					: { label: 'Hide cluster', tooltip: 'Hide the Connect bar ("+ Connect" brings it back)', action: () => editRemove(CONNECT) }
+				: cl[id]?.hidden
+					? { label: 'Show cluster', action: () => setCluster(id, { hidden: false }) }
+					: {
+							label: 'Hide cluster',
+							tooltip: id === 'bar' ? 'The toolbar holds Play — it cannot be hidden' : 'Hide these buttons (Show all brings them back)',
+							disabled: id === 'bar',
+							action: () => setCluster(id, { hidden: true })
+						},
+			{
+				label: 'Show all',
+				tooltip: 'Bring back every hidden cluster',
+				disabled: !anyHidden,
+				action: () => showAllClusters()
+			}
+		);
+		return items;
+	}
+	function rotateCluster(id: string) {
+		const c = liveClusters[id] ?? {};
+		const rotated = !c.rotated;
+		if (id === 'bar') {
+			// a vertical bar lives on a screen edge: it takes the left edge, half way down, unless it has a place
+			const atVerticalHome = c.x === BAR_VERTICAL_HOME.x && c.y === BAR_VERTICAL_HOME.y;
+			if (rotated && typeof c.x !== 'number') setCluster(id, { rotated: true, ...BAR_VERTICAL_HOME });
+			else if (!rotated && atVerticalHome) setCluster(id, { rotated: false, x: undefined, y: undefined, a: undefined });
+			else setCluster(id, { rotated });
+		} else setCluster(id, { rotated });
+		tick().then(layoutClusters);
+	}
+	function resetClusterPosition(id: string) {
+		// a vertical bar's start is the left edge, half way down; every other cluster's is its home
+		if (id === 'bar' && isRotated('bar')) setCluster(id, { ...BAR_VERTICAL_HOME });
+		else setCluster(id, { x: undefined, y: undefined, a: undefined });
+		if (id === 'bar' && controlsLayout.posX != null) setLayout({ posX: null });
+		tick().then(layoutClusters);
+	}
+	function resetAllPositions() {
+		for (const id of CLUSTERS) if (liveClusters[id] && (typeof liveClusters[id].x === 'number')) resetClusterPosition(id);
+		if (controlsLayout.posX != null) setLayout({ posX: null });
+	}
+	function showAllClusters() {
+		for (const id of CLUSTERS) if (liveClusters[id]?.hidden) setCluster(id, { hidden: false });
+		if (editing && editing.connect === false) editing = { ...editing, connect: true };
+	}
+
+	/** a cluster's grip in Edit positions: drag = move the cluster, tap / right-click = its menu */
+	function clusterGrip(node: HTMLElement, id: string) {
+		let current = id;
+		let from: { x: number; y: number } | null = null;
+		let press: PointerEvent | null = null;
+		const done = () => {
+			from = null;
+			press = null;
+			window.removeEventListener('pointermove', onMove);
+			window.removeEventListener('pointerup', onUp);
+			window.removeEventListener('pointercancel', done);
+		};
+		const onMove = (e: PointerEvent) => {
+			if (!from || !press) return;
+			if (Math.abs(e.clientX - from.x) + Math.abs(e.clientY - from.y) < DRAG_SLOP) return;
+			e.preventDefault();
+			grabId = current;
+			const opened = clusterGrab.begin(press);
+			done();
+			if (opened) clusterGrab.move(e);
+		};
+		const onUp = (e: PointerEvent) => {
+			const tap = !!from;
+			done();
+			if (tap) {
+				const r = node.getBoundingClientRect();
+				openClusterMenu(current, Math.round(r.left), Math.round(r.bottom));
+				e.preventDefault();
+			}
+		};
+		const onDown = (e: PointerEvent) => {
+			if ((e.button ?? 0) !== 0 || clusterGrab.active()) return;
+			e.stopPropagation();
+			try {
+				node.releasePointerCapture?.(e.pointerId);
+			} catch {
+				// not captured
+			}
+			from = { x: e.clientX, y: e.clientY };
+			press = e;
+			window.addEventListener('pointermove', onMove, { passive: false });
+			window.addEventListener('pointerup', onUp);
+			window.addEventListener('pointercancel', done);
+		};
+		const menu = (e: MouseEvent) => {
+			e.preventDefault();
+			e.stopPropagation();
+			openClusterMenu(current, e.clientX, e.clientY);
+		};
+		node.addEventListener('pointerdown', onDown);
+		node.addEventListener('contextmenu', menu);
+		return {
+			update(next: string) {
+				current = next;
+			},
+			destroy() {
+				done();
+				node.removeEventListener('pointerdown', onDown);
+				node.removeEventListener('contextmenu', menu);
+			}
+		};
+	}
+	/** where each cluster's grip is drawn: centred above it (below it when it is at the top of the screen, beside a
+	 *  vertical one) — or, when that spot is taken (the bar's round ✓, a cluster, an earlier grip, the screen edge), the next of a
+	 *  few spots around the cluster: a grip on the ✓ ate the tap that applies the edit (unfolded, a full right corner) */
+	const gripPlaces = $derived.by(() => {
+		const out: Record<string, { x: number; y: number }> = {};
+		if (typeof window === 'undefined') return out;
+		// hud.css's .cl-grip sizes (a finger's grip is larger)
+		const coarse = !!window.matchMedia?.('(pointer: coarse)').matches;
+		const GRIP_W = coarse ? 40 : 28;
+		const GRIP_H = coarse ? 26 : 18;
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+		// the ✓, the edit hint and every cluster's buttons are taken (a finger there would take the grip)
+		const fixed = ['toolbar-edit-apply', 'toolbar-edit-hint'].map((id) => shown(document.getElementById(id))).filter((b): b is Box => !!b);
+		const taken: Box[] = [...fixed, ...Object.values(clusterRects)];
+		const at = (x: number, y: number): Box => ({ left: x - GRIP_W / 2, top: y - GRIP_H / 2, right: x + GRIP_W / 2, bottom: y + GRIP_H / 2 });
+		const fits = (b: Box) => b.left >= 2 && b.top >= 2 && b.right <= vw - 2 && b.bottom <= vh - 2 && !taken.some((t) => overlaps(b, t, 4));
+		for (const [id, r] of Object.entries(clusterRects)) {
+			const vertical = id !== 'connect' && isVertical(id);
+			const cx = (r.left + r.right) / 2;
+			const cy = (r.top + r.bottom) / 2;
+			const above = r.top - GRIP_H / 2 - 5;
+			const below = r.bottom + GRIP_H / 2 + 5;
+			const before = r.left - GRIP_W / 2 - 4;
+			const after = r.right + GRIP_W / 2 + 4;
+			const near = r.left + GRIP_W / 2;
+			const far = r.right - GRIP_W / 2;
+			const leftHalf = cx < vw / 2;
+			const tries: [number, number][] = vertical
+				? [[leftHalf ? after : before, cy], [leftHalf ? before : after, cy], [cx, above], [cx, below]]
+				: [[cx, r.top >= 34 ? above : below], [cx, r.top >= 34 ? below : above], [leftHalf ? near : far, above], [leftHalf ? far : near, above], [before, cy], [after, cy]];
+			const pick = tries.find(([x, y]) => fits(at(x, y))) ?? tries[0];
+			out[id] = { x: pick[0], y: pick[1] };
+			taken.push(at(pick[0], pick[1]));
+		}
+		return out;
+	});
+	function gripStyle(id: string) {
+		const g = gripPlaces[id];
+		return g ? `left: ${Math.round(g.x)}px; top: ${Math.round(g.y)}px` : 'display: none';
+	}
+	/** the clusters' rects while editing (read every frame by the edit loop, with the Connect outline) */
+	function measureClusters() {
+		const next: Record<string, Box> = {};
+		for (const id of CLUSTERS) {
+			if (id === 'connect' && editing?.connect === false) continue;
+			const b = shown(clusterEl(id));
+			if (b) next[id] = b;
+		}
+		const prev = clusterRects;
+		const same =
+			Object.keys(next).length === Object.keys(prev).length &&
+			Object.entries(next).every(([k, b]) => prev[k] && Math.abs(prev[k].left - b.left) < 0.5 && Math.abs(prev[k].top - b.top) < 0.5 && Math.abs(prev[k].right - b.right) < 0.5 && Math.abs(prev[k].bottom - b.bottom) < 0.5);
+		if (!same) clusterRects = next;
+	}
 
 	/** the edit button's label, for the a11y tree and the tooltip */
 	function editLabel(id: string) {
@@ -1898,7 +2465,7 @@
 		// 43 K3: + whether the Connect pill shows (the draft's while editing — the pill hides the moment its
 		// "−" is pressed, and the "+" in its place brings it back)
 		const connect = editing ? editing.connect !== false : controlsLayout.connect !== false;
-		toolbarSlots.set({ top: [...stackTop], touch: [...stackTouch], editing: editing !== null, connect });
+		toolbarSlots.set({ top: [...stackTop], touch: [...stackTouch], editing: editing !== null, connect, clusters: liveClusters });
 	});
 	/** the buttons of a group Controls draws in it outside Edit positions (not the natives) */
 	const topExtras = $derived(stackTop.filter((id) => !TOP_NATIVE.includes(id)));
@@ -1928,6 +2495,18 @@
 			}
 		};
 	}
+
+	/** 44 M13: while Edit positions runs, the corner stacks sit BESIDE any open sidebar, like the edit bar (J8) and the
+	 *  row beside the logo — their placeholders used to stay in the corner, under an open column */
+	$effect(() => {
+		if (typeof document === 'undefined') return;
+		const g = $sidebarGeometry;
+		const on = editing !== null && !!g?.wide;
+		const root = document.documentElement;
+		root.classList.toggle('hud-edit-beside', on);
+		root.style.setProperty('--sb-open-left', on && g.left.shown ? g.leftX + g.left.w + 'px' : '0px');
+		root.style.setProperty('--sb-open-right', on && g.right.shown ? g.right.w + 'px' : '0px');
+	});
 
 	/** the pill no longer owns the corners' heights, so the opt-in sim transport rides above
 	 *  whatever the right stack holds (0..3 buttons) instead of a fixed 112px */
@@ -1966,7 +2545,13 @@
 		const open = (e: MouseEvent) => {
 			e.preventDefault();
 			e.stopPropagation();
-			if (editing) return; // in edit positions a held press is a drag
+			if (editing) {
+				// 44 M12b: in Edit positions a right-click opens the CLUSTER's menu (a held finger is a drag — the
+				// long press there is editItemGesture's / the grip's)
+				const cid = clusterAt(e.target as Element | null);
+				if (cid && (e as PointerEvent).pointerType !== 'touch' && performance.now() - longPressAt > 1200) openClusterMenu(cid, e.clientX, e.clientY);
+				return;
+			}
 			if (performance.now() - longPressAt < 1200) return; // already opened by the hold
 			openAt(e.clientX, e.clientY);
 		};
@@ -2128,17 +2713,19 @@
 			// hold the bar anywhere but the middle, which is the phone case.
 			{
 				label: 'Move toolbar',
-				tooltip: track.ok
-					? 'Slide the bar along the bottom — click to place it, arrows nudge, Escape puts it back'
-					: 'The screen has no room to move the bar — it stays centred',
-				disabled: !track.ok,
+				tooltip: barPlaced
+					? 'Move the bar anywhere — it snaps to the edges and the other buttons'
+					: track.ok
+						? 'Slide the bar along the bottom — click to place it, arrows nudge, Escape puts it back'
+						: 'The screen has no room to move the bar — it stays centred',
+				disabled: !track.ok && !barPlaced,
 				action: () => armMoveToolbar()
 			},
 			{
 				label: 'Reset toolbar position',
 				tooltip: 'Put the bar back in the middle',
-				disabled: controlsLayout.posX == null,
-				action: () => setLayout({ posX: null })
+				disabled: controlsLayout.posX == null && !barPlaced,
+				action: () => (barPlaced ? resetClusterPosition('bar') : setLayout({ posX: null }))
 			},
 			// the z-order pref, surfaced where the toolbar itself is (the Settings row
 			// stays; this is the same store, so the two can never disagree). Checked at
@@ -2501,12 +3088,31 @@
 	 *  fraction is the only source once it ends */
 	let dragCentre: number | null = $state(null);
 	let movingBar = $state(false);
+	/** 44 M4: the move was armed from a menu (no button held) — the bar says how to place it */
+	let movingModal = $state(false);
+	/** a touch screen (the hint's words): read once — a device does not change its pointer mid-session */
+	const coarsePointer = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
 	/** where the menu that armed a modal move was opened — the origin its pointer
 	 *  offsets are measured from, since a menu action carries no event of its own */
 	let lastMenuAt = { x: 0, y: 0 };
 	let armNudge = 0;
 	let trackRO: ResizeObserver | null = null;
 	let observedKey = '';
+	/** 44 L5: the observer's callback only SCHEDULES a measurement. `measureTrack` re-folds the bar
+	 *  (J10), which resizes `#controls-pill` — an element this same observer watches — and svelte
+	 *  flushes that DOM write in the microtask right after the callback, i.e. INSIDE the browser's
+	 *  delivery pass. A size change at the depth just delivered cannot be delivered in that pass, so
+	 *  Chromium raised "ResizeObserver loop completed with undelivered notifications" (the 1.34
+	 *  report) every time the bar changed its own width at its fold edge (a pointer-type switch, a
+	 *  zoom, a webfont landing). One frame later the write is an ordinary layout change. */
+	let trackRaf = 0;
+	function scheduleTrack() {
+		if (trackRaf) return;
+		trackRaf = requestAnimationFrame(() => {
+			trackRaf = 0;
+			measureTrack();
+		});
+	}
 
 	/** Re-derive the track from the LIVE DOM. Every number here is read, none is coded:
 	 *  a breakpoint constant would have to be kept in step with ui.css, and it could not
@@ -2518,6 +3124,17 @@
 		const pill = nav.getBoundingClientRect();
 		if (!pill.width) return;
 		const vw = window.innerWidth;
+		if (barPlaced) {
+			// 44 M12b: a placed bar has no bottom track; its room is the area's length along the bar (the folded
+			// "»" budget) — across the area when horizontal, down it when vertical
+			const a = clusterArea();
+			const len = (isVertical('bar') ? a.bottom - a.top : a.right - a.left) - 2 * EDGE_MARGIN;
+			if (editPlace) editPlace = null;
+			measureBarMetrics(nav);
+			if (barRoom.left !== 0 || barRoom.right !== len || !barRoom.ok) barRoom = { left: 0, right: len, ok: len > 0 };
+			if (track.ok) track = { ...track, ok: false };
+			return;
+		}
 		let left = EDGE_MARGIN;
 		let right = vw - EDGE_MARGIN;
 		// 43 J8: THE SIDEBARS. A PINNED column runs to the bottom edge, so the bar may never cross it —
@@ -2613,7 +3230,7 @@
 	}
 
 	onMount(() => {
-		if (typeof ResizeObserver !== 'undefined') trackRO = new ResizeObserver(() => measureTrack());
+		if (typeof ResizeObserver !== 'undefined') trackRO = new ResizeObserver(scheduleTrack);
 		measureTrack();
 		window.addEventListener('resize', measureTrack);
 		window.addEventListener('keydown', onArmedKey, true);
@@ -2622,6 +3239,8 @@
 			window.removeEventListener('keydown', onArmedKey, true);
 			trackRO?.disconnect();
 			trackRO = null;
+			if (trackRaf) cancelAnimationFrame(trackRaf);
+			trackRaf = 0;
 		};
 	});
 
@@ -2743,9 +3362,19 @@
 			const frac = span > 0 ? Math.max(0, Math.min(1, (c - t.min) / span)) : null;
 			setLayout({ posX: c === t.mid ? null : frac });
 		},
-		onActive: (active) => {
+		onActive: (active, modal) => {
 			movingBar = active;
-		}
+			movingModal = active && modal;
+		},
+		// 44 M4: armed from the menu on a touch screen, a finger GRABS the bar (follow it, place it on the
+		// lift) — the modal "follow the pointer, click to place" committed on the first touch, so the
+		// armed move could never move on touch. The drag continues from wherever the bar is now.
+		touchDrag: true,
+		rebase: (ctx) => {
+			ctx.snapshot = { ...ctx.snapshot, centre: dragCentre ?? ctx.snapshot.centre };
+			armNudge = 0;
+		},
+		passDown: (e) => !!(e.target as Element | null)?.closest?.('#toolbar-move-cancel')
 	});
 
 	/** THE MOVE GESTURE. A press anywhere on the bar starts a CANDIDATE; it becomes a
@@ -2777,18 +3406,20 @@
 			if (Math.abs(e.clientX - from.x) + Math.abs(e.clientY - from.y) < DRAG_SLOP) return;
 			e.preventDefault();
 			// hand over with the ORIGINAL press as the origin, so the bar does not jump
-			// by the slop it took to decide
-			const opened = toolbarGrab.begin(press);
+			// by the slop it took to decide. 44 M12b: a PLACED bar moves as a cluster (anywhere, snapping)
+			if (barPlaced) grabId = 'bar';
+			const opened = barPlaced ? clusterGrab.begin(press) : toolbarGrab.begin(press);
 			done();
 			if (!opened) return; // no track to move along — the press stays a click
-			toolbarGrab.move(e);
+			if (barPlaced) clusterGrab.move(e);
+			else toolbarGrab.move(e);
 		};
 		const onDown = (e: PointerEvent) => {
 			// the play FAB is the one control an accidental drag must not grab: a 50px
 			// circle is the way into play mode and it is what a thumb aims at
 			if (e.button !== 0 || (e.target as Element)?.closest?.('#play-button')) return;
 			if (editing) return; // 41 G1: in edit positions a press picks a button up instead
-			if (toolbarGrab.active()) return; // an armed move already owns the bar
+			if (toolbarGrab.active() || clusterGrab.active()) return; // an armed move already owns the bar
 			from = { x: e.clientX, y: e.clientY };
 			press = e;
 			window.addEventListener('pointermove', onMove);
@@ -2807,6 +3438,7 @@
 	/** "Move toolbar", from any toolbar menu: the same gesture with no button held, for
 	 *  whoever reached the bar by keyboard or long press rather than by dragging it. */
 	function armMoveToolbar() {
+		if (barPlaced) return armClusterMove('bar', lastMenuAt);
 		toolbarGrab.begin({ clientX: lastMenuAt.x, clientY: lastMenuAt.y } as any, { modal: true });
 	}
 
@@ -2851,7 +3483,7 @@
 	/** 43 J8: where the EDIT bar's centre goes — the bar's own centre, slid only as far as it must to
 	 *  sit wholly inside the band beside the open sidebars (the user's "it can be moved a bit") */
 	const editCentre = $derived.by(() => {
-		if (!editing || !editPlace) return null;
+		if (!editing || !editPlace || barPlaced) return null;
 		const room = editPlace.right - editPlace.left;
 		const half = Math.min(editPlace.w, room) / 2;
 		const lo = editPlace.left + half;
@@ -2859,6 +3491,10 @@
 		return lo > hi ? (editPlace.left + editPlace.right) / 2 : Math.max(lo, Math.min(hi, pillCentre));
 	});
 	const pillStyle = $derived(
+		// 44 M12b: a PLACED bar is drawn where the cluster engine put it (the --cl-bar-* pair, layoutClusters)
+		barPlaced
+			? 'left: var(--cl-bar-x, 50%); top: var(--cl-bar-y, auto); bottom: auto; translate: none; touch-action: none;' + (movingBar ? ' cursor: grabbing;' : '')
+			:
 		($floatingToolbar ? 'bottom: calc(var(--bottom-inset, 0px) + 16px);' : 'bottom: 16px;') +
 			(editCentre != null
 				? ` left: ${Math.round(editCentre)}px; max-width: ${Math.max(0, Math.floor(editPlace!.right - editPlace!.left))}px;`
@@ -3037,6 +3673,14 @@
 		{/each}
 		{/if}
 	</div>
+	{#if movingModal}
+		<!-- 44 M4: the armed Move toolbar says how to finish it — a finger drags and lifts, a mouse follows and
+		     clicks; touch has no Escape, so it gets a Cancel that puts the bar back -->
+		<p class="hud-edit-hint hud-move-hint" id="toolbar-move-hint" role="status">
+			<span>{coarsePointer ? 'Drag the toolbar to place it' : 'Move to place · click to drop · ← → nudge · Esc cancels'}</span>
+			<button type="button" id="toolbar-move-cancel" class="hud-move-cancel" use:onPress={() => toolbarGrab.cancel()}>Cancel</button>
+		</p>
+	{/if}
 	{#if editing}
 		<!-- 41 G1: the round green ✓ at the bar's top right applies; Escape / a press outside cancels -->
 		<button type="button" id="toolbar-edit-apply" class="hud-edit-apply" title="Apply the new positions" aria-label="Apply the new positions" use:onPress={() => applyEditPositions()}
@@ -3169,6 +3813,39 @@
 			>
 		{/if}
 	</div>
+{/if}
+
+{#if editing && !$phoneShell}
+	<!-- 44 M12b: each cluster's GRIP — drag it to move the whole cluster (it snaps; guide lines show to what), tap or
+	     right-click it for the cluster's menu (Move, Rotate, Reset position, Reset all, Hide / Show all) -->
+	<div id="cluster-grips" class="tp-ui">
+		{#each Object.keys(clusterRects) as id (id)}
+			<button
+				type="button"
+				class="cl-grip"
+				id="cluster-grip-{id}"
+				data-cluster-grip={id}
+				class:cl-grip-hidden={id !== 'connect' && !!liveClusters[id]?.hidden}
+				style={gripStyle(id)}
+				title="{CLUSTER_LABEL[id]} — drag to move, tap for more"
+				aria-label="{CLUSTER_LABEL[id]}: drag to move, press for its menu"
+				use:clusterGrip={id}><Icon name="grip-vertical" size={16} aria-hidden="true" /></button
+			>
+		{/each}
+	</div>
+{/if}
+{#each clusterGuides as g (g.axis + g.at)}
+	<div class="cl-guide cl-guide-{g.axis}" style={g.axis === 'x' ? `left: ${g.at}px` : `top: ${g.at}px`} aria-hidden="true"></div>
+{/each}
+{#if movingCluster}
+	<!-- 44 M12b: a cluster move armed from its menu — how to finish it (touch has no Escape) -->
+	<p class="hud-edit-hint hud-move-hint cl-move-hint" id="cluster-move-hint" role="status">
+		<span>{coarsePointer ? `Drag to place the ${CLUSTER_LABEL[movingCluster].toLowerCase()}` : 'Move to place · click to drop · Esc cancels'}</span>
+		<button type="button" id="cluster-move-cancel" class="hud-move-cancel" use:onPress={() => clusterGrab.cancel()}>Cancel</button>
+	</p>
+{/if}
+{#if clusterMenu}
+	<ContextMenu x={clusterMenu.x} y={clusterMenu.y} items={clusterMenuItems(clusterMenu.id)} sizeKey="toolbarcluster" on:close={() => (clusterMenu = null)} />
 {/if}
 
 {#if editDrag}

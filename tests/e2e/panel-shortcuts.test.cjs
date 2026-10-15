@@ -185,20 +185,22 @@ h.run(async () => {
 	}
 
 	// ------------- 3b. THE BINDING NAMES THE TOOL, not a toolbar slot
-	// The five optional dock views (Flow Code / Animation / UV / Shader / HUD) are in
-	// the roster but NOT on the bar of a fresh profile — they are listed in Customize
-	// unchecked. So this is the real case: their keys must work while their button does
-	// not exist. If the binding were an index into the button strip, it could not.
+	// The optional dock views (Flow Code / UV / Shader / HUD) are in the roster but NOT on
+	// the bar of a fresh profile — they are listed in Customize unchecked. So this is the
+	// real case: their keys must work while their button does not exist. If the binding
+	// were an index into the button strip, it could not. (33 E1 promoted Animation to the
+	// DEFAULT bar — Controls.svelte DEFAULT_ORDER / PROMOTED_DEFAULTS — so it is no longer
+	// one of the button-less views; it was five when this section was written.)
 	await clearDock(A.page);
 	const barTitles = await A.page.evaluate(() =>
 		[...document.querySelectorAll('nav p[title]')].map((p) => p.getAttribute('title'))
 	);
-	const optionalOnBar = ['UV editor', 'Shader editor', 'HUD editor', 'Animation', 'Flow Code'].filter((t) =>
-		barTitles.includes(t)
+	const optionalOnBar = ['UV editor', 'Shader editor', 'HUD editor', 'Flow Code'].filter((t) =>
+		barTitles.some((b) => b === t || b.startsWith(t + ' ('))
 	);
 	h.check(
 		optionalOnBar.length === 0,
-		`3b.1 premise: none of the five optional views has a toolbar button on a fresh profile (on bar: ${optionalOnBar.join(',') || 'none'})`
+		`3b.1 premise: none of the four optional views has a toolbar button on a fresh profile (on bar: ${optionalOnBar.join(',') || 'none'})`
 	);
 	await press(A.page, 'Alt+u');
 	const uvOpen = await storeVal(A.page, 'uvEditorClose');
@@ -228,7 +230,8 @@ h.run(async () => {
 	h.check(st.minimized === false, `4.5 T brings a minimized dock back (minimized=${st.minimized})`);
 	h.check(st.visible === 'animation', `4.6 ...showing the tab it had (visible=${st.visible})`);
 
-	// STATE C: NOTHING DOCKED -> open the last-active view, docked.
+	// STATE C: NOTHING DOCKED -> 44 M5: open the dock EMPTY (only its "+"), not the last-active view
+	// (the user: '"T" only should show empty docked window view with "+" in tab'); T again closes it.
 	await A.page.evaluate(() => window.__stores.bottomDock.activateDock('uv'));
 	await A.page.waitForTimeout(200);
 	await clearDock(A.page);
@@ -238,16 +241,28 @@ h.run(async () => {
 	await press(A.page, 't');
 	st = await dockState(A.page);
 	const uvClosed = await storeVal(A.page, 'uvEditorClose');
-	h.check(uvClosed === false, `4.9 T on an empty dock opens the last-active view (uvEditorClose=${uvClosed})`);
-	h.check(st.visible === 'uv' && st.minimized === false, `4.10 ...docked and showing (visible=${st.visible}, min=${st.minimized})`);
-
-	// ...and the fallback when bottomDockActive names a view this tree never heard of
-	await A.page.evaluate(() => window.__stores.bottomDock.bottomDockActive.set('not-a-view'));
-	await clearDock(A.page);
+	const emptyShown = await A.page.evaluate(() => {
+		let v;
+		window.__stores.bottomDock.dockEmptyShown.subscribe((x) => (v = x))();
+		return v;
+	});
+	h.check(uvClosed === true && st.visible === null, `4.9 T on an empty dock opens NO view (uvEditorClose=${uvClosed}, visible=${st.visible})`);
+	h.check(emptyShown === true && !!(await A.page.$('#phone-dock[data-dock-empty] #dock-add-view')), `4.10 ...it opens the EMPTY dock with its "+" (emptyShown=${emptyShown})`);
 	await press(A.page, 't');
-	st = await dockState(A.page);
-	const flowClosed = await storeVal(A.page, 'flowGraphClose');
-	h.check(flowClosed === false && st.visible === 'flow', `4.11 an unknown last-active view falls back to the Node editor (visible=${st.visible})`);
+	const emptyAfter = await A.page.evaluate(() => {
+		let v;
+		window.__stores.bottomDock.dockEmptyShown.subscribe((x) => (v = x))();
+		return v;
+	});
+	h.check(emptyAfter === false, `4.11 T again closes the empty dock (emptyShown=${emptyAfter})`);
+	// a populated dock for the minimize round trip below
+	await A.page.evaluate(() => {
+		const s = window.__stores;
+		s.bottomDock.armDockMode('flow', true);
+		s.flowGraphClose.set(false);
+		s.bottomDock.activateDock('flow');
+	});
+	await A.page.waitForTimeout(700);
 
 	// minimize -> reload -> T. `dockMinimized` is deliberately NOT persisted (a
 	// minimized dock leaves NO trace on screen, so a reload must never hand somebody a
@@ -264,7 +279,8 @@ h.run(async () => {
 	// bring the dock to a KNOWN showing state, whatever the reload restored, then
 	// assert the full round trip on the key alone
 	if (!st.visible) {
-		await press(A.page, 't');
+		// 44 M5: T on an empty dock opens it EMPTY, so a view comes in by its own key (N)
+		await press(A.page, 'n');
 		st = await dockState(A.page);
 	}
 	h.check(!!st.visible && !st.minimized, `4.14 ...and T reaches a showing dock from whatever the reload left (visible=${st.visible})`);

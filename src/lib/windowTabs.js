@@ -11,8 +11,8 @@ import { onLayoutRestore } from './uiLayoutsCore';
 // its tab.
 
 /** `minW`/`minH` are what a member needs to render — see `groupFloor`; absent means the
- * shared default is enough.
- * @type {Map<string, {node: any, title: string, close?: () => void, unsub?: () => void, minW?: number, minH?: number}>} */
+ * shared default is enough. `open` reads the window's own open store (44 M3: "Group with…").
+ * @type {Map<string, {node: any, title: string, close?: () => void, unsub?: () => void, minW?: number, minH?: number, open: () => boolean}>} */
 const registry = new Map();
 
 /** [{id, members: string[], active: string, rect: {left, top, width, height}}] */
@@ -391,6 +391,35 @@ function runPendingMerges() {
 	});
 }
 
+/**
+ * 44 M3 — the windows a header/tab menu's "Group with…" offers: every OTHER open floating window (a
+ * side-docked or hidden one is not on screen to join), one row per window. Joining one that is already
+ * in a group joins that group.
+ * @param {string} key @returns {{key: string, title: string}[]}
+ */
+export function groupCandidates(key) {
+	const own = groupOfKey(key);
+	/** @type {{key: string, title: string}[]} */
+	const out = [];
+	for (const [k, entry] of registry) {
+		if (k === key || own?.members.includes(k)) continue;
+		const n = entry.node;
+		if (!n?.isConnected || n.dataset?.docked || n.closest?.('[data-pd-host]')) continue;
+		// open by its own store (Chat and the AI assistant hide by a class on a wrapper, so the node's
+		// style cannot say); a group's inactive tab is display:none yet open — it offers its group
+		if (!entry.open()) continue;
+		if (!groupOfKey(k) && !n.getClientRects().length) continue;
+		out.push({ key: k, title: entry.title });
+	}
+	return out;
+}
+
+/** the window key a node registered with (null: not a tab-able window) @param {any} node */
+export function keyOfNode(node) {
+	for (const [k, entry] of registry) if (entry.node === node) return k;
+	return null;
+}
+
 /** @param {string} key */
 export function titleOf(key) {
 	return registry.get(key)?.title ?? key;
@@ -459,7 +488,7 @@ onLayoutRestore(() => {
  * @param {{key: string, title: string, openStore?: any, isOpen?: (v: any) => boolean, close?: () => void, minW?: number, minH?: number}} options
  */
 export function tabbable(node, { key, title, openStore, isOpen = (v) => !!v, close, minW, minH }) {
-	registry.set(key, { node, title, close, minW, minH });
+	registry.set(key, { node, title, close, minW, minH, open: () => (openStore ? isOpen(get(openStore)) : true) });
 
 	// closing through the window's own path removes the tab
 	let first = true;

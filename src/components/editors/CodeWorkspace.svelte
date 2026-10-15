@@ -65,7 +65,7 @@
 	import { dragWindow } from '$lib/dragWindow';
 	import { focusStack, raiseWindow } from '$lib/windowFocus';
 	import { tabbable, resizeGroup, tabGroups } from '$lib/windowTabs';
-	import { setDockOccupant, dockHeight, visibleDockKey, dockMinimized, activateDock, dockModeArm, forgetDockTab } from '$lib/bottomDock';
+	import { setDockOccupant, dockHeight, visibleDockKey, dockShownKeys, dockPaneOf, dockMinimized, activateDock, dockModeArm, forgetDockTab } from '$lib/bottomDock';
 	import { bottomDockable } from '$lib/bottomDockDrop';
 	import { safeStorage } from '$lib/safeStorage';
 	import { keyOf } from '$lib/keyOf';
@@ -110,7 +110,7 @@
 		setDockOccupant('code', docked, $dockHeight);
 		return () => setDockOccupant('code', false);
 	});
-	const dockVisible = $derived($visibleDockKey === 'code' && !$dockMinimized);
+	const dockVisible = $derived($dockShownKeys.includes('code'));
 	// a repeat open RAISES (the previewRaise shape): a docked view becomes the dock tab
 	$effect(() => {
 		if (!$codeWorkspaceRaise) return;
@@ -744,6 +744,7 @@
 		id="code-ws-dock"
 		data-tour="code-workspace"
 		class="code-ws tp-ui tp-dock-panel fixed inset-x-0 bottom-0 flex flex-col p-2 {dockVisible ? '' : 'hidden'}"
+		data-dock-pane={$dockPaneOf['code']}
 		style="z-index: var(--z-dock); height: {$dockHeight}px"
 		data-key-scope="panel"
 		role="region"

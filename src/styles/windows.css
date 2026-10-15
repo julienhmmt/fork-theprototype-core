@@ -445,6 +445,20 @@
 	pointer-events: none;
 }
 
+/* 44 M1 ($lib/windowBodyDrag.js) — while a window moves by its BODY the whole page says so, and no
+   text the pointer sweeps on the way is selected */
+:root.tp-body-dragging,
+:root.tp-body-dragging * {
+	cursor: grabbing !important;
+	user-select: none !important;
+}
+
+@media (min-width: 641px) {
+	[data-body-drag]:not([data-docked]):not([data-pd-host]) {
+		touch-action: none;
+	}
+}
+
 /* 41 G7 ($lib/bottomDockDrop.js) — a floating window dragged over the docked tab strip: the
    window goes see-through so the strip stays readable, the strip is outlined as the target,
    and a caret marks the slot the drop docks into */
@@ -546,11 +560,14 @@
    frame (PhoneDockHost, published as --pd-top = its body's top edge) hosts the element, the way
    the phone hosts its content tabs (phone.css section 2b). It sits over the frame's body, under
    floating windows; a hosted tab that is open but not in front stays mounted and hidden; its
-   own corner grip stands down (the dock's top edge resizes it). */
+   own corner grip stands down (the dock's top edge resizes it).
+   44 M6: it sits where the dock FRAME sits — beside a Full-height sidebar, never under it (the
+   frame's .tp-dock-panel already stopped short by --sb-dock-left/-right; the hosted element did
+   not, so Statistics, Chat, the Shader editor's neighbours … ran under the pinned column). */
 :root:not(.phone-shell) [data-pd-host] {
 	position: fixed !important;
-	left: 0 !important;
-	right: 0 !important;
+	left: var(--sb-dock-left, 0px) !important;
+	right: var(--sb-dock-right, 0px) !important;
 	top: var(--pd-top) !important;
 	bottom: 0 !important;
 	width: auto !important;
@@ -620,12 +637,51 @@
 :root[data-focus='dock']:not(.phone-shell) .tp-dock-panel:not(.hidden) {
 	box-shadow: 0 -24px 0 0 var(--surface-deep);
 }
-/* ...and the tab row stops short of the Exit-focus pill that shares its row (FocusModeExit: right 96 px,
-   ~104 px wide), so a long row of tabs scrolls instead of sliding under it */
+/* ...and the tab row stops short of the Exit-focus pill that shares its row (FocusModeExit publishes where
+   it ends: 44-int, the Split button and the Viewport toggle made both widths vary), so a long row of tabs
+   scrolls instead of sliding under it */
 :root[data-focus='dock']:not(.phone-shell) .dt-row {
-	right: 208px;
+	right: var(--focus-exit-reach, 208px);
 }
 /* (html:root outranks phone.css's `:root.phone-shell [data-pd-host]` bottom, which stops at the bar) */
 html:root[data-focus='dock'] [data-pd-host='shown'] {
 	bottom: 0 !important;
+}
+
+/* 44 M9 — THE DOCK SPLIT ($lib/bottomDock dockSplits; the divider + empty pane are DockSplit.svelte).
+   Two docked views side by side: each one's own frame (a .tp-dock-panel) or hosted window
+   (PhoneDockHost's [data-pd-host]) carries `data-dock-pane` / `data-pd-host-pane` = 'a' (left) or
+   'b' (right), and stops at the divider. The divider's place is `--dock-split-r` (a fraction of the
+   dock's width between the sidebars' pinned columns), published on the root only while a split is
+   on screen (`data-dock-split`). !important: the scoped Shader editor rule and the hosted-window
+   rule above both pin left/right. */
+:root[data-dock-split] {
+	--dock-split-x: calc(
+		var(--sb-dock-left, 0px) + var(--dock-split-r, 0.5) * (100vw - var(--sb-dock-left, 0px) - var(--sb-dock-right, 0px))
+	);
+	/* the right pane's width: what the left pane's strip reaches across */
+	--dock-split-bw: calc(100vw - var(--dock-split-x) - var(--sb-dock-right, 0px));
+}
+:root[data-dock-split] .tp-dock-panel[data-dock-pane='a'],
+:root[data-dock-split]:not(.phone-shell) [data-pd-host][data-pd-host-pane='a'] {
+	right: calc(100vw - var(--dock-split-x)) !important;
+}
+:root[data-dock-split] .tp-dock-panel[data-dock-pane='b'],
+:root[data-dock-split]:not(.phone-shell) [data-pd-host][data-pd-host-pane='b'] {
+	left: var(--dock-split-x) !important;
+}
+/* ONE strip for the pair: the left pane's strip reaches across the right pane (its chrome back on the
+   dock's right edge); the right pane's own strip and chrome stand down */
+:root[data-dock-split] .tp-dock-panel[data-dock-pane='a'] .dt-row {
+	right: calc(7rem - var(--dock-split-bw));
+}
+:root[data-dock-split] .tp-dock-panel[data-dock-pane='a'] .dt-chrome {
+	right: calc(0.75rem - var(--dock-split-bw));
+}
+:root[data-dock-split] .tp-dock-panel[data-dock-pane='b'] .dt-row,
+:root[data-dock-split] .tp-dock-panel[data-dock-pane='b'] .dt-chrome {
+	display: none;
+}
+:root[data-dock-split][data-focus='dock']:not(.phone-shell) .tp-dock-panel[data-dock-pane='a'] .dt-row {
+	right: calc(var(--focus-exit-reach, 208px) - var(--dock-split-bw));
 }

@@ -48,7 +48,7 @@
 	import Icon from './ui/Icon.svelte';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
 	export let items: any[] = [];
-	export let onrun: (item: any) => void;
+	export let onrun: (item: any, e?: MouseEvent) => void;
 	/** this level's submenu chain from the root ([] at the top level) */
 	export let path: string[] = [];
 	/** full chain of OPEN submenus */
@@ -267,11 +267,11 @@
 			class:ctx-checked={item.checked}
 			data-ctx-active={atNav && indexOf.get(item) === highlight}
 			role="menuitem"
-			title={item.tooltip ?? ''}
+			title={(item.tooltip ?? '') + (item.multiPick ? (item.tooltip ? ' — ' : '') + 'Ctrl- or Shift-click to pick several' : '')}
 			aria-label={item.rowActions ? item.label : undefined}
 			on:mouseenter={() => hoverRow(item, indexOf.get(item) ?? -1)}
 			on:mouseleave={leaveRow}
-			on:click={() => onrun(item)}
+			on:click={(e) => onrun(item, e)}
 		>
 			<span class="flex items-center gap-2">
 				{#if hasIcons}
