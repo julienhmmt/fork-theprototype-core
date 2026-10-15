@@ -2507,6 +2507,21 @@
 	let armNudge = 0;
 	let trackRO: ResizeObserver | null = null;
 	let observedKey = '';
+	/** 44 L5: the observer's callback only SCHEDULES a measurement. `measureTrack` re-folds the bar
+	 *  (J10), which resizes `#controls-pill` — an element this same observer watches — and svelte
+	 *  flushes that DOM write in the microtask right after the callback, i.e. INSIDE the browser's
+	 *  delivery pass. A size change at the depth just delivered cannot be delivered in that pass, so
+	 *  Chromium raised "ResizeObserver loop completed with undelivered notifications" (the 1.34
+	 *  report) every time the bar changed its own width at its fold edge (a pointer-type switch, a
+	 *  zoom, a webfont landing). One frame later the write is an ordinary layout change. */
+	let trackRaf = 0;
+	function scheduleTrack() {
+		if (trackRaf) return;
+		trackRaf = requestAnimationFrame(() => {
+			trackRaf = 0;
+			measureTrack();
+		});
+	}
 
 	/** Re-derive the track from the LIVE DOM. Every number here is read, none is coded:
 	 *  a breakpoint constant would have to be kept in step with ui.css, and it could not
@@ -2613,7 +2628,7 @@
 	}
 
 	onMount(() => {
-		if (typeof ResizeObserver !== 'undefined') trackRO = new ResizeObserver(() => measureTrack());
+		if (typeof ResizeObserver !== 'undefined') trackRO = new ResizeObserver(scheduleTrack);
 		measureTrack();
 		window.addEventListener('resize', measureTrack);
 		window.addEventListener('keydown', onArmedKey, true);
@@ -2622,6 +2637,8 @@
 			window.removeEventListener('keydown', onArmedKey, true);
 			trackRO?.disconnect();
 			trackRO = null;
+			if (trackRaf) cancelAnimationFrame(trackRaf);
+			trackRaf = 0;
 		};
 	});
 

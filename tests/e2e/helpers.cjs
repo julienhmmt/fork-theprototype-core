@@ -106,6 +106,9 @@ async function setupPage(browser, name, options = {}) {
 	// gain node in front of ctx.destination, and `spatial-voice` asserts on the
 	// exact shape of its panner chains.
 	if (options.audio) await ctx.addInitScript(AUDIO_TAP_SOURCE);
+	// options.init = fn or [fn, arg]: a listener the suite needs from the FIRST frame (44 L5's ResizeObserver
+	// guard) — installed before the first navigation, so no extra reload (reloads are scarce on 1.32+)
+	if (options.init) await ctx.addInitScript(...(Array.isArray(options.init) ? options.init : [options.init]));
 	// caller overrides last, so a test can replace any of the defaults above
 	if (options.storage) {
 		await ctx.addInitScript((extra) => {
