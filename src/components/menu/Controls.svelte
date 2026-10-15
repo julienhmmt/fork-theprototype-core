@@ -55,7 +55,7 @@
 	import { clampWinSize, clampResize, anchorOf, registerSizeReset } from '$lib/windowSize';
 	import { dockable } from '$lib/docking';
 	import { bottomDockable } from '$lib/bottomDockDrop';
-	import { visibleDockKey, dockOccupants, bottomInset, FLOW_FAMILY, armDockMode, DOCK_TITLES } from '$lib/bottomDock';
+	import { dockShownKeys, dockOccupants, bottomInset, FLOW_FAMILY, armDockMode, DOCK_TITLES } from '$lib/bottomDock';
 	import { togglePanel } from '$lib/panelToggles';
 	import { requestPlay, willEnterXR, willEnterAR, xrSessionFailed, playAsItems } from '$lib/playMode';
 	// 30 P2: Test play — the play button's right-click row beside the game chip's button
@@ -107,7 +107,8 @@
 	// floating window is shown.
 	// WHAT a click DOES now lives in $lib/panelToggles (`togglePanel`), one decision tree
 	// shared with the O / N keyboard shortcuts; only the icon TINT is decided here.
-	const flowDockVisible = $derived(FLOW_FAMILY.includes($visibleDockKey ?? ''));
+	// 44 M9: a split shows two dock views at once — either half counts as on screen
+	const flowDockVisible = $derived(FLOW_FAMILY.some((k) => $dockShownKeys.includes(k)));
 	const flowFloatingShown = $derived(!$flowGraphClose && !$dockOccupants.flow?.present);
 	const flowShown = $derived(flowDockVisible || flowFloatingShown);
 	// W8b: the Explorer's rule, generalised to every dock view the roster can carry —
@@ -120,7 +121,7 @@
 	// FLOW FAMILY, so any family tab counts as "its dock is on screen", which is a rule
 	// none of the others has.
 	const panelShown: Record<string, boolean> = $derived.by(() => {
-		const visible = $visibleDockKey ?? '';
+		const shownKeys = $dockShownKeys;
 		const occupants = $dockOccupants;
 		const closed: Record<string, boolean> = {
 			flowcode: $flowCodeClose,
@@ -134,7 +135,7 @@
 		};
 		const out: Record<string, boolean> = {};
 		for (const key of Object.keys(closed))
-			out[key] = !closed[key] && (visible === key || !occupants[key]?.present);
+			out[key] = !closed[key] && (shownKeys.includes(key) || !occupants[key]?.present);
 		return out;
 	});
 

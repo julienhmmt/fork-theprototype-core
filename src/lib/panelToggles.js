@@ -18,6 +18,7 @@ import {
 	bottomDockActive,
 	dockOccupants,
 	visibleDockKey,
+	dockShownKeys,
 	dockMinimized,
 	dockEmptyOpen,
 	setDockEmptyOpen
@@ -130,7 +131,8 @@ function isVisibleInDock(cfg) {
 	// no here sends them to `activateDock`, which un-minimizes, so O / N / the toolbar
 	// buttons are the restore affordance a minimized dock has no strip to offer.
 	if (get(dockMinimized)) return false;
-	return get(visibleDockKey) === cfg.key;
+	// 44 M9: either half of a split on screen is SHOWING
+	return get(dockShownKeys).includes(cfg.key);
 }
 
 /** Step 1: open a closed panel in the mode it was last in. @param {PanelConfig} cfg */

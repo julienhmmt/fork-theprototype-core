@@ -2,6 +2,7 @@ import { writable, derived, get } from 'svelte/store';
 import { viewPrefs } from './viewPrefs';
 import { onLayoutRestore } from './uiLayoutsCore';
 import { safeStorage } from './safeStorage';
+import { phoneShell } from './ui/phoneShell.js';
 
 // Bottom dock: the dock shows exactly ONE panel at a time, and every panel that is
 // docked+open is a notebook TAB in it — the Flow family (Node editor / Flow Code /
@@ -302,6 +303,8 @@ export function noteDockOrder(key) {
  * @param {string} key
  */
 export function forgetDockTab(key) {
+	// 44 M9: an undocked member ends its split (its partner stays, full width)
+	dissolveSplitOf(key);
 	const cur = resolveOrder(get(dockTabOrder));
 	if (!cur.includes(key)) return;
 	dockTabOrder.set(cur.filter((k) => k !== key));
@@ -355,14 +358,34 @@ export function placeDockTabs(keys, before) {
  * @param {string} key @param {'left'|'right'} dir @returns {boolean} did it move
  */
 export function moveDockTab(key, dir) {
-	const present = get(dockTabs).map((t) => t.key);
-	const i = present.indexOf(key);
+	// 44 M9: the STRIP's entries move — a split pair is one entry and moves as one
+	const strip = get(dockStripTabs);
+	const i = strip.findIndex((t) => t.key === key || t.pair?.b === key);
 	const j = i + (dir === 'left' ? -1 : 1);
-	if (i < 0 || j < 0 || j >= present.length) return false;
-	const next = [...present];
-	next[i] = present[j];
-	next[j] = key;
-	return reorderDockTabs(next);
+	if (i < 0 || j < 0 || j >= strip.length) return false;
+	const next = [...strip];
+	next[i] = strip[j];
+	next[j] = strip[i];
+	return reorderStripTabs(next.map((t) => t.key));
+}
+
+/**
+ * 44 M9 — commit a new order of STRIP entries (a pair named by its left member): each pair's right
+ * member follows its left one, the rest is `reorderDockTabs`.
+ * @param {string[]} entryKeys
+ */
+export function reorderStripTabs(entryKeys) {
+	const present = get(dockTabs).map((t) => t.key);
+	const pairs = get(dockStripTabs).filter((t) => t.pair);
+	/** @type {string[]} */
+	const keys = [];
+	for (const k of entryKeys) {
+		keys.push(k);
+		const b = pairs.find((t) => t.key === k)?.pair?.b;
+		if (b) keys.push(b);
+	}
+	for (const k of present) if (!keys.includes(k)) keys.push(k);
+	return reorderDockTabs(keys.filter((k) => present.includes(k)));
 }
 
 /** the single panel that is actually VISIBLE in the dock (null if the dock is empty) */
@@ -372,6 +395,211 @@ export const visibleDockKey = derived([dockOccupants, bottomDockActive], ([$o, $
 	// dock never goes blank while a tab is still open
 	return Object.keys($o).find((k) => $o[k]?.present) ?? null;
 });
+
+/**
+ * 44 M9 — THE DOCK SPLIT (decision: Blender / VS Code "split editor"). Two docked views side by
+ * side with a draggable vertical divider; the pair is ONE strip tab labelled "A / B". A pair is
+ * `{a, b, r}`: `a` the left pane, `b` the right one (null = an EMPTY right pane with its own "+"),
+ * `r` the divider's place as a fraction of the dock's width. Several pairs may exist (each key in
+ * one at most); the one on screen is the pair the visible tab belongs to.
+ *
+ * LOCAL and persisted, like the tab order: an arrangement of this screen, part of a workspace
+ * layout (uiLayoutsCore), never of the scene. Wider screens only — the folded phone's dock is one
+ * column, so there a pair simply shows as its two ordinary tabs (the record is kept for the unfold).
+ *
+ * WHAT ENDS A PAIR: unsplit, a member UNDOCKED (`forgetDockTab`) or closed from the strip / tab
+ * menu (`dissolveSplitOf`). A close the app makes on its own (Settings hiding the Node editor)
+ * keeps it, the rule the tab order follows — and while a member is closed the other one shows
+ * alone, full width, until it is back.
+ * @typedef {{a: string, b: string|null, r: number}} DockSplit
+ */
+/** the narrowest a pane may be, as a fraction of the dock */
+export const SPLIT_MIN = 0.15;
+// (above the store: its initial read runs `resolveSplits`, which needs these — a TDZ throw there was
+// swallowed by readSplits' catch and every reload came back with no splits)
+const clampR = (/** @type {number} */ r) => (Number.isFinite(r) ? Math.min(Math.max(r, SPLIT_MIN), 1 - SPLIT_MIN) : 0.5);
+/** @type {import('svelte/store').Writable<DockSplit[]>} */
+export const dockSplits = writable(readSplits());
+
+/** a stored (possibly stale, hand-edited, pre-44) record -> a usable list @param {unknown} raw @returns {DockSplit[]} */
+export function resolveSplits(raw) {
+	if (!Array.isArray(raw)) return [];
+	/** @type {Set<string>} */
+	const used = new Set();
+	/** @type {DockSplit[]} */
+	const out = [];
+	for (const p of raw) {
+		if (!p || typeof p !== 'object') continue;
+		const a = /** @type {any} */ (p).a;
+		const b = /** @type {any} */ (p).b ?? null;
+		if (!DOCK_KEYS.includes(a) || used.has(a)) continue;
+		if (b !== null && (!DOCK_KEYS.includes(b) || used.has(b) || b === a)) continue;
+		used.add(a);
+		if (b) used.add(b);
+		out.push({ a, b, r: clampR(Number(/** @type {any} */ (p).r)) });
+	}
+	return out;
+}
+function readSplits() {
+	try {
+		return resolveSplits(JSON.parse(ls?.getItem('bottomDockSplits') ?? 'null'));
+	} catch {
+		return [];
+	}
+}
+dockSplits.subscribe((value) => {
+	try {
+		ls?.setItem('bottomDockSplits', JSON.stringify(value));
+	} catch {}
+});
+onLayoutRestore(() => dockSplits.set(readSplits()));
+
+/** the pair `key` is in (null: none) @param {string|null|undefined} key */
+export function splitOf(key) {
+	if (!key) return null;
+	return get(dockSplits).find((p) => p.a === key || p.b === key) ?? null;
+}
+
+/**
+ * The split ON SCREEN: the visible tab's pair, when every member of it is docked+open (an empty
+ * right pane counts as there). Null on a phone, while minimized, or when a member is away.
+ * @type {import('svelte/store').Readable<DockSplit|null>}
+ */
+export const dockSplitView = derived([dockSplits, dockOccupants, visibleDockKey, dockMinimized, phoneShell], ([$splits, $o, $key, $min, $phone]) => {
+	if ($min || $phone || !$key) return null;
+	const p = $splits.find((s) => s.a === $key || s.b === $key);
+	if (!p || !$o[p.a]?.present || (p.b && !$o[p.b]?.present)) return null;
+	return p;
+});
+
+/** every dock key RENDERING now: the visible tab, or both halves of the split on screen */
+export const dockShownKeys = derived([dockSplitView, visibleDockKey, dockMinimized], ([$split, $key, $min]) => {
+	if ($split) return /** @type {string[]} */ ([$split.a, $split.b].filter(Boolean));
+	return $key && !$min ? [$key] : [];
+});
+
+/** key -> 'a' (left pane) | 'b' (right pane) while a split is on screen; {} otherwise.
+ *  Each docked view puts it on its root as `data-dock-pane` (windows.css places the panes). */
+export const dockPaneOf = derived(dockSplitView, ($split) => {
+	/** @type {Record<string, 'a'|'b'>} */
+	const out = {};
+	if ($split) {
+		out[$split.a] = 'a';
+		if ($split.b) out[$split.b] = 'b';
+	}
+	return out;
+});
+
+/**
+ * The STRIP's entries: every present tab in the user's order, with a split pair folded into ONE
+ * entry at its left member's slot ("Node editor / Explorer"). A pair whose member is away shows
+ * the present one as an ordinary tab. Off on the folded phone (one column).
+ * @type {import('svelte/store').Readable<{key: string, title: string, icon: string, pair: DockSplit|null}[]>}
+ */
+export const dockStripTabs = derived([dockTabs, dockSplits, phoneShell], ([$tabs, $splits, $phone]) => {
+	const present = new Set($tabs.map((t) => t.key));
+	/** @type {{key: string, title: string, icon: string, pair: DockSplit|null}[]} */
+	const out = [];
+	for (const t of $tabs) {
+		const p = $phone ? null : $splits.find((s) => (s.a === t.key || s.b === t.key) && present.has(s.a) && (!s.b || present.has(s.b)));
+		if (!p) out.push({ ...t, pair: null });
+		else if (p.a === t.key) out.push({ ...t, title: `${DOCK_TITLES[p.a]} / ${p.b ? DOCK_TITLES[p.b] : 'Empty'}`, pair: p });
+		// (the right member rides in its pair's entry)
+	}
+	return out;
+});
+
+/** @param {(splits: DockSplit[]) => DockSplit[]} fn */
+function editSplits(fn) {
+	dockSplits.set(resolveSplits(fn(get(dockSplits).map((p) => ({ ...p })))));
+}
+
+/**
+ * Split `a` with `b` side by side (`b` null: an empty right pane with its own "+"). Either key
+ * leaves any pair it was in first. Shows the split (the left pane in front).
+ * @param {string} a @param {string|null} [b] @param {number} [r]
+ */
+export function splitDock(a, b = null, r = 0.5) {
+	if (!DOCK_KEYS.includes(a) || a === b) return false;
+	editSplits((all) => [...all.filter((p) => p.a !== a && p.b !== a && (!b || (p.a !== b && p.b !== b))), { a, b, r }]);
+	activateDock(a);
+	return true;
+}
+
+/** the tab after `key` in the strip that is not in a pair (null: none) @param {string} key */
+export function nextSplitPartner(key) {
+	const strip = get(dockStripTabs);
+	const at = strip.findIndex((t) => t.key === key);
+	if (at < 0) return null;
+	return strip.slice(at + 1).find((t) => !t.pair)?.key ?? null;
+}
+
+/** 44 M9 — the split button / "Split right": `key` with the next tab, or with an empty pane @param {string} key */
+export function splitWithNext(key) {
+	return splitDock(key, nextSplitPartner(key));
+}
+
+/** end `key`'s pair; both views stay docked as ordinary tabs, the one in front stays in front @param {string} key */
+export function unsplitDock(key) {
+	const p = splitOf(key);
+	if (!p) return false;
+	editSplits((all) => all.filter((s) => s.a !== p.a));
+	return true;
+}
+/** a member leaving the dock (or closed from the strip) ends its pair @param {string} key */
+export function dissolveSplitOf(key) {
+	if (splitOf(key)) unsplitDock(key);
+}
+
+/** "Swap sides" @param {string} key */
+export function swapSplitSides(key) {
+	const p = splitOf(key);
+	if (!p || !p.b) return false;
+	editSplits((all) => all.map((s) => (s.a === p.a ? { a: /** @type {string} */ (p.b), b: p.a, r: 1 - p.r } : s)));
+	return true;
+}
+
+/**
+ * Put `key` into `pane` of `pairKey`'s pair (a tab dropped onto a pane, a pick from an empty pane's
+ * "+"). The view it replaces stays docked as an ordinary tab; `key` leaves any other pair first;
+ * dropping a pair's own member onto its other pane swaps them.
+ * @param {string} pairKey any member of the pair @param {'a'|'b'} pane @param {string} key
+ */
+export function setSplitPane(pairKey, pane, key) {
+	const p = splitOf(pairKey);
+	if (!p || !DOCK_KEYS.includes(key)) return false;
+	if (key === p.a || key === p.b) {
+		if ((pane === 'a' && key === p.a) || (pane === 'b' && key === p.b)) return false;
+		if (!p.b) return false;
+		return swapSplitSides(key);
+	}
+	const next = pane === 'a' ? { a: key, b: p.b, r: p.r } : { a: p.a, b: key, r: p.r };
+	editSplits((all) => [...all.filter((s) => s.a !== p.a && s.a !== key && s.b !== key), next]);
+	return true;
+}
+
+/** move the divider of `key`'s pair @param {string} key @param {number} r */
+export function setSplitRatio(key, r) {
+	const p = splitOf(key);
+	if (!p) return;
+	const next = clampR(r);
+	if (Math.abs(next - p.r) < 1e-4) return;
+	editSplits((all) => all.map((s) => (s.a === p.a ? { ...s, r: next } : s)));
+}
+
+// the divider's place on the root, for windows.css: the panes are laid out by CSS from it
+if (typeof document !== 'undefined') {
+	dockSplitView.subscribe((split) => {
+		const root = document.documentElement;
+		if (split) {
+			root.style.setProperty('--dock-split-r', String(split.r));
+			root.dataset.dockSplit = split.b ? 'pair' : 'empty';
+		} else {
+			root.style.removeProperty('--dock-split-r');
+			delete root.dataset.dockSplit;
+		}
+	});
+}
 
 /**
  * 44 M5 — THE EMPTY DOCK. "T" with every window dragged out of the dock used to open the last

@@ -646,3 +646,41 @@
 html:root[data-focus='dock'] [data-pd-host='shown'] {
 	bottom: 0 !important;
 }
+
+/* 44 M9 — THE DOCK SPLIT ($lib/bottomDock dockSplits; the divider + empty pane are DockSplit.svelte).
+   Two docked views side by side: each one's own frame (a .tp-dock-panel) or hosted window
+   (PhoneDockHost's [data-pd-host]) carries `data-dock-pane` / `data-pd-host-pane` = 'a' (left) or
+   'b' (right), and stops at the divider. The divider's place is `--dock-split-r` (a fraction of the
+   dock's width between the sidebars' pinned columns), published on the root only while a split is
+   on screen (`data-dock-split`). !important: the scoped Shader editor rule and the hosted-window
+   rule above both pin left/right. */
+:root[data-dock-split] {
+	--dock-split-x: calc(
+		var(--sb-dock-left, 0px) + var(--dock-split-r, 0.5) * (100vw - var(--sb-dock-left, 0px) - var(--sb-dock-right, 0px))
+	);
+	/* the right pane's width: what the left pane's strip reaches across */
+	--dock-split-bw: calc(100vw - var(--dock-split-x) - var(--sb-dock-right, 0px));
+}
+:root[data-dock-split] .tp-dock-panel[data-dock-pane='a'],
+:root[data-dock-split]:not(.phone-shell) [data-pd-host][data-pd-host-pane='a'] {
+	right: calc(100vw - var(--dock-split-x)) !important;
+}
+:root[data-dock-split] .tp-dock-panel[data-dock-pane='b'],
+:root[data-dock-split]:not(.phone-shell) [data-pd-host][data-pd-host-pane='b'] {
+	left: var(--dock-split-x) !important;
+}
+/* ONE strip for the pair: the left pane's strip reaches across the right pane (its chrome back on the
+   dock's right edge); the right pane's own strip and chrome stand down */
+:root[data-dock-split] .tp-dock-panel[data-dock-pane='a'] .dt-row {
+	right: calc(6rem - var(--dock-split-bw));
+}
+:root[data-dock-split] .tp-dock-panel[data-dock-pane='a'] .dt-chrome {
+	right: calc(0.75rem - var(--dock-split-bw));
+}
+:root[data-dock-split] .tp-dock-panel[data-dock-pane='b'] .dt-row,
+:root[data-dock-split] .tp-dock-panel[data-dock-pane='b'] .dt-chrome {
+	display: none;
+}
+:root[data-dock-split][data-focus='dock']:not(.phone-shell) .tp-dock-panel[data-dock-pane='a'] .dt-row {
+	right: calc(208px - var(--dock-split-bw));
+}

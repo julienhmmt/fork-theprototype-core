@@ -14,7 +14,8 @@ import {
 	activateDock,
 	forgetDockTab,
 	visibleDockKey,
-	dockMinimized
+	dockMinimized,
+	dockShownKeys
 } from './bottomDock';
 import { registerDockOpener, registerDockCloser, registerDockOpenState, registerFloatOpener } from './dockMenu';
 import { groupOfKey, removeFromGroup } from './windowTabs';
@@ -81,6 +82,12 @@ export const hostedTabsOpen = derived([phoneShell, hostedDocked, hostedOpenNow, 
 /** the hosted tab on screen in the wide posture (null: none, the dock minimized, or a phone) */
 export const hostedDockShown = derived([phoneShell, visibleDockKey, dockMinimized, hostedTabsOpen], ([$phone, $key, $min, $open]) =>
 	!$phone && !$min && $key && /** @type {any} */ ($open)[$key] ? $key : null
+);
+
+/** 44 M9: every hosted tab RENDERING in the wide posture — both halves of a split can be hosted
+ *  windows (Objects / Statistics), so a single "shown" key is not enough */
+export const hostedDockShownKeys = derived([phoneShell, dockShownKeys, hostedTabsOpen], ([$phone, $keys, $open]) =>
+	$phone ? [] : $keys.filter((k) => /** @type {any} */ ($open)[k])
 );
 
 /** @param {string} key */

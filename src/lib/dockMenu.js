@@ -13,7 +13,7 @@ import {
 } from '../stores/appStore';
 import { imageEditorClose } from './image/imageEditorState';
 import { get, writable } from 'svelte/store';
-import { activateDock, armDockMode, armDockModes, dockOccupants, dockTabs, moveDockTab, visibleDockKey, undockButtonMode, placeDockTabs, canDockFloating, DOCK_TITLES, DOCK_ICONS, PHONE_DOCK_TABS, HOSTED_DOCK_TABS } from './bottomDock';
+import { activateDock, armDockMode, armDockModes, dockOccupants, dockTabs, dockStripTabs, moveDockTab, visibleDockKey, undockButtonMode, placeDockTabs, canDockFloating, splitOf, splitDock, nextSplitPartner, unsplitDock, swapSplitSides, setSplitPane, dissolveSplitOf, DOCK_KEYS, DOCK_TITLES, DOCK_ICONS, PHONE_DOCK_TABS, HOSTED_DOCK_TABS } from './bottomDock';
 import { phoneShell } from './ui/phoneShell.js';
 import { queueMerge, groupOfKey, activateTab, nodeOf } from './windowTabs';
 import { maximizeDockTab } from './focusMode';
@@ -361,9 +361,11 @@ export function addWindowItems({ target = 'dock', exclude = [] } = {}) {
  * (DockTabs), and the empty dock's strip unmounts the moment a window docks — so a menu owned by the
  * strip died on the first Ctrl-pick there. The strips only SET this; one always-mounted renderer
  * (PhoneDockHost) draws the menu, so it outlives whichever strip opened it.
- * @type {import('svelte/store').Writable<{x: number, y: number}|null>}
+ * 44 M9: `pane` names a split pair (its left key) whose EMPTY right pane opened the menu — a pick
+ * there fills that pane.
+ * @type {import('svelte/store').Writable<{x: number, y: number, pane?: string}|null>}
  */
-export const dockAddMenuAt = writable(/** @type {{x: number, y: number}|null} */ (null));
+export const dockAddMenuAt = writable(/** @type {{x: number, y: number, pane?: string}|null} */ (null));
 
 /**
  * 44 M8 — rebuild a "+" menu's rows after a multi-pick: now, and once more when the picked window
@@ -377,9 +379,26 @@ export function rebuildAfterPick(rebuild) {
 }
 
 /** the bottom dock's "+" (and the floating Node editor's, which passes `exclude: ['flow']`)
- * @param {{exclude?: string[]}} [options] */
-export function dockAddItems({ exclude = [] } = {}) {
-	return addWindowItems({ target: 'dock', exclude });
+ * 44 M9: `pane` = a split's left key whose EMPTY right pane asked — a window that opens into the
+ * dock, or is already a dock tab, fills that pane (one open elsewhere is still focused there, M5).
+ * @param {{exclude?: string[], pane?: string}} [options] */
+export function dockAddItems({ exclude = [], pane } = {}) {
+	const rows = addWindowItems({ target: 'dock', exclude });
+	if (!pane) return rows;
+	return rows.map((row) => {
+		const where = windowWhere(row.key);
+		if (!DOCK_KEYS.includes(row.key) || (where && where !== 'dock') || row.key === pane) return row;
+		const run = row.action;
+		return {
+			...row,
+			action: () => {
+				const pair = splitOf(pane);
+				if (pair && !pair.b) setSplitPane(pane, 'b', row.key);
+				run();
+				if (where === 'dock') activateDock(row.key);
+			}
+		};
+	});
 }
 
 /**
@@ -402,14 +421,39 @@ export function dockAddItems({ exclude = [] } = {}) {
  * over a closed view rather than into a gap, and each disables itself at its end of the
  * strip — a row that can only no-op is worse than a row that says it cannot.
  * @param {string} key
- * @returns {{label: string, tooltip: string, action: () => void, danger?: boolean, disabled?: boolean}[]}
+ * @returns {{label: string, tooltip: string, action?: () => void, danger?: boolean, disabled?: boolean, children?: any[]}[]}
  */
 export function dockTabItems(key) {
 	const title = DOCK_TITLES[key] ?? 'this view';
-	/** @type {{label: string, tooltip: string, action: () => void, danger?: boolean, disabled?: boolean}[]} */
+	/** @type {{label: string, tooltip: string, action?: () => void, danger?: boolean, disabled?: boolean, children?: any[]}[]} */
 	const items = [];
-	const present = get(dockTabs).map((t) => t.key);
-	const at = present.indexOf(key);
+	// 44 M9 — the split rows (decision: Split right / Unsplit / Swap sides); wider screens only
+	if (!get(phoneShell)) {
+		const pair = splitOf(key);
+		if (pair) {
+			const names = `${DOCK_TITLES[pair.a] ?? pair.a} / ${pair.b ? (DOCK_TITLES[pair.b] ?? pair.b) : 'the empty pane'}`;
+			items.push({ label: 'Swap sides', tooltip: `Swap the two halves of ${names}`, disabled: !pair.b, action: () => swapSplitSides(key) });
+			items.push({ label: 'Unsplit', tooltip: `Show ${names} as two tabs again`, action: () => unsplitDock(key) });
+		} else {
+			const next = nextSplitPartner(key);
+			items.push({
+				label: 'Split right',
+				tooltip: next ? `Show ${title} and ${DOCK_TITLES[next]} side by side` : `Show ${title} beside an empty pane (pick its window with "+")`,
+				action: () => splitDock(key, next)
+			});
+			const others = get(dockStripTabs).filter((t) => !t.pair && t.key !== key);
+			if (others.length > 1)
+				items.push({
+					label: 'Split with',
+					tooltip: `Pick the view to show beside ${title}`,
+					children: others.map((t) => ({ label: t.title, icon: t.icon, tooltip: `${title} on the left, ${t.title} on the right`, action: () => splitDock(key, t.key) }))
+				});
+		}
+	}
+	// the strip's ENTRIES (a split pair is one entry and moves as one)
+	const present = get(dockStripTabs).map((t) => t.key);
+	const pairOf = splitOf(key);
+	const at = present.indexOf(key) >= 0 ? present.indexOf(key) : pairOf ? present.indexOf(pairOf.a) : -1;
 	items.push({
 		label: 'Move left',
 		tooltip: `Move ${title} one tab towards the start of the strip`,
@@ -490,6 +534,8 @@ export function registerDockCloser(key, fn) {
 }
 /** @param {string} key */
 export function closeDockView(key) {
+	// 44 M9: closing a split member from the strip / tab menu ends its split
+	dissolveSplitOf(key);
 	if (dockClosers[key]) dockClosers[key]();
 	else closeStoreFor(key)?.set(true);
 }
