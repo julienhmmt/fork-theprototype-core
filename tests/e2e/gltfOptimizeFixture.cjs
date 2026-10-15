@@ -26,4 +26,13 @@ async function buildOptimizeFixtures(shape = {}) {
 	};
 }
 
-module.exports = { buildOptimizeFixtures, esm };
+/** A heavy import: a UV sphere over the 50k-triangle threshold with a texture over 2048 px.
+ * Base64, so a 10 MB file crosses the CDP bridge as one string rather than 10M numbers.
+ * @param {{segments?: number[], texture?: number[]}} [shape] @returns {Promise<string>} */
+async function buildHeavyImport(shape = {}) {
+	const fx = await esm('tests/fixtures/gltfOptimizeFixtures.js');
+	const bytes = await fx.buildFixture({ segments: [256, 128], texture: [4096, 4096], textureMime: 'image/jpeg', normalMap: false, duplicateMaterial: false, ...shape });
+	return Buffer.from(bytes).toString('base64');
+}
+
+module.exports = { buildOptimizeFixtures, buildHeavyImport, esm };

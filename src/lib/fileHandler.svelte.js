@@ -707,6 +707,18 @@ export async function importFile(file, name, ext, position, extras, opts = {}) {
 		return null;
 	}
 	const label = defaultImportName(extension, name);
+	// 46 P2: AUTO-OPTIMIZE above the import thresholds (Settings ▸ Import, or the asset's own
+	// override): resized + KTX2-twinned textures and an LOD group, the original kept in the
+	// Library. Before the budget gate, so the gate measures what will actually be placed.
+	/** @type {any} */
+	let optimized = null;
+	try {
+		const { maybeOptimizeImport } = await import('./importOptimize.js');
+		optimized = await maybeOptimizeImport(parsed, { file, extension, label: label ?? file?.name ?? 'Model', opts });
+		if (optimized) parsed = optimized.parsed;
+	} catch (error) {
+		console.error('Import optimize skipped:', error);
+	}
 	// 26-F phase 2: `opts.reduce` asks for the reduced import directly (true = aim at the
 	// budget the verdict names, or an explicit plan). Phase 3 routes the dialog's own
 	// Reduce answer here. An animated rig is never reduced — it replicates as its original
@@ -754,6 +766,7 @@ export async function importFile(file, name, ext, position, extras, opts = {}) {
 			addAnimatedImport(parsed.animated.result, parsed.animated.buffer, label, parsed.animated.kind, position);
 		else addImported(parsed.root, label, position);
 		for (const note of parsed.notes) showToast(note);
+		if (optimized) void import('./importOptimize.js').then((m) => m.announceOptimized(parsed.root.uuid, label ?? 'Model', optimized));
 		return parsed.root.uuid;
 	} catch (error) {
 		console.error('Error importing file:', error);
@@ -965,18 +978,16 @@ registerHistoryKind('importswap', applyImportSwap);
 /**
  * Put the ORIGINAL model back in place of its reduced import — same uuid, same place,
  * same name — as ONE undoable step that replicates through the ordinary delete + create.
+ * 46: also "Keep original only" after an auto-optimized import (`strip` names the userData
+ * stamps the original must not keep — the optimize report and the LOD group it added).
  * @param {string} uuid the reduced root
+ * @param {{strip?: string[], label?: string}} [opts]
  * @returns {Promise<boolean>} whether it was restored
  */
-export async function restoreOriginalImport(uuid) {
+export async function restoreOriginalImport(uuid, opts = {}) {
 	const source = originalOf(uuid);
 	if (!source) {
 		showToast('The original file is no longer held — import it again to use it.');
-		return false;
-	}
-	const current = get(objectsGroup)?.getObjectByProperty('uuid', uuid);
-	if (!current) {
-		showToast('That model is no longer in the scene.');
 		return false;
 	}
 	/** @type {any} */
@@ -988,7 +999,34 @@ export async function restoreOriginalImport(uuid) {
 		showToast('Could not re-read the original of "' + source.name + '".');
 		return false;
 	}
-	const fresh = parsed.root;
+	const strip = opts.strip ?? ['reduced'];
+	const ok = swapInFresh(uuid, parsed.animated ? null : parsed.root, strip, opts.label ?? 'Restore original model');
+	if (!ok) return false;
+	for (const note of parsed.notes) showToast(note);
+	showToast(
+		opts.label
+			? 'Placed the original "' + source.name + '" — Ctrl+Z to go back'
+			: 'Restored the original "' + source.name + '" — Ctrl+Z to go back to the reduced one'
+	);
+	return true;
+}
+
+/**
+ * Swap `fresh` in where `uuid` stands (identity kept: the root's uuid, and every child's when the
+ * tree has the same shape), recording ONE `importswap` entry. False when there is nothing to swap.
+ * @param {string} uuid @param {any} fresh @param {string[]} strip userData keys the old root drops
+ * @param {string} label
+ */
+function swapInFresh(uuid, fresh, strip, label) {
+	const current = get(objectsGroup)?.getObjectByProperty('uuid', uuid);
+	if (!current) {
+		showToast('That model is no longer in the scene.');
+		return false;
+	}
+	if (!fresh) {
+		showToast('An animated model cannot be swapped in place — import it again instead.');
+		return false;
+	}
 	// IDENTITY: the root keeps its uuid (flows, notes, joints and selection are keyed by
 	// it), and so does every child when the tree still has the shape it was imported with
 	// — a reduction never changes the tree, so only a user's own edit can make them differ
@@ -1000,22 +1038,55 @@ export async function restoreOriginalImport(uuid) {
 	fresh.traverse((/** @type {any} */ o) => now.push(o));
 	if (was.length === now.length) now.forEach((o, i) => (o.uuid = was[i].uuid));
 	else fresh.uuid = current.uuid;
-	const { reduced, ...keep } = current.userData ?? {};
-	void reduced;
+	/** @type {any} */
+	const keep = { ...(current.userData ?? {}) };
+	for (const key of strip) delete keep[key];
 	fresh.userData = { ...(fresh.userData || {}), ...keep };
 	swapImport(current, fresh);
 	recordEntry({
 		kind: 'importswap',
-		label: 'Restore original model',
+		label,
 		uuid,
 		reduced: current,
 		original: fresh,
 		before: { which: 'reduced', positions: { byteLength: treeBytes(current) } },
 		after: { which: 'original', positions: { byteLength: treeBytes(fresh) } }
 	});
-	for (const note of parsed.notes) showToast(note);
-	showToast('Restored the original "' + fresh.name + '" — Ctrl+Z to go back to the reduced one');
 	return true;
+}
+
+/**
+ * 46 P2 REIMPORT: re-read `file` (an asset's ORIGINAL), run the import optimizer under the asset's
+ * current settings, and swap the result in where `uuid` stands (one undo step). Resolves
+ * `{optimized}` (the optimizer's result, or null when the settings say leave it) or null when
+ * nothing was swapped.
+ * @param {string} uuid @param {File} file @param {string} extension @param {string} name
+ */
+export async function replaceImportFrom(uuid, file, extension, name) {
+	/** @type {any} */
+	let parsed;
+	try {
+		parsed = await parseModelFile(file, extension, []);
+	} catch (error) {
+		console.error('Reimport: could not read the original:', error);
+		showToast('Could not re-read the original of "' + name + '".');
+		return null;
+	}
+	const { maybeOptimizeImport } = await import('./importOptimize.js');
+	const optimized = await maybeOptimizeImport(parsed, { file, extension, label: name });
+	if (optimized) parsed = optimized.parsed;
+	const fresh = parsed.animated ? null : parsed.root;
+	if (!fresh) {
+		disposeParsed(parsed.root);
+		showToast('"' + name + '" is animated: reimport it by placing it again.');
+		return null;
+	}
+	const ok = swapInFresh(uuid, fresh, ['optimized', 'lod', 'reduced'], 'Reimport "' + name + '"');
+	if (!ok) {
+		disposeParsed(fresh);
+		return null;
+	}
+	return { optimized };
 }
 
 /** Free a parsed tree that never reached the scene (a cancelled import). Geometry and

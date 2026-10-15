@@ -65,6 +65,10 @@ lodEnabled.subscribe((on) => {
 /** The multiplier on every switch distance (< 1 = coarser sooner). Written by the quality
  * governor (P3); a plain number store so this module never imports it. */
 export const lodBias = writable(1);
+/** 46 P2: the SCENE's LOD distance bias (environment.lodBias, replicated scene data; environment.js
+ * writes it). Multiplied into the governor's: > 1 keeps detail longer. Applies to auto LOD and
+ * every LOD group. */
+export const sceneLodBias = writable(1);
 
 /** How long a mesh's geometry must stand still before its levels are (re)built. */
 const STABLE_MS = 1500;
@@ -687,8 +691,15 @@ lodEnabled.subscribe((on) => {
 	enabled = on;
 	if (!on) restoreSwapped();
 });
+let governorBias = 1;
+let sceneBias = 1;
 lodBias.subscribe((b) => {
-	bias = Number.isFinite(b) && b > 0 ? b : 1;
+	governorBias = Number.isFinite(b) && b > 0 ? b : 1;
+	bias = governorBias * sceneBias;
+});
+sceneLodBias.subscribe((b) => {
+	sceneBias = Number.isFinite(b) && b > 0 ? b : 1;
+	bias = governorBias * sceneBias;
 });
 
 /** For the probe, the suite and the stats plate. */

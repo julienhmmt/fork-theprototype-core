@@ -11,6 +11,7 @@ import { cappedShadowSize, shadowsDisabled } from './lightParams';
 import { wireframeActive } from './viewMode';
 import { idbGet, idbPut, idbDelete, idbKeys } from './idb';
 import { safeStorage } from './safeStorage';
+import { sceneLodBias } from './lod';
 // 37-hdri: the PURE half only (normalize/merge/rotate) — the loader is a registered layer below
 import { mergeHdriPatch, rotateAboutY } from './hdri/hdriCore.js';
 
@@ -732,10 +733,33 @@ export function applyRemoteEnvironment(data) {
 		exposure: data.exposure ?? 1,
 		customPreset: data.customPreset ?? null,
 		lights: data.lights ?? [],
+		...(lodBiasOf(data) !== 1 ? { lodBias: lodBiasOf(data) } : {}),
 		changedAt: data.changedAt
 	});
 	applyEnvironment();
 }
+
+// 46 P2 — THE PER-SCENE LOD DISTANCE BIAS. It rides the environment singleton on purpose: when
+// detail steps down is a decision about how the scene LOOKS (the user's words), it is scene data
+// like the sky — latest-wins on the same stamp, saved with the scene, sent in the handshake —
+// with no new message type. 1 = the default (absent from every save); > 1 keeps detail longer,
+// < 1 steps down sooner. lod.js multiplies it into the quality governor's bias.
+
+/** Clamp a state's bias into the range the UI offers. @param {any} state */
+export function lodBiasOf(state) {
+	const v = Number(state?.lodBias);
+	return Number.isFinite(v) && v > 0 ? Math.min(4, Math.max(0.25, v)) : 1;
+}
+
+/** Configure Scene ▸ Level of detail: set the scene's LOD distance (replicated).
+ * @param {number} value */
+export function setSceneLodBias(value) {
+	const v = lodBiasOf({ lodBias: value });
+	if (v === lodBiasOf(get(environment))) return;
+	commit({ lodBias: v === 1 ? undefined : v });
+}
+
+environment.subscribe((state) => sceneLodBias.set(lodBiasOf(state)));
 
 /** A6: the authored sky/fog/lighting as SAVE data, or NULL when it is the stock
  * studio look — so a default scene saves byte-identical and an older reader sees
@@ -747,13 +771,15 @@ export function environmentSnapshot() {
 		(state.preset ?? 'studio') === 'studio' &&
 		(state.exposure ?? 1) === 1 &&
 		!state.customPreset &&
-		!(state.lights ?? []).length;
+		!(state.lights ?? []).length &&
+		lodBiasOf(state) === 1;
 	if (stock) return null;
 	return {
 		preset: state.preset,
 		exposure: state.exposure ?? 1,
 		customPreset: state.customPreset ?? null,
 		lights: state.lights ?? [],
+		...(lodBiasOf(state) !== 1 ? { lodBias: lodBiasOf(state) } : {}),
 		changedAt: state.changedAt ?? 0
 	};
 }
@@ -773,6 +799,7 @@ export function environmentRestore(payload, replicate = false) {
 				exposure: payload.exposure ?? 1,
 				customPreset: payload.customPreset ?? null,
 				lights: payload.lights ?? [],
+				...(lodBiasOf(payload) !== 1 ? { lodBias: lodBiasOf(payload) } : {}),
 				changedAt: sessionNow()
 			}
 		: { ...DEFAULT_STATE, changedAt: sessionNow() };
