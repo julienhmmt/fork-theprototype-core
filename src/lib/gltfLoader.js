@@ -44,7 +44,13 @@ export function createGltfLoader() {
 }
 
 /** The KTX2 loader, made once — null when there is no renderer to detect support on.
+ * 46: exported as `getKtx2Loader` for the KTX2 twins (ktx2Twins.js transcodes with it).
  * @returns {Promise<any>} */
+export function getKtx2Loader() {
+	return ktx2Loader();
+}
+
+/** @returns {Promise<any>} */
 function ktx2Loader() {
 	if (!ktx2)
 		ktx2 = (async () => {

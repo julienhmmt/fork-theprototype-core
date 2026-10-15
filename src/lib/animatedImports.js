@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { writable, get } from 'svelte/store';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { createGltfLoader } from './gltfLoader';
+import { parseGltfSceneSafe } from './ktx2Twins';
 import { objectsGroup, pokeScene } from '../stores/sceneStore';
 import { peers, showToast } from '../stores/appStore';
 import { registerHistoryKind, recordEntry } from './history';
@@ -108,10 +109,9 @@ async function parseAnimatedBytes(bytes, kind) {
 		const root = new FBXLoader().parse(bytes, '');
 		return { root, animations: root.animations ?? [] };
 	}
+	// 46: KTX2-aware, scene-safe (a KTX2 texture becomes an ordinary one + its twin)
 	/** @type {any} */
-	const gltf = await new Promise((resolve, reject) =>
-		createGltfLoader().parse(bytes, '', resolve, reject)
-	);
+	const gltf = await parseGltfSceneSafe(bytes);
 	return { root: gltf.scene, animations: gltf.animations ?? [] };
 }
 

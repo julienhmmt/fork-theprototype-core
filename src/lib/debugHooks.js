@@ -381,6 +381,7 @@ export const DEBUG_HOOKS = [
 	['lod', () => import('./lod')],
 	['gltfOptimize', () => import('./gltfOptimize.js')],
 	['gltfLoader', () => import('./gltfLoader.js')],
+	['ktx2Twins', () => import('./ktx2Twins.js')],
 	['lodGroup', () => import('./lodGroup')],
 	['lodGroupCore', () => import('./lodGroupCore')],
 	// 40 F14: the substitutes a fallback group draws

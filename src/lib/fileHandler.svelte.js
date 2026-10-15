@@ -21,6 +21,7 @@ import { shaderDrivenCount } from '$lib/shaderGraph';
 import { originOf, bakeOriginForExport } from '$lib/objectOrigin';
 import { bakeAnimationsForExport } from '$lib/animationPreview';
 import { createGltfLoader, registerAnimatedImport, recordAnimatedImport, sendAnimatedImport } from '$lib/animatedImports';
+import { parseGltfSceneSafe, withTwins } from '$lib/ktx2Twins';
 import { environment } from './environment';
 import { parkAnimatedAtBase } from '$lib/flowRuntime';
 import { stripEditOverlays } from '$lib/editOverlays';
@@ -227,7 +228,8 @@ export function gltfBytesFor(roots, opts = {}) {
 	if (animations.length) parseOptions.animations = animations;
 	return new Promise((resolve) => {
 		try {
-			new GLTFExporter().parse(
+			// 46: KTX2 twins ride along (KHR_texture_basisu beside the plain image)
+			withTwins(new GLTFExporter()).parse(
 				payload,
 				(/** @type {any} */ result) => {
 					restore();
@@ -654,11 +656,11 @@ export async function parseModelFile(file, extension, extras) {
 			: null;
 		return { root: object, animated, notes };
 	}
-	// glb/gltf (default) — draco/meshopt capable
+	// glb/gltf (default) — draco/meshopt capable. 46: KTX2-aware and SCENE-SAFE — a KTX2 texture
+	// arrives as an ordinary texture with its compressed twin (ktx2Twins.js), never as a
+	// CompressedTexture the wire/undo/saves could not write.
 	const buffer = await readAs(file, 'buffer');
-	const result = await new Promise((resolve, reject) =>
-		createGltfLoader().parse(buffer, '', resolve, (/** @type {any} */ error) => reject(error))
-	);
+	const result = await parseGltfSceneSafe(buffer);
 	// animated rigs keep their own pipeline (raw-bytes sync) — unplaced
 	const animated = result.animations?.length > 0 ? { result, buffer, kind: 'gltf' } : null;
 	return { root: result.scene, animated, notes };

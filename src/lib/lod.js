@@ -147,6 +147,19 @@ export function registerBatchPass(pass) {
 	installHooks();
 }
 
+// 46 P1: the KTX2 TWIN pass (ktx2Twins.js) lends textures their compressed twin for the render.
+// It runs FIRST in and LAST out of the bracket, so every pass (level swaps, the kit batch, the
+// shadow map, an XR eye) draws the compressed texture.
+/** @typedef {{before: (renderer: any) => void, after: () => void}} TwinPass */
+/** @type {TwinPass | null} */
+let twinPass = null;
+/** @param {TwinPass} pass */
+export function registerTwinPass(pass) {
+	if (twinPass === pass) return;
+	twinPass = pass;
+	installHooks();
+}
+
 /** "Show LOD level": every LOD-managed mesh drawn in its level's colour. LOCAL, off. */
 export const lodShowLevels = writable(false);
 let overlay = false;
@@ -515,6 +528,8 @@ function beforeRender(renderer, scene, camera) {
 	if (renderDepth++ > 0) return; // a nested render (a probe inside a pass) keeps the outer swap
 	batchPass?.after(); // a render that threw last time left members hidden: never keep that
 	restoreSwapped(); // a render that threw last time left a swap behind: never keep it
+	twinPass?.after();
+	twinPass?.before(renderer);
 	swapLevels(camera);
 	if (batchPass && camera?.matrixWorld) batchPass.before(camera);
 }
@@ -601,6 +616,7 @@ function afterRender(...args) {
 		batchPass?.after();
 		groupPass?.after();
 		restoreSwapped();
+		twinPass?.after();
 	}
 	prevAfter?.(...args);
 }
@@ -619,6 +635,7 @@ function installHooks() {
 function uninstallHooks() {
 	batchPass?.after();
 	restoreSwapped();
+	twinPass?.after();
 	if (!hookedScene) return;
 	if (hookedScene.onBeforeRender === beforeRender) hookedScene.onBeforeRender = prevBefore ?? THREE.Object3D.prototype.onBeforeRender;
 	if (hookedScene.onAfterRender === afterRender) hookedScene.onAfterRender = prevAfter ?? THREE.Object3D.prototype.onAfterRender;
