@@ -2501,6 +2501,10 @@
 	 *  fraction is the only source once it ends */
 	let dragCentre: number | null = $state(null);
 	let movingBar = $state(false);
+	/** 44 M4: the move was armed from a menu (no button held) — the bar says how to place it */
+	let movingModal = $state(false);
+	/** a touch screen (the hint's words): read once — a device does not change its pointer mid-session */
+	const coarsePointer = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
 	/** where the menu that armed a modal move was opened — the origin its pointer
 	 *  offsets are measured from, since a menu action carries no event of its own */
 	let lastMenuAt = { x: 0, y: 0 };
@@ -2743,9 +2747,19 @@
 			const frac = span > 0 ? Math.max(0, Math.min(1, (c - t.min) / span)) : null;
 			setLayout({ posX: c === t.mid ? null : frac });
 		},
-		onActive: (active) => {
+		onActive: (active, modal) => {
 			movingBar = active;
-		}
+			movingModal = active && modal;
+		},
+		// 44 M4: armed from the menu on a touch screen, a finger GRABS the bar (follow it, place it on the
+		// lift) — the modal "follow the pointer, click to place" committed on the first touch, so the
+		// armed move could never move on touch. The drag continues from wherever the bar is now.
+		touchDrag: true,
+		rebase: (ctx) => {
+			ctx.snapshot = { ...ctx.snapshot, centre: dragCentre ?? ctx.snapshot.centre };
+			armNudge = 0;
+		},
+		passDown: (e) => !!(e.target as Element | null)?.closest?.('#toolbar-move-cancel')
 	});
 
 	/** THE MOVE GESTURE. A press anywhere on the bar starts a CANDIDATE; it becomes a
@@ -3037,6 +3051,14 @@
 		{/each}
 		{/if}
 	</div>
+	{#if movingModal}
+		<!-- 44 M4: the armed Move toolbar says how to finish it — a finger drags and lifts, a mouse follows and
+		     clicks; touch has no Escape, so it gets a Cancel that puts the bar back -->
+		<p class="hud-edit-hint hud-move-hint" id="toolbar-move-hint" role="status">
+			<span>{coarsePointer ? 'Drag the toolbar to place it' : 'Move to place · click to drop · ← → nudge · Esc cancels'}</span>
+			<button type="button" id="toolbar-move-cancel" class="hud-move-cancel" use:onPress={() => toolbarGrab.cancel()}>Cancel</button>
+		</p>
+	{/if}
 	{#if editing}
 		<!-- 41 G1: the round green ✓ at the bar's top right applies; Escape / a press outside cancels -->
 		<button type="button" id="toolbar-edit-apply" class="hud-edit-apply" title="Apply the new positions" aria-label="Apply the new positions" use:onPress={() => applyEditPositions()}

@@ -645,3 +645,27 @@
 	border-radius: var(--radius-pill);
 	font: 500 var(--fs-body) var(--font-ui);
 }
+/* 44 M4: the armed Move toolbar's hint above the bar — with a Cancel (touch has no Escape) */
+.hud-move-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	pointer-events: auto;
+	padding-right: 4px;
+}
+.hud-move-cancel {
+	height: 22px;
+	padding: 0 10px;
+	border: 0;
+	border-radius: var(--radius-pill);
+	background: var(--surface-hover);
+	color: var(--text);
+	font: 600 var(--fs-badge, 11px) var(--font-ui);
+	cursor: pointer;
+}
+@media (pointer: coarse) {
+	.hud-move-cancel {
+		height: 32px;
+		padding: 0 14px;
+	}
+}

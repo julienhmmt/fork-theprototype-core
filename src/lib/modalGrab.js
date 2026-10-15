@@ -36,7 +36,8 @@
  *   data: any,
  *   dx: number,
  *   dy: number,
- *   event: any
+ *   event: any,
+ *   touching?: boolean
  * }} GestureContext
  */
 
@@ -47,7 +48,10 @@
  *   apply: (ctx: GestureContext) => void,
  *   revert?: (ctx: GestureContext) => void,
  *   end?: (ctx: GestureContext, kept: boolean) => void,
- *   onActive?: (active: boolean, modal: boolean) => void
+ *   onActive?: (active: boolean, modal: boolean) => void,
+ *   touchDrag?: boolean,
+ *   rebase?: (ctx: GestureContext) => void,
+ *   passDown?: (e: PointerEvent) => boolean
  * }} hooks
  *   `snapshot` returns whatever the consumer needs to re-derive absolute state
  *   (falsy, or an empty array, refuses the gesture). `start` opens the undo session
@@ -55,6 +59,10 @@
  *   can legitimately refuse). `apply` writes absolute state from `ctx.snapshot` and
  *   `ctx.dx/dy` (pointer pixels). `revert` puts the snapshot back. `end` closes the
  *   session and drops any frozen view state, kept or not.
+ *   44 M4 — `touchDrag`: in a MODAL gesture a touch / pen press grabs (the gesture follows the finger
+ *   and commits on the lift) instead of committing; `rebase` folds what is applied so far into
+ *   `ctx.snapshot` first, so the drag continues from there. `passDown(e)` true lets a press through
+ *   untouched (a Cancel button drawn for the armed gesture).
  */
 export function createGesture(hooks) {
 	/** @type {GestureContext|null} */
@@ -76,6 +84,8 @@ export function createGesture(hooks) {
 		window.removeEventListener('pointerup', onUp);
 		window.removeEventListener('pointerdown', onModalDown, true);
 		window.removeEventListener('keydown', onModalKey, true);
+		window.removeEventListener('pointerup', onTouchUp, true);
+		window.removeEventListener('pointercancel', onTouchUp, true);
 	}
 
 	function onMove(/** @type {PointerEvent} */ e) {
@@ -86,8 +96,28 @@ export function createGesture(hooks) {
 	}
 	function onModalDown(/** @type {PointerEvent} */ e) {
 		if (!ctx?.modal) return;
+		// a control the consumer draws for the armed gesture itself (a touch Cancel) keeps its press
+		if (hooks.passDown?.(e)) return;
 		e.preventDefault();
 		e.stopPropagation();
+		// 44 M4: a FINGER has no hover, so "follow the pointer, click to commit" committed on the very
+		// first touch, wherever the thing was. With `touchDrag` a touch / pen press GRABS instead: the
+		// gesture re-bases on what has been applied so far, follows the finger, and commits on the lift.
+		if (hooks.touchDrag && e.pointerType && e.pointerType !== 'mouse') {
+			if (ctx.touching) return;
+			hooks.rebase?.(ctx);
+			ctx.origin = { x: e.clientX, y: e.clientY };
+			ctx.dx = 0;
+			ctx.dy = 0;
+			ctx.touching = true;
+			window.addEventListener('pointerup', onTouchUp, true);
+			window.addEventListener('pointercancel', onTouchUp, true);
+			return;
+		}
+		finish(true);
+	}
+	function onTouchUp() {
+		// a pointercancel (the browser took the touch) keeps what the finger did so far, like a lift
 		finish(true);
 	}
 	function onModalKey(/** @type {KeyboardEvent} */ e) {
