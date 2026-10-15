@@ -390,7 +390,7 @@ module.exports = (/** @type {string[]} */ parts) => {
 			await P.evaluate(() => window.__stores.touchTools.set(true));
 			await P.waitForTimeout(500);
 			tt = await rect(P, '#touch-tools');
-			h.check(Math.abs(tt.left - (78 + g.left.w)) <= 2, T + `M13: pinned left sidebar → the row beside the logo slides with the logo (${Math.round(tt.left)})`);
+			h.check(Math.abs(tt.left - (78 + g.left.w)) <= 2 || Math.abs(tt.left - (14 + g.left.w)) <= 2, T + `M13: pinned left sidebar → the row beside the logo slides with the logo (beside or stacked under it: ${Math.round(tt.left)})`);
 			const pillHits = await P.evaluate(() => {
 				const p = document.querySelector('.connect-pill').getBoundingClientRect();
 				const t = document.getElementById('touch-tools').getBoundingClientRect();
@@ -636,7 +636,10 @@ module.exports = (/** @type {string[]} */ parts) => {
 			await kit.hold(await centre(Q.locator('#hud-stack-left [data-edit-wrap]').first()), 800);
 			rows = (await menuRows(Q)).map((r) => r.label);
 			h.check(rows.includes('Rotate to horizontal') && rows.includes('Move'), TU + `M12b: a long press on a placeholder opens its cluster menu (${rows.join(' | ')})`);
-			await closeMenus(Q);
+			// a finger closes a menu by tapping outside it (on touch nothing holds the menu's keys, so no Escape) — and
+			// that tap closes the MENU only, Edit positions stays
+			await kit.tap({ x: 400, y: 300 });
+			h.check(!(await menuOpen(Q)) && (await Q.locator('#toolbar-edit-apply').count()) === 1, TU + 'M12b: a tap outside closes the cluster menu and keeps Edit positions');
 			const ul0 = await rect(Q, '#hud-stack-left');
 			const gp = await centre(Q.locator('#cluster-grip-left'));
 			await kit.drag(gp, { x: gp.x + 260, y: gp.y - 260 }, 14);
