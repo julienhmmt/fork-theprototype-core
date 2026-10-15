@@ -85,39 +85,45 @@ h.run(async () => {
 	await A.page.waitForTimeout(400);
 	h.check(await A.page.locator('#explorer-list').isVisible(), 'docks back to the bottom');
 
-	// The shared dock has ONE slot, and the contract changed in 5651aaa ("tabbed bottom
-	// dock"): the FLOW FAMILY (Node editor / Flow Code / Animation / UV) are notebook
-	// tabs in it, and the Explorer is a separate panel MUTUALLY EXCLUSIVE with them —
-	// activating a Flow tab CLOSES the Explorer, and the Explorer is not a tab. This
-	// section used to assert the older both-mounted-one-hidden model.
+	// The shared dock has ONE slot, and its contract changed twice. 5651aaa ("tabbed bottom
+	// dock") made the Flow family notebook tabs and the Explorer a separate panel that a Flow
+	// tab force-CLOSED; 739f9df ("the explorer is a bottom-dock tab") deleted that
+	// exclusivity: the Explorer is a tab in the SAME strip, and switching tabs changes only
+	// WHICH panel renders — nothing closes anything. So a Flow tab takes the dock and the
+	// Explorer stays open as a hidden tab, and re-opening the Explorer is the same kind of
+	// move in the other direction (both halves are visibility questions now).
+	const shown = () =>
+		A.page.evaluate(() => {
+			const vis = (/** @type {string} */ sel) => {
+				const el = document.querySelector(sel);
+				return !!el && el.getBoundingClientRect().height > 0;
+			};
+			let explorerClose;
+			window.__stores.explorerClose.subscribe((v) => (explorerClose = v))();
+			return {
+				flow: vis('#flow-list'),
+				explorer: vis('#explorer-list'),
+				explorerOpen: explorerClose === false,
+				tabs: [...new Set([...document.querySelectorAll('.tab-note')].map((b) => (b.textContent || '').trim()).filter(Boolean))]
+			};
+		});
 	await A.page.locator('p[title="Node editor (N)"]').click();
 	await A.page.waitForTimeout(600);
-	const dock = await A.page.evaluate(() => ({
-		flow: !!document.querySelector('#flow-list'),
-		explorer: !!document.querySelector('#explorer-list'),
-		tabs: [...document.querySelectorAll('.tab-note')].map((b) => (b.textContent || '').trim())
-	}));
-	h.check(dock.flow && !dock.explorer, `a Flow tab takes the dock and closes the Explorer (${JSON.stringify(dock)})`);
+	const dock = await shown();
+	h.check(dock.flow && !dock.explorer, `a Flow tab takes the dock and the Explorer hides (${JSON.stringify(dock)})`);
+	h.check(dock.explorerOpen, '...but the Explorer is NOT closed - it stays open as a hidden tab (739f9df)');
 	h.check(dock.tabs.includes('Node editor'), 'the dock tab strip names the visible Flow panel');
-	h.check(!dock.tabs.some((t) => /Explorer/i.test(t)), 'the Explorer is not a Flow-family tab');
+	h.check(dock.tabs.includes('Explorer'), 'the Explorer is a tab in the same strip, so the hidden panel is one click away');
 
-	// ...and re-opening the Explorer takes the dock back. The two directions are NOT
-	// symmetric, deliberately: a Flow tab CLOSES the Explorer (it unmounts, above),
-	// while the Explorer merely becomes the visible panel and leaves the Flow tab
-	// open-but-hidden — so this half is a visibility question, not a presence one.
+	// ...and re-opening the Explorer takes the dock back, leaving the Flow tab open-but-hidden
 	await A.page.locator('#explorer-slot').click();
 	await A.page.waitForTimeout(600);
-	const backAgain = await A.page.evaluate(() => {
-		const shown = (/** @type {string} */ sel) => {
-			const el = document.querySelector(sel);
-			return !!el && el.getBoundingClientRect().height > 0;
-		};
-		return { flow: shown('#flow-list'), explorer: shown('#explorer-list') };
-	});
+	const backAgain = await shown();
 	h.check(
 		backAgain.explorer && !backAgain.flow,
 		`the Explorer takes the dock back and the Flow tab hides (${JSON.stringify(backAgain)})`
 	);
+	h.check(backAgain.tabs.includes('Node editor'), '...and the Node editor stays a tab beside it (nothing closed either way)');
 
 	// --- 106: tree v2 ---
 	// inline create: the button spawns an input, Enter creates, Esc cancels
@@ -209,8 +215,10 @@ h.run(async () => {
 				}
 			: null;
 	});
+	// 901b068 (R22 round 36): the subtree MOVES TO DELETED now (restorable, structure kept), so
+	// the count reads "files" and the sentence promises the bin rather than destruction
 	h.check(
-		!!cascade && /Delete "Textures"\?/.test(cascade.title) && /2 folders and 1 item/.test(cascade.detail),
+		!!cascade && /Delete "Textures"\?/.test(cascade.title) && /2 folders and 1 file move to Deleted/.test(cascade.detail),
 		`cascade delete confirms with counts (${JSON.stringify(cascade)})`
 	);
 	await A.page.locator('#explorer-confirm-yes').click();
@@ -270,8 +278,9 @@ h.run(async () => {
 		(names) => names.includes('Keep'),
 		'the folder reaches IndexedDB before the reload'
 	);
-	await A.page.reload();
-	await A.page.waitForTimeout(2500);
+	// wait for the debug stores, not a fixed 2.5 s: under e2e load the boot outran it and
+	// `window.__stores` was still undefined (a TypeError instead of a verdict)
+	await h.freshReload(A);
 	const persisted = await A.page.evaluate(async () => {
 		await window.__stores.explorer.loadExplorer();
 		return new Promise((resolve) => {

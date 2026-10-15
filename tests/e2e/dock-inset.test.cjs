@@ -102,6 +102,8 @@ h.run(async () => {
 	const A = await h.setupPage(browser, 'A');
 
 	h.check((await inset(A.page)) === 0, 'inset is 0 with the dock closed');
+	// where the bottom chrome RESTS with no dock — what "returns to the viewport bottom" means below
+	const rest = await bottomChrome(A.page);
 
 	// open the flow drawer -> inset = its height; sidebar ends above it
 	await A.page.locator('p[title="Node editor (N)"]').click();
@@ -291,13 +293,16 @@ h.run(async () => {
 	await A.page.waitForTimeout(500);
 	h.check((await inset(A.page)) === 0, 'inset returns to 0 when the dock closes');
 
-	// ...and the bottom chrome drops back to the viewport bottom (FAB bottom:10px,
-	// pill bottom:16px — the +2 slack absorbs sub-pixel rounding)
+	// ...and the bottom chrome drops back to the viewport bottom. The play FAB is the pill's
+	// OWN child since the roster rewrite (4b: <nav id="controls-pill">), so it no longer has a
+	// bottom of its own (the old "FAB bottom:10px") — it rests inside the pill, 18px clear. So
+	// it is compared with where it rested before the dock ever opened (the +2 slack absorbs
+	// sub-pixel rounding), and it must sit inside the pill that is back on the floor.
 	await A.page.waitForTimeout(400); // the 200ms bottom transition, settled
 	const shut = await bottomChrome(A.page);
 	h.check(
-		shut.vh - shut.fabBottom <= 12,
-		`play FAB returns to the viewport bottom (${shut.vh - shut.fabBottom}px clear)`
+		Math.abs(shut.fabBottom - rest.fabBottom) <= 2 && shut.fabBottom <= shut.pillBottom + 1,
+		`play FAB returns to the viewport bottom (${shut.vh - shut.fabBottom}px clear; ${rest.vh - rest.fabBottom}px before the dock opened)`
 	);
 	h.check(
 		shut.vh - shut.pillBottom <= 18,

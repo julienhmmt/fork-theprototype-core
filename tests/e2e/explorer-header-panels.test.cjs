@@ -490,6 +490,9 @@ h.run(async () => {
 	h.check(chosen > 260, `premise: a width worth remembering (${chosen | 0}px)`);
 	await h.freshReload(A);
 	await A.page.waitForFunction(() => !!window.__stores?.explorer, { timeout: 30000 });
+	// 41 G16: "Restore previous session?" is a blocking modal after a reload of a page that
+	// autosaved objects — answer it (the snapshot stays saved) or every click lands on it
+	await h.answerRestore(A);
 	await openExplorer(A);
 	const reloaded = await shellGeom(A);
 	h.check(

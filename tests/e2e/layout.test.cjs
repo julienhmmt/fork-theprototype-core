@@ -46,7 +46,10 @@ h.run(async () => {
 	await A.page.waitForTimeout(200);
 	const after = (await A.page.locator('#flow-list').boundingBox()).height;
 	h.check(Math.abs(after - before - 80) < 12, `flow resized by drag (${before} → ${after})`);
-	const persisted = await A.page.evaluate(() => localStorage.getItem('flowHeight'));
+	// 5651aaa ("tabbed bottom dock"): ONE height for every dock tab, so the key is the
+	// shared `flowDockHeight` (bottomDock.dockHeight) — the Node editor's own `flowHeight`
+	// went away with it, and reading that dead key is what made this check red
+	const persisted = await A.page.evaluate(() => localStorage.getItem('flowDockHeight'));
 	h.check(Math.abs(parseInt(persisted) - after) < 12, `new height persisted (${persisted})`);
 
 	// undock into a floating window

@@ -177,6 +177,9 @@ h.run(async () => {
 	// the feed is served through a route: the real index shape with the waves row, and the
 	// scene bytes this run resolved — so the card exists in the modal before the row is
 	// released, and the SAME path a user takes (pickEntry -> loadRemoteScene) is what loads it
+	const sceneModules = JSON.parse(
+		require('fflate').strFromU8(require('fflate').unzipSync(new Uint8Array(scene.bytes), { filter: (f) => f.name === 'session.json' })['session.json'])
+	).modules;
 	await A.page.route('**/cdn.jsdelivr.net/**', (route) => {
 		const url = route.request().url();
 		if (!url.includes('/theprototype-app/scenes@')) return route.continue();
@@ -194,10 +197,11 @@ h.run(async () => {
 							author: 'theprototype',
 							license: 'CC0-1.0',
 							tags: ['vr', 'co-op', 'survival'],
-							modules: [
-								{ id: 'health', version: '1.0.0' },
-								{ id: 'waves', version: '2.2.0' } // 31-waves: the union ships 2.2.0
-							],
+							// the row's requirement list is the SCENE FILE's own (`session.json` modules —
+							// what the gallery index publishes), not a pinned literal: the literal said
+							// waves 2.2.0 while the file and the installed zip moved to 2.3.0, so the
+							// card rightly showed the C5 version-skew badge instead of the needs line
+							modules: sceneModules,
 							bytes: scene.bytes.length,
 							scene: 'games/waves/scene.tpscene',
 							thumb: 'games/waves/thumb.webp'
@@ -224,6 +228,7 @@ h.run(async () => {
 	await h.eventually(() => card.count(), (n) => n === 1, '1.1 the Games tab lists the Waves card', 15000);
 	const needs = (await A.page.locator('#templates-modal .tpl-needs[data-needs="waves"]').textContent().catch(() => '')) ?? '';
 	h.check(/health/i.test(needs) && /waves/i.test(needs), '1.2 the card names both modules it needs (' + needs.trim() + ')');
+	h.check(!/you have/i.test(needs), '1.2b ...as a plain needs line: the file and the installed modules agree, so no version-skew badge (' + JSON.stringify(sceneModules) + ')');
 	await card.click();
 	await h.eventually(() => namesOf(A.page).then((n) => Object.keys(n)), (n) => n.length === OBJECTS.length && !n.includes('Box'), '1.3 picking the card loads the scene: the box is gone, ' + OBJECTS.length + ' objects stand', 30000);
 	await A.page.waitForTimeout(1500);

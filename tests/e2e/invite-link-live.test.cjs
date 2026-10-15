@@ -13,6 +13,9 @@ const h = require('./helpers.cjs');
 const openPeers = (peer) => peer.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return [...(p?.openedPeers ?? [])]; });
 const pendingOut = (peer) => peer.page.evaluate(() => { let w; window.__stores.waitingForApproval.subscribe((x) => (w = x))(); return w.filter((e) => e[1] === 'pending').map((e) => e[0]); });
 const lastToasts = (peer) => peer.page.evaluate(() => { let n; window.__stores.notifications.subscribe((x) => (n = x))(); return n.slice(-4).map((x) => x.text); });
+// 41 G16: the two QUESTIONS (leave this session? / join on another server?) are confirmDialog
+// modals now, not toasts — so they are read from the dialog record, never from the toast log
+const question = (peer) => peer.page.evaluate(() => { let d; window.__stores.confirmDialog.confirmDialog.subscribe((x) => (d = x))(); return d ? (d.title ?? '') + ' | ' + (d.message ?? '') : ''; });
 const navCount = (peer) => peer.page.evaluate(() => performance.getEntriesByType('navigation').length);
 const serverKind = (peer) => peer.page.evaluate(() => { let s; window.__stores.peerServer.peerServerStatus.subscribe((x) => (s = x))(); return s?.kind ?? null; });
 // the toast STACK hides while the Connect drawer is open (toasts route into its Toasts
@@ -48,7 +51,7 @@ h.run(async () => {
 	const browser = await h.launch();
 	const A = await h.setupPage(browser, 'A');
 	const B = await h.setupPage(browser, 'B');
-	const C = await h.setupPage(browser, 'C');
+	const C = await h.setupPageQuiet(browser, 'C', [A, B]);
 	const urlBefore = B.page.url();
 
 	// ---- 1. paste A's id into B's open tab: B dials, A approves, no navigation -----
@@ -74,8 +77,7 @@ h.run(async () => {
 	// ---- 3. in a session, pasting C's id asks; Stay keeps the session ----------------
 	await paste(B, '#' + C.id);
 	await B.page.waitForTimeout(400);
-	toasts = await lastToasts(B);
-	h.check(toasts.some((t) => /Leave it and join/.test(t)), `a third id while connected asks to leave first (${JSON.stringify(toasts.at(-1))})`);
+	await h.eventually(() => question(B), (q) => /Leave it and join/.test(q), 'a third id while connected asks to leave first', 10000);
 	await clickToast(B, 'Stay');
 	await B.page.waitForTimeout(600);
 	h.check((await openPeers(B)).includes(A.id) && (await pendingOut(B)).length === 0, 'Stay leaves the session with A intact and dials nobody');
@@ -99,15 +101,18 @@ h.run(async () => {
 	h.check(edge.badSrv === 'none', `an unreadable ~srv is refused without a dial (${edge.badSrv})`);
 
 	// ---- 6. D2: a link pinning ANOTHER server switches at runtime, then dials ---------
+	// A, B and C are done with (section 7 needs A's id STRING only — it dials an unreachable server):
+	// close them, so D and E boot on a browser that is not already rendering three software-GL
+	// pages. A fourth page there took more than 90 s to boot (43-tests e2e/r2-invite-link-live.1.log).
+	for (const peer of [A, B, C]) await h.closePeer(peer);
 	// D on a CUSTOM config (the self-hosted box spelled out), E on the public cloud
 	const custom = { mode: 'custom', custom: { host: 'peerjs.theprototype.app', port: 443, path: '/peerjs', secure: true } };
 	const D = await h.setupPage(browser, 'D', { storage: { peerServerConfig: JSON.stringify(custom) } });
-	const E = await h.setupPage(browser, 'E', { storage: { peerServerConfig: JSON.stringify({ mode: 'public' }) } });
+	const E = await h.setupPageQuiet(browser, 'E', [D], { storage: { peerServerConfig: JSON.stringify({ mode: 'public' }) } });
 	h.check((await serverKind(D)) === 'custom' && (await serverKind(E)) === 'public', `premise: D on a custom server, E on the public cloud (${await serverKind(D)}, ${await serverKind(E)})`);
 	await paste(D, '#' + E.id + '~srv=public');
 	await D.page.waitForTimeout(400);
-	toasts = await lastToasts(D);
-	h.check(toasts.some((t) => /^Join .* on the public PeerJS cloud\?/.test(t)), `a link pinning another server asks, naming it (${JSON.stringify(toasts.at(-1))})`);
+	await h.eventually(() => question(D), (q) => /\| Join .* on the public PeerJS cloud\?/.test(q), 'a link pinning another server asks, naming it', 10000);
 	await clickToast(D, 'Join');
 	await h.eventually(() => serverKind(D), (k) => k === 'public', 'D switched to the public cloud without a reload', 20000);
 	await h.eventually(() => pendingOut(D), (p) => p.includes(E.id), 'D dials E on the new server', 15000);
@@ -126,7 +131,20 @@ h.run(async () => {
 	await h.eventually(() => lastToasts(D), (t) => t.some((x) => /Could not reach nonexistent\.invalid:4443/.test(x)), 'an unreachable pinned server is reported by name', 30000);
 	await h.eventually(() => serverKind(D), (k) => k === 'public', 'D is back on the server it had (public)', 20000);
 	h.check((await pendingOut(D)).length === 0, 'and nothing was dialled');
-	await h.eventually(() => D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return !!p.peer?.open; }), (o) => o, 'the rebuilt link on the previous server opened', 20000);
+	// the state is read whole so a red says where it stopped (45 s: well past the 8 s switch
+	// timeout plus one capped backoff)
+	await h.eventually(
+		() => D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return { open: !!p.peer?.open, id: p.peer?.id ?? null, disconnected: !!p.peer?.disconnected, destroyed: !!p.peer?.destroyed, idRetries: p.idRetries ?? null }; }),
+		(o) => o.open,
+		'the rebuilt link on the previous server opened',
+		45000
+	);
+	// RED BY AN APP BUG, not by the test (43-tests STATUS "Real bugs" #2, ~half the runs on either server):
+	// the rebuild collides with this peer's own still-held registration ("ID … is taken"), the
+	// collision retry mints a new id, and the link then never opens and never errors. The net log
+	// printed here is the evidence.
+	if (!(await D.page.evaluate(() => { let p; window.__stores.peers.subscribe((x) => (p = x))(); return !!p.peer?.open; })))
+		console.log('  net log: ' + JSON.stringify(await D.page.evaluate(() => window.__stores.diagnostics.lines().filter((l) => /net|peer|signal/i.test(JSON.stringify(l))).slice(-15))));
 
 	// ---- 8. D2: Settings ▸ Connection "Apply" switches without a reload -------------
 	await D.page.evaluate((cfg) => {

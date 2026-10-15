@@ -249,8 +249,16 @@ h.run(async () => {
 			? `on a phone the profile menu is a bottom sheet (${JSON.stringify(sheet)})`
 			: `on a narrow screen the panel seats on the circle and stays off the window edge (${JSON.stringify(anchor)})`
 	);
-	await A.page.locator(CIRCLE).first().click({ force: true });
+	// close it the way this posture offers: 41b H11 dropped the notch circle from the PHONE sheet
+	// (the avatar is already on screen top right, and the sheet sits nowhere near it), so on the
+	// phone shell the trigger itself closes it — waiting 30 s for a circle that is deliberately
+	// not drawn there is what made this suite die here
+	await A.page.locator(phoneShell ? '#avatar-trigger' : CIRCLE).first().click({ force: true });
 	await A.page.waitForTimeout(300);
+	h.check(
+		!(await A.page.evaluate(() => !!document.querySelector('#avatar-dropdown'))),
+		`and it closes again (${phoneShell ? 'the phone sheet, from its trigger' : 'from the seated circle'})`
+	);
 	await A.page.setViewportSize({ width: 1280, height: 800 });
 
 	// The panel's horizontal edge is PINNED in CSS instead of being left to floating-ui:

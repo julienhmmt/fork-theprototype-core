@@ -124,15 +124,21 @@ h.run(async () => {
 		const tri = items.find((i) => i.name === 'tri.obj');
 		const dt = new DataTransfer();
 		dt.setData('application/x-explorer-item', JSON.stringify({ id: tri.id, kind: 'object', name: tri.name }));
+		// the element really UNDER the drop point (the viewport canvas). `querySelector('canvas')`
+		// stopped meaning the viewport when the hidden #dungeon-minimap canvas joined the App root
+		// ahead of it — and nobody can drop onto a hidden element
 		document
-			.querySelector('canvas')
-			.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, clientX: 300, clientY: 300 }));
+			.elementFromPoint(300, 300)
+			.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true, clientX: 300, clientY: 300 }));
 	});
-	await A.page.waitForTimeout(2000);
-	aObjects = await objectsOn(A.page);
-	h.check(
-		aObjects.filter((o) => o.name === 'tri').length === 2,
-		'DOM drop on the viewport routes through the Explorer handler'
+	// the drop IMPORTS the model asynchronously (importFile parses the bytes; nothing awaits it),
+	// so wait for the second piece rather than 2 s — on a loaded box it landed after ~3 s
+	// (43-tests logs/r2-p-probe2c.log). A drop that never routes still never places one.
+	await h.eventually(
+		() => objectsOn(A.page).then((list) => list.filter((o) => o.name === 'tri').length),
+		(n) => n === 2,
+		'DOM drop on the viewport routes through the Explorer handler',
+		15000
 	);
 
 	await h.finish(browser);
