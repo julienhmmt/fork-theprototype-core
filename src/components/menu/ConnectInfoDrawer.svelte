@@ -25,6 +25,9 @@
 	import { cancelOutboundRequest } from '$lib/peerApproval';
 	import { drawerSlot, rolesInfo } from '$lib/cloudHooks';
 	import CloudSlot from '../CloudSlot.svelte';
+	// 44 M14: the pill pinned to the top row or floating — this shell's answer ($lib/connectPin)
+	import { connectPinned, setConnectPinned } from '$lib/connectPin';
+	import { phoneShellActive } from '$lib/ui/phoneShell.js';
 
 	/** @type {{ onClose?: () => void }} */
 	const { onClose = () => {} } = $props();
@@ -190,6 +193,22 @@
 			<span class="cxd-slabel">{statusLabel}</span>
 			{#if $pendingApprovals.length}<span class="cxd-req-badge" title="Pending connection request(s)">{$pendingApprovals.length} new request{$pendingApprovals.length > 1 ? 's' : ''}</span>{/if}
 		</span>
+		{#if !$phoneShellActive}
+			<!-- 44 M14: "Pin to top row" / "Float" — the pill's own row along the top edge, or the centred pill
+			     (compact when the top row is crowded). Per shell: pinned by default on a touch screen, floating
+			     on desktop. -->
+			<button
+				id="connect-pin-toggle"
+				class="cxd-rowpin"
+				class:pinned={$connectPinned}
+				title={$connectPinned ? 'Pinned to the top row — click to float it (it goes compact when the row is full)' : 'Floating — click to pin it to the top row'}
+				aria-label="Pin to top row"
+				aria-pressed={$connectPinned}
+				onclick={() => setConnectPinned()}
+			>
+				<Icon name={$connectPinned ? 'lock' : 'lock-open'} size={16} aria-hidden="true" /><span>{$connectPinned ? 'Pinned' : 'Float'}</span>
+			</button>
+		{/if}
 		<button class="cxd-pin" class:pinned={$connectDrawerPinned} title={$connectDrawerPinned ? 'Unpin (hide tabs when closed)' : 'Pin — keep the tabs visible when closed'} aria-label="Pin drawer" aria-pressed={$connectDrawerPinned} onclick={togglePin}>
 			<Icon name="pin" size={16} aria-hidden="true" />
 		</button>
@@ -559,6 +578,31 @@
 		color: var(--text-muted);
 		cursor: pointer;
 		transform: rotate(30deg);
+	}
+	.cxd-rowpin {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		height: 28px;
+		padding: 0 8px;
+		border: 0;
+		border-radius: var(--radius-button);
+		background: transparent;
+		color: var(--text-muted);
+		font: 500 var(--fs-badge) var(--font-ui);
+		cursor: pointer;
+	}
+	.cxd-rowpin:hover {
+		color: var(--text);
+		background: var(--surface-hover);
+	}
+	.cxd-rowpin.pinned {
+		color: var(--accent-text);
+	}
+	.cxd-rowpin:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: -2px;
 	}
 	.cxd-pin:hover {
 		color: var(--text);

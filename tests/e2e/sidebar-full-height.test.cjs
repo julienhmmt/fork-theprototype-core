@@ -162,7 +162,10 @@ h.run(async () => {
 	const notes2 = await rect(page, '#notes-toggle');
 	const pill = await rect(page, '.connect-wrap');
 	const ins2 = await rect(page, '#inspector');
-	h.check(docked === true && sR2.y >= barH - 1, `1024: the Connect bar docks to its full-width strip and the pinned sidebars start under it (bar ${barH}, sidebar ${sR2.y})`);
+	// 44 M14 (decision): a FLOATING pill with no room goes COMPACT instead of docking to its own row; pinned to the
+	// top row it docks as before and the pinned sidebars start under it
+	const cdock = await page.evaluate(() => window.__connectDock);
+	h.check((docked === true && sR2.y >= barH - 1) || (cdock?.squeezed === true && !docked && sR2.y === 0), `1024: the Connect bar goes compact (floating) or docks to its strip with the pinned sidebars under it (bar ${barH}, sidebar ${sR2.y}, squeezed ${cdock?.squeezed})`);
 	h.check(!overlap(notes2, pill) && notes2.right <= ins2.x, `1024: the moved corner buttons do not collide with the Connect bar (${JSON.stringify(notes2)})`);
 	h.check(ins2.bottom === 768, `1024: still bottom edge (${ins2.bottom})`);
 
