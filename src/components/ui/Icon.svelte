@@ -1,3 +1,53 @@
+<script module>
+	import { mount, unmount } from 'svelte';
+
+	// 44 L3 — AN ICON IS A STAMP. A lucide icon is three components deep (this one's dynamic
+	// `<Cmp>`, the per-icon wrapper, lucide's own Icon with its spreads, derived attributes and an
+	// {#each} of <svelte:element>), and an object-list row mounts four. Loading the castle on a
+	// CPU x6 phone, those mounts were ~29 % of the CPU inside the long tasks — the largest share of
+	// the scene-load drift from ~140 to ~250 ms since 1.25. Every instance with the same props
+	// renders the same markup, so after hydration an icon is rendered by lucide ONCE per
+	// (name, size, stroke, attributes) and every later instance stamps that markup: one parse, no
+	// component. Exact by construction (the stamp IS lucide's output). Instances hydrated from the
+	// prerendered page, and any instance given a non-primitive prop (a handler, a snippet), keep
+	// the component path.
+	/** @type {Map<string, string>} */
+	const stamps = new Map();
+	let hydrated = false;
+	export function markHydrated() {
+		hydrated = true;
+	}
+	/** @param {Record<string, any>} rest @returns {string | null} a cache key, null = not stampable */
+	function restKey(rest) {
+		const parts = [];
+		for (const k of Object.keys(rest).sort()) {
+			const v = rest[k];
+			if (v !== null && v !== undefined && typeof v === 'object') return null;
+			if (typeof v === 'function' || typeof v === 'symbol') return null;
+			parts.push(k + '=' + String(v));
+		}
+		return parts.join('\u0001');
+	}
+	/** @param {any} Cmp @param {string} name @param {number} px @param {number} strokeWidth @param {Record<string, any>} rest
+	 * @returns {string | null} */
+	export function stampOf(Cmp, name, px, strokeWidth, rest) {
+		if (!hydrated || typeof document === 'undefined') return null;
+		const rk = restKey(rest);
+		if (rk === null) return null;
+		const key = name + '|' + px + '|' + strokeWidth + '|' + rk;
+		let html = stamps.get(key);
+		if (html === undefined) {
+			const host = document.createElement('div');
+			const inst = mount(Cmp, { target: host, props: { size: px, strokeWidth, 'aria-hidden': 'true', ...rest } });
+			html = host.innerHTML;
+			unmount(inst);
+			if (stamps.size > 600) stamps.clear();
+			stamps.set(key, html);
+		}
+		return html;
+	}
+</script>
+
 <script>
 	// 38 R10 — THE icon component (SPEC §7). Every icon under src/components goes through
 	// here: static markup (`<Icon name="play" />`) and data-driven names alike (Explorer kind
@@ -448,10 +498,19 @@
 	$effect(() => {
 		if (import.meta.env.DEV && !tool && !(name in MAP)) console.warn(`Icon: no icon named "${name}" in ui/Icon.svelte's map`);
 	});
+	// 44 L3: decided once, at creation — an instance hydrated from the prerendered page stays a
+	// component (its markup is already there); effects run after hydration, so the first one
+	// opens the stamp path for every icon created from then on
+	// svelte-ignore state_referenced_locally
+	const stampable = !tool && typeof document !== 'undefined';
+	$effect(() => markHydrated());
+	const stamp = $derived(stampable ? stampOf(Cmp, String(name), px, strokeWidth, rest) : null);
 </script>
 
 {#if tool}
 	<ToolIcon name={tool} size={px} {strokeWidth} class={rest.class} />
+{:else if stamp}
+	{@html stamp}
 {:else}
 	<Cmp size={px} {strokeWidth} aria-hidden="true" {...rest} />
 {/if}

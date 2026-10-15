@@ -635,14 +635,16 @@ function sample() {
 	sceneMetrics.set(metrics);
 }
 
-/** @type {Set<(ms: number) => void>} */
+/** @type {Set<(ms: number, at: number) => void>} */
 const frameObservers = new Set();
 
 /**
  * Hear every frame's duration. 26-G's freeze detector is the reader; it registers rather
  * than being imported so this module keeps knowing nothing about pausing. An observer
  * that throws is isolated — one bad observer must not end the sampler for everyone.
- * @param {(ms: number) => void} fn @returns {() => void} unregister
+ * `at` is the frame's own timestamp (the rAF one `ms` was measured from), so a frame spans
+ * exactly (at - ms, at] and the next one starts where it ended (44 L1).
+ * @param {(ms: number, at: number) => void} fn @returns {() => void} unregister
  */
 export function registerFrameObserver(fn) {
 	frameObservers.add(fn);
@@ -688,7 +690,7 @@ function loop(ts) {
 		noteFrame(ms);
 		for (const fn of frameObservers) {
 			try {
-				fn(ms);
+				fn(ms, at);
 			} catch {
 				/* isolated — see registerFrameObserver */
 			}
