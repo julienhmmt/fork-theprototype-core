@@ -542,7 +542,11 @@ h.run(async () => {
 			await sidebar(P, { side: 'right', full: false, w: 400 });
 			await enterEdit(P, 'Move (1)');
 			const bar = await rect(P, '#controls-pill');
-			h.check(bar.right <= 1440 - 400 + 1 && bar.right >= 1440 - 400 - 40, T + `J8: a bar parked right slides just clear of the sidebar (right edge ${Math.round(bar.right)}, sidebar at ${1440 - 400})`);
+			// 44 M13: in Edit positions the right corner stack sits beside the sidebar too, so on the bar's row the
+			// stack is the nearer wall (when it is there): just clear of whichever comes first
+			const stack = await rect(P, '#hud-stack-right');
+			const wall = stack && stack.width && stack.bottom > bar.bottom - 44 && stack.left < 1440 - 400 ? Math.min(1440 - 400, stack.left) : 1440 - 400;
+			h.check(bar.right <= wall + 1 && bar.right >= wall - 40, T + `J8: a bar parked right slides just clear of the sidebar (right edge ${Math.round(bar.right)}, sidebar at ${1440 - 400}, wall ${Math.round(wall)})`);
 			await P.keyboard.press('Escape');
 			await P.waitForTimeout(300);
 			}

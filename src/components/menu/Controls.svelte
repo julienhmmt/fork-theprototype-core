@@ -28,7 +28,7 @@
 	import { onMount, setContext, tick } from 'svelte';
 	import { createGesture } from '$lib/modalGrab';
 	// 44 M12b: free but anchored placement of the clusters + rotation
-	import { boxAt, fractionsOf, snapBox, nudgeFree, clampBox } from '$lib/clusterPlace';
+	import { boxAt, fractionsOf, snapBox, nudgeFree, clampBox, overlaps } from '$lib/clusterPlace';
 	import type { Box, Guide } from '$lib/clusterPlace';
 	import { connectPinned, setConnectPinned } from '$lib/connectPin';
 	import { connectDocked, connectBarHeight } from '../../stores/appStore.js';
@@ -1859,13 +1859,18 @@
 				const at = { x: e.clientX, y: e.clientY };
 				const g = editGesture;
 				holdTimer = window.setTimeout(() => {
-					if (editGesture !== g || g.dragging) return;
-					const cid = clusterAt(node);
-					editGestureEnd();
-					if (cid) {
-						longPressAt = performance.now();
-						openClusterMenu(cid, at.x, at.y);
-					}
+					// decided on the NEXT frame: Chrome delivers a finger's pointermoves aligned to frames, so a busy
+					// frame (the edit loop measures every one) can hold back the moves that make this press a drag —
+					// the timer then won the race and the cluster menu ate the drag (toolbar-slots-42 I9, 3 in 7)
+					requestAnimationFrame(() => {
+						if (editGesture !== g || g.dragging) return;
+						const cid = clusterAt(node);
+						editGestureEnd();
+						if (cid) {
+							longPressAt = performance.now();
+							openClusterMenu(cid, at.x, at.y);
+						}
+					});
 				}, LONG_PRESS_MS);
 			}
 			window.addEventListener('pointermove', editGestureMove, { passive: false });
@@ -2369,20 +2374,45 @@
 		};
 	}
 	/** where each cluster's grip is drawn: centred above it (below it when it is at the top of the screen, beside a
-	 *  vertical one) */
-	function gripStyle(id: string, r: Box) {
-		const vertical = id !== 'connect' && isVertical(id);
-		let x: number;
-		let y: number;
-		if (vertical) {
-			const leftHalf = (r.left + r.right) / 2 < window.innerWidth / 2;
-			x = leftHalf ? r.right + 16 : r.left - 16;
-			y = (r.top + r.bottom) / 2;
-		} else {
-			x = (r.left + r.right) / 2;
-			y = r.top >= 34 ? r.top - 14 : r.bottom + 14;
+	 *  vertical one) — or, when that spot is taken (the bar's round ✓, a cluster, an earlier grip, the screen edge), the next of a
+	 *  few spots around the cluster: a grip on the ✓ ate the tap that applies the edit (unfolded, a full right corner) */
+	const gripPlaces = $derived.by(() => {
+		const out: Record<string, { x: number; y: number }> = {};
+		if (typeof window === 'undefined') return out;
+		// hud.css's .cl-grip sizes (a finger's grip is larger)
+		const coarse = !!window.matchMedia?.('(pointer: coarse)').matches;
+		const GRIP_W = coarse ? 40 : 28;
+		const GRIP_H = coarse ? 26 : 18;
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+		// the ✓, the edit hint and every cluster's buttons are taken (a finger there would take the grip)
+		const fixed = ['toolbar-edit-apply', 'toolbar-edit-hint'].map((id) => shown(document.getElementById(id))).filter((b): b is Box => !!b);
+		const taken: Box[] = [...fixed, ...Object.values(clusterRects)];
+		const at = (x: number, y: number): Box => ({ left: x - GRIP_W / 2, top: y - GRIP_H / 2, right: x + GRIP_W / 2, bottom: y + GRIP_H / 2 });
+		const fits = (b: Box) => b.left >= 2 && b.top >= 2 && b.right <= vw - 2 && b.bottom <= vh - 2 && !taken.some((t) => overlaps(b, t, 4));
+		for (const [id, r] of Object.entries(clusterRects)) {
+			const vertical = id !== 'connect' && isVertical(id);
+			const cx = (r.left + r.right) / 2;
+			const cy = (r.top + r.bottom) / 2;
+			const above = r.top - GRIP_H / 2 - 5;
+			const below = r.bottom + GRIP_H / 2 + 5;
+			const before = r.left - GRIP_W / 2 - 4;
+			const after = r.right + GRIP_W / 2 + 4;
+			const near = r.left + GRIP_W / 2;
+			const far = r.right - GRIP_W / 2;
+			const leftHalf = cx < vw / 2;
+			const tries: [number, number][] = vertical
+				? [[leftHalf ? after : before, cy], [leftHalf ? before : after, cy], [cx, above], [cx, below]]
+				: [[cx, r.top >= 34 ? above : below], [cx, r.top >= 34 ? below : above], [leftHalf ? near : far, above], [leftHalf ? far : near, above], [before, cy], [after, cy]];
+			const pick = tries.find(([x, y]) => fits(at(x, y))) ?? tries[0];
+			out[id] = { x: pick[0], y: pick[1] };
+			taken.push(at(pick[0], pick[1]));
 		}
-		return `left: ${Math.round(x)}px; top: ${Math.round(y)}px`;
+		return out;
+	});
+	function gripStyle(id: string) {
+		const g = gripPlaces[id];
+		return g ? `left: ${Math.round(g.x)}px; top: ${Math.round(g.y)}px` : 'display: none';
 	}
 	/** the clusters' rects while editing (read every frame by the edit loop, with the Connect outline) */
 	function measureClusters() {
@@ -3757,14 +3787,14 @@
 	<!-- 44 M12b: each cluster's GRIP — drag it to move the whole cluster (it snaps; guide lines show to what), tap or
 	     right-click it for the cluster's menu (Move, Rotate, Reset position, Reset all, Hide / Show all) -->
 	<div id="cluster-grips" class="tp-ui">
-		{#each Object.entries(clusterRects) as [id, r] (id)}
+		{#each Object.keys(clusterRects) as id (id)}
 			<button
 				type="button"
 				class="cl-grip"
 				id="cluster-grip-{id}"
 				data-cluster-grip={id}
 				class:cl-grip-hidden={id !== 'connect' && !!liveClusters[id]?.hidden}
-				style={gripStyle(id, r)}
+				style={gripStyle(id)}
 				title="{CLUSTER_LABEL[id]} — drag to move, tap for more"
 				aria-label="{CLUSTER_LABEL[id]}: drag to move, press for its menu"
 				use:clusterGrip={id}><Icon name="grip-vertical" size={16} aria-hidden="true" /></button
