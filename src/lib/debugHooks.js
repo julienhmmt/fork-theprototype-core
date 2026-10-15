@@ -379,6 +379,8 @@ export const DEBUG_HOOKS = [
 	['placeholders', () => import('./placeholders')],
 	['replaceModel', () => import('./replaceModel')],
 	['lod', () => import('./lod')],
+	['gltfOptimize', () => import('./gltfOptimize.js')],
+	['gltfLoader', () => import('./gltfLoader.js')],
 	['lodGroup', () => import('./lodGroup')],
 	['lodGroupCore', () => import('./lodGroupCore')],
 	// 40 F14: the substitutes a fallback group draws
