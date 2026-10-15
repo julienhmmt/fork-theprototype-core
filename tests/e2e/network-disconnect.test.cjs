@@ -44,16 +44,19 @@ h.run(async () => {
 	h.check(seeded.hand && seeded.cursor && seeded.lock, 'seeded B hands/cursor/lock on A');
 
 	// Make B REALLY gone, without a goodbye: neuter its announcement broadcast
-	// (leaveSession/pagehide would mark the close graceful) and destroy its peer,
+	// (leaveSession/pagehide would mark the close graceful) and CLOSE B's page,
 	// then close A's conn deterministically (a hard remote destroy relies on an
 	// unbounded ICE timeout that won't fire promptly in headless). A's reconnect
 	// window redials a dead registration, exhausts, and THEN tears down.
+	// 44 L2: it used to `pc.peer.destroy()` on B's LIVE page — but a closed peer is rebuilt on
+	// the same id (27-F), so B came back and A's redial healed the session, which is right. It
+	// only read as "gone" while stale signaling timers usually killed B's rebuild (the L2 bug).
 	await B.page.evaluate(() => {
 		let pc;
 		window.__stores.peers.subscribe((p) => (pc = p))();
 		pc.broadcast = () => {};
-		pc.peer.destroy();
 	});
+	await B.ctx.close();
 	await A.page.evaluate((bid) => {
 		let pc;
 		window.__stores.peers.subscribe((p) => (pc = p))();
