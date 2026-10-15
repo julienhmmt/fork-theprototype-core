@@ -105,6 +105,33 @@ jobs:
       - name: scene-lint
         run: node scripts/scene-lint.cjs static/templates .perf-deps/scenes --packs .perf-deps/packs
 
+  # 45 D3: what the repo depends on, and whether any of it is known-bad. syft writes an SPDX
+  # SBOM of both lockfiles (root + tools/agent, dev dependencies included — .syft.yaml says
+  # why) and grype FAILS the job on any critical or high finding. Accepted findings go in
+  # .grype.yaml, one rule per advisory with a reason; RELEASING.md has the ritual. No npm ci:
+  # the lockfiles are the whole input, so this runs in seconds.
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: SBOM (syft, SPDX JSON)
+        uses: anchore/sbom-action@v0.24.3
+        with:
+          path: .
+          config: .syft.yaml
+          format: spdx-json
+          output-file: sbom.spdx.json
+          artifact-name: sbom.spdx.json
+      - name: vulnerability gate (grype, fails on critical/high)
+        uses: anchore/scan-action@v7.4.2
+        with:
+          sbom: sbom.spdx.json
+          config: .grype.yaml
+          severity-cutoff: high
+          fail-build: true
+          output-format: table
+          only-fixed: false
+
   unit:
     runs-on: ubuntu-latest
     steps:
