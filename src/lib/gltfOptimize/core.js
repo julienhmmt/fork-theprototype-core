@@ -36,7 +36,7 @@ import { isGlb, unpackGlb, packGlb, addKtx2Fallback, embedMsftLod, asBytes } fro
 import { defaultScreenSizes } from '../lodGroupCore.js';
 
 /**
- * @typedef {{data: Uint8Array, width: number, height: number}} Rgba
+ * @typedef {{data: Uint8Array, width: number, height: number, sourceWidth?: number, sourceHeight?: number}} Rgba
  * @typedef {{
  *   MeshoptEncoder: any, MeshoptSimplifier: any, MeshoptDecoder: any,
  *   decodeImage: (bytes: Uint8Array, mime: string, maxSize: number) => Promise<Rgba>,
@@ -401,4 +401,61 @@ export async function optimizeGltfBytes(input, opts, env) {
 	report.ms = Math.round(now() - started);
 	env.onProgress?.({ step: 'done' });
 	return { bytes: out, report };
+}
+
+/**
+ * @typedef {{id: string, bytes: Uint8Array, mime: string, normal?: boolean, srgb?: boolean}} ImageJob
+ * @typedef {{id: string, sourceWidth: number, sourceHeight: number, width: number, height: number,
+ *   plain: Uint8Array | null, plainMime: string, ktx2: Uint8Array | null, alpha: boolean,
+ *   gpuBefore: number, gpuAfter: number, skipped?: string}} ImageResult
+ */
+
+/**
+ * Loose IMAGES through the same texture policy the glTF path uses — for a .tpscene, whose
+ * textures live as data URLs inside toJSON elements rather than in a glTF. Each image is resized
+ * to `maxTextureSize` (a new plain picture only when it changed) and, with `ktx2`, encoded to
+ * KTX2 (UASTC for a normal map, ETC1S otherwise).
+ * @param {ImageJob[]} list @param {{maxTextureSize: number, ktx2: boolean}} options @param {OptimizeEnv} env
+ * @returns {Promise<ImageResult[]>}
+ */
+export async function optimizeImages(list, options, env) {
+	/** @type {ImageResult[]} */
+	const out = [];
+	let done = 0;
+	for (const job of list) {
+		env.onProgress?.({ step: 'textures', done: done++, total: list.length });
+		/** @type {ImageResult} */
+		const row = { id: job.id, sourceWidth: 0, sourceHeight: 0, width: 0, height: 0, plain: null, plainMime: job.mime, ktx2: null, alpha: false, gpuBefore: 0, gpuAfter: 0 };
+		out.push(row);
+		/** @type {Rgba} */
+		let rgba;
+		try {
+			rgba = await env.decodeImage(job.bytes, job.mime, options.maxTextureSize);
+		} catch (error) {
+			row.skipped = 'could not decode: ' + String(/** @type {any} */ (error)?.message ?? error);
+			continue;
+		}
+		row.sourceWidth = rgba.sourceWidth ?? rgba.width;
+		row.sourceHeight = rgba.sourceHeight ?? rgba.height;
+		row.width = rgba.width;
+		row.height = rgba.height;
+		row.alpha = hasAlpha(rgba.data);
+		row.gpuBefore = gpuBytes(row.sourceWidth, row.sourceHeight, 'rgba8');
+		row.gpuAfter = gpuBytes(rgba.width, rgba.height, 'rgba8');
+		if (rgba.width !== row.sourceWidth || rgba.height !== row.sourceHeight) {
+			row.plain = await env.encodeImage(rgba, job.mime);
+			row.plainMime = sniffMime(row.plain) ?? job.mime;
+		}
+		if (options.ktx2 && rgba.width * rgba.height <= MAX_KTX2_TEXELS) {
+			const mode = job.normal ? 'uastc' : 'etc1s';
+			try {
+				row.ktx2 = await env.encodeKtx2(rgba, { mode, srgb: !!job.srgb, normal: !!job.normal });
+				row.gpuAfter = gpuBytes(rgba.width, rgba.height, mode === 'uastc' ? 'uastc' : row.alpha ? 'etc1sAlpha' : 'etc1sOpaque');
+			} catch (error) {
+				row.skipped = 'KTX2 encode failed: ' + String(/** @type {any} */ (error)?.message ?? error);
+			}
+		}
+	}
+	env.onProgress?.({ step: 'textures', done: list.length, total: list.length });
+	return out;
 }

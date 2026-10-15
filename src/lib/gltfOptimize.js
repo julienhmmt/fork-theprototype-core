@@ -74,6 +74,7 @@ function ensureWorker() {
 		}
 		pending.delete(data.id);
 		if (data.error) job.reject(data.unsupported ? new OptimizeUnsupported(data.error) : new Error(data.error));
+		else if (data.images) job.resolve(data.images.map((/** @type {any} */ r) => ({ ...r, plain: r.plain ? new Uint8Array(r.plain) : null, ktx2: r.ktx2 ? new Uint8Array(r.ktx2) : null })));
 		else job.resolve({ bytes: new Uint8Array(data.bytes), report: data.report });
 		if (!pending.size)
 			idle = setTimeout(() => {
@@ -109,6 +110,33 @@ export function optimizeGltf(bytes, options, hooks = {}) {
 			stats.jobs++;
 			try {
 				ensureWorker().postMessage({ id, bytes: copy, options: JSON.parse(JSON.stringify(options ?? {})) }, [copy]);
+			} catch (error) {
+				pending.delete(id);
+				reject(error);
+			}
+		});
+	const job = queue.then(run, run);
+	queue = job.catch(() => {});
+	return /** @type {Promise<any>} */ (job);
+}
+
+/**
+ * Loose images through the texture policy (resize to `maxTextureSize`, KTX2 when `ktx2`) — the
+ * .tpscene export's textures. Queued with the glTF jobs on the one Worker.
+ * @param {{id: string, bytes: Uint8Array, mime: string, normal?: boolean, srgb?: boolean}[]} images
+ * @param {{maxTextureSize: number, ktx2: boolean}} options
+ * @param {{onProgress?: (p: {step: string, done?: number, total?: number}) => void}} [hooks]
+ * @returns {Promise<import('./gltfOptimize/core.js').ImageResult[]>}
+ */
+export function optimizeImagesInWorker(images, options, hooks = {}) {
+	const list = images.map((j) => ({ ...j, bytes: j.bytes.slice().buffer }));
+	const run = () =>
+		new Promise((resolve, reject) => {
+			const id = nextId++;
+			pending.set(id, { resolve, reject, onProgress: hooks.onProgress });
+			stats.jobs++;
+			try {
+				ensureWorker().postMessage({ id, images: list, options: { ...options } }, list.map((j) => j.bytes));
 			} catch (error) {
 				pending.delete(id);
 				reject(error);

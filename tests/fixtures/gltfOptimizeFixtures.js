@@ -96,7 +96,7 @@ export function nodeEnv() {
 			if (maxSize && Math.max(meta.width, meta.height) > maxSize)
 				s = s.resize({ width: maxSize, height: maxSize, fit: 'inside', kernel: 'lanczos3' });
 			const { data, info } = await s.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-			return { data: new Uint8Array(data), width: info.width, height: info.height };
+			return { data: new Uint8Array(data), width: info.width, height: info.height, sourceWidth: meta.width, sourceHeight: meta.height };
 		},
 		async encodeImage(rgba, mime) {
 			const s = sharp(Buffer.from(rgba.data), { raw: { width: rgba.width, height: rgba.height, channels: 4 } });

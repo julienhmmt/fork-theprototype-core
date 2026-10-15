@@ -400,6 +400,21 @@ export async function parseGltfSceneSafe(bytes, resourcePath = '') {
 	return gltf;
 }
 
+/**
+ * A loaded .tpscene's KTX2 sidecars (sessions.applySession): each texture under `root` whose uuid
+ * the index names gets its twin. Resolves how many did.
+ * @param {any} root @param {Record<string, Uint8Array>} byTextureUuid
+ */
+export function attachTwinsByTextureUuid(root, byTextureUuid) {
+	if (!byTextureUuid) return 0;
+	let n = 0;
+	for (const { texture } of textureSlots(root)) {
+		const bytes = byTextureUuid[texture.uuid];
+		if (bytes && !twins.has(texture) && attachTwin(texture, bytes)) n++;
+	}
+	return n;
+}
+
 /** The compressed texture types three ships (a sanity hook for the suite). */
 export const isCompressed = (/** @type {any} */ t) => t instanceof CompressedTexture;
 

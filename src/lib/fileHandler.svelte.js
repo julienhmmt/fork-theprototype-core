@@ -30,6 +30,7 @@ import { hashBytes } from '$lib/explorer';
 import { saveFileBase } from '$lib/saveName';
 import { peers, fixLight, loadingFile, showToast, showInfoToast, dismissToastById } from '../stores/appStore';
 import { safeStorage } from './safeStorage';
+import { saveOptions } from './saveOptions';
 import { admitModel, verdictFor } from './importGate';
 import { reductionPlan } from './importBudget';
 import { reduceModel, plannedTriangles, retainOriginal, originalOf, textureCapFor } from './decimate';
@@ -90,7 +91,29 @@ async function saveTpScene() {
 	// 36-community (C4): a saved file carries the scene's permanent game id
 	(await import('./gameIdentity.js')).ensureGameId();
 	const payload = buildSessionPayload('Scene export');
-	const zip = await exportSessionZip(payload, tpsceneOptions());
+	// 46 P3: the export preset (Save options, the last choice on this device)
+	const preset = get(saveOptions).exportPreset;
+	const progressId = 'tpscene-optimize';
+	/** @type {any} */
+	const opts = { ...tpsceneOptions(), preset };
+	if (preset === 'quest') {
+		showInfoToast(progressId, 'Making the scene for Quest / web… you can keep working while it runs.', [], undefined, true);
+		opts.onProgress = (/** @type {any} */ p) => {
+			if (p.step === 'textures' && p.total) showInfoToast(progressId, 'Making the scene for Quest / web: textures ' + Math.min(p.total, (p.done ?? 0) + 1) + ' / ' + p.total + '…', [], undefined, true);
+		};
+	}
+	/** @type {any} */
+	let zip;
+	try {
+		zip = await exportSessionZip(payload, opts);
+	} finally {
+		dismissToastById(progressId);
+	}
+	if (opts.report) {
+		const { presetSummary } = await import('./exportPresetReport.js');
+		lastExportReport.set({ kind: 'tpscene', preset, report: opts.report, bytes: zip.byteLength });
+		showToast(presetSummary('tpscene', opts.report, zip.byteLength));
+	}
 	const blob = new Blob([zip], { type: 'application/zip' });
 	const a = document.createElement('a');
 	document.body.appendChild(a);
@@ -99,7 +122,7 @@ async function saveTpScene() {
 	a.href = url;
 	// 21-I5: the scene's NAME still names the file (the save-name template) — that is
 	// the one thing the removed option and this line had in common and it stays
-	a.download = `${saveFileBase(sceneName)}.tpscene`;
+	a.download = `${saveFileBase(sceneName)}${preset === 'quest' ? '-quest' : ''}.tpscene`;
 	a.click();
 	window.URL.revokeObjectURL(url);
 }
@@ -255,6 +278,54 @@ export function gltfBytesFor(roots, opts = {}) {
 	});
 }
 
+/** 46 P3: what the last preset export did (the suite and the docs measurement read it). LOCAL.
+ * @type {import('svelte/store').Writable<any>} */
+export const lastExportReport = writable(null);
+
+/**
+ * 46 P3 — the GLTF "For Quest / web" export: the same export ritual as bytes (gltfBytesFor: the
+ * origin bake, the clip bake, KTX2 twins carried), then the optimizer's quest preset in its Worker
+ * (KTX2/Basis textures at most 2048 px, quantized + EXT_meshopt_compression geometry, the LOD
+ * chain as MSFT_lod), downloaded as one .glb. Resolves the report, or null when nothing was made.
+ * @param {any[]} roots @param {string} [filename]
+ */
+export async function exportGltfQuest(roots, filename) {
+	const bytes = await gltfBytesFor(roots, { binary: true });
+	if (!bytes) {
+		showToast('Could not export the selection.');
+		return null;
+	}
+	const progressId = 'gltf-optimize';
+	showInfoToast(progressId, 'Making the GLB for Quest / web… you can keep working while it runs.', [], undefined, true);
+	try {
+		const { optimizeGltf, EXPORT_PRESETS } = await import('./gltfOptimize.js');
+		const { bytes: out, report } = await optimizeGltf(new Uint8Array(bytes), EXPORT_PRESETS.quest.options, {
+			onProgress: (p) => {
+				if (p.step === 'textures' && p.total) showInfoToast(progressId, 'Making the GLB for Quest / web: textures ' + Math.min(p.total, (p.done ?? 0) + 1) + ' / ' + p.total + '…', [], undefined, true);
+			}
+		});
+		const blob = new Blob([/** @type {any} */ (out)], { type: 'model/gltf-binary' });
+		const a = document.createElement('a');
+		document.body.appendChild(a);
+		a.style.display = 'none';
+		const url = window.URL.createObjectURL(blob);
+		a.href = url;
+		a.download = (filename || saveFileBase(sceneName)) + '-quest.glb';
+		a.click();
+		window.URL.revokeObjectURL(url);
+		const { presetSummary } = await import('./exportPresetReport.js');
+		lastExportReport.set({ kind: 'gltf', preset: 'quest', report, bytes: out.byteLength });
+		showToast(presetSummary('gltf', report, out.byteLength));
+		return report;
+	} catch (error) {
+		console.error('Quest/web export failed:', error);
+		showToast('Could not make the Quest / web file: ' + String(/** @type {any} */ (error)?.message ?? error));
+		return null;
+	} finally {
+		dismissToastById(progressId);
+	}
+}
+
 /**
  * 21-H2: export an arbitrary object TREE as GLTF — a prefab parsed by `prefabObject`,
  * which is never in the scene. The seam exists so the prefab path reuses this module's
@@ -289,8 +360,11 @@ export function save(format) {
 	// selection -> warn + offer the whole scene. JSON keeps its whole-scene behavior.
 	if (String(format).toLowerCase() === 'gltf') {
 		const roots = selectedRoots();
+		// 46 P3: "For Quest / web" writes a .glb through the optimizer instead
+		const quest = get(saveOptions).exportPreset === 'quest';
 		if (roots.length) {
-			exportGltf(format, roots);
+			if (quest) void exportGltfQuest(roots);
+			else exportGltf(format, roots);
 			showToast(roots.length === 1 ? 'Exported 1 selected object (GLTF)' : `Exported ${roots.length} selected objects (GLTF)`);
 		} else {
 			// 41 G16: a question that blocks the export is a modal, not a toast
@@ -298,7 +372,7 @@ export function save(format) {
 				title: 'Nothing selected',
 				message: 'GLTF exports the selection. Export the entire scene instead?',
 				choices: [{ value: 'all', label: 'Export all' }]
-			}).then((answer) => answer === 'all' && exportGltf(format, sceneObjects));
+			}).then((answer) => answer === 'all' && (quest ? void exportGltfQuest([sceneObjects]) : exportGltf(format, sceneObjects)));
 		}
 		return;
 	}

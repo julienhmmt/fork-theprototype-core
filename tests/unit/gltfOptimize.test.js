@@ -7,7 +7,8 @@
 // (the docs quote them) are the file's own.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { MeshoptSimplifier, MeshoptEncoder, MeshoptDecoder } from 'meshoptimizer';
-import { optimizeGltfBytes, sceneStats, sniffMime, UnsupportedGltfError } from '../../src/lib/gltfOptimize/core.js';
+import { optimizeGltfBytes, optimizeImages, sceneStats, sniffMime, UnsupportedGltfError } from '../../src/lib/gltfOptimize/core.js';
+import { presetSummary } from '../../src/lib/exportPresetReport.js';
 import {
 	unpackGlb,
 	packGlb,
@@ -282,5 +283,37 @@ describe('engine', () => {
 		expect(sniffMime(await gradientImage(4, 4))).toBe('image/png');
 		expect(sniffMime(await gradientImage(4, 4, { mime: 'image/jpeg' }))).toBe('image/jpeg');
 		expect(sniffMime(new Uint8Array(KTX2_MAGIC.concat([0, 0, 0, 0, 0, 0, 0, 0])))).toBe('image/ktx2');
+	});
+
+	it('loose images (the textures of a .tpscene): resized past the cap, a KTX2 twin each, UASTC for a normal map', async () => {
+		const big = await gradientImage(1024, 512);
+		const small = await gradientImage(128, 128, { seed: 9 });
+		const out = await optimizeImages(
+			[
+				{ id: 'a', bytes: big, mime: 'image/png', srgb: true },
+				{ id: 'n', bytes: small, mime: 'image/png', normal: true }
+			],
+			{ maxTextureSize: 256, ktx2: true },
+			nodeEnv()
+		);
+		const a = out.find((r) => r.id === 'a');
+		const n = out.find((r) => r.id === 'n');
+		expect([a.sourceWidth, a.sourceHeight, a.width, a.height]).toEqual([1024, 512, 256, 128]);
+		expect(sniffMime(a.plain)).toBe('image/png');
+		expect(isKtx2(a.ktx2)).toBe(true);
+		expect(a.gpuAfter).toBe(gpuBytes(256, 128, 'etc1sOpaque'));
+		// under the cap: no new picture, still a twin
+		expect(n.plain).toBe(null);
+		expect(isKtx2(n.ktx2)).toBe(true);
+		expect(n.gpuAfter).toBe(gpuBytes(128, 128, 'uastc'));
+	}, 60000);
+
+	it('words a preset export', () => {
+		expect(presetSummary('gltf', { bytesBefore: 10 * 1024 * 1024, gpuBytesBefore: 100, gpuBytesAfter: 10, lods: [{ ratio: 0.5 }, { ratio: 0.1 }] }, 2 * 1024 * 1024)).toBe(
+			'Exported for Quest / web: 10 MB → 2 MB (−80%), texture memory 100 B → 10 B, LOD chain 50% / 10%.'
+		);
+		expect(presetSummary('tpscene', { images: 2, resized: 1, gpuBefore: 0, lodStamped: 1 }, 1024)).toBe(
+			'Saved for Quest / web (1 KB): 2 textures (1 resized) with KTX2 twins, 1 object got an LOD chain.'
+		);
 	});
 });

@@ -181,7 +181,7 @@ export const SETTINGS_ROWS = [
 	["Export", "Quality", "The quality a player starts at."],
 	["Export", "Include VR button", "On a headset browser the start card offers Enter VR."],
 	["Export", "Use CDN for packs", "Smaller zip: kit pieces load from the packs CDN when the game starts, so it needs internet."],
-	["Export", "Compress textures", "Not in this release: textures go into the export exactly as authored."],
+	["Export", "Optimize for", "Full quality, or For Quest / web: KTX2-compressed textures at most 2048 px and an LOD chain."],
 	["Connection", "Session size", "How many people you expect in a session."],
 	["Connection", "Signaling server", "Where peers discover each other."],
 	["Connection", "Apply changes", "Switches the signaling server now and keeps your session id; an open session is left first."],
