@@ -273,10 +273,9 @@ export function dockTabItems(key) {
 			tooltip: `Take ${title} out of the dock`,
 			action: () => armDockMode(key, false)
 		});
-	// 43 J4: any dock tab can move into a sidebar column on a wider screen (the phone has none; a
-	// touch screen keeps windows out of the side columns — docking.js stands down on a coarse pointer)
-	const coarse = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
-	if (!get(phoneShell) && !coarse && canDockFloating(key) && sideMover)
+	// 43 J4: any dock tab can move into a sidebar column on a wider screen (the phone has none). 44 M2:
+	// a touch screen wider than a phone (the unfolded N6) too — docking.js no longer stands down there
+	if (!get(phoneShell) && canDockFloating(key) && sideMover)
 		for (const side of /** @type {const} */ (['left', 'right']))
 			items.push({
 				label: `Move to the ${side} sidebar`,
@@ -306,6 +305,10 @@ let sideMover = null;
 /** @param {((key: string, side: 'left'|'right') => boolean) | null} fn */
 export function registerSideMover(fn) {
 	sideMover = fn;
+}
+/** is the sidebar seam wired? (docking.js registers it at load) */
+export function canMoveToSidebar() {
+	return !!sideMover;
 }
 /** move a window into a sidebar column (false: it cannot live there) @param {string} key @param {'left'|'right'} side */
 export function moveToSidebar(key, side) {

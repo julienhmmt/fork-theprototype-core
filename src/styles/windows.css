@@ -445,6 +445,20 @@
 	pointer-events: none;
 }
 
+/* 44 M1 ($lib/windowBodyDrag.js) — while a window moves by its BODY the whole page says so, and no
+   text the pointer sweeps on the way is selected */
+:root.tp-body-dragging,
+:root.tp-body-dragging * {
+	cursor: grabbing !important;
+	user-select: none !important;
+}
+
+@media (min-width: 641px) {
+	[data-body-drag]:not([data-docked]):not([data-pd-host]) {
+		touch-action: none;
+	}
+}
+
 /* 41 G7 ($lib/bottomDockDrop.js) — a floating window dragged over the docked tab strip: the
    window goes see-through so the strip stays readable, the strip is outlined as the target,
    and a caret marks the slot the drop docks into */

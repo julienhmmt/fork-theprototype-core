@@ -12,6 +12,7 @@
 	import { keyOf } from '$lib/keyOf';
 	import { setLastScope } from '$lib/keyScope';
 	import { isHeaderDrag, startWindowDragGuard } from '$lib/windowGrip';
+	import { bodyDrag } from '$lib/windowBodyDrag';
 	import { systemGroupNames } from '$lib/moduleSDK';
 	import { ENV_ROOT } from '$lib/environment';
 	import { flyTo } from '$lib/objectActions';
@@ -51,7 +52,7 @@
 	import SimControls from './SimControls.svelte';
 	import { focusStack } from '$lib/windowFocus';
 	import { tabbable, groupRectOf, moveGroupOf, resizeGroup } from '$lib/windowTabs';
-	import { clampWinSize, clampResize, anchorOf } from '$lib/windowSize';
+	import { clampWinSize, clampResize, anchorOf, registerSizeReset } from '$lib/windowSize';
 	import { dockable } from '$lib/docking';
 	import { bottomDockable } from '$lib/bottomDockDrop';
 	import { visibleDockKey, dockOccupants, bottomInset, FLOW_FAMILY, armDockMode, DOCK_TITLES } from '$lib/bottomDock';
@@ -798,6 +799,11 @@
 
 		let startX = 0;
 		let startY = 0;
+		// 44 M1: where in the window the pointer grabbed it — the window is placed at pointer - grab,
+		// so it stays under the pointer (a body drag hands over past its slop; summed movement deltas
+		// left the window those px behind for the rest of the gesture)
+		let grabX = 0;
+		let grabY = 0;
 		let startWidth = 0;
 		let startHeight = 0;
 
@@ -833,6 +839,7 @@
 		// already in viewport coordinates, so nothing else changes.
 		node.style.position = 'fixed';
 		node.style.userSelect = 'none';
+		bodyDrag(node); // 44 M1: a press-and-drag anywhere that is not a control moves it too
 		clampRect();
 		window.addEventListener('resize', clampRect);
 		// reveal: when the window is shown again after being shoved partly off-screen,
@@ -871,6 +878,8 @@
 				// 42 I6: start from where the window IS — a tab tear-off or the dock (dockHost) may
 				// have placed it since the last drag
 				if (!grouped() && !node.dataset.docked) ({ left, top } = { left: node.offsetLeft, top: node.offsetTop });
+				grabX = e.clientX - left;
+				grabY = e.clientY - top;
 			}
 		});
 
@@ -880,8 +889,8 @@
 					// move the whole tab group so its strip follows (not just this window)
 					moveGroupOf('objects', e.movementX, e.movementY);
 				} else {
-					left += e.movementX;
-					top += e.movementY;
+					left = e.clientX - grabX;
+					top = e.clientY - grabY;
 					// allow the window to be shoved PARTLY off-screen (a grabbable strip
 					// always stays; the header row stays at/below the top so it's never
 					// lost — reopening snaps it fully back on, see the reveal observer)
@@ -934,13 +943,18 @@
 		// 18-B: double-click the grip — back to the default size, position kept.
 		// A direct listener, like every other gesture in this action: the panel
 		// chrome swallows delegated events.
-		node.addEventListener('dblclick', (e: any) => {
-			if (!e.target?.classList?.contains('resize-handle') || grouped()) return;
+		const resetSize = () => {
+			if (grouped()) return;
 			({ w: width, h: height } = clampWinSize(OBJ_WIN_DEFAULT.w, OBJ_WIN_DEFAULT.h, OBJ_WIN_MIN));
 			node.style.width = `${width}px`;
 			node.style.height = `${height}px`;
 			persist();
+		};
+		node.addEventListener('dblclick', (e: any) => {
+			if (!e.target?.classList?.contains('resize-handle')) return;
+			resetSize();
 		});
+		registerSizeReset(node, resetSize); // 44 M3: the header menu's "Reset size"
 
 		// 169: Settings "Reset window positions" recentres the object list too
 		registerWindowReset(() => {
