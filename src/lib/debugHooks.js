@@ -130,6 +130,7 @@ export const DEBUG_HOOKS = [
 	['keyScope', () => import('./keyScope')],
 	// 36 F3/F4: the window-chrome rules (isHeaderDrag, windowDragActive)
 	['windowGrip', () => import('./windowGrip')],
+	['windowBodyDrag', () => import('./windowBodyDrag')],
 	['nodeGroups', () => import('./nodeGroups')],
 	['nodeEditorActions', () => import('./nodeEditorActions')],
 	['themes', () => import('./themes')],

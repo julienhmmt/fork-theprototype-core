@@ -5,6 +5,7 @@
 import { clampWinSize, clampResize, bottomReserve } from './windowSize';
 import { safeStorage } from './safeStorage';
 import { isHeaderDrag, startWindowDragGuard } from './windowGrip';
+import { bodyDrag } from './windowBodyDrag';
 import { onLayoutRestore } from './uiLayoutsCore';
 
 // 169: live reset registry — every draggable window (this action + the object
@@ -404,6 +405,9 @@ export function dragWindow(node, { key, defaultRect = {}, resizable = false, axi
 	node.addEventListener('pointermove', move);
 	node.addEventListener('pointerup', up);
 	node.addEventListener('pointercancel', cancel);
+	// 44 M1: an ungrouped floating window also moves by a press-and-drag on its body (windowBodyDrag
+	// hands the gesture to the header above once it travels)
+	const body = bodyDrag(node, { enabled: () => !suspended() });
 
 	// --- B7: opt-in resize grabber (bottom-right), Flow's corner-resize feel ---
 	/** @type {any} */
@@ -518,6 +522,7 @@ export function dragWindow(node, { key, defaultRect = {}, resizable = false, axi
 			vv?.removeEventListener?.('resize', onWindowResize);
 			vv?.removeEventListener?.('scroll', onWindowResize);
 			grabber?.remove();
+			body.destroy();
 			node.removeEventListener('pointerdown', down);
 			node.removeEventListener('pointermove', move);
 			node.removeEventListener('pointerup', up);
