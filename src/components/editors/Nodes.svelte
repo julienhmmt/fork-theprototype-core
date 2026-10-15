@@ -646,6 +646,12 @@
 	// membership, and the middle/right button pans. xyflow 1.6: `panOnDrag` takes the
 	// button list, `selectionOnDrag` the rectangle, `multiSelectionKey` the modifier.
 	const selectFirst = $derived($flowMouseBindings === 'select');
+	// 44 L4: Delete and the Space pan belong to the keymap registry, so xyflow's own two must never fire.
+	// `null` said so, but xyflow 1.7's KeyHandler turns a null key into a trigger with NO key, and
+	// @svelte-put/shortcut warns about such a trigger on EVERY keydown and keyup — two lines per key event
+	// (180 of the 199 lines of the user's 1.34 diagnostics bundle). A key no KeyboardEvent ever carries is
+	// the same "never" without the warning (`event.key` is a named key, a character, or 'Unidentified').
+	const NO_KEY = 'tp-never';
 	// Select-first re-emits a STATIONARY right click as the pane menu: once the right
 	// button pans, xyflow's Pane preventDefaults EVERY contextmenu and forwards none
 	// (its system layer would re-emit a press that did not travel, but the svelte
@@ -2033,8 +2039,8 @@
 			selectionMode={SelectionMode.Partial}
 			multiSelectionKey={selectFirst ? 'Shift' : undefined}
 			defaultEdgeOptions={{ type: edgeStyle, markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 } }}
-			deleteKey={null}
-			panActivationKey={null}
+			deleteKey={NO_KEY}
+			panActivationKey={NO_KEY}
 			disableKeyboardA11y={true}
 			onmovestart={onMoveStart}
 			onmoveend={onMoveEnd}
