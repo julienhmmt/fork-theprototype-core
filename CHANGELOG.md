@@ -5,6 +5,55 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.34.0 — Your 1.33 review: copy and paste any value, a toolbar that fits, and a real full-screen focus 📋
+
+Everything from your review of the 1.33 preview.
+
+### 📋 Copy, paste and reset values
+
+- 📋 **Right-click any value** in Properties or Configure Scene (long-press on a touch screen) for **Copy**, **Paste**
+  and **Reset to default** — one number, a whole vector (Position / Rotation / Scale, or just X, Y or Z), a colour, a
+  choice, a switch, or a **whole section** from its header (also *Copy as JSON*).
+- ⌨️ **Ctrl+C / Ctrl+V over a field** copies and pastes without a menu. With several objects selected, a section can be
+  **pasted to all of them** at once. Every paste is one undo.
+- 📝 It is plain text: paste into a notepad or a code editor, change it, paste it back — `1, 2, 3`, `Vector3(1, 2, 3)`,
+  `#ff8800`, JSON and `name: value` lines all work. The wrong kind of value is refused with the reason.
+
+### 🖥️ Sidebars
+
+- 🗂️ **Sidebar tabs get an ×, a right-click menu** (long press on touch: Close, Close others, Undock, Move to the other
+  side, Move to the bottom dock) and **scroll** like the dock's tabs.
+- 🎯 **Drag a tab anywhere**: into the 3D view to float it, onto the dock to dock it, onto the other side — every drop is
+  highlighted first ("Float here", "Move to dock", "Add as tab"), never a silent drop.
+- 🪟 **Any window can live in a sidebar** — Node editor, Code, Explorer, Shader, Statistics … — with **no extra window
+  header**: the sidebar tab is its header.
+- 🔒 On the desktop the panel-header **lock sits beside Full height** in the sidebar's tab row.
+- ↔️ **Resizing a sidebar** moves the logo and profile button with the edge, without lag, and a narrow sidebar never
+  scrolls sideways on a touch screen.
+- 📱 On a phone, **Statistics is a dock tab** like Objects and Properties.
+
+### 🧰 The toolbar
+
+- ⏩ **Buttons that do not fit fold into a » menu** — from the right end, Play never — and come back by themselves as
+  room returns. Nothing is switched off.
+- 🖱️ **A right-click anywhere on the toolbar** — gaps included — opens its menu, never the browser's.
+- ➖ **The "…" button and the Connect bar can be hidden** like any other button; hidden buttons stay hidden (the
+  phone too).
+- 🧱 **The toolbar keeps clear of pinned sidebars**: Move toolbar stops at their edge, Edit positions lays its bar beside
+  any open sidebar, and *Lift corner buttons* moves the corner buttons beside a pinned sidebar.
+- ↩️ **With a mouse, Edit positions arranges the row beside the logo** too; Undo, Redo and Multi-select can go onto the
+  bottom toolbar or into a corner. An emptied group left of your profile picture leaves no empty box.
+- 🔝 **The Connect bar takes its own row** only when the top row is full, and goes back to the middle when room returns.
+- 💡 The phone's **More tip** goes away once you have arranged the bar (*Settings ▸ Interface ▸ Reset tips* brings it back).
+
+### 🎯 Focus mode 2.0
+
+- ⛶ **A maximized docked window fills the whole window** (Ctrl+Space or Maximize in its tab menu) — the sidebars step
+  aside and come back exactly as they were.
+- 🖼️ **The 3D view stays with you as a picture-in-picture** in the corner: live, resizable, movable, closable — and
+  interactive: orbit, pan, zoom, click to select, W / E / R and the gizmo, F to frame, Delete.
+- 📷 **The camera preview is resizable** too.
+
 ## 1.33.0 — Your 1.32 review: sidebars your way, a phone bar you arrange, and focus mode 🎯
 
 Everything from your review of the 1.32 preview.

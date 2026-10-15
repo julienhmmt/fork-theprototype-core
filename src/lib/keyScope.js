@@ -20,6 +20,9 @@
 //             side panes, previews, chat… Only GLOBAL rows act; WASD never flies. A
 //             floating window gets it from dragWindow, a docked branch marks its root
 //   vr        an immersive session is running (registered by the VR side via a probe)
+//   pip       the viewport picture-in-picture of a maximized docked window (43 K5): a second 3D view,
+//             so it falls back to the VIEWPORT's rows (Delete, 1/2/3, G, Ctrl+D …) after its own
+//             (W/E/R arm the gizmo — there is no fly in a PiP — and F frames the PiP's camera)
 //   viewport  the 3D canvas and the overlays drawn on it
 //
 // A host marked `data-key-scope="keep"` (the toolbars, a viewport session's floating
@@ -32,7 +35,7 @@
 // its own scope a scoped row WINS over a global row with the same combo — Blender's rule
 // that a more specific keymap shadows the window keymap.
 
-/** @typedef {'global'|'viewport'|'objects'|'panel'|'nodes'|'code'|'text'|'vr'|'uv'|'animation'|'shader'|'hud'} KeyScope */
+/** @typedef {'global'|'viewport'|'objects'|'panel'|'nodes'|'code'|'text'|'vr'|'pip'|'uv'|'animation'|'shader'|'hud'} KeyScope */
 
 /** Display order + human names (the `?` sheet and Settings ▸ Shortcuts group by these). */
 export const SCOPE_LABELS = /** @type {Record<string, string>} */ ({
@@ -42,6 +45,7 @@ export const SCOPE_LABELS = /** @type {Record<string, string>} */ ({
 	nodes: 'Node editor',
 	code: 'Code editor',
 	vr: 'VR',
+	pip: 'Viewport picture-in-picture',
 	uv: 'UV editor',
 	animation: 'Animation timeline',
 	shader: 'Shader editor',
@@ -237,6 +241,7 @@ export function rowIn(row, scope) {
  */
 export function chainOf(focused) {
 	if (focused === 'vr') return ['vr', 'viewport', 'global'];
+	if (focused === 'pip') return ['pip', 'viewport', 'global'];
 	if (focused === 'global') return ['global'];
 	return [focused, 'global'];
 }

@@ -8,12 +8,15 @@
 	// (the default) or scrolls away with the properties, remembered per panel ($lib/panelHeaderPrefs,
 	// Settings ▸ Interface ▸ "Sticky panel headers"). One component, so the phone's sheet / dock tab
 	// and the desktop sidebars all get it. `#inspector-sticky-head` is the button's id.
+	// 43 J6: on a wider screen the lock belongs to the SIDEBAR — it sits in the sidebar's header strip
+	// beside "Full height" (SidebarStrips.svelte, same id, same store); the phone keeps it here.
 	import WindowChrome from '../../ui/WindowChrome.svelte';
 	import SearchField from '../../ui/SearchField.svelte';
 	import Badge from '../../ui/Badge.svelte';
 	import Icon from '../../ui/Icon.svelte';
 	import { inspectorFilter } from '../../../stores/appStore';
 	import { stickyPanelHeads, toggleStickyHead } from '$lib/panelHeaderPrefs';
+	import { sidebarsWide } from '$lib/sidebars';
 
 	/** @type {{title?: string, badge?: string, icon?: string, pinned?: boolean, onpin?: (() => void) | null, onclose?: (() => void) | null, filter?: boolean, panel?: 'scene'|'properties'|''}} */
 	let { title = '', badge = '', icon = '', pinned = false, onpin = null, onclose = null, filter = false, panel = '' } = $props();
@@ -44,7 +47,7 @@
 	>
 		{#snippet actions()}
 			{#if badge}<Badge tone="neutral" text={badge} data-inspector-badge />{/if}
-			{#if panel}
+			{#if panel && !$sidebarsWide}
 				<button
 					type="button"
 					id="inspector-sticky-head"

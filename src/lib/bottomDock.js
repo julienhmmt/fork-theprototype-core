@@ -28,7 +28,10 @@ export const DOCK_FAMILY = [...FLOW_FAMILY, 'explorer', 'profiler', 'code', 'ima
  * "views with a floating dock window" (dockAllOf, dockTab, a floating group's Dock button), and
  * `objects` is a floating window key there.
  */
-export const PHONE_DOCK_TABS = ['properties', 'objects', 'notes', 'layouts', 'scene'];
+// 43 J1: Statistics too ("statistics also as tab in mobile view, not its floating window") — like the
+// Objects list it is a floating window on a wider screen and keeps that mode on a phone that allows
+// undocking (Settings ▸ Interface)
+export const PHONE_DOCK_TABS = ['properties', 'objects', 'notes', 'layouts', 'scene', 'stats'];
 /**
  * 42 I6 — floating windows that have NO docked layout of their own (no `docked` flag, no
  * second render branch) and still dock as tabs on a wider screen: the dock frame HOSTS their

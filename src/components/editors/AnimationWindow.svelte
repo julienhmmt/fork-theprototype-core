@@ -2745,7 +2745,7 @@
 					<span class="flex-1"></span>
 				{/snippet}
 				{#snippet actions()}
-					<button class="wc-act-text" title="Dock to the bottom" onclick={() => setDocked(true)}><Icon name="panel-bottom" size={16} />Dock</button>
+					<button data-wc-chrome class="wc-act-text" title="Dock to the bottom" onclick={() => setDocked(true)}><Icon name="panel-bottom" size={16} />Dock</button>
 				{/snippet}
 			</WindowChrome>
 			{#if compact && target}<div class="flex shrink-0 items-center gap-2 px-2 py-1">{@render paneSwitch()}</div>{/if}

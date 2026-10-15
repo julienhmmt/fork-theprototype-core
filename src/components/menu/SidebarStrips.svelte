@@ -7,8 +7,23 @@
 	// front, a DRAG moves the panel to the other side of the screen — the target column lights up
 	// while the pointer is over that half, the drop docks it there. The header is drawn even for a
 	// single tab, so the pin and the drag handle are always where the user expects them.
-	import { onMount } from 'svelte';
+	//
+	// 43 J4 — THE TAB IS THE PANEL'S HEADER in a sidebar (J7: a docked window shows no header of its
+	// own there), so it carries what a header did: an × per tab, a menu (right-click; a long press on
+	// touch — Close, Close others, Undock, Move to the other side, Move to the bottom dock:
+	// $lib/sidebarMenu), and a drag that lands where it is dropped — the other side's column, the
+	// bottom dock, or the viewport as a floating window — with ONE highlight for each
+	// ($lib/sidebarDrop). The tabs scroll sideways like the dock strip's when they outgrow the column.
+	// J6 — the Inspector's sticky-header lock (42 I1) sits here, beside Full height, on a wider screen.
+	import { onMount, tick } from 'svelte';
 	import Icon from '../ui/Icon.svelte';
+	import ContextMenu from '../ContextMenu.svelte';
+	import { stripScroll } from '$lib/ui/stripScroll.js';
+	import { tabDropTarget, showDropTarget, canFloatPanel } from '$lib/sidebarDrop';
+	import { canDockHere } from '$lib/dockMenu';
+	import { floatSizeOf } from '$lib/docking';
+	import { sidebarTabItems, closeSidebarTab, floatSidebarTab, sidebarTabToDock } from '$lib/sidebarMenu';
+	import { stickyPanelHeads, toggleStickyHead } from '$lib/panelHeaderPrefs';
 	import {
 		SIDES,
 		startSidebars,
@@ -21,6 +36,7 @@
 		toggleSidebarFull,
 		setSidebarWidth,
 		sidebarWidth,
+		sidebarResizing,
 		inspectorTabTitle
 	} from '$lib/sidebars';
 	import { inspectorKind } from '../../stores/appStore.js';
@@ -39,11 +55,18 @@
 		return DOCK_ICONS[key] ?? 'app-window';
 	}
 
-	// ---- the tab drag: move a panel to the other side ----
-	let drag = $state<{ key: string; from: Side; x: number; y: number; target: Side | null } | null>(null);
+	// ---- the tab drag: the panel lands where it is dropped ($lib/sidebarDrop) ----
+	type Target = ReturnType<typeof tabDropTarget>;
+	let drag = $state<{ key: string; from: Side; x: number; y: number; target: Target } | null>(null);
 	let press: { key: string; from: Side; x0: number; y0: number; id: number } | null = null;
 	let suppressClick = false;
 	const DRAG_SLOP = 6;
+	const LONG_PRESS_MS = 500;
+	let pressTimer: ReturnType<typeof setTimeout> | null = null;
+	function clearPress() {
+		if (pressTimer) clearTimeout(pressTimer);
+		pressTimer = null;
+	}
 
 	function onTabDown(e: PointerEvent, key: string, side: Side) {
 		if (e.button !== 0) return;
@@ -51,21 +74,93 @@
 		suppressClick = false;
 		press = { key, from: side, x0: e.clientX, y0: e.clientY, id: e.pointerId };
 		(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+		clearPress();
+		// touch has no right button: a STILL press opens the tab's menu (the timer is the promise —
+		// Android's own long-press contextmenu is not guaranteed once the tab claims the touch)
+		if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+			const at = press;
+			pressTimer = setTimeout(() => {
+				pressTimer = null;
+				if (press !== at || drag) return;
+				press = null;
+				suppressClick = true;
+				openTabMenu(at.x0, at.y0, key, side);
+			}, LONG_PRESS_MS);
+		}
 	}
 	function onTabMove(e: PointerEvent) {
 		if (!press || e.pointerId !== press.id) return;
 		if (!drag && Math.hypot(e.clientX - press.x0, e.clientY - press.y0) < DRAG_SLOP) return;
-		const half: Side = e.clientX < window.innerWidth / 2 ? 'left' : 'right';
-		drag = { key: press.key, from: press.from, x: e.clientX, y: e.clientY, target: half === press.from ? null : half };
+		clearPress();
+		const key = press.key;
+		const target = tabDropTarget({
+			x: e.clientX,
+			y: e.clientY,
+			key,
+			from: press.from,
+			canFloat: canFloatPanel(key),
+			canDock: key !== 'inspector' && canDockHere(key),
+			size: floatSizeOf(key) ?? undefined
+		});
+		showDropTarget(target, { id: 'sidebar-drop-zone' });
+		drag = { key, from: press.from, x: e.clientX, y: e.clientY, target };
 	}
 	function onTabUp(e: PointerEvent) {
 		if (!press || e.pointerId !== press.id) return;
+		clearPress();
 		const d = drag;
 		press = null;
 		drag = null;
+		showDropTarget(null);
 		if (!d) return;
 		suppressClick = true; // the click that ends a drag is not a tab press
-		if (d.target) moveSidebarTab(d.key, d.target);
+		const t = d.target;
+		if (!t) return;
+		if (t.kind === 'side') moveSidebarTab(d.key, t.side);
+		else if (t.kind === 'dock') sidebarTabToDock(d.key, t.strip ? t.strip.before : undefined);
+		else floatSidebarTab(d.key, e.clientX, e.clientY);
+	}
+	function onTabCancel() {
+		clearPress();
+		press = null;
+		drag = null;
+		showDropTarget(null);
+	}
+
+	// ---- the tab's menu ----
+	let menu = $state<{ x: number; y: number; items: any[] } | null>(null);
+	function openTabMenu(x: number, y: number, key: string, side: Side) {
+		menu = { x, y, items: sidebarTabItems(key, side, titleOf(key, $inspectorTabTitle)) };
+	}
+	function onTabMenu(e: MouseEvent, key: string, side: Side) {
+		e.preventDefault();
+		onTabCancel();
+		openTabMenu(e.clientX, e.clientY, key, side);
+	}
+
+	// ---- the strip keeps its front tab in view (it scrolls when the tabs outgrow the column) ----
+	$effect(() => {
+		const shown = $sidebarShown;
+		tick().then(() => {
+			for (const side of SIDES) {
+				const key = shown[side];
+				if (!key) continue;
+				const box = document.querySelector(`#sidebar-strip-${side} .sb-tabs`) as HTMLElement | null;
+				const tab = box?.querySelector(`[data-sidebar-tab-group="${key}"]`) as HTMLElement | null;
+				if (!box || !tab) continue;
+				const a = tab.offsetLeft;
+				const b = a + tab.offsetWidth;
+				if (a < box.scrollLeft) box.scrollLeft = Math.max(0, a - 8);
+				else if (b > box.scrollLeft + box.clientWidth) box.scrollLeft = b + 8 - box.clientWidth;
+			}
+		});
+	});
+
+	// ---- J6: the Inspector's header lock, beside Full height ----
+	/** which panel the lock acts on when a side shows the Inspector ('' = none: a file, another tab) */
+	function lockPanelOf(shown: string | null, kind: string): '' | 'scene' | 'properties' {
+		if (shown !== 'inspector') return '';
+		return kind === 'scene' ? 'scene' : kind === 'file' ? '' : 'properties';
 	}
 	function onTabClick(key: string) {
 		if (suppressClick) {
@@ -92,6 +187,7 @@
 		e.preventDefault();
 		sizing = { side, x0: e.clientX, w0: $sidebarWidth[side], id: e.pointerId };
 		(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+		sidebarResizing.set(side); // 43 K1: the edge-followers stop animating for the gesture
 	}
 	function onGripMove(e: PointerEvent) {
 		if (!sizing || e.pointerId !== sizing.id) return;
@@ -102,6 +198,13 @@
 		if (!sizing || e.pointerId !== sizing.id) return;
 		setSidebarWidth(sizing.side, $sidebarWidth[sizing.side], true);
 		sizing = null;
+		sidebarResizing.set(null);
+	}
+	function onGripCancel() {
+		if (!sizing) return;
+		setSidebarWidth(sizing.side, $sidebarWidth[sizing.side], true);
+		sizing = null;
+		sidebarResizing.set(null);
 	}
 	/** double-click forgets the width (back to the default) */
 	function onGripReset(side: Side) {
@@ -112,41 +215,65 @@
 {#if $sidebarsWide}
 	{#each SIDES as side (side)}
 		{#if $sidebarTabs[side].length}
+			{@const lockPanel = lockPanelOf($sidebarShown[side], $inspectorKind)}
 			<div
 				id="sidebar-strip-{side}"
 				class="sb-strip tp-ui"
 				class:sb-full={$sidebarFull[side]}
 				data-side={side}
-				role="tablist"
-				aria-label="{side === 'left' ? 'Left' : 'Right'} sidebar"
 				style="top: var(--sb-{side}-top); width: var(--sb-{side}-w); {side === 'left' ? 'left: var(--sb-left-x, 0px)' : 'right: 0px'}"
 			>
-				<div class="sb-tabs">
+				<div class="sb-tabs tp-noscrollbar" role="tablist" aria-label="{side === 'left' ? 'Left' : 'Right'} sidebar" use:stripScroll>
 					{#each $sidebarTabs[side] as key (key)}
-						<button
-							class="sb-tab"
-							class:on={$sidebarShown[side] === key}
-							class:dragging={drag?.key === key}
-							role="tab"
-							aria-selected={$sidebarShown[side] === key}
-							tabindex={$sidebarShown[side] === key ? 0 : -1}
-							data-sidebar-tab={key}
-							title="{titleOf(key, $inspectorTabTitle)} — drag to the other side of the screen to move it there"
-							onpointerdown={(e) => onTabDown(e, key, side)}
-							onpointermove={onTabMove}
-							onpointerup={onTabUp}
-							onpointercancel={() => {
-								press = null;
-								drag = null;
-							}}
-							onclick={() => onTabClick(key)}
-							onkeydown={(e) => onTabKey(e, side, key)}
-						>
-							<Icon name={iconOf(key, $inspectorKind)} size={16} aria-hidden="true" />
-							<span class="sb-tab-label">{titleOf(key, $inspectorTabTitle)}</span>
-						</button>
+						{@const title = titleOf(key, $inspectorTabTitle)}
+						<span class="sb-tab-group" class:on={$sidebarShown[side] === key} class:dragging={drag?.key === key} data-sidebar-tab-group={key}>
+							<button
+								class="sb-tab"
+								class:on={$sidebarShown[side] === key}
+								role="tab"
+								aria-selected={$sidebarShown[side] === key}
+								tabindex={$sidebarShown[side] === key ? 0 : -1}
+								data-sidebar-tab={key}
+								title="{title} — drag to move it (the other side, the bottom dock, or out into a floating window); right-click for more"
+								onpointerdown={(e) => onTabDown(e, key, side)}
+								onpointermove={onTabMove}
+								onpointerup={onTabUp}
+								onpointercancel={onTabCancel}
+								oncontextmenu={(e) => onTabMenu(e, key, side)}
+								onclick={() => onTabClick(key)}
+								onkeydown={(e) => onTabKey(e, side, key)}
+							>
+								<Icon name={iconOf(key, $inspectorKind)} size={16} aria-hidden="true" />
+								<span class="sb-tab-label">{title}</span>
+							</button>
+							<button
+								class="sb-tab-x"
+								tabindex="-1"
+								data-sidebar-tab-close={key}
+								title="Close {title}"
+								aria-label="Close {title}"
+								onclick={() => closeSidebarTab(key)}><Icon name="x" size={16} aria-hidden="true" /></button
+							>
+						</span>
 					{/each}
 				</div>
+				{#if lockPanel}
+					{@const sticky = $stickyPanelHeads[lockPanel] !== false}
+					{@const panelName = lockPanel === 'scene' ? 'Configure Scene' : 'Properties'}
+					<button
+						type="button"
+						id="inspector-sticky-head"
+						class="sb-pin sb-lock ins-sticky-btn"
+						aria-pressed={sticky}
+						aria-label={sticky ? `Let the ${panelName} header scroll away` : `Keep the ${panelName} header on top`}
+						title={sticky
+							? 'Header stays on top — click to let it scroll away with the properties'
+							: 'Header scrolls away — click to keep it on top while you scroll'}
+						onclick={() => toggleStickyHead(lockPanel)}
+					>
+						<Icon name={sticky ? 'lock' : 'lock-open'} size={16} aria-hidden="true" />
+					</button>
+				{/if}
 				<button
 					id="sidebar-full-{side}"
 					class="sb-pin"
@@ -175,30 +302,25 @@
 				onpointerdown={(e) => onGripDown(e, side)}
 				onpointermove={onGripMove}
 				onpointerup={onGripUp}
+				onpointercancel={onGripCancel}
+				onlostpointercapture={onGripCancel}
 				ondblclick={() => onGripReset(side)}
 			></div>
 		{/if}
 	{/each}
 
 	{#if drag}
-		<!-- the drop highlight: the column the panel will land in -->
-		{#if drag.target}
-			<div
-				id="sidebar-drop-zone"
-				class="sb-drop-zone"
-				data-side={drag.target}
-				style="top: var(--sb-{drag.target}-top); bottom: var(--sb-{drag.target}-bottom); width: var(--sb-{drag.target}-w); {drag.target === 'left'
-					? 'left: var(--sb-left-x, 0px)'
-					: 'right: 0px'}"
-			>
-				Move to the {drag.target} side
-			</div>
-		{/if}
+		<!-- the drop highlight is $lib/sidebarDrop's (one painter for every target); the ghost follows the pointer -->
 		<div class="sb-ghost tp-ui" style="left: {drag.x + 12}px; top: {drag.y + 8}px">
 			<Icon name={iconOf(drag.key, $inspectorKind)} size={16} aria-hidden="true" />
 			{titleOf(drag.key, $inspectorTabTitle)}
+			{#if !drag.target}<span class="sb-ghost-hint">{drag.key === 'inspector' ? 'Drop on a side' : 'Stays here'}</span>{/if}
 		</div>
 	{/if}
+{/if}
+
+{#if menu}
+	<ContextMenu x={menu.x} y={menu.y} items={menu.items} sizeKey="sidebartab" onclose={() => (menu = null)} />
 {/if}
 
 <style>
@@ -230,13 +352,37 @@
 	:global(:root.connect-docked) .sb-strip {
 		z-index: calc(var(--z-chrome-top) + 1);
 	}
+	/* 43 J4: the tabs keep their width and the row SCROLLS sideways (wheel, swipe; the edge with more
+	   behind it fades — stripScroll), the dock strip's model, instead of squeezing every name away */
 	.sb-tabs {
 		display: flex;
 		align-items: stretch;
 		gap: 2px;
 		min-width: 0;
 		flex: 1 1 auto;
-		overflow: hidden;
+		overflow-x: auto;
+		overflow-y: hidden;
+	}
+	.sb-tab-group {
+		display: inline-flex;
+		align-items: stretch;
+		flex: 0 0 auto;
+		max-width: 200px;
+		margin-top: 3px;
+		border-radius: var(--radius-input) var(--radius-input) 0 0;
+		color: var(--text-muted);
+	}
+	.sb-tab-group:hover {
+		color: var(--text);
+		background: var(--surface-hover);
+	}
+	.sb-tab-group.on {
+		color: var(--text);
+		background: var(--surface-2);
+		box-shadow: inset 0 2px 0 var(--accent);
+	}
+	.sb-tab-group.dragging {
+		opacity: 0.5;
 	}
 	.sb-tab {
 		display: inline-flex;
@@ -244,32 +390,36 @@
 		gap: 6px;
 		min-width: 0;
 		flex: 0 1 auto;
-		padding: 0 10px;
-		margin-top: 3px;
-		border-radius: var(--radius-input) var(--radius-input) 0 0;
+		padding: 0 2px 0 10px;
+		color: inherit;
 		font-size: var(--fs-desc);
-		color: var(--text-muted);
 		cursor: grab;
 		touch-action: none;
 		user-select: none;
 		white-space: nowrap;
 	}
-	.sb-tab:hover {
-		color: var(--text);
-		background: var(--surface-hover);
-	}
-	.sb-tab.on {
-		color: var(--text);
-		background: var(--surface-2);
-		box-shadow: inset 0 2px 0 var(--accent);
-	}
-	.sb-tab.dragging {
-		opacity: 0.5;
-	}
 	.sb-tab-label {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+	.sb-tab-x {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		margin: 3px 3px 3px 0;
+		border-radius: var(--radius-input);
+		color: var(--text-faint);
+	}
+	.sb-tab-x:hover {
+		color: var(--text);
+		background: var(--surface-hover);
+	}
+	.sb-ghost-hint {
+		margin-left: 4px;
+		color: var(--text-faint);
 	}
 	.sb-pin {
 		flex: 0 0 auto;
@@ -289,12 +439,30 @@
 		color: var(--accent-text);
 		background: var(--accent-soft);
 	}
+	/* 43 K2: above the column's own panel (the Inspector sits on --z-side-panel) — the grip straddles the
+	   column's inner edge, and its inner half used to be UNDER the panel, so a finger there pressed the
+	   panel instead of the grip; wider under a finger */
 	.sb-grip {
 		position: fixed;
-		z-index: var(--z-dock);
+		z-index: calc(var(--z-side-panel) + 1);
 		width: 6px;
 		cursor: ew-resize;
 		touch-action: none;
+	}
+	/* under a DOCKED Connect bar the column's panel rides --z-chrome-top + 1 (ui.css), so the grip does too */
+	:global(:root.connect-docked) .sb-grip {
+		z-index: calc(var(--z-chrome-top) + 2);
+	}
+	@media (pointer: coarse) {
+		.sb-grip {
+			width: 14px;
+		}
+		#sidebar-grip-left {
+			margin-left: -4px;
+		}
+		#sidebar-grip-right {
+			margin-right: -4px;
+		}
 	}
 	.sb-ghost {
 		position: fixed;

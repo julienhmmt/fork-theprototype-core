@@ -93,13 +93,14 @@ h.run(async () => {
 	await page.screenshot({ path: (process.env.OUT || '/tmp') + '/g22-desktop-plus-dark.png' });
 	// 41b H1: the phone sheet ALSO lists the phone's content tabs (Properties … Configure Scene) — rows of the
 	// same registry that only the phone posture offers; every other row is the desktop "+" list, same order
-	const PHONE_ONLY = ['Properties', 'Objects', 'Notes', 'Layouts', 'Configure Scene'];
+	// 43 J1: Statistics is a phone content tab too
+	const PHONE_ONLY = ['Properties', 'Objects', 'Notes', 'Layouts', 'Configure Scene', 'Statistics'];
 	const shared = sheet.filter((t) => !PHONE_ONLY.includes(t));
 	// 42 I6: the desktop "+" ALSO lists the floating windows the dock hosts there (Objects, Statistics,
 	// Live profiler, Chat, AI assistant) — after the shared rows; the phone keeps its content tabs
 	const HOSTED = ['Objects', 'Statistics', 'Live profiler', 'Chat', 'AI assistant'];
 	h.check(JSON.stringify(titles) === JSON.stringify([...shared, ...HOSTED]), `1.1 the desktop "+" lists the phone sheet's windows, same order, then the hosted windows (desktop ${JSON.stringify(titles)} vs phone ${JSON.stringify(shared)})`);
-	h.check(PHONE_ONLY.every((t) => sheet.includes(t)) && !titles.some((t) => PHONE_ONLY.includes(t) && !HOSTED.includes(t)), `1.1b the phone sheet adds the five content tabs, the desktop "+" only the one that floats there (Objects) (${JSON.stringify(sheet)})`);
+	h.check(PHONE_ONLY.every((t) => sheet.includes(t)) && !titles.some((t) => PHONE_ONLY.includes(t) && !HOSTED.includes(t)), `1.1b the phone sheet adds the five content tabs, the desktop "+" only the ones that float there (Objects, Statistics) (${JSON.stringify(sheet)})`);
 	h.check(titles.includes('Node editor'), `2.1 ...the Node editor among them (${JSON.stringify(titles)})`);
 	h.check(titles.includes('Image editor'), `2.2 ...and the Image editor (G24)`);
 	const flowRow = (rows ?? []).find((r) => r.title === 'Node editor');

@@ -84,6 +84,7 @@
 		void $connectDocked;
 		void $connectBarHeight;
 		void $touchTools;
+		void $toolbarSlots.editing;
 		void ttCount;
 		measure();
 		// one more after layout settles — the pill is centred with a transform and its
@@ -109,7 +110,10 @@
 
 <svelte:window onresize={measure} />
 
-{#if $touchTools}
+<!-- 43 J12: the row is a layout region on every device — shown while Touch tools is on, and ALWAYS
+     while Edit positions runs (a mouse user arranges it too; Controls turns Touch tools on when the
+     edit changed this row, so what was arranged stays). An empty row draws nothing (hud.css). -->
+{#if $touchTools || $toolbarSlots.editing}
 	<!-- The logo's own top is published as a CUSTOM PROPERTY rather than written straight
 	     to `top`, because the stacked layout needs to place itself BELOW that anchor. The
 	     first version set `top` directly, which overrode the stacked position and put the

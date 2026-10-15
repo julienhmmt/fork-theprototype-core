@@ -2,6 +2,7 @@ import { writable, derived, get } from 'svelte/store';
 import { selectedObjects, objectsGroup, isVRMode } from '../stores/sceneStore';
 import { isCameraObject, cameraSpec, aspectRatio } from './cameraObjects';
 import { cameraPreview } from './cameraPreview';
+import { safeStorage } from './safeStorage';
 
 // 16-Q4: the little live PREVIEW WINDOW that appears when you select a camera
 // object — bottom-right, draggable, per-camera opt-out.
@@ -51,11 +52,29 @@ export const pipTarget = derived(
 	}
 );
 
+/** the smallest a camera preview may be resized to (CSS px tall) — declared ABOVE the store that
+ * reads it at module evaluation (the TDZ rule) */
+export const PIP_MIN_HEIGHT = 90;
+/** 43 K5: the window is RESIZABLE now (its corner grip); the height the user chose is remembered
+ * (LOCAL, persisted — the width always follows the camera's framing aspect). null = PIP_HEIGHT.
+ * @type {import('svelte/store').Writable<number | null>} */
+export const pipHeight = writable(readPipHeight());
+function readPipHeight() {
+	const raw = safeStorage.getItem('cameraPip:height');
+	const v = raw == null ? NaN : Number(raw);
+	return Number.isFinite(v) && v >= PIP_MIN_HEIGHT ? v : null;
+}
+pipHeight.subscribe((v) => {
+	// safeStorage never throws: in private mode the size lives for the session
+	if (v == null) safeStorage.removeItem('cameraPip:height');
+	else safeStorage.setItem('cameraPip:height', String(Math.round(v)));
+});
+
 /** Window size for a camera's framing (16:9 unless it declares otherwise).
- * @param {any} object */
-export function pipSize(object) {
+ * @param {any} object @param {number | null} [height] the user's height (null = the default) */
+export function pipSize(object, height = null) {
 	const ratio = aspectRatio(cameraSpec(object).aspect) || 16 / 9;
-	const h = PIP_HEIGHT;
+	const h = Math.max(PIP_MIN_HEIGHT, Math.round(height ?? PIP_HEIGHT));
 	return { w: Math.round(h * ratio), h };
 }
 
@@ -106,7 +125,12 @@ export function resetPipPosition() {
 	pipPosition.set(null);
 }
 
+/** 43 K5: back to the default size (the grip's double-click) */
+export function resetPipSize() {
+	pipHeight.set(null);
+}
+
 /** test/debug view */
 export function pipDebug() {
-	return { target: get(pipTarget), rect: get(pipRect), position: get(pipPosition) };
+	return { target: get(pipTarget), rect: get(pipRect), position: get(pipPosition), height: get(pipHeight) };
 }

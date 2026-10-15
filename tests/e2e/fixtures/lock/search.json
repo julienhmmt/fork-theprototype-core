@@ -1,5 +1,5 @@
 {
-	"recordedAt": "2026-10-14T04:08:19.752Z",
+	"recordedAt": "2026-10-14T20:16:07.978Z",
 	"settings": {
 		"Theme": {
 			"rows": [
@@ -140,6 +140,7 @@
 		},
 		"Reset tours": {
 			"rows": [
+				"Reset tips",
 				"Reset tours"
 			],
 			"sections": [
@@ -448,7 +449,8 @@
 		},
 		"Move (translate)": {
 			"rows": [
-				"Move (translate)"
+				"Move (translate)",
+				"Move (translate) — in the viewport PiP"
 			],
 			"sections": [
 				"Shortcuts"
@@ -460,6 +462,7 @@
 				"Phone selection toolbar",
 				"Pivot point",
 				"Rotate",
+				"Rotate — in the viewport PiP",
 				"World grab snapping"
 			],
 			"sections": [
@@ -474,6 +477,7 @@
 				"Phone selection toolbar",
 				"Pivot point",
 				"Scale",
+				"Scale — in the viewport PiP",
 				"World grab snapping"
 			],
 			"sections": [
@@ -1074,6 +1078,7 @@
 				"Distribute the selection evenly left to right",
 				"Distribute the selection evenly top to bottom",
 				"Duplicate the selection (wires between copies kept)",
+				"Frame the selection with the PiP's camera",
 				"Group the selection",
 				"Grow the selection (faces)",
 				"Invert the selection (any mode)",
@@ -2312,6 +2317,7 @@
 				"Phone grab handle",
 				"Phone selection toolbar",
 				"Project actions",
+				"Reset tips",
 				"Reset tours",
 				"Show FPS and draw calls",
 				"Show others as classic heads",
@@ -2653,6 +2659,7 @@
 				"Phone selection toolbar",
 				"Pivot point",
 				"Rotate",
+				"Rotate — in the viewport PiP",
 				"World grab snapping"
 			],
 			"sections": [
@@ -2890,6 +2897,7 @@
 				"Phone grab handle",
 				"Phone selection toolbar",
 				"Project actions",
+				"Reset tips",
 				"Reset tours",
 				"Show FPS and draw calls",
 				"Show others as classic heads",
@@ -2937,6 +2945,7 @@
 				"Phone selection toolbar",
 				"Project actions",
 				"Reset panel positions",
+				"Reset tips",
 				"Reset tours",
 				"Shift+A opens the Add menu",
 				"Show FPS",
@@ -3041,6 +3050,7 @@
 				"Frame all nodes",
 				"Frame all nodes (Home)",
 				"Frame the selected nodes (all when none are selected)",
+				"Frame the selection with the PiP's camera",
 				"Group the selection",
 				"Grow the selection (faces)",
 				"HUD editor: show / bring to front / hide",
@@ -3053,6 +3063,7 @@
 				"Loop select (faces: again = perpendicular; edges: the chain)",
 				"Move (grab) — same as 1",
 				"Move (translate)",
+				"Move (translate) — in the viewport PiP",
 				"Mute / unmute the selection (a muted node does nothing)",
 				"Next element mode (Vertices - Edges - Faces)",
 				"Node editor: show / bring to front / hide",
@@ -3082,9 +3093,11 @@
 				"Redo (alternative)",
 				"Reverse trackpad pan",
 				"Rotate",
+				"Rotate — in the viewport PiP",
 				"Save checkpoint…",
 				"Save scene",
 				"Scale",
+				"Scale — in the viewport PiP",
 				"Select all (any mode)",
 				"Select all nodes",
 				"Select all objects",
@@ -3431,6 +3444,7 @@
 				"Frame all nodes",
 				"Frame all nodes (Home)",
 				"Frame the selected nodes (all when none are selected)",
+				"Frame the selection with the PiP's camera",
 				"Group the selection",
 				"Grow the selection (faces)",
 				"HUD editor: show / bring to front / hide",
@@ -3443,6 +3457,7 @@
 				"Loop select (faces: again = perpendicular; edges: the chain)",
 				"Move (grab) — same as 1",
 				"Move (translate)",
+				"Move (translate) — in the viewport PiP",
 				"Mute / unmute the selection (a muted node does nothing)",
 				"Next element mode (Vertices - Edges - Faces)",
 				"Node editor: show / bring to front / hide",
@@ -3470,9 +3485,11 @@
 				"Redo",
 				"Redo (alternative)",
 				"Rotate",
+				"Rotate — in the viewport PiP",
 				"Save checkpoint…",
 				"Save scene",
 				"Scale",
+				"Scale — in the viewport PiP",
 				"Select all (any mode)",
 				"Select all nodes",
 				"Select all objects",
@@ -3543,6 +3560,7 @@
 				"Frame all nodes",
 				"Frame all nodes (Home)",
 				"Frame the selected nodes (all when none are selected)",
+				"Frame the selection with the PiP's camera",
 				"Group the selection",
 				"Grow the selection (faces)",
 				"HUD editor: show / bring to front / hide",
@@ -3555,6 +3573,7 @@
 				"Loop select (faces: again = perpendicular; edges: the chain)",
 				"Move (grab) — same as 1",
 				"Move (translate)",
+				"Move (translate) — in the viewport PiP",
 				"Mute / unmute the selection (a muted node does nothing)",
 				"Next element mode (Vertices - Edges - Faces)",
 				"Node editor: show / bring to front / hide",
@@ -3582,9 +3601,11 @@
 				"Redo",
 				"Redo (alternative)",
 				"Rotate",
+				"Rotate — in the viewport PiP",
 				"Save checkpoint…",
 				"Save scene",
 				"Scale",
+				"Scale — in the viewport PiP",
 				"Select all (any mode)",
 				"Select all nodes",
 				"Select all objects",
@@ -3655,6 +3676,7 @@
 				"Frame all nodes",
 				"Frame all nodes (Home)",
 				"Frame the selected nodes (all when none are selected)",
+				"Frame the selection with the PiP's camera",
 				"Group the selection",
 				"Grow the selection (faces)",
 				"HUD editor: show / bring to front / hide",
@@ -3667,6 +3689,7 @@
 				"Loop select (faces: again = perpendicular; edges: the chain)",
 				"Move (grab) — same as 1",
 				"Move (translate)",
+				"Move (translate) — in the viewport PiP",
 				"Mute / unmute the selection (a muted node does nothing)",
 				"Next element mode (Vertices - Edges - Faces)",
 				"Node editor mouse",
@@ -3695,9 +3718,11 @@
 				"Redo",
 				"Redo (alternative)",
 				"Rotate",
+				"Rotate — in the viewport PiP",
 				"Save checkpoint…",
 				"Save scene",
 				"Scale",
+				"Scale — in the viewport PiP",
 				"Select all (any mode)",
 				"Select all nodes",
 				"Select all objects",
@@ -3765,6 +3790,7 @@
 			"rows": [
 				"Editor tour",
 				"Offer Enter VR in a headset browser",
+				"Reset tips",
 				"Reset tours",
 				"Show tours automatically",
 				"VR welcome tour"
@@ -4087,6 +4113,7 @@
 				"Mesh generation",
 				"Placeholder style",
 				"Project actions",
+				"Reset tips",
 				"Reverse trackpad pan",
 				"Stance",
 				"Storage used",

@@ -31,6 +31,11 @@
 //   top          42 I9: the top-right group (Users.svelte), left → right, at most SIDE_MAX
 //   touch        42 I9: the touch-tools cluster beside the logo (TouchTools.svelte), at most SIDE_MAX
 //   seen         41 G23: every id this record has placed (see above)
+//   more         43 J2: the bar's trailing "…" (Customize toolbar) is shown — absent = true; it is
+//                the bar's own menu button, so it is not an id of `order`: it can be taken off and
+//                put back like any item, never moved into the row or a corner
+//   connect      43 K3: the Connect pill (top centre) is shown — absent = true; removable / restorable
+//                in Edit positions and Customize, never moved
 //
 // 42 I9 — FIVE REGIONS, ONE RECORD. The bar and four STACKS (the two bottom corners, the
 // top-right group, the touch tools). A stack holds at most SIDE_MAX (four — the user's "if I
@@ -70,6 +75,8 @@ export const isHole = (id) => typeof id === 'string' && id.startsWith(HOLE + ':'
  * @property {string[]} top
  * @property {string[]} touch
  * @property {string[]} seen
+ * @property {boolean} more
+ * @property {boolean} connect
  */
 
 /**
@@ -94,6 +101,8 @@ export const isHole = (id) => typeof id === 'string' && id.startsWith(HOLE + ':'
  * @property {string[]} top       left → right
  * @property {string[]} touch     left → right (top → bottom when the cluster stacks)
  * @property {Record<string, Region>} [home]  42: the home-only ids (copied from the config)
+ * @property {boolean} [more]  43 J2: the trailing "…" is on the bar (absent = keep the record's)
+ * @property {boolean} [connect]  43 K3: the Connect pill is shown (absent = keep the record's)
  */
 
 /** @param {unknown} v */
@@ -120,7 +129,9 @@ export function defaultLayout(cfg) {
 		right: [...cfg.right],
 		top: [...cfgStack(cfg, 'top')],
 		touch: [...cfgStack(cfg, 'touch')],
-		seen: uniq([...cfg.order, ...STACKS.flatMap((s) => cfgStack(cfg, s))])
+		seen: uniq([...cfg.order, ...STACKS.flatMap((s) => cfgStack(cfg, s))]),
+		more: true,
+		connect: true
 	};
 }
 
@@ -165,6 +176,8 @@ export function normalizeLayout(raw, cfg) {
 	let order = list(saved.order) ?? [];
 	const posX = readPosX(saved.posX);
 	const collapsed = saved.collapsed === true;
+	const more = saved.more !== false;
+	const connect = saved.connect !== false;
 	// 33 E1: a record that is still a SHIPPED default migrates to today's default bar (the
 	// corner stacks and `seen` it carries are kept — they are not part of the legacy rows)
 	if (isLegacyDefault(order, saved, cfg)) {
@@ -175,6 +188,8 @@ export function normalizeLayout(raw, cfg) {
 				...fresh,
 				collapsed,
 				posX,
+				more,
+				connect,
 				...(keepSides ? { left: saved.left ?? fresh.left, right: saved.right ?? fresh.right, seen: saved.seen } : {})
 			},
 			{ ...cfg, legacyRows: [] }
@@ -223,7 +238,7 @@ export function normalizeLayout(raw, cfg) {
 	const spacerIndex = Number.isFinite(saved.spacerIndex)
 		? clamp(Math.round(saved.spacerIndex), 0, room)
 		: Math.min(cfg.spacer, room);
-	return { order, hidden, spacerIndex, collapsed, posX, left, right, top, touch, seen: [...seen].filter(known) };
+	return { order, hidden, spacerIndex, collapsed, posX, left, right, top, touch, seen: [...seen].filter(known), more, connect };
 }
 
 /** the bar buttons actually ON the bar, in bar order (Play's well is not one) */
@@ -336,6 +351,8 @@ export function placements(/** @type {ToolbarLayout} */ l, /** @type {Record<str
 		right: [...l.right],
 		top: [...stackOf(l, 'top')],
 		touch: [...stackOf(l, 'touch')],
+		more: l.more !== false,
+		connect: l.connect !== false,
 		...(home ? { home } : {})
 	};
 }
@@ -358,7 +375,7 @@ export function fromPlacements(/** @type {ToolbarLayout} */ l, /** @type {Placem
 	const hidden = l.hidden.filter((id) => !placed.includes(id));
 	const order = [...shown, ...hidden];
 	const spacerIndex = clamp(bar.indexOf(PLAY), 0, shown.length);
-	return { ...l, order, hidden, spacerIndex, ...stacks, seen: uniq([...l.seen, ...placed]) };
+	return { ...l, order, hidden, spacerIndex, ...stacks, seen: uniq([...l.seen, ...placed]), more: typeof p.more === 'boolean' ? p.more : l.more !== false, connect: typeof p.connect === 'boolean' ? p.connect : l.connect !== false };
 }
 
 /** @param {Placements} p @param {string} id @returns {Placements} */
@@ -448,4 +465,51 @@ export function stepItem(p, id, key) {
 /** the roster ids NOT placed anywhere (the "+" popup's list; Play is never in a roster) */
 export function unplacedIds(/** @type {Placements} */ p, /** @type {string[]} */ roster) {
 	return roster.filter((id) => id !== PLAY && !isHole(id) && !placeRegion(p, id));
+}
+
+// ── 43 J10: TOOLBAR OVERFLOW ──────────────────────────────────────────────────────────────────
+// When the bar lacks room (a wide pinned sidebar, every button enabled on a laptop), the cells that
+// do not fit fold into an overflow "»" whose menu holds them — the Office / VS Code / Figma toolbar
+// rule — and come back by themselves as room returns. It is DERIVED, never stored: the user's
+// enabled set (`order`/`hidden`, the corners) is not touched, so shrinking a sidebar again is all it
+// takes to unfold. PRIORITY IS THE USER'S ORDER, read right to left: the cell at the far right of the
+// bar folds first, the next one after it, and Play (the well) never folds. The trailing "…" is the
+// lowest priority of all: once anything folds it is the "»" that ends the bar (its menu closes with
+// "Customize toolbar…"), so a folded bar is never wider than one that still had its "…".
+
+/**
+ * @typedef {object} FoldMetrics   every width in px, measured off the live bar
+ * @property {number} [budget]  the room the bar may take (absent / Infinity / NaN = no limit)
+ * @property {number} chrome  the bar's own padding + border
+ * @property {number} cell    one button cell
+ * @property {number} well    Play's well
+ * @property {number} gap     the gap between two cells (and before a trailing control)
+ * @property {number} tail    what a trailing control adds after the row: the gap, the separator and
+ *                            one cell — the "…" while nothing folds, the "»" once anything does
+ * @property {boolean} more   the record shows the "…"
+ */
+
+/** the bar's width for a row of cells and an optional trailing control @param {string[]} ids @param {FoldMetrics} m @param {boolean} trailing */
+export function barWidth(ids, m, trailing) {
+	const cells = ids.reduce((sum, id) => sum + (id === PLAY ? m.well : m.cell), 0);
+	return m.chrome + cells + Math.max(0, ids.length - 1) * m.gap + (trailing ? m.tail : 0);
+}
+
+/**
+ * Split the visual row into what stays on the bar and what folds into "»".
+ * @param {string[]} row  the visual row (PLAY included once)
+ * @param {FoldMetrics} m
+ * @returns {{ shown: string[], folded: string[] }}  `folded` keeps the bar's left → right order
+ */
+export function foldToFit(row, m) {
+	if (!((m.budget ?? NaN) > 0) || barWidth(row, m, m.more) <= (m.budget ?? Infinity)) return { shown: [...row], folded: [] };
+	const shown = [...row];
+	/** @type {string[]} */
+	const folded = [];
+	for (let i = shown.length - 1; i >= 0 && barWidth(shown, m, true) > (m.budget ?? Infinity); i--) {
+		if (shown[i] === PLAY) continue;
+		folded.unshift(shown[i]);
+		shown.splice(i, 1);
+	}
+	return { shown, folded };
 }

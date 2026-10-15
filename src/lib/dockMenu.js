@@ -91,7 +91,8 @@ export const PHONE_DOCK_WINDOWS = [
 	{ key: 'objects', tooltip: 'Every object in the scene, as a tree', phone: true },
 	{ key: 'notes', tooltip: 'The scene’s notes, grouped by label', phone: true },
 	{ key: 'layouts', tooltip: 'Save and switch named workspace layouts', phone: true },
-	{ key: 'scene', tooltip: 'Sky, light, physics, grid and the rest of the scene’s settings', phone: true }
+	{ key: 'scene', tooltip: 'Sky, light, physics, grid and the rest of the scene’s settings', phone: true },
+	{ key: 'stats', tooltip: 'Scene budget: draw calls, triangles, textures and memory', phone: true }
 ];
 /**
  * 42 I6 — the floating windows the dock HOSTS on a wider screen ($lib/dockHost): the "+" offers
@@ -272,6 +273,16 @@ export function dockTabItems(key) {
 			tooltip: `Take ${title} out of the dock`,
 			action: () => armDockMode(key, false)
 		});
+	// 43 J4: any dock tab can move into a sidebar column on a wider screen (the phone has none; a
+	// touch screen keeps windows out of the side columns — docking.js stands down on a coarse pointer)
+	const coarse = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
+	if (!get(phoneShell) && !coarse && canDockFloating(key) && sideMover)
+		for (const side of /** @type {const} */ (['left', 'right']))
+			items.push({
+				label: `Move to the ${side} sidebar`,
+				tooltip: `Dock ${title} in the ${side} sidebar, as one of its tabs`,
+				action: () => moveToSidebar(key, side)
+			});
 	// 42 I14: focus mode's touch/pointer way in for a docked window — the tab fills the window
 	items.push({
 		label: 'Maximize (focus mode)',
@@ -284,6 +295,21 @@ export function dockTabItems(key) {
 		action: () => closeDockView(key)
 	});
 	return items;
+}
+
+/**
+ * 43 J4 — how a dock tab moves to a SIDEBAR column: docking.js registers `dockToSide` (it reaches
+ * this module through bottomDockDrop, so the seam runs this way round).
+ * @type {((key: string, side: 'left'|'right') => boolean) | null}
+ */
+let sideMover = null;
+/** @param {((key: string, side: 'left'|'right') => boolean) | null} fn */
+export function registerSideMover(fn) {
+	sideMover = fn;
+}
+/** move a window into a sidebar column (false: it cannot live there) @param {string} key @param {'left'|'right'} side */
+export function moveToSidebar(key, side) {
+	return !!sideMover?.(key, side);
 }
 
 /**

@@ -26,10 +26,11 @@ export const TOUCH_NATIVE = ['undo', 'redo', 'multiselect'];
  * @property {string[]} top     the top-right group, left → right
  * @property {string[]} touch   the touch tools, in order
  * @property {boolean} editing  Edit positions is on (the natives stand down for the placeholders)
+ * @property {boolean} [connect] 43 K3: the Connect pill is shown (the draft's while editing; absent = shown)
  */
 
 /** @type {import('svelte/store').Writable<ToolbarSlots>} */
-export const toolbarSlots = writable({ top: [...TOP_DEFAULT], touch: [...TOUCH_DEFAULT], editing: false });
+export const toolbarSlots = writable({ top: [...TOP_DEFAULT], touch: [...TOUCH_DEFAULT], editing: false, connect: true });
 
 /**
  * Where a native sits in its group: `null` = not placed there (the component hides it), else the

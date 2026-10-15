@@ -31,6 +31,9 @@
 	import FlowPathSection from '../sim/FlowPathSection.svelte'; // 36-fb F24
 	import FluidTankSection from '../sim/FluidTankSection.svelte'; // 36-sim U2b
 	import DragRow from '../ui/DragRow.svelte';
+	import FieldClip from '../ui/FieldClip.svelte'; // 43 J3
+	import FieldMenuHost from '../ui/FieldMenuHost.svelte'; // 43 J3
+	import { provideFieldClip, fieldClip, nativeFieldSpec } from '$lib/fieldMenu'; // 43 J3
 	import SheetGrip from '../ui/SheetGrip.svelte';
 	import { saveSheetH } from '$lib/ui/sheetDrag.js';
 	import { phoneSheetMaxH } from '$lib/ui/phoneShell.js';
@@ -276,6 +279,11 @@
 	// picker's own hex/rgb/hsv field from 15-C2 replaced them, so the validating
 	// regex they needed is gone too)
 	const RAD_SNAP = Math.PI / 12; // Ctrl-snap rotations to 15°
+
+	// 43 J3: every row in Properties + Configure Scene answers copy / paste / reset
+	// ($lib/fieldMenu): value-box rows, toggles and choices on their own, the rows this file
+	// draws by hand through the clip specs below, and each Section as a whole.
+	provideFieldClip();
 
 	// B3 (roadmap #13): camera lens presets. Labels use the familiar full-frame
 	// focal-length vocabulary; the value set is three's VERTICAL fov in degrees
@@ -1239,6 +1247,108 @@
 		autoKeyAfterEdit([$selectedObject]); // a typed transform keys too (17-E)
 	}
 
+	// ---- 43 J3: the transform rows as clipboard vectors ----------------------------
+	// Shown units: the length unit for position, degrees for rotation (units.js). A paste goes
+	// through setTransform, so a multi-selection moves its ORIGIN rigidly exactly as typing
+	// does; the 500 ms seal records it inside the paste's history gesture = one undo step.
+	const XFORM_DEFAULT = { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] };
+	/** @param {'position'|'rotation'|'scale'} field @returns {number[]} */
+	function xformValue(field) {
+		if (multiCount) {
+			const pose = $pivotPose;
+			const v = field === 'position' ? pose?.pos : field === 'rotation' ? pose?.rot : pose?.scale;
+			return (v ?? XFORM_DEFAULT[field]).slice(0, 3);
+		}
+		const value = $selectedObject?.[field];
+		return value ? [value.x, value.y, value.z] : XFORM_DEFAULT[field].slice();
+	}
+	/** @param {'position'|'rotation'|'scale'} field */
+	const xformClip = (field) => ({
+		kind: 'vector',
+		key: field,
+		unit: field === 'position' ? 'length' : field === 'rotation' ? 'angle' : '',
+		get: () => xformValue(field),
+		set: (/** @type {number[]} */ next) => {
+			const now = xformValue(field);
+			/** @type {('x'|'y'|'z')[]} */ (['x', 'y', 'z']).forEach((axis, i) => {
+				if (Number.isFinite(next[i]) && next[i] !== now[i]) setTransform(field, axis, next[i]);
+			});
+		},
+		reset: XFORM_DEFAULT[field]
+	});
+	/**
+	 * "Paste to all selected": each selected object takes the pasted values as its OWN
+	 * (absolute) — unlike the rows, which move the set's origin. One transformSet entry.
+	 * @param {Record<string, number[]>} values
+	 */
+	function pasteTransformToAll(values) {
+		if (xformGestureStart != null) {
+			clearTimeout(xformGestureTimer);
+			sealTransformGesture();
+		}
+		/** @type {any[]} */
+		const items = [];
+		withWireBatch(() => {
+			for (const object of insTargets) {
+				const before = poseOf(object);
+				if (values.position) object.position.fromArray(values.position);
+				if (values.rotation) object.rotation.set(values.rotation[0], values.rotation[1], values.rotation[2]);
+				if (values.scale) object.scale.fromArray(values.scale);
+				sendMove(object);
+				items.push({ uuid: object.uuid, before, after: poseOf(object) });
+			}
+		});
+		recordTransformSet(items);
+		if (items.length > 1)
+			attachMultiPivot(
+				items.map((item) => item.uuid),
+				true
+			);
+		autoKeyAfterEdit(insTargets);
+		selectedObject.update((v) => v);
+	}
+	/** the object's own origin, in world space (17-D) */
+	const originClip = {
+		kind: 'vector',
+		key: 'origin',
+		inSection: false,
+		unit: 'length',
+		get: () => originPos.slice(0, 3),
+		set: (/** @type {number[]} */ next) => {
+			if (!originTarget) return;
+			setOriginFromWorld(originTarget.uuid, new THREE.Vector3().fromArray(next.slice(0, 3)));
+			reseatPivot();
+			selectedObject.update((v) => v);
+		},
+		reset: () => clearOrigin()
+	};
+	/**
+	 * A colour row for the field menu: copies as #hex, a paste equal to the current colour
+	 * writes nothing (the picker mount-echo rule, sameHex).
+	 * @param {string} name @param {() => string} read @param {(hex: string) => void} write @param {string} [reset]
+	 */
+	const colorClip = (name, read, write, reset) => ({
+		kind: 'color',
+		name,
+		get: read,
+		set: (/** @type {string} */ hex) => {
+			if (!sameHex(hex, read())) write(hex);
+		},
+		reset
+	});
+	const NO_EMISSION = '#000000'; // tokens-ok: a material colour (DATA) — black = no emission
+	const BANNER_CHOICES = [
+		{ value: 'hint', label: 'Show' },
+		{ value: 'hide', label: 'Hide' },
+		{ value: 'custom', label: 'Custom' }
+	];
+	/** @param {any} val */
+	function setBannerMode(val) {
+		setScenePhysics({
+			play: { banner: val === 'hint' ? null : val === 'hide' ? { mode: 'hide' } : { mode: 'custom', text: $scenePlay.banner?.text ?? '' } }
+		});
+	}
+
 	// ---- 37 R1: LIGHTS edit as a set too ---------------------------------------
 	// Every Light row fans over the selected LIGHTS (a mixed selection's meshes are not
 	// lights; a type-specific row reaches the lights that have that field). Replication is
@@ -1633,8 +1743,9 @@
 	data-sidebar-side={sheetMode ? null : insSide}
 	data-sidebar-hidden={insCovered ? '' : null}
 	transition:fly={insTransition}
-	class={'tp-ui ins-shell fixed inset-e-0 top-16 z-(--z-side-panel) w-80 overflow-y-auto p-4 pt-0' + (bottomRounded ? ' ins-rounded-bl' : '')}
+	class={'tp-ui ins-shell fixed inset-e-0 top-16 z-(--z-side-panel) w-80 overflow-y-auto overflow-x-hidden touch-pan-y p-4 pt-0' + (bottomRounded ? ' ins-rounded-bl' : '')}
 	use:minimalScroll
+	use:fieldClip={nativeFieldSpec}
 	id="inspector"
 	data-key-scope="panel"
 	role="region"
@@ -1736,6 +1847,7 @@
 				/>
 				<SliderRow
 					label="Exposure"
+					resetValue={1}
 					min={0.4}
 					max={2}
 					step={0.05}
@@ -1786,17 +1898,21 @@
 						onchange={(v) => editRigComponent('hemi', { intensity: v })} />
 					<PropRow label="Sky / ground" valueBox={false}>
 						{#snippet control()}
+							<FieldClip clip={colorClip('Sky colour', () => envPayload.hemi?.sky, (hex) => editRigComponent('hemi', { sky: hex }))}>
 							<input type="color" class="ins-swatch" aria-label="Sky colour" value={envPayload.hemi.sky}
 								onchange={(e) => editRigComponent('hemi', { sky: e.currentTarget.value })} />
+							</FieldClip>
+							<FieldClip clip={colorClip('Ground colour', () => envPayload.hemi?.ground, (hex) => editRigComponent('hemi', { ground: hex }))}>
 							<input type="color" class="ins-swatch" aria-label="Ground colour" value={envPayload.hemi.ground}
 								onchange={(e) => editRigComponent('hemi', { ground: e.currentTarget.value })} />
+							</FieldClip>
 						{/snippet}
 					</PropRow>
 				{/if}
 				{#if envPayload.sun}
 					<SliderRow label="Sun" min={0} max={4} step={0.05} value={envPayload.sun.intensity}
 						onchange={(v) => editRigComponent('sun', { intensity: v })} />
-					<PropRow label="Sun color" valueBox={false}>
+					<PropRow label="Sun color" valueBox={false} clip={colorClip('Sun color', () => envPayload.sun?.color, (hex) => editRigComponent('sun', { color: hex }))}>
 						{#snippet control()}
 							<input type="color" class="ins-swatch" aria-label="Sun colour" value={envPayload.sun.color}
 								onchange={(e) => editRigComponent('sun', { color: e.currentTarget.value })} />
@@ -1808,11 +1924,15 @@
 					<div class="env-light ins-card">
 						<div class="ins-card-head">
 							<span class="ins-card-kind">{def.kind}</span>
+							<FieldClip clip={colorClip(def.kind + ' colour', () => def.color, (hex) => updateEnvLight(def.id, { color: hex }))}>
 							<input type="color" class="ins-swatch" aria-label="Light colour" value={def.color}
 								onchange={(e) => updateEnvLight(def.id, { color: e.currentTarget.value })} />
+							</FieldClip>
 							{#if def.kind === 'hemisphere'}
+								<FieldClip clip={colorClip(def.kind + ' ground colour', () => def.groundColor, (hex) => updateEnvLight(def.id, { groundColor: hex }))}>
 								<input type="color" class="ins-swatch" aria-label="Ground colour" value={def.groundColor}
 									onchange={(e) => updateEnvLight(def.id, { groundColor: e.currentTarget.value })} />
+								</FieldClip>
 							{/if}
 							<span class="flex-1"></span>
 							<UiButton variant="ghost" size="sm" title="Convert back into a normal scene object"
@@ -2839,7 +2959,8 @@
 				{/if}
 				<!-- 37 R24: flying in Play is OPT-IN per game (players walk unless the game allows it),
 				     and a scene can remove it outright — over any module or Character Controller -->
-				<PropRow label="Flying" valueBox={false} id="physics-play-flying-row">
+				<PropRow label="Flying" valueBox={false} id="physics-play-flying-row"
+					clip={{ kind: 'enum', options: FLY_CHOICES, get: () => flyChoiceOf($scenePlay), set: setFlyChoice, reset: 'off' }}>
 					{#snippet control()}
 						<Segmented
 							id="physics-play-flying"
@@ -2861,22 +2982,16 @@
 				<!-- 38 NOTES-38 #4 / #33: the "Playing · Press Esc to stop" banner — shown by default;
 				     a game or an advanced scene hides it or says its own words (phone too: the
 				     banner reads the same scene setting). A game's Menu · Esc button is not this. -->
-				<PropRow label="Playing banner" valueBox={false} id="physics-play-banner-row">
+				<PropRow label="Playing banner" valueBox={false} id="physics-play-banner-row"
+					clip={{ kind: 'enum', options: BANNER_CHOICES, get: () => $scenePlay.banner?.mode ?? 'hint', set: setBannerMode, reset: 'hint' }}>
 					{#snippet control()}
 						<Segmented
 							id="physics-play-banner"
 							label="Playing banner"
 							full
-							options={[
-								{ value: 'hint', label: 'Show' },
-								{ value: 'hide', label: 'Hide' },
-								{ value: 'custom', label: 'Custom' }
-							]}
+							options={BANNER_CHOICES}
 							value={$scenePlay.banner?.mode ?? 'hint'}
-							onchange={(/** @type {any} */ val) =>
-								setScenePhysics({
-									play: { banner: val === 'hint' ? null : val === 'hide' ? { mode: 'hide' } : { mode: 'custom', text: $scenePlay.banner?.text ?? '' } }
-								})}
+							onchange={setBannerMode}
 						/>
 					{/snippet}
 				</PropRow>
@@ -2910,6 +3025,7 @@
 			</Section>
 
 			<Section variant="panel" label="Background" badge="Shared">
+				<FieldClip clip={colorClip('Background', () => $backgroundColor, (hex) => setBackground(hex))}>
 				<ColorPicker
 					isAlpha={false}
 					isTextInput={true}
@@ -2929,9 +3045,11 @@
 					hex={$backgroundColor}
 					onInput={(/** @type {any} */ c) => setBackground(c.hex)}
 				/>
+				</FieldClip>
 			</Section>
 
 			<Section variant="panel" label="Fog" badge="Shared">
+				<FieldClip clip={colorClip('Fog color', () => envFog?.color ?? FOG_DEFAULT, (hex) => editEnvSky({ fog: { color: hex } }), FOG_DEFAULT)}>
 				<ColorPicker
 					isAlpha={false}
 					isTextInput={true}
@@ -2954,6 +3072,7 @@
 						editEnvSky({ fog: { color: c.hex } });
 					}}
 				/>
+				</FieldClip>
 				<SliderRow id="fog-near" label="Near" min={0} max={Math.max(10, Math.ceil(envFog?.near ?? 0))} step={0.1} decimals={1} value={envFog?.near ?? 0}
 					onchange={(v) => editEnvSky({ fog: { near: v } })} />
 				<SliderRow id="fog-far" label="Far" min={0} max={Math.max(100, Math.ceil(envFog?.far ?? 0))} step={0.1} decimals={1} value={envFog?.far ?? 0}
@@ -3033,6 +3152,7 @@
 					{#key rerenderSelectGroup}
 						<ThemedSelect
 							id="select-group"
+						clip={false}
 							items={groups}
 							placeholder="Move to group"
 							onchange={(/** @type {any} */ val) => {
@@ -3225,7 +3345,7 @@
 				</Section>
 			{/if}
 			<!-- 38 NOTES-38 #24 (design page): a transform is shared, and its section says so -->
-			<Section variant="panel" label="Transform" badge="Shared">
+			<Section variant="panel" label="Transform" badge="Shared" clip={{ count: () => insTargets.length, pasteAll: pasteTransformToAll }}>
 				{#if multiCount}
 					<!-- 17-D1 follow-up: for a SET these rows drive the selection's origin
 					     (the gizmo's pivot), so every axis has one real value instead of a
@@ -3266,7 +3386,7 @@
 				<!-- 38 R5: the transform rows are PropRows — a fixed label column and the three
 				     axis fields as its control; every field is the same DragRow as before -->
 				<div class="ins-transform">
-					<PropRow label={multiCount ? 'Origin' : 'Position'} valueBox={false}>
+					<PropRow label={multiCount ? 'Origin' : 'Position'} valueBox={false} clip={xformClip('position')}>
 					{#snippet control()}
 					<div id="inspector-position" class="ins-axes">
 						<DragRow label="X" accent="ins-axis-x" step={0.02} unit="length"
@@ -3282,7 +3402,7 @@
 					{/snippet}
 					</PropRow>
 					{#if !isLight && !$pivotOnly}
-						<PropRow label="Rotation" valueBox={false}>
+						<PropRow label="Rotation" valueBox={false} clip={xformClip('rotation')}>
 						{#snippet control()}
 						<div id="inspector-rotation" class="ins-axes">
 							<DragRow label="X" accent="ins-axis-x" step={0.01} snap={RAD_SNAP} unit="angle"
@@ -3297,7 +3417,7 @@
 						</div>
 						{/snippet}
 						</PropRow>
-						<PropRow label="Scale" valueBox={false}>
+						<PropRow label="Scale" valueBox={false} clip={xformClip('scale')}>
 						{#snippet control()}
 						<div id="inspector-scale" class="ins-axes">
 							<DragRow label="X" accent="ins-axis-x" step={0.01} snap={0.1}
@@ -3342,7 +3462,7 @@
 							</div>
 						</div>
 						<div class="ins-transform">
-							<PropRow label="World" valueBox={false}>
+							<PropRow label="World" valueBox={false} clip={originClip}>
 							{#snippet control()}
 							<div id="inspector-origin" class="ins-axes">
 								<DragRow label="X" accent="ins-axis-x" step={0.02} unit="length" value={originPos[0]}
@@ -3419,7 +3539,7 @@
 			</Section>
 
 			{#if !isLight}
-				<Section variant="panel" label="Object">
+				<Section variant="panel" label="Object" clip={{ count: () => insTargets.length, fans: true }}>
 					<PropRow label="Render order" labelFor="inspector-render-order" valueBox={false}>
 					{#snippet control()}
 						<div class="ins-axes ins-solo">
@@ -3627,12 +3747,13 @@
 			{/if}
 
 			{#if isLight}
-				<Section variant="panel" label="Light">
+				<Section variant="panel" label="Light" clip={{ count: () => lightTargets.length, fans: true }}>
 					{#if lightTargets.length > 1}
 						<p id="light-multi-note" class="text-[length:var(--fs-badge)] italic text-text-muted">
 							Applies to {lightTargets.length} selected lights{lightMixed((l) => l.color?.getHex?.()) ? ' — their colours differ (—); picking one sets all' : ''}.
 						</p>
 					{/if}
+					<FieldClip clip={colorClip('Color', () => color, (hex) => { color = hex; setLights((light) => light.color.set(hex), (light) => !!light.color); })}>
 					<ColorPicker
 						isAlpha={false}
 						isTextInput={true}
@@ -3656,8 +3777,10 @@
 							setLights((light) => light.color.set(c.hex), (light) => !!light.color);
 						}}
 					/>
+					</FieldClip>
 					{#if $selectedObject.type === 'HemisphereLight'}
 						<p class="ui-section-label">Ground color</p>
+						<FieldClip clip={colorClip('Ground color', () => groundColor, (hex) => { groundColor = hex; setLights((light) => light.groundColor.set(hex), (light) => !!light.groundColor); })}>
 						<ColorPicker
 							isAlpha={false}
 							isTextInput={true}
@@ -3681,6 +3804,7 @@
 								setLights((light) => light.groundColor.set(c.hex), (light) => !!light.groundColor);
 							}}
 						/>
+						</FieldClip>
 					{/if}
 					<PropRow label="Intensity" valueBox={false}>
 					{#snippet control()}
@@ -3793,7 +3917,7 @@
 			{/if}
 
 			{#if material}
-				<Section variant="panel" label="Material">
+				<Section variant="panel" label="Material" clip={{ count: () => matTargets.length, fans: true }}>
 					{#if matCount}
 						<p id="material-multi-note" class="text-[length:var(--fs-badge)] italic text-text-muted">
 							Applies to {matCount} selected objects.
@@ -3892,6 +4016,7 @@
 								Colour — (mixed): picking one sets all {matCount}.
 							</p>
 						{/if}
+						<FieldClip clip={colorClip('Color', () => color, (hex) => { color = hex; fanMat('Colour', (object) => setObjectColor(object.uuid, hex)); })}>
 						<ColorPicker
 							isAlpha={false}
 							isTextInput={true}
@@ -3928,6 +4053,7 @@
 								pokeScene();
 							}}
 						/>
+						</FieldClip>
 					{/if}
 
 					<!-- materials supporting textures initialize map to null; ShadowMaterial has no map at all -->
@@ -4011,29 +4137,29 @@
 					{/if}
 
 					{#if material.type === 'MeshStandardMaterial' || material.type === 'MeshPhysicalMaterial'}
-						<SliderRow label="Roughness" min={0} max={1} step={0.05} value={material.roughness}
+						<SliderRow label="Roughness" resetValue={1} min={0} max={1} step={0.05} value={material.roughness}
 							mixed={matMixed((o) => o.material.roughness)}
 							onchange={(v) => setMat('roughness', v)} />
-						<SliderRow label="Metalness" min={0} max={1} step={0.05} value={material.metalness}
+						<SliderRow label="Metalness" resetValue={0} min={0} max={1} step={0.05} value={material.metalness}
 							mixed={matMixed((o) => o.material.metalness)}
 							onchange={(v) => setMat('metalness', v)} />
 					{/if}
 					{#if material.type === 'MeshPhysicalMaterial'}
-						<SliderRow label="Clearcoat" min={0} max={1} step={0.05} value={material.clearcoat}
+						<SliderRow label="Clearcoat" resetValue={0} min={0} max={1} step={0.05} value={material.clearcoat}
 							mixed={matMixed((o) => o.material.clearcoat)}
 							onchange={(v) => setMat('clearcoat', v)} />
-						<SliderRow label="Clearcoat rough" min={0} max={1} step={0.05} value={material.clearcoatRoughness}
+						<SliderRow label="Clearcoat rough" resetValue={0} min={0} max={1} step={0.05} value={material.clearcoatRoughness}
 							mixed={matMixed((o) => o.material.clearcoatRoughness)}
 							onchange={(v) => setMat('clearcoatRoughness', v)} />
-						<SliderRow label="Transmission" min={0} max={1} step={0.05} value={material.transmission}
+						<SliderRow label="Transmission" resetValue={0} min={0} max={1} step={0.05} value={material.transmission}
 							mixed={matMixed((o) => o.material.transmission)}
 							onchange={(v) => setMat('transmission', v)} />
-						<SliderRow label="IOR" min={1} max={2.333} step={0.01} decimals={2} value={material.ior}
+						<SliderRow label="IOR" resetValue={1.5} min={1} max={2.333} step={0.01} decimals={2} value={material.ior}
 							mixed={matMixed((o) => o.material.ior)}
 							onchange={(v) => setMat('ior', v)} />
 					{/if}
 					{#if material.type === 'MeshPhongMaterial'}
-						<SliderRow label="Shininess" min={0} max={100} step={1} decimals={0} value={material.shininess}
+						<SliderRow label="Shininess" resetValue={30} min={0} max={100} step={1} decimals={0} value={material.shininess}
 							mixed={matMixed((o) => o.material.shininess)}
 							onchange={(v) => setMat('shininess', v)} />
 					{/if}
@@ -4043,7 +4169,7 @@
 						</p>
 					{/if}
 					{#if typeof material.opacity !== 'undefined' && material.type !== 'ShadowMaterial'}
-						<SliderRow label="Opacity" min={0} max={1} step={0.05} value={material.opacity}
+						<SliderRow label="Opacity" resetValue={1} min={0} max={1} step={0.05} value={material.opacity}
 							mixed={matMixed((o) => o.material.opacity)}
 							onchange={(v) =>
 								fanMat('Opacity', (object) => {
@@ -4095,10 +4221,11 @@
 					     emission however high it goes — hence the note. -->
 					{#if material.emissive}
 						<p class="ui-section-label">Emission</p>
-						<SliderRow label="Strength" min={0} max={5} step={0.05} value={material.emissiveIntensity ?? 1}
+						<SliderRow label="Strength" resetValue={1} min={0} max={5} step={0.05} value={material.emissiveIntensity ?? 1}
 							mixed={matMixed((o) => o.material.emissiveIntensity)}
 							onchange={(v) => setMat('emissiveIntensity', v)} />
-						<div id="inspector-emissive" class="ui-row items-center gap-2">
+						<FieldClip clip={colorClip('Emission color', () => '#' + material.emissive.getHexString(), (hex) => setMat('emissive', hex), NO_EMISSION)}>
+												<div id="inspector-emissive" class="ui-row items-center gap-2">
 							<span class="w-20 shrink-0 text-xs text-text-muted">Color</span>
 							<input
 								type="color"
@@ -4110,6 +4237,7 @@
 							/>
 							<span class="text-[length:var(--fs-badge)] italic text-text-muted">{matMixed((o) => o.material.emissive?.getHex?.()) ? '— (mixed) · ' : ''}black = no glow</span>
 						</div>
+						</FieldClip>
 					{/if}
 
 					{/if}
@@ -4142,7 +4270,7 @@
 			{#if $selectedObject.userData?.fluidEmitter}<FluidEmitterSection object={$selectedObject} />{/if}<!-- 36-fb F23 -->
 			{#if $selectedObject.userData?.flowPath}<FlowPathSection object={$selectedObject} />{/if}<!-- 36-fb F24 -->
 			{#if !$selectedObject.isLight}
-				<Section variant="panel" label="Physics">
+				<Section variant="panel" label="Physics" clip={{ count: () => insTargets.length, fans: true }}>
 					{#if multiCount}
 						<p id="physics-multi-note" class="text-[length:var(--fs-badge)] italic text-text-muted">
 							Applies to {multiCount} selected objects.
@@ -4163,7 +4291,7 @@
 						/>
 					</div>
 					{#if ($selectedObject.userData.physics?.mode ?? 'auto') === 'dynamic'}
-						<SliderRow label="Mass" min={0.1} max={100} step={0.1} value={$selectedObject.userData.physics?.mass ?? 1}
+						<SliderRow label="Mass" resetValue={1} min={0.1} max={100} step={0.1} value={$selectedObject.userData.physics?.mass ?? 1}
 							mixed={mixed((o) => o.userData.physics?.mass ?? 1)}
 							onchange={(v) => setPhysics({ mass: v })} />
 					{/if}
@@ -4186,10 +4314,10 @@
 							}}
 						/>
 					</div>
-					<SliderRow label="Bounciness" min={0} max={1} step={0.05} value={$selectedObject.userData.physics?.restitution ?? 0.3}
+					<SliderRow label="Bounciness" resetValue={0.3} min={0} max={1} step={0.05} value={$selectedObject.userData.physics?.restitution ?? 0.3}
 						mixed={mixed((o) => o.userData.physics?.restitution ?? 0.3)}
 						onchange={(v) => setPhysics({ restitution: v })} />
-					<SliderRow label="Friction" min={0} max={2} step={0.05} value={$selectedObject.userData.physics?.friction ?? 0.5}
+					<SliderRow label="Friction" resetValue={0.5} min={0} max={2} step={0.05} value={$selectedObject.userData.physics?.friction ?? 0.5}
 						mixed={mixed((o) => o.userData.physics?.friction ?? 0.5)}
 						onchange={(v) => setPhysics({ friction: v })} />
 					<div class="ui-row items-center gap-2">
@@ -4419,6 +4547,7 @@
 							<span class="w-20 shrink-0 text-xs text-text-muted">Emitter</span>
 							<ThemedSelect
 								id="particles-add"
+						clip={false}
 								items={[
 									{ value: 'none', name: 'Add emitter…' },
 									...PARTICLE_PRESETS.map((p) => ({ value: p.key, name: p.name }))
@@ -4466,25 +4595,25 @@
 								<span class="text-xs text-text-muted">fires for every peer</span>
 							</div>
 						{/if}
-						<SliderRow label="Count" min={1} max={500} step={1} value={p.count ?? 80}
+						<SliderRow label="Count" resetValue={80} min={1} max={500} step={1} value={p.count ?? 80}
 							onchange={(v) => setParticles({ count: v })} />
-						<SliderRow label="Lifetime" min={0.1} max={6} step={0.1} value={p.lifetime ?? 1.5}
+						<SliderRow label="Lifetime" resetValue={1.5} min={0.1} max={6} step={0.1} value={p.lifetime ?? 1.5}
 							onchange={(v) => setParticles({ lifetime: v })} />
-						<SliderRow label="Speed" min={0} max={8} step={0.1} value={p.speed ?? 1}
+						<SliderRow label="Speed" resetValue={1} min={0} max={8} step={0.1} value={p.speed ?? 1}
 							onchange={(v) => setParticles({ speed: v })} />
-						<SliderRow label="Gravity" min={-10} max={10} step={0.1} value={p.gravity ?? 0}
+						<SliderRow label="Gravity" resetValue={0} min={-10} max={10} step={0.1} value={p.gravity ?? 0}
 							onchange={(v) => setParticles({ gravity: v })} />
 						{#if p.shape === 'box'}
 							<!-- 36 B3: a weather area (rain / snow) -->
-							<SliderRow label="Area width" min={0.5} max={60} step={0.5} value={p.area?.[0] ?? 8}
+							<SliderRow label="Area width" resetValue={8} min={0.5} max={60} step={0.5} value={p.area?.[0] ?? 8}
 								onchange={(v) => setParticles({ area: [v, p.area?.[1] ?? 8] })} />
-							<SliderRow label="Area depth" min={0.5} max={60} step={0.5} value={p.area?.[1] ?? 8}
+							<SliderRow label="Area depth" resetValue={8} min={0.5} max={60} step={0.5} value={p.area?.[1] ?? 8}
 								onchange={(v) => setParticles({ area: [p.area?.[0] ?? 8, v] })} />
-							<SliderRow label="Wind X" min={-10} max={10} step={0.05} value={p.wind?.[0] ?? 0}
+							<SliderRow label="Wind X" resetValue={0} min={-10} max={10} step={0.05} value={p.wind?.[0] ?? 0}
 								onchange={(v) => setParticles({ wind: [v, 0, p.wind?.[2] ?? 0] })} />
-							<SliderRow label="Wind Z" min={-10} max={10} step={0.05} value={p.wind?.[2] ?? 0}
+							<SliderRow label="Wind Z" resetValue={0} min={-10} max={10} step={0.05} value={p.wind?.[2] ?? 0}
 								onchange={(v) => setParticles({ wind: [p.wind?.[0] ?? 0, 0, v] })} />
-							<SliderRow label="Ground below" min={0} max={40} step={0.1} value={p.fall ?? 0}
+							<SliderRow label="Ground below" resetValue={0} min={0} max={40} step={0.1} value={p.fall ?? 0}
 								onchange={(v) => setParticles({ fall: v })} />
 							<div class="ui-row items-center gap-2">
 								<span class="w-20 shrink-0 text-xs text-text-muted">On landing</span>
@@ -4500,13 +4629,13 @@
 								/>
 							</div>
 						{/if}
-						<SliderRow label="Turbulence" min={0} max={1} step={0.05} value={p.turbulence ?? 0.2}
+						<SliderRow label="Turbulence" resetValue={0.2} min={0} max={1} step={0.05} value={p.turbulence ?? 0.2}
 							onchange={(v) => setParticles({ turbulence: v })} />
-						<SliderRow label="Size start" min={0.01} max={1} step={0.01} value={p.sizeStart ?? 0.1}
+						<SliderRow label="Size start" resetValue={0.1} min={0.01} max={1} step={0.01} value={p.sizeStart ?? 0.1}
 							onchange={(v) => setParticles({ sizeStart: v })} />
-						<SliderRow label="Size end" min={0} max={1} step={0.01} value={p.sizeEnd ?? 0.03}
+						<SliderRow label="Size end" resetValue={0.03} min={0} max={1} step={0.01} value={p.sizeEnd ?? 0.03}
 							onchange={(v) => setParticles({ sizeEnd: v })} />
-						<SliderRow label="Opacity" min={0} max={1} step={0.05} value={p.opacity ?? 0.9}
+						<SliderRow label="Opacity" resetValue={0.9} min={0} max={1} step={0.05} value={p.opacity ?? 0.9}
 							onchange={(v) => setParticles({ opacity: v })} />
 						<div class="ui-row items-center gap-2">
 							<span class="w-20 shrink-0 text-xs text-text-muted" title="Where particles spawn, relative to the object center (local axes)">Emit from</span>
@@ -4599,6 +4728,9 @@
 </div>
 {/if}
 
+<!-- 43 J3: the one copy / paste / reset menu every row and section here opens -->
+<FieldMenuHost />
+
 <style>
 	/* 38 R5: the Inspector is a migrated surface — `.tp-ui` gives its whole body the SPEC
 	   tokens (one blue accent, the surface-2 panel, the UI sans); the chrome is the panel
@@ -4610,6 +4742,12 @@
 		border-right: 0;
 		border-top-left-radius: var(--radius-window);
 		box-shadow: var(--shadow-window);
+	}
+	/* 43 K2: the panel is never wider than its column (a sidebar goes down to 250px): it cannot scroll
+	   sideways (overflow-x-hidden + touch-pan-y on the shell), and a label + chips / toggles row WRAPS
+	   onto a second line instead of running off the edge (Grid ▸ Follow, Physics ▸ Lock rotation …) */
+	.ins-shell :global(.ui-row) {
+		flex-wrap: wrap;
 	}
 	.ins-rounded-bl {
 		border-bottom-left-radius: var(--radius-window);

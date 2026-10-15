@@ -268,6 +268,20 @@
 		bottom: calc(var(--hud-stack-lift, 0px) + 74px + var(--hud-stack-right-n, 2) * (var(--hud-fab) + 4px) + 4px);
 	}
 }
+/* 43 J5: lifted, a stack also keeps clear of a PINNED (full-height) sidebar on its side — it slides
+   inward by the column's width, and the sim transport riding the right stack with it.
+   `--sb-dock-left/-right` is a pinned, shown column's width, else 0px ($lib/sidebars publishes it),
+   and the vertical lift is the dock's VISIBLE height (`--bottom-inset` reads 0 while the dock is
+   hidden or minimized), so a hidden dock drops the stacks back to the floor beside the sidebar. */
+:root.hud-stacks-lifted .hud-stack-left {
+	left: calc(16px + var(--sb-dock-left, 0px));
+}
+:root.hud-stacks-lifted .hud-stack-right {
+	right: calc(16px + var(--sb-dock-right, 0px));
+}
+:root.hud-stacks-lifted #sim-controls {
+	right: calc(16px + var(--sb-dock-right, 0px));
+}
 .hud-edit-item {
 	position: relative;
 	touch-action: none;
@@ -559,4 +573,75 @@
 }
 #connect-status {
 	margin: 0 4px 0 8px;
+}
+/* 43 J2: the "…" placeholder in Edit positions is removable, not draggable */
+.hud-edit-more,
+.hud-edit-more .hud-edit-grip {
+	cursor: default;
+}
+/* …and it is the edit bar's last item, so the round ✓ (top right of the bar) would sit on its "−":
+   the bar keeps room for the ✓ beyond it */
+#controls-pill.hud-editing:has(.hud-edit-more) {
+	padding-right: 28px;
+}
+/* 43 J8: Edit positions shows EVERY item, so its bar WRAPS into the band beside the open sidebars
+   (Controls sets the band as the bar's max-width and places it inside the band) instead of running
+   under a sidebar; the hint above wraps to the bar's width */
+#controls-pill.hud-editing {
+	height: auto;
+	min-height: var(--hud-bar-h);
+	min-width: 0;
+	padding-top: 4px;
+	padding-bottom: 4px;
+}
+#controls-pill.hud-editing .hud-bar-row {
+	flex-wrap: wrap;
+	justify-content: center;
+	row-gap: 6px;
+	height: auto;
+	min-width: 0;
+}
+#controls-pill.hud-editing .hud-edit-hint {
+	white-space: normal;
+	width: max-content;
+	max-width: 100%;
+	text-align: center;
+}
+/* 43 J11: a top-right group with nothing in it draws NO empty glass square. Its children are the
+   natives Users.svelte places (notes, the bell, the peers trigger — the trigger only while someone is
+   connected) and Controls' portal wrapper (`[data-toolbar-portal]`, display: contents) holding any other
+   button placed there; with none of either the box goes. In Edit positions the wrapper holds the
+   group's placeholders and its "+", so the group is always there as a drop / add target. */
+#hud-tr:not(:has(> :not([data-toolbar-portal]))):not(:has(> [data-toolbar-portal] > *)) {
+	display: none;
+}
+/* 43 J12: the row beside the logo (TouchTools.svelte) likewise draws nothing when it holds no button —
+   its natives are its own buttons, anything else sits in Controls' portal wrapper */
+#touch-tools:not(:has(> :not([data-toolbar-portal]))):not(:has(> [data-toolbar-portal] > *)) {
+	display: none;
+}
+/* 43 K3: the Connect pill in Edit positions — an outline over the real pill (it takes the presses, so the
+   pill is not clicked mid-edit) with the red "−"; hidden, a "+ Connect" at the top centre */
+.hud-edit-connect {
+	position: fixed;
+	z-index: calc(var(--z-chrome-top) + 1);
+	border-radius: var(--radius-window);
+	cursor: default;
+	animation: none;
+}
+.hud-edit-connect .hud-edit-grip {
+	cursor: default;
+}
+.hud-edit-connect-add {
+	position: fixed;
+	top: 8px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: calc(var(--z-chrome-top) + 1);
+	width: auto;
+	height: var(--hud-icon-button);
+	padding: 0 12px;
+	gap: 4px;
+	border-radius: var(--radius-pill);
+	font: 500 var(--fs-body) var(--font-ui);
 }

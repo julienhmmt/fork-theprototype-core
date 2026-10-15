@@ -787,6 +787,7 @@
 		<WindowChrome
 			size="tool"
 			bare
+			dockedHead="tools"
 			body={false}
 			title="Code"
 			headerClass="ui-panel-header move-handle cursor-move select-none"
@@ -802,7 +803,7 @@
 			{#snippet actions()}
 				{@render openGraph()}
 				{@render sideToggle('right')}
-				<button class="wc-act-text" title="Dock to the bottom" onclick={() => setDocked(true)}><Icon name="panel-bottom" size={16} />Dock</button>
+				<button data-wc-chrome class="wc-act-text" title="Dock to the bottom" onclick={() => setDocked(true)}><Icon name="panel-bottom" size={16} />Dock</button>
 			{/snippet}
 		</WindowChrome>
 		<div class="flex min-h-0 flex-1 flex-col p-1">{@render main()}</div>

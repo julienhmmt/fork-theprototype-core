@@ -577,7 +577,9 @@
 	// the same flex row with the same numbers); one moved elsewhere or removed is not drawn, and
 	// while Edit positions runs Controls draws the whole group's placeholders instead. The folded
 	// phone shell keeps the default group (its chrome is the phone bar's).
-	const trSlots = $derived($phoneShell ? { top: TOP_DEFAULT, editing: false } : $toolbarSlots);
+	// 43 K3: the phone shell keeps the group's default ORDER, but a native the person took out (Edit
+	// positions / Customize, on the unfolded screen) stays out here too — hidden stays hidden
+	const trSlots = $derived($phoneShell ? { top: TOP_DEFAULT.filter((id) => $toolbarSlots.top.includes(id)), editing: false } : $toolbarSlots);
 	const trOrder = (id: string) => slotOrder(trSlots.top, id);
 	const trShown = (id: string) => !trSlots.editing && trOrder(id) != null;
 </script>

@@ -121,7 +121,8 @@
 		use:focusStack={'profilerLive'}
 		style="z-index: var(--z-window); width: 420px; height: 520px"
 	>
-		<div class="ui-panel-header move-handle flex shrink-0 cursor-move select-none items-center gap-2 py-1.5">
+		<!-- 43 J7: name + ✕ only — in a sidebar the column's tab is this header (data-sb-headless, windows.css) -->
+		<div data-sb-headless class="ui-panel-header move-handle flex shrink-0 cursor-move select-none items-center gap-2 py-1.5">
 			<Icon name="activity" size={16} aria-hidden="true" />
 			<span class="flex-1 text-sm font-semibold">Live profiler</span>
 			<button id="profiler-live-close" class="rounded-sm p-1 hover:brightness-150" title="Close" aria-label="Close live profiler" onclick={() => profilerLiveOpen.set(false)}

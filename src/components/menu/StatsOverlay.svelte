@@ -58,8 +58,9 @@
 		style="z-index: var(--z-window); width: 380px; height: 460px"
 	>
 		<div class="ui-panel-header move-handle flex shrink-0 cursor-move select-none items-center gap-2 py-1.5">
-			<Icon name="gauge" size={16} aria-hidden="true" />
-			<span class="flex-1 text-sm font-semibold">Statistics</span>
+			<!-- 43 J7: in a sidebar the column's tab names it and closes it (data-wc-chrome, windows.css) -->
+			<span data-wc-chrome class="inline-flex"><Icon name="gauge" size={16} aria-hidden="true" /></span>
+			<span data-wc-chrome class="flex-1 text-sm font-semibold">Statistics</span>
 			<span id="stats-overall" class="budget-dot" data-tier={overall} title={'Scene budget: ' + overall}></span>
 			<button
 				class="rounded-sm p-1 hover:brightness-150"
@@ -68,6 +69,7 @@
 				onclick={() => { sampleSceneMetrics(); resetWireStats(); }}><Icon name="refresh-cw" size={16} aria-hidden="true" /></button>
 			<button
 				id="stats-close"
+				data-wc-chrome
 				class="rounded-sm p-1 hover:brightness-150"
 				title="Close"
 				aria-label="Close statistics"

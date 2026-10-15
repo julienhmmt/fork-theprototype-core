@@ -7,6 +7,7 @@
 		displayDecimals,
 		parseValue
 	} from '$lib/units';
+	import { autoFieldScope, fieldClip, nameNear } from '$lib/fieldMenu';
 	import { withHistoryGesture } from '$lib/historyGesture';
 
 	// THE numeric field (phase 64.2, rebuilt in 16-Q3). One control everywhere:
@@ -299,9 +300,32 @@
 		// a click that did not scrub = "let me type it" (anywhere on the field)
 		inputEl?.focus();
 	}
+
+	// 43 J3: a value box standing on its own inside the Inspector (not inside a row that
+	// answers for it) is a clipboard field — copy / paste / reset ($lib/fieldMenu). Inert
+	// anywhere else, and nothing about scrubbing or typing changes.
+	const clipScope = autoFieldScope();
+	/** @type {HTMLElement|null} */
+	let wrapEl = $state(null);
+	/** @returns {any} */
+	function clipSpec() {
+		if (!clipScope) return null;
+		return {
+			kind: 'number',
+			name: ariaLabel || label || title || nameNear(wrapEl) || 'Value',
+			get: () => value,
+			// straight to onchange: commit() would swap the paste's history gesture for this field's
+			set: (/** @type {number} */ next) => Number.isFinite(next) && onchange(clamp(next)),
+			unit,
+			min,
+			max,
+			disabled
+		};
+	}
+	$effect(() => clipScope?.section?.add(clipSpec));
 </script>
 
-<div class="dn-wrap" class:nodrag class:nopan={nodrag} class:dn-scrub={scrubbing} class:dn-focus={focused} class:dn-disabled={disabled} use:drag>
+<div class="dn-wrap" class:nodrag class:nopan={nodrag} class:dn-scrub={scrubbing} class:dn-focus={focused} class:dn-disabled={disabled} use:drag bind:this={wrapEl} use:fieldClip={clipSpec}>
 	{#if label}
 		<span class={'dn-label ' + accent}>{label}</span>
 	{/if}

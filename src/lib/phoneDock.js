@@ -13,6 +13,7 @@ import {
 	HOSTED_DOCK_TABS
 } from './bottomDock';
 import { hostedTabsOpen, dockHostedView } from './dockHost';
+import { statsOpen } from './sceneBudget';
 import { registerDockOpener, registerDockCloser, closeStoreFor } from './dockMenu';
 import { togglePanel } from './panelToggles';
 import { phoneShell } from './ui/phoneShell.js';
@@ -74,16 +75,21 @@ function quietly(fn) {
 // (Objects is the one content panel with a floating window of its own: with Settings ▸ Interface ▸
 // "Allow undocking on touch screens" on, a phone keeps it a floating, tab-groupable window — 41 G6 —
 // and only the panels with no floating mode are dock tabs)
+// 43 J1: Statistics follows the Objects list's rule — a dock tab unless undocking is allowed
 export const phoneTabsOpen = derived(
-	[phoneShell, inspTabs, objectListClose, notesDrawerOpen, layoutsMenuOpen, mobileUndockAllowed],
-	([$phone, $ins, $objClosed, $notes, $layouts, $undock]) => ({
+	[phoneShell, inspTabs, objectListClose, notesDrawerOpen, layoutsMenuOpen, mobileUndockAllowed, statsOpen],
+	([$phone, $ins, $objClosed, $notes, $layouts, $undock, $stats]) => ({
 		properties: $phone && $ins.properties,
 		scene: $phone && $ins.scene,
 		objects: $phone && !$undock && !$objClosed,
 		notes: $phone && !!$notes,
-		layouts: $phone && !!$layouts
+		layouts: $phone && !!$layouts,
+		stats: $phone && !$undock && !!$stats
 	})
 );
+
+/** the content tabs that are floating WINDOWS elsewhere (and on a phone that allows undocking) */
+const WINDOW_TABS = ['objects', 'stats'];
 
 /** the phone content tab on screen right now (null: none, or the dock is minimized) */
 export const phoneDockShown = derived([phoneShell, visibleDockKey, dockMinimized], ([$phone, $key, $min]) =>
@@ -109,6 +115,7 @@ export function openPhoneTab(key) {
 	if (key === 'objects') objectListClose.set(false);
 	else if (key === 'notes') notesDrawerOpen.set(true);
 	else if (key === 'layouts') layoutsMenuOpen.set(true);
+	else if (key === 'stats') statsOpen.set(true);
 	activateDock(key);
 }
 
@@ -128,6 +135,7 @@ export function closePhoneTab(key) {
 	if (key === 'objects') objectListClose.set(true);
 	else if (key === 'notes') notesDrawerOpen.set(false);
 	else if (key === 'layouts') layoutsMenuOpen.set(false);
+	else if (key === 'stats') statsOpen.set(false);
 }
 
 /** the dock shows an Inspector tab: make the one Inspector element show that tab's kind */
@@ -160,7 +168,7 @@ export function phoneBarTap(key) {
 		else activateDock(key);
 		return;
 	}
-	if (PHONE_DOCK_TABS.includes(key) && !(key === 'objects' && get(mobileUndockAllowed))) {
+	if (PHONE_DOCK_TABS.includes(key) && !(WINDOW_TABS.includes(key) && get(mobileUndockAllowed))) {
 		openPhoneTab(key);
 		return;
 	}
@@ -178,12 +186,14 @@ export function phoneBarTap(key) {
 const floatStore = (key) => (key === 'objects' ? objectListClose : closeStoreFor(key));
 /** @param {string} key */
 function floatingOpen(key) {
+	if (key === 'stats') return get(statsOpen); // an open flag, not a close store
 	const store = floatStore(key);
 	return !!store && get(store) === false;
 }
 /** @param {string} key */
 function closeFloating(key) {
-	floatStore(key)?.set(true);
+	if (key === 'stats') statsOpen.set(false);
+	else floatStore(key)?.set(true);
 }
 
 // ---- the posture memory --------------------------------------------------------------------
@@ -357,7 +367,7 @@ export function startPhoneDock() {
 	for (const key of PHONE_DOCK_TABS) {
 		// 42 I6: on a wider screen the Objects list is a HOSTED dock tab ($lib/dockHost) — a "+"
 		// row docks the floating window there instead of opening a phone tab
-		offs.push(registerDockOpener(key, () => (posture !== 'phone' && key === 'objects' ? dockHostedView(key) : openPhoneTab(key))));
+		offs.push(registerDockOpener(key, () => (posture !== 'phone' && HOSTED_DOCK_TABS.includes(key) ? dockHostedView(key) : openPhoneTab(key))));
 		offs.push(registerDockCloser(key, () => closePhoneTab(key)));
 	}
 	offs.push(phoneShell.subscribe((on) => enterPosture(on ? 'phone' : 'wide')));
@@ -404,7 +414,8 @@ export function startPhoneDock() {
 	for (const [key, store, isOpen] of /** @type {[string, import('svelte/store').Readable<any>, (v: any) => boolean][]} */ ([
 		['objects', objectListClose, (v) => !v],
 		['notes', notesDrawerOpen, (v) => !!v],
-		['layouts', layoutsMenuOpen, (v) => !!v]
+		['layouts', layoutsMenuOpen, (v) => !!v],
+		['stats', statsOpen, (v) => !!v]
 	])) {
 		let was = isOpen(get(store));
 		offs.push(

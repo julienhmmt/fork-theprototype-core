@@ -68,7 +68,8 @@ export const LAYOUT_VERSION = 2;
 export const CHROME_KEYS = {
 	// the toolbar record (bar, corners, top-right group, touch tools, position), its two lift
 	// prefs and always-on-top, and the Connect bar's one optional button
-	desktop: ['controlsLayout', 'floatingToolbar', 'toolbarOnTop', 'hudStackLift', 'showRoomsButton'],
+	// 43 J12: + `touchTools` — whether the row beside the logo shows (it holds what Edit positions put there)
+	desktop: ['controlsLayout', 'floatingToolbar', 'toolbarOnTop', 'hudStackLift', 'showRoomsButton', 'touchTools'],
 	// the folded phone's bottom bar (42 I5's one list) and More's three Show switches
 	phone: ['phoneBar', 'phoneSelectionStrip', 'phoneDockTabs', 'phoneGrabHandle']
 };

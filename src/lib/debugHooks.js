@@ -233,6 +233,9 @@ export const DEBUG_HOOKS = [
 	['cameraPreview', () => import('./cameraPreview')],
 	['addObjects', () => import('./addObjects')],
 	['cameraPip', () => import('./cameraPip')],
+	// 43 K5: the shared PiP renderer + the maximized dock's viewport PiP
+	['pipViews', () => import('./pipViews')],
+	['viewportPip', () => import('./viewportPip')],
 	['inputDevice', () => import('./inputDevice')],
 	['sceneTemplates', () => import('./sceneTemplates')],
 	['bvhPicking', () => import('./bvhPicking')],
@@ -263,12 +266,17 @@ export const DEBUG_HOOKS = [
 	['shaderTextures', () => import('./shaderTextures')],
 	['shaderCatalog', () => import('./shaderCatalog')],
 	['units', () => import('./units')],
+	['fieldMenu', () => import('./fieldMenu')],
 	['postBackends', () => import('./postBackends')],
 	['workspace', () => import('./workspace')],
 	['uiLayouts', () => import('./uiLayouts')],
 	['undoToast', () => import('./undoToast')],
 	['docking', () => import('./docking')],
 	['sidebars', () => import('./sidebars')],
+	// 43 J9: dismissible tips (the phone More sheet's drag how-to) + Reset tips
+	['tips', () => import('./tips')],
+	// 43: the layout reloaders (a suite swaps the stored toolbar without reloading the page)
+	['uiLayoutsCore', () => import('./uiLayoutsCore')],
 	['editResume', () => import('./editResume')],
 	['moduleRequirements', () => import('./moduleRequirements')],
 	['hudDocs', () => import('./hudDocs')],

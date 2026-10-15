@@ -8424,6 +8424,7 @@
 			<WindowChrome
 				size="tool"
 				bare
+				dockedHead="tools"
 				body={false}
 				title="Explorer"
 				headerClass="ui-panel-header move-handle cursor-move select-none"
@@ -8458,7 +8459,7 @@
 					</div>
 				{/snippet}
 				{#snippet actions()}
-					<button id="explorer-dock" class="wc-act-text" title="Dock to the bottom" onclick={() => setDocked(true)}><Icon name="panel-bottom" size={16} />Dock</button>
+					<button id="explorer-dock" data-wc-chrome class="wc-act-text" title="Dock to the bottom" onclick={() => setDocked(true)}><Icon name="panel-bottom" size={16} />Dock</button>
 				{/snippet}
 			</WindowChrome>
 			<div class="min-h-0 flex-1 p-1">

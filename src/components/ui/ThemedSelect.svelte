@@ -7,6 +7,7 @@
 	// containing-block gotcha). Drop-in for flowbite's <Select>: items:[{value,
 	// name}], value (bindable), onchange(value). Keyboard + drop-up + roles.
 	import { tick } from 'svelte'
+	import { autoFieldScope, fieldClip, nameNear } from '$lib/fieldMenu'
 
 	let {
 		items = [],
@@ -17,7 +18,9 @@
 		disabled = false,
 		title = undefined,
 		mixed = false,
-		class: klass = ''
+		class: klass = '',
+		clip = undefined,
+		clipName = undefined
 	}: {
 		items?: Array<{ value: any; name: string }>
 		value?: any
@@ -30,7 +33,37 @@
 		 * pick (even the primary's own value) write, since it sets every member */
 		mixed?: boolean
 		class?: string
+		/** 43 J3: false = not a clipboard field (a select that runs an ACTION, not a value) */
+		clip?: boolean
+		/** 43 J3: the field's name in the menu and a copied section (else the label beside it) */
+		clipName?: string
 	} = $props()
+
+	// 43 J3: inside the Inspector a choice is a clipboard field — copy the label, paste a
+	// value or a label ($lib/fieldMenu); the label span beside the select answers too
+	const clipScope = autoFieldScope()
+	let wrapEl: HTMLElement | null = $state(null)
+	function clipSpec(): any {
+		if (!clipScope || clip === false) return null
+		return {
+			kind: 'enum',
+			name: clipName || nameNear(wrapEl) || title || (id ? id.replace(/[-_]+/g, ' ') : 'Choice'),
+			options: items.map((it) => ({ value: it.value, label: it.name })),
+			get: () => value,
+			set: (next: any) => {
+				const item = items.find((it) => eq(it.value, next))
+				if (item && !disabled) pick(item)
+			},
+			disabled
+		}
+	}
+	$effect(() => clipScope?.section?.add(clipSpec))
+	$effect(() => {
+		const label = wrapEl?.previousElementSibling as HTMLElement | null | undefined
+		if (!clipScope || !label || !/^(SPAN|LABEL)$/.test(label.tagName)) return
+		const action = fieldClip(label, clipSpec)
+		return () => action.destroy()
+	})
 
 	let open = $state(false)
 	let btn: any = $state(null)
@@ -153,7 +186,7 @@
 
 <svelte:window onpointerdown={onDocPointer} />
 
-<div class={'ts-wrap ' + klass}>
+<div class={'ts-wrap ' + klass} bind:this={wrapEl} use:fieldClip={clipSpec}>
 	<button
 		{id}
 		{title}
@@ -200,6 +233,9 @@
 <style>
 	.ts-wrap {
 		position: relative;
+		/* 43 K2: a select in a flex row may shrink with its column — its label ellipsizes rather than
+		   pushing the row (and a narrow sidebar) wider than it is */
+		min-width: 0;
 		/* a flex column so the button can stretch to the wrap's height when the wrap
 		   is itself stretched by a flex row (e.g. beside a taller label box) — keeps
 		   the control vertically aligned with its setting label instead of sitting
@@ -213,6 +249,7 @@
 		justify-content: space-between;
 		gap: 0.5rem;
 		width: 100%;
+		min-width: 0;
 		flex: 1 1 auto;
 		min-height: 2.25rem;
 		padding: 0.3rem 0.55rem;
@@ -229,6 +266,7 @@
 		cursor: not-allowed;
 	}
 	.ts-label {
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
