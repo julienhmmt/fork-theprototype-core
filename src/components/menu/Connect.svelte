@@ -20,6 +20,8 @@
 	import CloudSlot from '../CloudSlot.svelte';
 	import ConnectInfoDrawer from './ConnectInfoDrawer.svelte';
 	import { safeStorage } from '$lib/safeStorage';
+	// 44 M14: pinned to the top row (the full-width bar) or floating (the centred pill, compact when crowded)
+	import { connectPinned } from '$lib/connectPin';
 
 	let peerIdToConnect = $state('');
 	let displayid = $state('Generating...');
@@ -119,6 +121,12 @@
 	// never move with docking) keeps the decision deterministic — no oscillation.
 	let pillEl = $state<HTMLElement | null>(null);
 	let docked = $state(false);
+	/** 44 M14: FLOATING with no room on the top row — the pill shows its compact form (status dot + chevron) */
+	let squeezed = $state(false);
+	/** …and a tap on the dot shows the full bar over the row until a press elsewhere (or room returns) */
+	let peek = $state(false);
+	/** the natural width per content state, so a squeezed pill knows what it would need without drawing it */
+	const naturalByKey = new Map<string, number>();
 	// last natural (undocked) width of the pill content — frozen while docked so the
 	// undock threshold uses a stable value even though the bar is now full-width
 	let naturalWidth = 0;
@@ -140,13 +148,15 @@
 			const r = el?.getBoundingClientRect();
 			return r && r.width > 0 && r.height > 0 ? r : null;
 		};
+		// 44 M12b: a cluster MOVED off the top row is not a wall of it (only what overlaps the row's band counts)
+		const onRow = (r: DOMRect | null) => (r && r.top < 60 + ($connectDocked ? $connectBarHeight : 0) ? r : null);
 		const logo = visible(document.getElementById('logo-menu'));
 		let left = logo ? logo.right : 56;
 		const row = document.getElementById('touch-tools');
-		const rowRect = visible(row);
+		const rowRect = onRow(visible(row));
 		// stacked under the logo, the row is not on the top row at all
 		if (rowRect && logo && !row!.classList.contains('tt-stacked')) left = Math.max(left, rowRect.right);
-		const group = visible(document.getElementById('hud-tr'));
+		const group = onRow(visible(document.getElementById('hud-tr')));
 		const avatar = visible(document.getElementById('avatar-trigger')) ?? visible(document.getElementById('avatar-menu'));
 		const right = group ? group.left : avatar ? avatar.left : vw - 240;
 		return { left, right };
@@ -188,8 +198,19 @@
 		const vw = window.innerWidth;
 		const { left: leftRight, right: rightLeft } = topRowWalls(vw);
 		const gap = 12;
-		// only trust a fresh content-width reading while the pill is its natural size
-		if (!docked) naturalWidth = Math.max(pillEl.scrollWidth, pillEl.offsetWidth) || naturalWidth;
+		// only trust a fresh content-width reading while the pill is its natural size (drawn full: not docked, not
+		// squeezed — a peek draws it full); 44: remembered per content state for while it is not
+		const key = naturalKey();
+		if (!docked && (!squeezed || peek)) {
+			naturalWidth = Math.max(pillEl.scrollWidth, pillEl.offsetWidth) || naturalWidth;
+			naturalByKey.set(key, naturalWidth);
+		} else if (naturalByKey.has(key)) naturalWidth = naturalByKey.get(key)!;
+		else if (squeezed) {
+			// a content state never seen full: draw it full once to learn its width, then decide
+			squeezed = false;
+			tick().then(measureDock);
+			return;
+		}
 		// 42 I2: a FULL-HEIGHT sidebar slides its corner's buttons inward by the column's width. Centred
 		// on the window, the pill then lost the gap on that side and docked for nothing (the cloud
 		// build's ~480 px pill at 1440 px) — so while a column is pinned it centres in the gap between
@@ -200,8 +221,53 @@
 		cxShift = pinned ? Math.round(centerX - vw / 2) : 0;
 		// a centred element fits iff its width <= twice the SMALLER side gap
 		const available = 2 * Math.min(centerX - (leftRight + gap), (rightLeft - gap) - centerX);
-		docked = pillShown && (vw <= 640 || naturalWidth > available);
-		(window as any).__connectDock = { docked, naturalWidth, available, left: leftRight, right: rightLeft };
+		// 44 M14: PINNED = its own full-width row, always; FLOATING = centred while it fits, else COMPACT (dot +
+		// chevron) — and its own row only when even the compact form has no room (or on a phone-width window)
+		if (!pillShown || (placedPill && vw > 640 && !$connectPinned)) {
+			// 44 M12b: hidden, or MOVED by the person (Edit positions) — a placed pill is drawn full where it was put
+			docked = false;
+			squeezed = false;
+		} else if (vw <= 640 || $connectPinned) {
+			docked = true;
+			squeezed = false;
+		} else if (naturalWidth <= available) {
+			docked = false;
+			squeezed = false;
+		} else {
+			squeezed = COMPACT_W <= available;
+			docked = !squeezed;
+		}
+		if (!squeezed) peek = false;
+		(window as any).__connectDock = { docked, squeezed, peek, pinned: $connectPinned, naturalWidth, available, left: leftRight, right: rightLeft };
+	}
+
+	/** 44 M12b: the pill has a place of its own (Edit positions ▸ the Connect bar's grip / Move) */
+	const placedPill = $derived.by(() => {
+		const c = $toolbarSlots.clusters?.connect;
+		return !!c && typeof c.x === 'number' && typeof c.y === 'number';
+	});
+	/** 44: the compact form's width (dot + chevron + the pill's padding) — a constant, never the element's own
+	 *  rect, or the measurement would feed the layout it produced */
+	const COMPACT_W = 104;
+	/** what the full pill's width depends on */
+	function naturalKey() {
+		return [connState, expanded, $showRoomsButton && !!$drawerSlot, !!$connectSlot, !!$joinRefusal].join('|');
+	}
+	// 44 M14: the switch re-decides from the full pill (a docked bar's width says nothing about the pill's)
+	$effect(() => {
+		void $connectPinned;
+		docked = false;
+		squeezed = false;
+		tick().then(measureDock);
+	});
+	/** the peek ends on a press outside the bar (or Escape) */
+	function onPeekDown(e: PointerEvent) {
+		if (!peek) return;
+		if ((e.target as Element | null)?.closest?.('.connect-wrap')) return;
+		peek = false;
+	}
+	function onPeekKey(e: KeyboardEvent) {
+		if (peek && e.key === 'Escape') peek = false;
 	}
 
 	// 43 K4: the walls change without the window or the pill changing — a button added to / removed from
@@ -211,6 +277,7 @@
 	$effect(() => {
 		void $toolbarSlots;
 		void $touchTools;
+		void placedPill;
 		void pillShown;
 		tick().then(measureDock);
 		const t = setTimeout(measureDock, 160);
@@ -321,6 +388,12 @@
 	// on the phone shell the bar only ever shows INSIDE the Connect sheet, which is the
 	// expanded form already — the shell draws its own chip (#ps-connect-chip)
 	const compact = $derived(connState === 'connected' && !expanded && !$phoneShellActive);
+	/** 44 M11: pinned to the top row with a sidebar open below it, the bar's bottom corner on that side is SQUARE —
+	 *  a rounded one showed the viewport through the gap between the curve and the column's top edge */
+	const squareLeft = $derived(docked && !$phoneShellActive && $sidebarGeometry.wide && $sidebarGeometry.left.shown);
+	const squareRight = $derived(docked && !$phoneShellActive && $sidebarGeometry.wide && $sidebarGeometry.right.shown);
+	/** 44 M14: the squeezed form is drawn (not while a peek shows the full bar, never on the phone shell) */
+	const squeezedView = $derived(squeezed && !peek && !$phoneShellActive);
 	/** up to three peers on the chip, the rest as +N (NOTES-38 #12: a speaker gets the ring) */
 	const chipPeers = $derived(
 		remoteOpen.slice(0, 3).map((id) => {
@@ -429,12 +502,28 @@
 	 transparent margin pass clicks to windows underneath (z-index 300); the pill
 	 re-enables them. Narrow screens drop the bar to its own row BELOW the logo
 	 (left) and the peers/profile chrome (right) instead of squeezing between them. -->
-<div class="connect-wrap" data-key-scope="keep" class:docked class:body-open={$connectDrawerOpen} class:cx-hidden={!pillShown} style:--cx-shift="{cxShift}px">
+<svelte:window onpointerdown={onPeekDown} onkeydown={onPeekKey} />
+<div class="connect-wrap" data-key-scope="keep" class:docked class:squeezed={squeezedView} class:peek class:body-open={$connectDrawerOpen} class:cx-hidden={!pillShown} style:--cx-shift="{cxShift}px">
 	<!-- 38 R8: one glass bar (styles/hud.css) — your invite id as a mono chip, the dial field
 	     with ONE primary button, status as a Badge, icon buttons for the rest. Every id,
 	     testid, placeholder and button name the suites and the tour read is unchanged. -->
-	<div class="connect-pill tp-ui hud-glass" class:drawer-open={drawerVisible} class:compact class:docked bind:this={pillEl} role="group" data-state={connState}>
-		{#if compact}
+	<div class="connect-pill tp-ui hud-glass" class:drawer-open={drawerVisible} class:compact class:docked class:squeezed={squeezedView} class:sq-left={squareLeft} class:sq-right={squareRight} bind:this={pillEl} role="group" data-state={connState}>
+		{#if squeezedView}
+			<!-- 44 M14: floating with no room on the top row — the compact form (the phone chip's dot + the
+			     chevron). The dot shows the full bar over the row; it expands by itself when room returns. -->
+			<button
+				type="button"
+				id="connect-squeeze-dot"
+				class="cx-chip cx-squeeze"
+				title={$connectionStatus.words + ' — tap for the full bar'}
+				aria-label={$connectionStatus.words + '. Show the full connection bar'}
+				aria-expanded="false"
+				data-tone={$connectionStatus.tone}
+				onclick={() => (peek = true)}
+			>
+				<span class="cx-dot cx-status-dot" data-tone={$connectionStatus.tone} aria-hidden="true"></span>
+			</button>
+		{:else if compact}
 			<!-- NOTES-38 #10: the connected chip. Click it for the full bar. -->
 			<button
 				type="button"
@@ -544,7 +633,7 @@
 		{/if}
 
 
-		{#if $joinRefusal && connState === 'idle'}
+		{#if $joinRefusal && connState === 'idle' && !squeezedView}
 			<!-- 25-F: declined, or full — told apart, and dismissable -->
 			<button
 				id="connect-refusal-chip"
@@ -558,7 +647,7 @@
 
 		<!-- Rooms shortcut → opens the drawer on its Rooms tab. Shown only when the cloud
 			 plugin provides room content ($drawerSlot) and Settings ▸ Show Rooms button is on. -->
-		{#if $drawerSlot && $showRoomsButton}
+		{#if $drawerSlot && $showRoomsButton && !squeezedView}
 			<button
 				id="connect-rooms-button"
 				class="hud-cell cx-rooms"
@@ -597,7 +686,7 @@
 		</button>
 
 		<!-- open-core (M1d): cloud plugin mount point. Empty in the OSS build. -->
-		{#if $connectSlot}
+		{#if $connectSlot && !squeezedView}
 			<span class="hud-sep"></span>
 			<CloudSlot mount={$connectSlot} />
 		{/if}
@@ -788,6 +877,32 @@
 	   flips to DOCKED (measured in script): a full-width bar stuck to the top edge — the
 	   field flexes to fill, the buttons stay visible, the Rooms shortcut hides, and the
 	   corner chrome drops below the bar (Sidebar/Users read connectDocked/BarHeight). */
+	/* 44 M14: the compact form — dot + chevron; its drawer keeps a readable width (centred under it) */
+	.connect-pill.squeezed {
+		gap: 2px;
+		padding: 0 4px;
+	}
+	.cx-squeeze {
+		padding: 0 10px;
+	}
+	.connect-pill.squeezed.drawer-open {
+		border-bottom-left-radius: var(--radius-window);
+		border-bottom-right-radius: var(--radius-window);
+		border-bottom-color: var(--border);
+	}
+	.connect-wrap.squeezed :global(.cxd-panel) {
+		left: 50%;
+		right: auto;
+		width: min(420px, calc(100vw - 16px));
+		margin-left: calc(min(420px, calc(100vw - 16px)) / -2);
+		border-top: 1px solid var(--border);
+		border-radius: var(--radius-window);
+		margin-top: 4px;
+	}
+	/* the peek: the full bar over the row's chrome, until a press elsewhere */
+	.connect-wrap.peek {
+		z-index: calc(var(--z-popover) + 5);
+	}
 	/* 43 K3: hidden from Edit positions / Customize — it takes no room and docks nothing */
 	.connect-wrap.cx-hidden {
 		display: none;
@@ -806,6 +921,12 @@
 		border-radius: 0 0 var(--radius-window) var(--radius-window);
 		border-top: 0;
 		white-space: normal;
+	}
+	.connect-pill.docked.sq-left {
+		border-bottom-left-radius: 0;
+	}
+	.connect-pill.docked.sq-right {
+		border-bottom-right-radius: 0;
 	}
 	.connect-pill.docked.drawer-open {
 		border-bottom-left-radius: 0;

@@ -19,6 +19,8 @@
 	// (Controls portals any OTHER button placed here into this row, with the same `order` numbers)
 	import { toolbarSlots, slotOrder } from '$lib/toolbarSlots';
 	import { SIDE_MAX } from '$lib/toolbarLayout';
+	// 44 M13: the row slides with the left sidebar, like the logo beside it
+	import { geometry as sidebarGeometry } from '$lib/sidebars';
 	const ttOrder = (/** @type {string} */ id) => slotOrder($toolbarSlots.touch, id);
 	const ttShown = (/** @type {string} */ id) => !$toolbarSlots.editing && ttOrder(id) != null;
 	/** how many buttons the row holds (edit mode adds a "+" while there is room) */
@@ -43,10 +45,30 @@
 	/** the row's own width, from CONSTANTS and the COUNT of buttons the layout puts in it — never
 	 *  from the element's own rect, or the measurement would feed the layout that produced it
 	 *  (the frozen-span rule). 42 I9: the count is no longer always three. */
-	const rowRight = (/** @type {number} */ n) => ROW_LEFT + BTN * n + GAP * Math.max(0, n - 1) + GUTTER;
+	const rowRight = (/** @type {number} */ n) => ROW_LEFT + pinnedSlide() + BTN * n + GAP * Math.max(0, n - 1) + GUTTER;
+	/** the part of the slide that moves the ROW (a pinned column) — never the stacked-only part, or deciding to
+	 *  stack would move the row that decided it */
+	function pinnedSlide() {
+		const g = $sidebarGeometry;
+		return g?.wide && g.left.shown && g.left.full ? g.left.w : 0;
+	}
 
 	let stacked = $state(false);
 
+	/** 44 M13: how far the row slides right for the LEFT sidebar. A PINNED (full-height) column takes the corner and
+	 *  the logo slides by its width (42 I2) — the row beside it used to stay at 78 px, on top of the column. An OPEN
+	 *  (unpinned) column starts below the logo's row, so it only matters where the row would sit over it: stacked
+	 *  below the logo, or while Edit positions draws every placeholder (the edit bar sits beside any open sidebar,
+	 *  J8, and so does this row). */
+	const slide = $derived.by(() => {
+		const g = $sidebarGeometry;
+		if (!g?.wide || !g.left.shown) return 0;
+		if (g.left.full) return g.left.w;
+		// the row's band is its anchor .. +48; the column's tab strip may tuck under its round buttons' lower edge
+		const anchor = $connectDocked ? $connectBarHeight + 8 : 20;
+		const overRow = g.left.top < anchor + BTN - 8;
+		return stacked || overRow || $toolbarSlots.editing ? g.leftX + g.left.w : 0;
+	});
 	/** Everything that can sit on the logo's row and must not be run into: the centred
 	 *  Connect pill, and the notes / peers / profile cluster the user pointed out is just
 	 *  as much of a wall as the pill.
@@ -58,6 +80,12 @@
 
 	function measure() {
 		if (typeof document === 'undefined') return;
+		// 44 M12b: a row the person PLACED (Edit positions) or rotated is laid out as they chose — no measuring
+		const own = $toolbarSlots.clusters?.touch;
+		if (own && (typeof own.x === 'number' || own.rotated)) {
+			stacked = false;
+			return;
+		}
 		const logo = document.querySelector('#logo-menu')?.getBoundingClientRect();
 		if (!logo) {
 			stacked = false;
@@ -86,6 +114,7 @@
 		void $touchTools;
 		void $toolbarSlots.editing;
 		void ttCount;
+		void $sidebarGeometry;
 		measure();
 		// one more after layout settles — the pill is centred with a transform and its
 		// rect is not final on the same frame the bar's height changes
@@ -124,7 +153,7 @@
 		data-key-scope="keep"
 		class="touch-tools"
 		class:tt-stacked={stacked}
-		style="--tt-anchor: {$connectDocked ? $connectBarHeight + 8 : 20}px"
+		style="--tt-anchor: {$connectDocked ? $connectBarHeight + 8 : 20}px; --tt-slide: {slide}px"
 		aria-label="Touch tools"
 	>
 		{#if ttShown('undo')}
@@ -179,7 +208,8 @@
 	.touch-tools {
 		position: fixed;
 		top: var(--tt-anchor, 20px);
-		left: 78px;
+		left: calc(78px + var(--tt-slide, 0px));
+		transition: left 0.2s ease;
 		z-index: var(--z-hud);
 		display: flex;
 		flex-direction: row;
@@ -194,7 +224,7 @@
 	   the same 20px the logo uses left them looking 6px out. */
 	.touch-tools.tt-stacked {
 		top: calc(var(--tt-anchor, 20px) + 56px);
-		left: calc(16px + (44px - 48px) / 2);
+		left: calc(16px + (44px - 48px) / 2 + var(--tt-slide, 0px));
 		flex-direction: column;
 	}
 	/* 42 I9: GLOBAL — Controls portals placeholders and other roster buttons into this row, and a

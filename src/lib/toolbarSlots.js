@@ -27,6 +27,8 @@ export const TOUCH_NATIVE = ['undo', 'redo', 'multiselect'];
  * @property {string[]} touch   the touch tools, in order
  * @property {boolean} editing  Edit positions is on (the natives stand down for the placeholders)
  * @property {boolean} [connect] 43 K3: the Connect pill is shown (the draft's while editing; absent = shown)
+ * @property {Record<string, {x?: number, y?: number, rotated?: boolean, hidden?: boolean}>} [clusters] 44 M12b: the
+ *   clusters' placement / rotation (the draft's while editing) — a placed Connect pill stops docking / squeezing
  */
 
 /** @type {import('svelte/store').Writable<ToolbarSlots>} */

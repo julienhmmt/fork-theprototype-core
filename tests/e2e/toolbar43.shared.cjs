@@ -328,19 +328,22 @@ h.run(async () => {
 					await setBar(P, bar, A);
 					await P.waitForTimeout(500);
 					const t = await topRow();
-					seq.push(`${name}:${t.docked ? 'own row' : 'centre'}`);
-					h.check(t.hits.length === 0, T + `K4 ${width}px ${name}: the pill (${t.docked ? 'on its own row' : 'centred'}) overlaps nothing on the top row (${t.hits.join(',') || 'clear'}; fits ${Math.round(t.dock?.naturalWidth)} in ${Math.round(t.dock?.available)})`);
+					// 44 M14 (decision): a FLOATING pill that does not fit goes COMPACT (dot + chevron) instead of taking its
+					// own row — the 43 cycle "own row → centre → own row" is now "compact → full → compact"
+					const crowdedState = (x) => (x.dock?.squeezed ? 'compact' : x.docked ? 'own row' : 'centre');
+					seq.push(`${name}:${crowdedState(t)}`);
+					h.check(t.hits.length === 0, T + `K4 ${width}px ${name}: the pill (${crowdedState(t)}) overlaps nothing on the top row (${t.hits.join(',') || 'clear'}; fits ${Math.round(t.dock?.naturalWidth)} in ${Math.round(t.dock?.available)})`);
 					// the measurement's own reading exists from 43 on (the base has none: its counterfactual is the overlap above)
 					if (t.dock) {
 						h.check(t.docked === !!t.dock.docked && (t.docked || Math.abs((t.pill.left + t.pill.right) / 2 - width / 2) <= 2), T + `K4 ${width}px ${name}: ${t.docked ? 'docked full width' : 'centred on the window'} — the measurement and the page agree`);
-						h.check(t.docked === (t.dock.naturalWidth > t.dock.available || width <= 640), T + `K4 ${width}px ${name}: it docks exactly when it would not fit between the walls (${Math.round(t.dock.left)}..${Math.round(t.dock.right)})`);
+						h.check((!!t.dock.squeezed || t.docked) === (t.dock.naturalWidth > t.dock.available || width <= 640) && (!t.docked || width <= 640 || t.dock.available < 104), T + `K4 ${width}px ${name}: floating, it goes compact exactly when it would not fit between the walls (${Math.round(t.dock.left)}..${Math.round(t.dock.right)})`);
 					}
 					if (width === 900) await shot(P, `k4-${width}-${name.replace(' ', '-')}-${theme}`);
 				}
-				if (seq[1].endsWith('own row') && seq[2].endsWith('centre') && seq[3].endsWith('own row')) flipped++;
+				if (seq[1].endsWith('compact') && seq[2].endsWith('centre') && seq[3].endsWith('compact')) flipped++;
 				console.log(T + `K4 ${width}px: ${seq.join(' → ')}`);
 			}
-			h.check(flipped >= 1, T + `K4: at some width the pill takes its own row when the top row fills, returns to it when room comes back, and leaves again (${flipped} width(s))`);
+			h.check(flipped >= 1, T + `K4 (44 M14): at some width the pill goes compact when the top row fills, comes back full when room returns, and goes compact again (${flipped} width(s))`);
 			await P.setViewportSize({ width: 1440, height: 900 });
 			await P.evaluate(() => window.__stores.touchTools.set(false));
 			await setBar(P, null, A);
@@ -539,7 +542,11 @@ h.run(async () => {
 			await sidebar(P, { side: 'right', full: false, w: 400 });
 			await enterEdit(P, 'Move (1)');
 			const bar = await rect(P, '#controls-pill');
-			h.check(bar.right <= 1440 - 400 + 1 && bar.right >= 1440 - 400 - 40, T + `J8: a bar parked right slides just clear of the sidebar (right edge ${Math.round(bar.right)}, sidebar at ${1440 - 400})`);
+			// 44 M13: in Edit positions the right corner stack sits beside the sidebar too, so on the bar's row the
+			// stack is the nearer wall (when it is there): just clear of whichever comes first
+			const stack = await rect(P, '#hud-stack-right');
+			const wall = stack && stack.width && stack.bottom > bar.bottom - 44 && stack.left < 1440 - 400 ? Math.min(1440 - 400, stack.left) : 1440 - 400;
+			h.check(bar.right <= wall + 1 && bar.right >= wall - 40, T + `J8: a bar parked right slides just clear of the sidebar (right edge ${Math.round(bar.right)}, sidebar at ${1440 - 400}, wall ${Math.round(wall)})`);
 			await P.keyboard.press('Escape');
 			await P.waitForTimeout(300);
 			}
