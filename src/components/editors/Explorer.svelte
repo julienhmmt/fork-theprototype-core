@@ -340,7 +340,7 @@
 	import { selectedObjects } from '../../stores/sceneStore.js';
 	import { sceneAssets } from '$lib/sceneAssets';
 	import { findNodeAnyGraph } from '../../stores/flowStore';
-	import { bottomDockActive, visibleDockKey, dockMinimized, setDockOccupant, dockHeight, dockModeArm, forgetDockTab } from '$lib/bottomDock';
+	import { bottomDockActive, visibleDockKey, dockShownKeys, dockPaneOf, dockMinimized, setDockOccupant, dockHeight, dockModeArm, forgetDockTab } from '$lib/bottomDock';
 	import { bottomDockable } from '$lib/bottomDockDrop';
 	import { dragWindow } from '$lib/dragWindow';
 	// 24-C1: the in-app clipboard for files and folders
@@ -468,7 +468,7 @@
 	});
 	// W2: a MINIMIZED dock renders nothing while every tab stays open (the occupant
 	// report above is untouched, so the strip comes back with its tabs intact)
-	const dockVisible = $derived($visibleDockKey === 'explorer' && !$dockMinimized);
+	const dockVisible = $derived($dockShownKeys.includes('explorer'));
 
 	// tab-grouped windows share one size: show the group's rect so a resize on any
 	// member updates every tab, not just the active one.
@@ -8342,6 +8342,7 @@
 			id="explorer-list"
 			transition:fly={{ y: 300, duration: 200 }}
 			class="tp-ui tp-dock-panel fixed inset-x-0 bottom-0 p-2 {dockVisible ? '' : 'hidden'}"
+			data-dock-pane={$dockPaneOf['explorer']}
 			style="z-index: var(--z-dock); height: {$dockHeight}px"
 			data-key-scope="panel"
 			aria-label="Explorer (docked)"

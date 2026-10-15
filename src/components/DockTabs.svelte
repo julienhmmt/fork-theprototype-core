@@ -40,10 +40,10 @@
 	// strip it UNDOCKS that view into a floating window. Both are the fast paths for
 	// what the tab's right-click menu already offered in words, which is what keeps the
 	// feature reachable on a device that cannot drag.
-	import { dockTabs, bottomDockActive, activateDock, dockMinimized, reorderDockTabs, armDockMode, undockButtonMode, setDockEmptyOpen } from '$lib/bottomDock';
+	import { dockTabs, dockStripTabs, bottomDockActive, activateDock, dockMinimized, reorderStripTabs, armDockMode, undockButtonMode, setDockEmptyOpen, dockSplitView, splitWithNext, unsplitDock, setSplitPane, visibleDockKey } from '$lib/bottomDock';
 	import { dockAddMenuAt, dockTabItems, closeDockView, undockFromDock, undockInto, canUndockTab, moveToSidebar } from '$lib/dockMenu';
 	import { sideAt, sideOpen, showDropTarget } from '$lib/sidebarDrop';
-	import { canDockFloating } from '$lib/bottomDock';
+	import { canDockFloating, DOCK_TITLES } from '$lib/bottomDock';
 	import { windowAt, nodeOf } from '$lib/windowTabs';
 	import { phoneShell } from '$lib/ui/phoneShell.js';
 	import { mobileUndockAllowed } from '../stores/appStore.js';
@@ -72,6 +72,44 @@
 		e.preventDefault();
 		tabMenu = { x: e.clientX, y: e.clientY, items: dockTabItems(key) };
 	}
+
+	// --- 44 M9: the split pair's tab --------------------------------------------------
+	/** the half of a pair the strip acts on: the one in front, else the left one
+	 * @param {{a: string, b: string|null}} pair */
+	function pairFocus(pair) {
+		return $bottomDockActive === pair.b ? pair.b : pair.a;
+	}
+	/** a click on a pair tab: on a half's name it fronts that half; elsewhere it shows the pair
+	 * (keeping whichever half was in front) @param {MouseEvent} e @param {{a: string, b: string|null}} pair */
+	function pairClick(e, pair) {
+		if (performance.now() - draggedAt < 300) return;
+		const half = /** @type {HTMLElement} */ (e.target)?.closest?.('[data-dock-half]')?.getAttribute('data-dock-half');
+		if (half) activateDock(half);
+		else activateDock($bottomDockActive === pair.b || $bottomDockActive === pair.a ? $bottomDockActive : pair.a);
+	}
+	/** the pair's ✕ closes both halves (the pair is one tab) @param {{a: string, b: string|null}} pair */
+	function closePair(pair) {
+		closeDockView(pair.a);
+		if (pair.b) closeDockView(pair.b);
+	}
+	/** 44 M9 — the split button left of Undock: split the tab in front with the next one (or an
+	 * empty pane), or unsplit the split on screen */
+	function toggleSplit() {
+		if ($dockSplitView) unsplitDock($dockSplitView.a);
+		else if ($visibleDockKey) splitWithNext($visibleDockKey);
+	}
+	/** the split pane under a point (a tab dragged out of the strip lands IN it), or null
+	 * @param {number} x @param {number} y @returns {{pair: string, pane: 'a'|'b'}|null} */
+	function paneAt(x, y) {
+		const split = $dockSplitView;
+		if (!split) return null;
+		const el = document.elementsFromPoint(x, y).find((n) => n.closest?.('[data-dock-pane], [data-pd-host-pane]'));
+		const host = /** @type {HTMLElement|undefined} */ (el?.closest?.('[data-dock-pane], [data-pd-host-pane]'));
+		const pane = host?.getAttribute('data-dock-pane') || host?.getAttribute('data-pd-host-pane');
+		return pane === 'a' || pane === 'b' ? { pair: split.a, pane } : null;
+	}
+	/** 44 M9: the pane a drag released out of the strip would go INTO */
+	let paneKey = /** @type {{pair: string, pane: 'a'|'b'}|null} */ (null);
 
 	// --- W7: drag a tab -------------------------------------------------------------
 	// THRESHOLD, not a timer: 6px of TRAVEL promotes a press into a drag. A press that
@@ -108,6 +146,14 @@
 	 * @param {string} key @param {number} x @param {number} y @param {boolean} out @param {string|null} join
 	 */
 	function paintOut(key, x, y, out, join) {
+		// 44 M9: over a pane of the split on screen, the tab goes INTO that pane
+		paneKey = out && !join ? paneAt(x, y) : null;
+		if (paneKey) {
+			const r = document.querySelector(`[data-dock-pane="${paneKey.pane}"]:not(.hidden), [data-pd-host-pane="${paneKey.pane}"]`)?.getBoundingClientRect();
+			sideKey = null;
+			if (r) showDropTarget({ kind: 'float', x: r.left, y: r.top, w: r.width, h: r.height }, { id: 'dock-tab-pane-zone' });
+			return;
+		}
 		const side = out && !join && !$phoneShell && canDockFloating(key) ? sideAt(x, y, { except: key }) : null;
 		sideKey = side;
 		if (side) showDropTarget({ kind: 'side', side, tab: sideOpen(side, key) }, { id: 'dock-tab-side-zone' });
@@ -185,9 +231,16 @@
 			const out = dropOut;
 			const join = out ? windowAt(e.clientX, e.clientY, dragged ?? undefined) : null;
 			const side = sideKey;
+			const pane = paneKey;
 			cleanup();
 			if (!state || !dragged) return; // never travelled: the click activates the tab
 			draggedAt = performance.now();
+			// 44 M9: dropped onto a pane of the split — it shows there (a pair dragged by its tab
+			// moves its LEFT half; the half it replaces stays a tab)
+			if (pane && setSplitPane(pane.pair, pane.pane, dragged)) {
+				activateDock(dragged);
+				return;
+			}
 			// 41b H1: a phone content tab has nowhere to float — dragged clear of the strip it
 			// simply stays (it still reorders inside the strip). 42 I6: a hosted window docked on a
 			// wider screen (the Objects list) floats out like any other tab (`canUndockTab`)
@@ -208,7 +261,7 @@
 			const without = state.order.filter((k) => k !== dragged);
 			const from = state.order.indexOf(dragged);
 			without.splice(dropIndex > from ? dropIndex - 1 : dropIndex, 0, dragged);
-			reorderDockTabs(without);
+			reorderStripTabs(without);
 		};
 		const cancel = () => cleanup();
 		function cleanup() {
@@ -217,6 +270,7 @@
 			dropOut = false;
 			markJoin(null);
 			sideKey = null;
+			paneKey = null;
 			showDropTarget(null);
 			window.removeEventListener('pointermove', move);
 			window.removeEventListener('pointerup', up);
@@ -306,7 +360,41 @@
 			use:keepScroll
 		>
 			<div class="dt-tabs" role="tablist" aria-label="Docked views">
-				{#each $dockTabs as tab (tab.key)}
+				{#each $dockStripTabs as tab (tab.key)}
+					{@const pair = tab.pair}
+					{@const on = pair ? $bottomDockActive === pair.a || $bottomDockActive === pair.b : $bottomDockActive === tab.key}
+					{#if pair}
+						<!-- 44 M9: a split pair is ONE tab, "A / B"; the half in front reads full-strength -->
+						<span class="tp-dtab-group" class:tp-dtab-group-on={on}>
+							<button
+								data-dock-tab={tab.key}
+								data-dock-pair={pair.b ?? ''}
+								role="tab"
+								aria-selected={on}
+								class="tab-note tp-dtab select-none {on ? 'dt-on' : 'dt-off'} {dragKey === tab.key ? 'dt-dragging opacity-40' : ''}"
+								title="{tab.title} — split side by side; drag to reorder, onto a pane to swap it in"
+								use:tabDrag={{ key: tab.key }}
+								oncontextmenu={(/** @type {MouseEvent} */ e) => openTabMenu(e, pairFocus(pair))}
+								onclick={(/** @type {MouseEvent} */ e) => pairClick(e, pair)}
+								><span class="tp-dtab-ico"><Icon name="columns-2" size={16} aria-hidden="true" /></span><span
+									data-dock-half={pair.a}
+									class="dt-half"
+									class:dt-half-on={on && $bottomDockActive === pair.a}>{DOCK_TITLES[pair.a]}</span
+								><span class="dt-half-sep" aria-hidden="true">/</span>{#if pair.b}<span
+										data-dock-half={pair.b}
+										class="dt-half"
+										class:dt-half-on={on && $bottomDockActive === pair.b}>{DOCK_TITLES[pair.b]}</span
+									>{:else}<span class="dt-half dt-half-empty">Empty</span>{/if}</button
+							>
+							<button
+								data-dock-tab-close={tab.key}
+								class="tab-note tp-dtab-x"
+								title="Close {tab.title}"
+								aria-label="Close {tab.title}"
+								onclick={() => closePair(pair)}><Icon name="x" size={16} aria-hidden="true" /></button
+							>
+						</span>
+					{:else}
 					<span class="tp-dtab-group" class:tp-dtab-group-on={$bottomDockActive === tab.key}>
 						<button
 							data-dock-tab={tab.key}
@@ -329,6 +417,7 @@
 							onclick={() => closeDockView(tab.key)}><Icon name="x" size={16} aria-hidden="true" /></button
 						>
 					</span>
+					{/if}
 				{/each}
 			</div>
 			<!-- the insertion bar: where the dragged tab would land. Hidden once the pointer is
@@ -361,6 +450,18 @@
 		     It undocks the ACTIVE tab (or, per Settings, every tab as one tabbed window). A phone
 		     whose windows cannot float has nothing to undock to, so it shows no button. -->
 		<!-- 44 M5: the EMPTY dock has nothing to undock -->
+		<!-- 44 M9: split / unsplit, left of Undock (wider screens: a folded phone's dock is one column) -->
+		{#if !$phoneShell && $dockTabs.length}
+			<button
+				id="dock-split"
+				class="tab-note dt-btn tp-dtab tp-dtab-icon"
+				class:dt-btn-on={!!$dockSplitView}
+				aria-pressed={!!$dockSplitView}
+				title={$dockSplitView ? 'Unsplit: show the two views as tabs again' : 'Split: show this view beside the next tab (or an empty pane)'}
+				aria-label={$dockSplitView ? 'Unsplit the dock' : 'Split the dock side by side'}
+				onclick={toggleSplit}><Icon name="columns-2" size={16} aria-hidden="true" /></button
+			>
+		{/if}
 		{#if !sheetMode && $dockTabs.length}
 			<button
 				id="dock-undock"
@@ -401,6 +502,25 @@
 	.dt-bar {
 		display: flex;
 		min-width: 0;
+	}
+	/* 44 M9: a split pair's two names — the half in front full-strength, the other muted */
+	.dt-half {
+		opacity: 0.7;
+	}
+	.dt-half-on {
+		opacity: 1;
+		font-weight: 600;
+	}
+	.dt-half-empty {
+		font-style: italic;
+	}
+	.dt-half-sep {
+		margin: 0 4px;
+		color: var(--text-faint);
+	}
+	.dt-btn-on {
+		color: var(--accent-text);
+		background: var(--accent-soft);
 	}
 	.dt-tabs {
 		display: flex;

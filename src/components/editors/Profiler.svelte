@@ -38,7 +38,7 @@
 	import {
 		setDockOccupant,
 		dockHeight,
-		visibleDockKey,
+		visibleDockKey, dockShownKeys, dockPaneOf,
 		dockMinimized,
 		activateDock,
 		dockModeArm,
@@ -109,7 +109,7 @@
 		setDockOccupant('profiler', !$profilerClose && docked, $dockHeight);
 		return () => setDockOccupant('profiler', false);
 	});
-	const dockVisible = $derived($visibleDockKey === 'profiler' && !$dockMinimized);
+	const dockVisible = $derived($dockShownKeys.includes('profiler'));
 
 	const clampH = (/** @type {number} */ h) =>
 		Math.min(Math.max(h || 320, 200), Math.round(window.innerHeight * 0.8));
@@ -908,6 +908,7 @@
 			class="tp-themed fixed inset-x-0 bottom-0 tp-ui tp-dock-panel flex flex-col p-2 {dockVisible
 				? ''
 				: 'hidden'}"
+			data-dock-pane={$dockPaneOf['profiler']}
 			style="z-index: var(--z-dock); height: {$dockHeight}px; border-top: 1px solid var(--tp-line)"
 			data-key-scope="panel"
 			role="region"

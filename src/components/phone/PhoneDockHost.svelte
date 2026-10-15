@@ -25,9 +25,10 @@
 	import { dockAddMenuAt, dockAddItems, rebuildAfterPick } from '$lib/dockMenu';
 	import EmptyState from '../ui/EmptyState.svelte';
 	import WorkspaceLayouts from '../menu/WorkspaceLayouts.svelte';
-	import { dockHeight, dockEmptyShown } from '$lib/bottomDock';
+	import { dockHeight, dockEmptyShown, dockSplitView, dockPaneOf } from '$lib/bottomDock';
+	import DockSplit from '../DockSplit.svelte';
 	import { phoneDockShown, phoneTabsOpen, startPhoneDock } from '$lib/phoneDock';
-	import { HOSTED, hostedTabsOpen, hostedDockShown, startDockHost } from '$lib/dockHost';
+	import { HOSTED, hostedTabsOpen, hostedDockShown, hostedDockShownKeys, startDockHost } from '$lib/dockHost';
 	import { phoneShell } from '$lib/ui/phoneShell.js';
 	import { selectedObjects } from '../../stores/sceneStore';
 	import { inspectorKind } from '../../stores/appStore';
@@ -54,10 +55,14 @@
 	// several windows and the rows rebuild after each pick (their checks and hints change)
 	let addItems = $state(/** @type {any[]} */ ([]));
 	$effect(() => {
-		if ($dockAddMenuAt) addItems = dockAddItems();
+		if ($dockAddMenuAt) addItems = dockAddItems({ pane: $dockAddMenuAt.pane });
 	});
 	/** the tab in front, whichever posture hosts it */
-	const shownTab = $derived($phoneShell ? $phoneDockShown : $hostedDockShown);
+	const shownTab = $derived($phoneShell ? $phoneDockShown : ($hostedDockShownKeys[0] ?? $hostedDockShown));
+	// 44 M9 — a SPLIT with one hosted half: this frame is that half's pane (the other half is an
+	// editor's own frame, or the empty pane). Two hosted halves share one full-width frame, each
+	// element placed in its own pane by windows.css.
+	const framePane = $derived(!$phoneShell && $dockSplitView && $hostedDockShownKeys.length === 1 ? $dockPaneOf[$hostedDockShownKeys[0]] : undefined);
 	// Properties with nothing selected has nothing to show (the Inspector would show the last
 	// object, which the selection no longer holds): the frame says so instead
 	const nothingSelected = $derived(
@@ -82,11 +87,22 @@
 			if (!open[key]) continue;
 			const el = document.querySelector(sel);
 			if (!el) continue;
-			const on = shown === key && !(key === 'properties' && nothingSelected);
+			const on = ($phoneShell ? shown === key : $hostedDockShownKeys.includes(key)) && !(key === 'properties' && nothingSelected);
 			if (on || !want.has(el)) want.set(el, on ? 'shown' : 'hidden');
 		}
 		for (const el of document.querySelectorAll('[data-pd-host]')) if (!want.has(el)) el.removeAttribute('data-pd-host');
 		for (const [el, v] of want) if (el.getAttribute('data-pd-host') !== v) el.setAttribute('data-pd-host', v);
+		// 44 M9: which pane of a split each shown hosted window sits in (windows.css places it)
+		const panes = /** @type {Record<string, string>} */ ($phoneShell ? {} : $dockPaneOf);
+		for (const el of document.querySelectorAll('[data-pd-host-pane]')) {
+			el.removeAttribute('data-pd-host-pane');
+		}
+		for (const [key, sel] of Object.entries(hostOf)) {
+			const el = document.querySelector(sel);
+			if (!el) continue;
+			const pane = want.get(el) === 'shown' ? panes[key] : undefined;
+			if (pane) el.setAttribute('data-pd-host-pane', pane);
+		}
 	}
 	$effect(() => {
 		void $phoneShell;
@@ -94,6 +110,8 @@
 		void $phoneTabsOpen;
 		void $hostedTabsOpen;
 		void $hostedDockShown;
+		void $hostedDockShownKeys;
+		void $dockPaneOf;
 		void nothingSelected;
 		// an element may mount a frame after its store flips (the Inspector's fly-in, the object
 		// list's chunked tree): try now, after the flush, on the next frame and once more
@@ -170,6 +188,7 @@
 		data-phone-tab={shownTab ?? ''}
 		data-dock-host={$phoneShell ? 'phone' : 'wide'}
 		data-dock-empty={emptyDock ? 'true' : undefined}
+		data-dock-pane={framePane}
 		role="region"
 		aria-label="Docked panels"
 	>
@@ -201,13 +220,15 @@
 	</div>
 {/if}
 
+<DockSplit />
+
 {#if $dockAddMenuAt}
 	<ContextMenu
 		x={$dockAddMenuAt.x}
 		y={$dockAddMenuAt.y}
 		items={addItems}
 		onclose={() => dockAddMenuAt.set(null)}
-		onpicked={() => rebuildAfterPick(() => $dockAddMenuAt && (addItems = dockAddItems()))}
+		onpicked={() => rebuildAfterPick(() => $dockAddMenuAt && (addItems = dockAddItems({ pane: $dockAddMenuAt.pane })))}
 	/>
 {/if}
 

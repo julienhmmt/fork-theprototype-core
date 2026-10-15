@@ -63,7 +63,7 @@
 	import { focusStack } from '$lib/windowFocus';
 	import { tabbable, resizeGroup, tabGroups } from '$lib/windowTabs';
 	import { clampWinSize, clampResize, anchorOf } from '$lib/windowSize';
-	import { setDockOccupant, dockHeight, visibleDockKey, dockMinimized, activateDock, dockModeArm, forgetDockTab } from '$lib/bottomDock';
+	import { setDockOccupant, dockHeight, visibleDockKey, dockShownKeys, dockPaneOf, dockMinimized, activateDock, dockModeArm, forgetDockTab } from '$lib/bottomDock';
 	import { bottomDockable } from '$lib/bottomDockDrop';
 	import { safeStorage } from '$lib/safeStorage';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
@@ -165,7 +165,7 @@
 	});
 	// W2: a MINIMIZED dock renders nothing while every tab stays open (the occupant
 	// report above is untouched, so the strip comes back with its tabs intact)
-	const dockVisible = $derived($visibleDockKey === 'hud' && !$dockMinimized);
+	const dockVisible = $derived($dockShownKeys.includes('hud'));
 
 	// While the editor is open the artboard shows the screen being EDITED, so the runtime
 	// layer is pointed at it too — otherwise you would lay out one screen and watch
@@ -1436,6 +1436,7 @@
 		<div
 			id="hud-dock"
 			class="fixed inset-x-0 bottom-0 tp-ui tp-dock-panel flex flex-col p-2 {dockVisible ? '' : 'hidden'}"
+			data-dock-pane={$dockPaneOf['hud']}
 			style="z-index: var(--z-dock); height: {$dockHeight}px"
 			data-key-scope="panel"
 			role="region"
