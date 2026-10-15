@@ -27,6 +27,9 @@ import { onLayoutRestore } from './uiLayoutsCore';
 //   --sb-left-x                   the left column's x (the menu insets an UNPINNED left column)
 //   --sb-dock-left / -right       a PINNED, shown column's width, else 0px: what the bottom dock
 //                                 and the corner chrome give way to
+//   --sb-logo-left                how far the logo (and the menu it opens) slides right: a pinned
+//                                 column's width, or an OPEN left column's right edge when that
+//                                 column reaches up into the logo's band (under a docked Connect bar)
 //
 // A leaf: svelte/store + the app stores. Members REPORT themselves (`reportMember`); nothing
 // here reaches into a component.
@@ -385,12 +388,21 @@ export const geometry = derived(
 		};
 		const left = col('left');
 		const right = col('right');
+		const leftX = left.full || !$wide ? 0 : measureLeftInset();
+		const dockLeft = $wide && left.visible && left.full ? left.w : 0;
+		// 44-int: under a docked Connect bar an open column starts right below the bar (cBar + 4), in the band the
+		// logo drops to (cBar + 8, a 44 px tile) — its tab strip covered the logo, so the menu could not be
+		// opened (44 M14 pins the bar by default on the unfolded phone). The logo slides beside the column, as
+		// the row beside it already does (44 M13, TouchTools' overRow).
+		const logoTop = $cDocked ? $cBar + 8 : 8;
+		const overLogo = $wide && left.visible && !left.full && left.top < logoTop + 44 - 8;
 		return {
 			left,
 			right,
 			wide: $wide,
-			leftX: left.full || !$wide ? 0 : measureLeftInset(),
-			dockLeft: $wide && left.visible && left.full ? left.w : 0,
+			leftX,
+			dockLeft,
+			logoLeft: overLogo ? leftX + left.w : dockLeft,
 			dockRight: $wide && right.visible && right.full ? right.w : 0
 		};
 	}
@@ -407,6 +419,7 @@ function publish(g) {
 	}
 	root.setProperty('--sb-left-x', g.leftX + 'px');
 	root.setProperty('--sb-dock-left', g.dockLeft + 'px');
+	root.setProperty('--sb-logo-left', g.logoLeft + 'px');
 	root.setProperty('--sb-dock-right', g.dockRight + 'px');
 	document.documentElement.classList.toggle('sb-full-left', !!g.dockLeft);
 	document.documentElement.classList.toggle('sb-full-right', !!g.dockRight);

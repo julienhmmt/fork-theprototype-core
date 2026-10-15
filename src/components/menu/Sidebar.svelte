@@ -362,8 +362,9 @@
 	   scoped rule beats every utility — which theme.css's !important remap used to hide) */
 	.burger {
 		top: 8px;
-		/* 42 I2: a FULL-HEIGHT left sidebar takes the corner — the logo slides inward by its width */
-		left: calc(8px + var(--sb-dock-left, 0px));
+		/* 42 I2: a FULL-HEIGHT left sidebar takes the corner — the logo slides inward by its width
+		   (44-int: and beside an open column that reaches up into its band, under a docked Connect bar) */
+		left: calc(8px + var(--sb-logo-left, 0px));
 		transition:
 			left 0.2s ease,
 			transform 150ms;
@@ -404,7 +405,7 @@
 		top: var(--side-top, 64px);
 		/* 42 I2: opens from the logo — beside a full-height left sidebar, and on --z-popover, above
 		   every sidebar either way */
-		left: calc(8px + var(--sb-dock-left, 0px));
+		left: calc(8px + var(--sb-logo-left, 0px));
 		z-index: var(--z-popover);
 		/* size to the widest row so wider-font themes (e.g. 8-bit) never overflow
 		   the panel and overlap the scene; clamped so it stays compact */
