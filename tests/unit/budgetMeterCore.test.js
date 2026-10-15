@@ -57,6 +57,14 @@ describe('tiers', () => {
 		expect(tierOfShare(150, 150)).toBe('amber');
 		expect(tierOfShare(151, 150)).toBe('red');
 	});
+	it('a small whole-number budget has no amber band: AT it is green, past it red (an empty scene\'s one sun is not a warning)', () => {
+		expect(tierOfShare(1, 1, true)).toBe('green');
+		expect(tierOfShare(2, 1, true)).toBe('red');
+		const sunOnly = judgeCost({ calls: 1, triangles: 48, textureMB: 0, lights: 1, shadowLights: 1, shadowCasters: 1 }, T.quest);
+		expect(sunOnly.tier).toBe('green');
+		expect(sunOnly.worst.key).not.toBe('shadowLights');
+		expect(sunOnly.percent).toBeLessThan(5);
+	});
 	it('the verdict is the worst tier; the headline is the largest share', () => {
 		const v = judgeCost({ calls: 30, triangles: 280000, textureMB: 10, lights: 1, shadowLights: 0, shadowCasters: 0 }, T.quest);
 		expect(v.tier).toBe('amber');
@@ -131,9 +139,28 @@ describe('measureScene', () => {
 		expect(byName.Lamp.lights).toBe(1); // the ambient is not counted (the gate's rule)
 		expect(byName.Lamp.shadowLights).toBe(1);
 		expect(m.totals.lights).toBe(2); // + the environment's sun, not its hemisphere
-		expect(m.totals.shadowCasters).toBe(1);
+		expect(m.totals.shadowCasters).toBe(1); // 1 caster x 1 shadow light
 		expect(byName.Environment.selectable).toBe(false);
 		expect(byName.Crate.selectable).toBe(true);
+	});
+
+	it('shadow DRAWS = casters x shadow-casting lights, and none without a shadow light', () => {
+		const group = new THREE.Group();
+		for (let i = 0; i < 5; i++) {
+			const m = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+			m.castShadow = true;
+			group.add(m);
+		}
+		expect(measureScene({ roots: [{ object: group, kind: 'objects' }] }).totals.shadowCasters).toBe(0);
+		const sun = new THREE.DirectionalLight();
+		sun.castShadow = true;
+		const spot = new THREE.SpotLight();
+		spot.castShadow = true;
+		group.add(sun, spot);
+		const m = measureScene({ roots: [{ object: group, kind: 'objects' }] });
+		expect(m.totals.shadowLights).toBe(2);
+		expect(m.totals.shadowCasters).toBe(10);
+		expect(m.rows.reduce((n, r) => n + r.shadowCasters, 0)).toBe(10); // rows add up to the total
 	});
 
 	it('a texture two objects share is in BOTH rows but counted once in the total', () => {

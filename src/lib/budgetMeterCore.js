@@ -39,7 +39,7 @@ export const METRIC_LABELS = /** @type {Record<Metric, string>} */ ({
 	textureMB: 'Texture memory',
 	lights: 'Lights',
 	shadowLights: 'Shadow-casting lights',
-	shadowCasters: 'Shadow casters'
+	shadowCasters: 'Shadow draws'
 });
 export const METRIC_WHY = /** @type {Record<Metric, string>} */ ({
 	calls: 'Separately drawn meshes (main pass). Each is CPU time per frame; kit pieces that instance count once.',
@@ -47,11 +47,14 @@ export const METRIC_WHY = /** @type {Record<Metric, string>} */ ({
 	textureMB: 'GPU memory for the textures in use, uncompressed (one upload per image). A headset or phone tab is killed when it runs out.',
 	lights: 'Real-time lights (ambient and hemisphere not counted). Every light adds shading cost to every pixel it reaches.',
 	shadowLights: 'Lights that cast shadows. Each one draws every shadow caster again.',
-	shadowCasters: 'Meshes that cast shadows — drawn again for each shadow-casting light.'
+	shadowCasters: 'Shadow-casting meshes drawn again, once per shadow-casting light (0 with no shadow light). Every mesh casts by default — turn Cast shadow off on small props.'
 });
 
 /** amber from this share of the budget; red past the budget itself (the gate's line) */
 export const AMBER_FROM = 0.8;
+/** small whole-number budgets (2 lights, 1 shadow light): AT the budget is fine, not a warning — the
+ * default sun alone is 1 of 1 shadow lights, and an empty scene must not read amber */
+export const DISCRETE = /** @type {Metric[]} */ (['lights', 'shadowLights']);
 
 // What the 46 import/export pipeline does to a heavy asset (USER-PROMPT.md decision: models over 50k
 // triangles and textures over 2048 px are optimized — LOD chain + meshopt + KTX2/Basis). 46-int: when
@@ -92,12 +95,18 @@ function pick(obj, keys) {
 	return out;
 }
 
-/** @param {number} value @param {number} limit @returns {Tier} */
-export function tierOfShare(value, limit) {
+/** @param {number} value @param {number} limit @param {boolean} [discrete] no amber band @returns {Tier} */
+export function tierOfShare(value, limit, discrete = false) {
 	if (!Number.isFinite(limit) || limit <= 0) return 'green';
 	const share = value / limit;
 	if (share > 1) return 'red';
-	return share >= AMBER_FROM ? 'amber' : 'green';
+	return !discrete && share >= AMBER_FROM ? 'amber' : 'green';
+}
+
+/** the share a metric contributes to a HEADLINE: a small count within its budget says nothing
+ * (1 of 1 shadow lights is not "100 %") @param {Metric} key @param {number} share */
+function headShare(key, share) {
+	return DISCRETE.includes(key) && share <= 1 ? 0 : share;
 }
 
 const ORDER = { green: 0, amber: 1, red: 2 };
@@ -112,16 +121,16 @@ export function judgeCost(totals, target) {
 		const value = totals?.[key] ?? 0;
 		const limit = target[key];
 		const share = Number.isFinite(limit) && limit > 0 ? value / limit : 0;
-		return { key, label: METRIC_LABELS[key], why: METRIC_WHY[key], value, limit, share, tier: tierOfShare(value, limit) };
+		return { key, label: METRIC_LABELS[key], why: METRIC_WHY[key], value, limit, share, tier: tierOfShare(value, limit, DISCRETE.includes(key)) };
 	});
 	let worst = rows[0];
 	/** @type {Tier} */
 	let tier = 'green';
 	for (const r of rows) {
-		if (r.share > worst.share) worst = r;
+		if (headShare(r.key, r.share) > headShare(worst.key, worst.share)) worst = r;
 		if (ORDER[r.tier] > ORDER[tier]) tier = r.tier;
 	}
-	return { tier, rows, worst, percent: Math.round(worst.share * 100) };
+	return { tier, rows, worst, percent: Math.round(headShare(worst.key, worst.share) * 100) };
 }
 
 /**
@@ -323,6 +332,11 @@ export function measureScene(input) {
 		totals.triangles += r.triangles;
 		totals.lights += r.lights;
 		totals.shadowLights += r.shadowLights;
+	}
+	// a caster is drawn again once per shadow-casting light, and not at all with none: rows count their
+	// casters, so turn them into DRAWS with the scene's shadow lights (a row's shadow draws add up too)
+	for (const r of rows) {
+		r.shadowCasters *= totals.shadowLights;
 		totals.shadowCasters += r.shadowCasters;
 	}
 	return { totals, rows, objects: rows.filter((r) => r.kind === 'object').length };
@@ -347,7 +361,7 @@ export function heaviest(rows, target, limit = 8) {
 			let by = 'triangles';
 			for (const m of METRICS) {
 				const l = target[m];
-				const s = Number.isFinite(l) && l > 0 ? r[m] / l : 0;
+				const s = headShare(m, Number.isFinite(l) && l > 0 ? r[m] / l : 0);
 				if (s > share) {
 					share = s;
 					by = m;
