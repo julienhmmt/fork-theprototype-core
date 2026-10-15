@@ -249,6 +249,18 @@ export class PeerConnection {
 		this.didFallback = false; // we've already switched to the public cloud
 		this.idRetries = 0;       // fresh-id attempts after an id collision (B5)
 		this.serverErrorAt = 0;   // 24-D2: last signaling-level error (switchServer fails fast)
+		// 44 L2: the servers THIS id has opened on (a key per server). An "ID is taken" there is our
+		// own registration the server has not let go of yet — wait it out on the same id; anywhere
+		// else it is somebody else's, take a fresh one. `hasOpened` cannot say this: a runtime
+		// switch resets it, and the way BACK to the previous server then minted a new id.
+		/** @type {Set<string>} */
+		this.registeredOn = new Set();
+		this.serverKey = '';
+		this.freshIds = 0;        // fresh ids minted after a collision (bounded, like idRetries)
+		this.switchSeq = 0;       // 44 L2: a newer switchServer supersedes an older one's ticks
+		/** 44 L2: every pending reconnect/recreate timer — a rebuild cancels them all, since each
+		 * was scheduled for a peer that no longer exists @type {Set<ReturnType<typeof setTimeout>>} */
+		this.recreateTimers = new Set();
 
 		/** @type {Record<string, any>} outgoing DataConnections, keyed by peer id */
 		this.connections = {};
@@ -306,6 +318,7 @@ export class PeerConnection {
 		const createPeerForMode = (/** @type {boolean} */ forcePublic) => {
 			const { options, canFallback } = resolvePeerOptions({ isLocalDev, forcePublic });
 			this.canFallback = canFallback;
+			this.serverKey = options?.host ? `${options.host}:${options.port ?? ''}${options.path ?? ''}` : 'public';
 			// Publish the resolved server for the Connect indicator (I5); carry the
 			// fallback flag once we've switched to the public cloud.
 			peerServerStatus.set({ ...describePeerServer({ isLocalDev, forcePublic }), didFallback: this.didFallback });
@@ -320,11 +333,48 @@ export class PeerConnection {
 		// fallback, the runtime switchServer, the id-collision retry) and the fourth —
 		// a peer whose link CLOSED — did not exist at all, which is why a closed peer
 		// stayed dead: `reconnect()` cannot revive a spent Peer object.
+		// 44 L2: a REPLACED peer is retired before it is destroyed, so the 'disconnected'/'close'
+		// its destroy emits — and anything it emits later — is ignored by its own handlers (they
+		// used to act on `this.peer`, i.e. on the rebuild that replaced it). Every timer scheduled
+		// for an older peer is cancelled for the same reason: a burst of failures on a dead server
+		// left 0.8-8 s timers that destroyed the way-back peer before it could open.
+		/** @type {WeakSet<any>} */
+		const retired = new WeakSet();
+		const later = (/** @type {() => void} */ fn, /** @type {number} */ ms) => {
+			const t = setTimeout(() => {
+				this.recreateTimers.delete(t);
+				fn();
+			}, ms);
+			this.recreateTimers.add(t);
+		};
+		const cancelTimers = () => {
+			for (const t of this.recreateTimers) clearTimeout(t);
+			this.recreateTimers.clear();
+		};
+		// 44 L2: a rebuilt link that neither opens nor fails — no 'open', no 'error', no 'close' —
+		// had nothing left to retry it (invite-link-live §7 sat 45 s+ at open/disconnected/destroyed
+		// all false). Give a rebuilt peer the length of a switch to open, then rebuild it again on
+		// the capped schedule. Rebuilds only: the boot peer keeps its old behaviour.
+		const OPEN_WATCH_MS = 10000;
+		let watchAttempt = 0;
+		const watchOpen = (/** @type {any} */ p) => {
+			if (exportMode) return;
+			const wait = Math.max(OPEN_WATCH_MS, backoffDelay(++watchAttempt, RETRY_BACKOFF) ?? 8000);
+			later(() => {
+				if (p !== this.peer || retired.has(p) || p.open || p.destroyed || p.disconnected) return;
+				log('warn', 'net', 'signaling link never opened — rebuilding', { id: p.id, after: wait });
+				recreatePeer(this.didFallback);
+			}, wait);
+		};
 		const recreatePeer = (/** @type {boolean} */ forcePublic) => {
-			try { this.peer.destroy(); } catch (e) { /* already gone */ }
+			cancelTimers();
+			const old = this.peer;
+			if (old) retired.add(old);
+			try { old.destroy(); } catch (e) { /* already gone */ }
 			createPeerForMode(!!forcePublic);
 			attachVoiceToPeer(this); // rebind the incoming-call handler to the new peer
 			wire();
+			watchOpen(this.peer);
 		};
 
 		// The pinned self-hosted server never opened -> rebuild against the public
@@ -364,15 +414,23 @@ export class PeerConnection {
 				this.didFallback = false;
 				this.hasOpened = false;
 				this.idRetries = 0;
+				this.freshIds = 0;
 				this.reconnectAttempts = 0;
 				this.serverErrorAt = 0;
 				recreatePeer(!!ov?.forcePublic);
 			};
+			const seq = ++this.switchSeq;
+			watchAttempt = 0;
 			rebuild(target);
 			const pinned = !!(target && (target.forcePublic || target.custom?.host));
 			return new Promise((resolve) => {
 				const startedAt = Date.now();
 				const tick = () => {
+					// 44 L2: another switch started since — its own ticks own the outcome now
+					if (seq !== this.switchSeq) {
+						resolve(false);
+						return;
+					}
 					if (this.peer?.open) {
 						peers.update((value) => value);
 						resolve(true);
@@ -410,9 +468,15 @@ export class PeerConnection {
 		};
 
 		const wire = () => {
-		this.peer.on('open', (id) => {
+		// 44 L2: THIS peer — every handler below acts on it, and only while it is the live one
+		const p = this.peer;
+		const live = () => p === this.peer && !retired.has(p);
+		p.on('open', (id) => {
+			if (!live()) return;
 			console.log(id);
 			this.hasOpened = true;
+			this.registeredOn.add(this.serverKey);
+			watchAttempt = 0;
 			// 41 G21: no "Reconnected" toast — the dot turning back says it
 			clearSignalingRetry();
 			this.signalingNotified = false;
@@ -440,12 +504,13 @@ export class PeerConnection {
 		// this used to be a dead end with only a page reload out of it. Rebuild on the
 		// SAME id (an id is a per-server registration, so the invite link a user copied
 		// a minute ago still works when the link comes back).
-		this.peer.on('close', () => {
+		p.on('close', () => {
+			if (!live()) return;
 			log('error', 'net', 'signaling server closed');
 			this.reconnectAttempts++;
 			const delay = backoffDelay(this.reconnectAttempts, RETRY_BACKOFF) ?? 8000;
 			signalingDown(this.reconnectAttempts);
-			setTimeout(() => { if (!this.peer?.open) recreatePeer(this.didFallback); }, delay);
+			later(() => { if (live() && !p.open) recreatePeer(this.didFallback); }, delay);
 		});
 
 		// 27-F (audit H2): THE RETRY NEVER GIVES UP. It used to stop after five attempts
@@ -456,17 +521,21 @@ export class PeerConnection {
 		// the attempt COUNT protected nobody. One toast on the way in, a CHIP for the
 		// live state — an unbounded retry that toasts per attempt is spam.
 		this.reconnectAttempts = 0;
-		this.peer.on('disconnected', () => {
+		p.on('disconnected', () => {
+			if (!live()) return;
 			log('warn', 'net', 'signaling server disconnected');
-			if (this.peer.destroyed) return;
+			if (p.destroyed) return;
 			this.reconnectAttempts++;
 			const delay = backoffDelay(this.reconnectAttempts, RETRY_BACKOFF) ?? 8000;
 			signalingDown(this.reconnectAttempts);
-			setTimeout(() => {
-				if (!this.peer.destroyed && this.peer.disconnected) this.peer.reconnect();
+			later(() => {
+				if (!live() || p.destroyed || !p.disconnected) return;
+				p.reconnect();
+				watchOpen(p); // a reconnect can stall exactly like a rebuild
 			}, delay);
 		});
-		this.peer.on('error', (err) => {
+		p.on('error', (err) => {
+			if (!live()) return;
 			log('error', 'net', 'peer error', { type: err?.type, error: String(err) });
 			// Pinned self-hosted server never opened -> retry on the public cloud
 			// (default mode only; custom/public keep canFallback false).
@@ -487,16 +556,21 @@ export class PeerConnection {
 			// first open, so a peer rebuilt after a close — while the server still holds the
 			// old registration for a moment — fell through to "please reload", which is the
 			// dead end this phase exists to remove. Wait out the registration and rebuild.
-			if (err.type === 'unavailable-id' && this.hasOpened && this.idRetries < 3) {
+			// 44 L2: "ours" is decided by the SERVER this id opened on, not by `hasOpened` (see
+			// registeredOn). Once the waits are spent, a fresh id beats "please reload".
+			const ownHeld = this.registeredOn.has(this.serverKey);
+			if (err.type === 'unavailable-id' && ownHeld && this.idRetries < 3) {
 				this.idRetries++;
 				const wait = backoffDelay(this.idRetries, RETRY_BACKOFF) ?? 8000;
 				log('warn', 'net', 'id still held by the old registration — rebuilding', { wait });
 				noteSignalingRetry(this.idRetries);
-				setTimeout(() => { if (!this.peer?.open) recreatePeer(this.didFallback); }, wait);
+				later(() => { if (live() && !p.open) recreatePeer(this.didFallback); }, wait);
 				return;
 			}
-			if (err.type === 'unavailable-id' && !this.hasOpened && this.idRetries < 3) {
+			if (err.type === 'unavailable-id' && this.freshIds < 3) {
+				this.freshIds++;
 				this.idRetries++;
+				this.registeredOn.clear(); // a fresh id is registered nowhere yet
 				this.myId = createPeer();
 				log('warn', 'net', 'session id collided — retrying', { id: this.myId });
 				recreatePeer(this.didFallback);
@@ -521,7 +595,7 @@ export class PeerConnection {
 			}
 		});
 
-		this.peer.on('connection', handleConnection.bind(this));
+		p.on('connection', handleConnection.bind(this));
 		};
 
 		createPeerForMode(false);
