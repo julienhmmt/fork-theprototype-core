@@ -18,8 +18,11 @@ import {
 	bottomDockActive,
 	dockOccupants,
 	visibleDockKey,
-	dockMinimized
+	dockMinimized,
+	dockEmptyOpen,
+	setDockEmptyOpen
 } from './bottomDock';
+import { phoneShell } from './ui/phoneShell.js';
 import { raiseWindow, isTopVisibleWindow } from './windowFocus';
 import { groupOfKey, activateTab } from './windowTabs';
 import { revealWindow } from './dragWindow';
@@ -193,43 +196,34 @@ export function togglePanel(key) {
  * THE DOCK ITSELF, as one key (T). `togglePanel` answers for a NAMED view; this one
  * answers for the strip that holds them, which had no keyboard affordance at all.
  *
- * Three states, and the third is the reason it is not a one-line `dockMinimized`
- * flip:
- *
  *   showing        -> minimize. Every tab stays open and the viewport clears.
  *   minimized      -> bring it back. `dockMinimized` is deliberately NOT persisted and
  *                     a minimized dock draws no strip, so this key (and the toolbar
  *                     buttons) are the ONLY way back — it must work from every state.
- *   nothing docked -> open the last-active view DOCKED, so the key still does
- *                     something from a clean state instead of reading as broken.
+ *   nothing docked -> 44 M5: open the dock EMPTY — its frame and its strip with only the
+ *                     "+" (the user: "'T' only should show empty docked window view with
+ *                     '+' in tab"). It used to open the last-active view docked, which read
+ *                     as the dock refusing to let go of a window you had just dragged out.
+ *                     Pressed again, the empty dock closes.
  *
- * The empty case asks through `armDockMode` rather than writing the panel's
- * localStorage flag: a panel's `docked` is component-local `$state` read ONCE at mount,
- * so an outside write is measurably inert at a live panel (the note on that store).
- * That also means T genuinely DOCKS a view whose remembered mode is floating, which is
- * what "show the dock" has to mean when the dock is empty because everything floated
- * out of it.
+ * The phone keeps the old empty case (open the last view docked): its "+" is the Windows
+ * sheet, not a strip, so an empty frame there would hold nothing to press.
  */
 export function toggleDock() {
 	const showing = get(visibleDockKey);
-	if (get(dockMinimized)) {
-		// A minimized dock with nothing left in it would come back EMPTY — indis-
-		// tinguishable from the key doing nothing — so that falls through to the open
-		// path below (`activateDock` clears the minimize on its way).
-		if (showing) {
-			dockMinimized.set(false);
-			return;
-		}
-	} else if (showing) {
-		dockMinimized.set(true);
+	if (showing) {
+		dockMinimized.set(!get(dockMinimized));
 		return;
 	}
-	openDockView(lastDockView());
+	if (get(phoneShell)) {
+		openDockView(lastDockView());
+		return;
+	}
+	setDockEmptyOpen(!(get(dockEmptyOpen) && !get(dockMinimized)));
 }
 
-/** The view T brings back when the dock is empty: whichever tab was last active, and
- * the Node editor when that names a view this tree has never heard of (a key written by
- * an older or newer release, or one that has since left DOCK_FAMILY). */
+/** The view T brings back on a phone when the dock is empty: whichever tab was last active,
+ * and the Node editor when that names a view this tree has never heard of. */
 function lastDockView() {
 	const key = get(bottomDockActive);
 	return PANELS[key] && key !== 'objects' ? key : 'flow';

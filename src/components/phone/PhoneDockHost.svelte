@@ -23,7 +23,7 @@
 	import DockTabs from '../DockTabs.svelte';
 	import EmptyState from '../ui/EmptyState.svelte';
 	import WorkspaceLayouts from '../menu/WorkspaceLayouts.svelte';
-	import { dockHeight } from '$lib/bottomDock';
+	import { dockHeight, dockEmptyShown } from '$lib/bottomDock';
 	import { phoneDockShown, phoneTabsOpen, startPhoneDock } from '$lib/phoneDock';
 	import { HOSTED, hostedTabsOpen, hostedDockShown, startDockHost } from '$lib/dockHost';
 	import { phoneShell } from '$lib/ui/phoneShell.js';
@@ -44,6 +44,9 @@
 	const anyOpen = $derived(Object.values($phoneTabsOpen).some(Boolean));
 	// 42 I6: a hosted window docked on a wider screen
 	const anyHosted = $derived(Object.values($hostedTabsOpen).some(Boolean));
+	// 44 M5: the EMPTY dock ("T" with nothing docked) is this frame too, on a wider screen — its strip
+	// with only the "+", and a helper line where a tab's body would be
+	const emptyDock = $derived(!$phoneShell && $dockEmptyShown);
 	/** the tab in front, whichever posture hosts it */
 	const shownTab = $derived($phoneShell ? $phoneDockShown : $hostedDockShown);
 	// Properties with nothing selected has nothing to show (the Inspector would show the last
@@ -149,14 +152,15 @@
 	});
 </script>
 
-{#if ($phoneShell && anyOpen) || (!$phoneShell && anyHosted)}
+{#if ($phoneShell && anyOpen) || (!$phoneShell && (anyHosted || emptyDock))}
 	<div
 		id="phone-dock"
-		class="tp-themed tp-ui tp-dock-panel pd-frame fixed inset-x-0 bottom-0 flex flex-col {shownTab ? '' : 'hidden'}"
+		class="tp-themed tp-ui tp-dock-panel pd-frame fixed inset-x-0 bottom-0 flex flex-col {shownTab || emptyDock ? '' : 'hidden'}"
 		style="z-index: var(--z-dock); height: {$dockHeight}px; border-top: 1px solid var(--tp-line)"
 		data-key-scope="panel"
 		data-phone-tab={shownTab ?? ''}
 		data-dock-host={$phoneShell ? 'phone' : 'wide'}
+		data-dock-empty={emptyDock ? 'true' : undefined}
 		role="region"
 		aria-label="Docked panels"
 	>
@@ -179,6 +183,8 @@
 				<div class="pd-layouts" id="phone-dock-layouts" use:minimalScroll>
 					<WorkspaceLayouts idPrefix="layouts-menu" />
 				</div>
+			{:else if emptyDock}
+				<div id="dock-empty" class="pd-empty">Press + or drag a tab here</div>
 			{:else if nothingSelected}
 				<EmptyState id="phone-dock-no-selection" icon="sliders-horizontal" title="Nothing selected" description="Select an object to see its properties here." />
 			{/if}
@@ -195,6 +201,17 @@
 		flex: 1;
 		flex-direction: column;
 		min-height: 0;
+	}
+	/* 44 M5: the empty dock's one quiet line (VS Code / Blender style), centred in the body */
+	.pd-empty {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-4);
+		color: var(--text-faint);
+		font-size: var(--fs-desc);
+		user-select: none;
 	}
 	.pd-layouts {
 		flex: 1;

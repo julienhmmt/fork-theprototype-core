@@ -284,21 +284,33 @@ h.run(async () => {
 			return v;
 		});
 
-	// Every panel here is FLOATING, so the dock is EMPTY — and T's third state docks the
-	// last-active view rather than reading as broken. That is the two lanes meeting: a
-	// window LEAVES the floating stack, and `apply()` re-ranks what is left. Assert that
-	// deliberately instead of being surprised by it, then test the minimize cycle from a
-	// dock that actually holds something (which is the only state that can minimize).
+	// Every panel here is FLOATING, so the dock is EMPTY. 44 M5: T then opens the dock EMPTY (only its
+	// "+") — nothing leaves the floating stack any more (it used to dock the last-active view). Assert
+	// that, then dock one view through the arm to test the minimize cycle from a dock that holds something
+	// (the only state that can minimize) — the property the other lane needs is unchanged.
 	const beforeDock = await zMap();
 	await pressT();
+	const emptyOpen = await page.evaluate(() => {
+		let v;
+		window.__stores.bottomDock.dockEmptyShown.subscribe((x) => (v = x))();
+		return v;
+	});
+	const afterEmpty = await zMap();
+	h.check(
+		emptyOpen === true && JSON.stringify(afterEmpty) === JSON.stringify(beforeDock),
+		`3b.0 T on an EMPTY dock opens the empty dock and the floating stack is untouched (${JSON.stringify(afterEmpty)})`
+	);
+	await pressT(); // closes the empty dock again
+	await page.evaluate(() => {
+		const s = window.__stores;
+		s.bottomDock.armDockMode('flowcode', true);
+		s.flowCodeClose.set(false);
+	});
+	await page.waitForTimeout(900);
 	const afterDock = await zMap();
 	h.check(
-		(await dockMin()) === false && Object.keys(afterDock).length === Object.keys(beforeDock).length - 1,
-		`3b.0 T on an EMPTY dock docks one view, so it leaves the floating stack (${Object.keys(beforeDock).length} -> ${Object.keys(afterDock).length} floating)`
-	);
-	h.check(
 		Object.values(afterDock).filter((z) => z === 44).length === 1,
-		`3b.0b ...and the windows left behind re-rank with a single top (${JSON.stringify(afterDock)})`
+		`3b.0b ...a view docked into it leaves the stack, and the windows left behind re-rank with a single top (${JSON.stringify(afterDock)})`
 	);
 
 	await pressT();

@@ -40,7 +40,7 @@
 	// strip it UNDOCKS that view into a floating window. Both are the fast paths for
 	// what the tab's right-click menu already offered in words, which is what keeps the
 	// feature reachable on a device that cannot drag.
-	import { dockTabs, bottomDockActive, activateDock, dockMinimized, reorderDockTabs, armDockMode, undockButtonMode } from '$lib/bottomDock';
+	import { dockTabs, bottomDockActive, activateDock, dockMinimized, reorderDockTabs, armDockMode, undockButtonMode, setDockEmptyOpen } from '$lib/bottomDock';
 	import { dockAddItems, dockTabItems, closeDockView, undockFromDock, undockInto, canUndockTab, moveToSidebar } from '$lib/dockMenu';
 	import { sideAt, sideOpen, showDropTarget } from '$lib/sidebarDrop';
 	import { canDockFloating } from '$lib/bottomDock';
@@ -364,7 +364,8 @@
 		<!-- 40 F8: undock lives HERE, left of "minimize the dock", not inside each docked window.
 		     It undocks the ACTIVE tab (or, per Settings, every tab as one tabbed window). A phone
 		     whose windows cannot float has nothing to undock to, so it shows no button. -->
-		{#if !sheetMode}
+		<!-- 44 M5: the EMPTY dock has nothing to undock -->
+		{#if !sheetMode && $dockTabs.length}
 			<button
 				id="dock-undock"
 				class="tab-note dt-btn tp-dtab tp-dtab-icon"
@@ -378,7 +379,7 @@
 			class="tab-note dt-btn tp-dtab tp-dtab-icon"
 			title="Minimize the dock"
 			aria-label="Minimize the dock"
-			onclick={() => dockMinimized.set(true)}><Icon name="panel-bottom" size={16} aria-hidden="true" /></button
+			onclick={() => ($dockTabs.length ? dockMinimized.set(true) : setDockEmptyOpen(false))}><Icon name="panel-bottom" size={16} aria-hidden="true" /></button
 		>
 	</div>
 </div>

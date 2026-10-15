@@ -16,7 +16,7 @@ import {
 	visibleDockKey,
 	dockMinimized
 } from './bottomDock';
-import { registerDockOpener, registerDockCloser, registerDockOpenState } from './dockMenu';
+import { registerDockOpener, registerDockCloser, registerDockOpenState, registerFloatOpener } from './dockMenu';
 import { groupOfKey, removeFromGroup } from './windowTabs';
 
 // 42 I6 — HOSTED DOCK TABS: the floating windows with no docked layout of their own — the
@@ -166,6 +166,13 @@ export function startDockHost() {
 	);
 	for (const key of HOSTED_DOCK_TABS) {
 		offs.push(registerDockOpenState(key, () => HOSTED[key].isOpen(get(HOSTED[key].store))));
+		// 44 M7: a sidebar "+" opens it FLOATING (its column then takes it) — out of the dock first
+		offs.push(
+			registerFloatOpener(key, () => {
+				if (get(hostedDocked)[key]) setHostedDocked(key, false);
+				HOSTED[key].open();
+			})
+		);
 		// the Objects list's opener/closer are phoneDock's (posture-aware); the rest are ours
 		if (PHONE_DOCK_TABS.includes(key)) continue;
 		offs.push(registerDockOpener(key, () => dockHostedView(key)));

@@ -7,14 +7,19 @@ import {
 	hudEditorClose,
 	explorerClose,
 	profilerClose,
-	codeWorkspaceClose
+	codeWorkspaceClose,
+	inspectorClose,
+	inspectorKind
 } from '../stores/appStore';
 import { imageEditorClose } from './image/imageEditorState';
 import { get } from 'svelte/store';
 import { activateDock, armDockMode, armDockModes, dockOccupants, dockTabs, moveDockTab, visibleDockKey, undockButtonMode, placeDockTabs, canDockFloating, DOCK_TITLES, DOCK_ICONS, PHONE_DOCK_TABS, HOSTED_DOCK_TABS } from './bottomDock';
 import { phoneShell } from './ui/phoneShell.js';
-import { queueMerge } from './windowTabs';
+import { queueMerge, groupOfKey, activateTab, nodeOf } from './windowTabs';
 import { maximizeDockTab } from './focusMode';
+import { sidebarTabs, activateSidebarTab, inspectorSide } from './sidebars';
+import { raiseWindow, raiseWindowNode } from './windowFocus';
+import { revealWindow } from './dragWindow';
 
 // The dock's "+" add-a-view menu, in ONE place. The docked tab strip
 // (DockTabs.svelte) and the FLOATING Node editor's header "+" (Flow.svelte) each
@@ -198,30 +203,163 @@ function dockView(key) {
 }
 
 /**
- * 41 G22 — the desktop "+" is the phone sheet's twin: ADD / REMOVE windows in the dock, one row
- * per `DOCK_WINDOWS` entry. A docked window is marked (checked) and its row removes it (closes
- * it — the same as the sheet's switch going off); a floating one is brought into the dock; a
- * closed one opens docked. The hint at the row's end says which, so a click is never a guess.
- * (Before G22 the list dropped every docked view — W5 — which is what left the menu unable to
- * remove anything and, with the Node editor missing, unable to even name it.)
- * @param {{exclude?: string[]}} [options] `exclude`: the floating Node editor's own "+" leaves
- *   itself out — offering a window its own row there is nonsense.
- * @returns {{key: string, label: string, tooltip: string, icon: string, hint: string, checked: boolean, action: () => void}[]}
+ * 44 M5 — WHERE IS THIS WINDOW OPEN? The one question every "+" menu asks before it acts:
+ * 'dock' (a bottom-dock tab), 'left' / 'right' (a sidebar tab), 'floating' (its own window, or a
+ * floating tab group's member), or null (closed). A sidebar tab is asked first, because a window
+ * docked to a side is ALSO open by its close store and would otherwise read as floating — which
+ * is how "+" ▸ Statistics put a second Statistics in the dock while the first sat in a sidebar.
+ * @param {string} key @returns {'dock'|'left'|'right'|'floating'|null}
  */
-export function dockAddItems({ exclude = [] } = {}) {
-	const occupied = get(dockOccupants);
-	return windowsHere().filter((view) => !exclude.includes(view.key)).map((view) => {
+export function windowWhere(key) {
+	const tabs = get(sidebarTabs);
+	if (tabs.left.includes(key)) return 'left';
+	if (tabs.right.includes(key)) return 'right';
+	if (get(dockOccupants)[key]?.present) return 'dock';
+	return viewOpen(key) ? 'floating' : null;
+}
+
+/** where a floating editor window remembers its rect (dragWindow's key), for the reveal */
+const FLOAT_DRAG_KEYS = /** @type {Record<string, string>} */ ({
+	flow: 'flowWin',
+	flowcode: 'flowCode',
+	animation: 'animation',
+	uv: 'uv',
+	shader: 'shader',
+	hud: 'hud',
+	explorer: 'explorerWin',
+	profiler: 'profilerWin',
+	code: 'codeWin'
+});
+
+/**
+ * 44 M5 — bring an OPEN window to the front WHERE IT IS: its dock tab, its sidebar tab, or its
+ * floating window (its group's tab first, then raised and pulled fully back on screen). Nothing
+ * moves and nothing is opened twice. False when it is not open anywhere.
+ * @param {string} key
+ */
+export function focusWindow(key) {
+	const where = windowWhere(key);
+	if (!where) return false;
+	if (where === 'dock') activateDock(key);
+	else if (where === 'left' || where === 'right') activateSidebarTab(key);
+	else {
+		const group = groupOfKey(key);
+		if (group && group.active !== key) activateTab(group.id, key);
+		if (FLOAT_DRAG_KEYS[key]) revealWindow(FLOAT_DRAG_KEYS[key]);
+		if (!raiseWindow(key)) raiseWindowNode(nodeOf(key));
+	}
+	return true;
+}
+
+/** the words for where a window is, in a row's hint @param {'dock'|'left'|'right'|'floating'} where */
+function whereHint(where) {
+	return where === 'dock' ? 'In dock' : where === 'floating' ? 'Floating' : where === 'left' ? 'Left sidebar' : 'Right sidebar';
+}
+
+/**
+ * 44 M7 — open a CLOSED window as a tab of a sidebar column (the sidebar's own "+"). Its side is
+ * written first (docking.js remembers it for a window that is not mounted yet), then it opens in
+ * its floating mode, which is the mode a side column takes. Where the side column cannot take it
+ * (a touch screen keeps windows out of the columns today), it simply opens as it would anywhere.
+ * @param {string} key @param {'left'|'right'} side
+ */
+function openInSide(key, side) {
+	const sided = moveToSidebar(key, side);
+	if (floatOpeners[key]) floatOpeners[key]();
+	else {
+		armDockMode(key, false);
+		closeStoreFor(key)?.set(false);
+	}
+	if (!sided) return;
+	// the window reports itself a member as it mounts; bring it to the front once it has
+	queueMicrotask(() => activateSidebarTab(key));
+}
+
+/**
+ * 44 M7 — how a window with no close store of its own opens FLOATING (a hosted window: Objects,
+ * Statistics, …): $lib/dockHost registers each, since this module may not import it.
+ * @type {Record<string, () => void>}
+ */
+const floatOpeners = {};
+/** @param {string} key @param {() => void} fn @returns {() => void} unregister */
+export function registerFloatOpener(key, fn) {
+	floatOpeners[key] = fn;
+	return () => {
+		if (floatOpeners[key] === fn) delete floatOpeners[key];
+	};
+}
+
+/**
+ * 44 M7 — the Configure Scene row a sidebar "+" offers: the Inspector lives only in the sidebars.
+ * Open (as Configure Scene) it is focused where it is; open as Properties it swaps to the scene in
+ * place (one panel, two kinds); closed it opens on THIS side.
+ * @param {'left'|'right'} side
+ */
+function sceneRow(side) {
+	const open = !get(inspectorClose);
+	const isScene = open && get(inspectorKind) === 'scene';
+	const tabs = get(sidebarTabs);
+	const at = tabs.left.includes('inspector') ? 'left' : tabs.right.includes('inspector') ? 'right' : null;
+	const title = 'Configure Scene';
+	const icon = 'sun';
+	if (isScene && at)
+		return { key: 'scene', label: title, icon, hint: whereHint(at), checked: true, multiPick: true, tooltip: `${title} is open in the ${at} sidebar — click to show it there`, action: () => activateSidebarTab('inspector') };
+	return {
+		key: 'scene',
+		label: title,
+		icon,
+		hint: open ? 'Show' : 'Open',
+		checked: false,
+		multiPick: true,
+		tooltip: 'Sky, light, physics, grid and the rest of the scene’s settings',
+		action: () => {
+			if (!open) inspectorSide.set(side);
+			inspectorKind.set('scene');
+			inspectorClose.set(false);
+			queueMicrotask(() => activateSidebarTab('inspector'));
+		}
+	};
+}
+
+/**
+ * 41 G22 + 44 M5/M7 — THE "+" MENU, every one of them: the dock strip's, a sidebar's, the
+ * floating Node editor's header. One row per registry window (`DOCK_WINDOWS` + the hosted ones),
+ * and ONE RULE for a row (44 M5, the user: "'+' ▸ Statistics while Statistics lives in a sidebar
+ * must focus that sidebar tab, not open a second copy"): a window that is OPEN ANYWHERE — the
+ * dock, a sidebar, floating — is checked, its hint says where, and its row brings it to the front
+ * THERE (`focusWindow`). Only a CLOSED window opens, and it opens into the "+" that was pressed:
+ * the dock for the dock's, that side's column for a sidebar's.
+ *
+ * Every row is `multiPick` (44 M8): Ctrl-click (Cmd on a Mac) or Shift-click runs it and keeps
+ * the menu up for the next pick (ContextMenu); a plain click picks one and closes.
+ * @param {{target?: 'dock'|'left'|'right', exclude?: string[]}} [options]
+ * @returns {{key: string, label: string, tooltip: string, icon: string, hint: string, checked: boolean, multiPick: true, action: () => void}[]}
+ */
+export function addWindowItems({ target = 'dock', exclude = [] } = {}) {
+	const side = target === 'left' || target === 'right' ? target : null;
+	/** @type {any[]} */
+	const rows = [];
+	if (side && !exclude.includes('scene')) rows.push(sceneRow(side));
+	for (const view of windowsHere()) {
+		if (exclude.includes(view.key)) continue;
 		const title = DOCK_TITLES[view.key] ?? view.key;
-		const docked = !!occupied[view.key]?.present;
-		// not docked, but OPEN = a floating window: the row moves it rather than opening a copy
-		const floating = !docked && viewOpen(view.key);
 		const icon = DOCK_ICONS[view.key] ?? 'app-window';
-		if (docked)
-			return { key: view.key, label: title, icon, hint: 'Remove', checked: true, tooltip: `${title} is in the dock — click to remove it (closes it)`, action: () => closeDockView(view.key) };
-		if (floating)
-			return { key: view.key, label: title, icon, hint: 'Dock', checked: false, tooltip: `Bring the floating ${title} window into the dock`, action: () => dockView(view.key) };
-		return { key: view.key, label: title, icon, hint: 'Open', checked: false, tooltip: view.tooltip, action: () => dockView(view.key) };
-	});
+		const where = windowWhere(view.key);
+		if (where) {
+			const place = where === 'dock' ? 'the dock' : where === 'floating' ? 'a floating window' : `the ${where} sidebar`;
+			rows.push({ key: view.key, label: title, icon, hint: whereHint(where), checked: true, multiPick: true, tooltip: `${title} is open in ${place} — click to show it there`, action: () => focusWindow(view.key) });
+			continue;
+		}
+		const open = side && canDockFloating(view.key) ? () => openInSide(view.key, side) : () => dockView(view.key);
+		rows.push({ key: view.key, label: title, icon, hint: 'Open', checked: false, multiPick: true, tooltip: view.tooltip, action: open });
+	}
+	return rows;
+}
+
+/** the bottom dock's "+" (and the floating Node editor's, which passes `exclude: ['flow']`)
+ * @param {{exclude?: string[]}} [options] */
+export function dockAddItems({ exclude = [] } = {}) {
+	return addWindowItems({ target: 'dock', exclude });
 }
 
 /**

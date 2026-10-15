@@ -721,10 +721,12 @@ h.run(async () => {
 	});
 	await A.page.waitForTimeout(400);
 	rows = await menuRows();
+	// 44 M5: ONE registry rule — an open window is FOCUSED where it is by every "+" (the user's "+ ▸
+	// Statistics opened a second copy"); the row names where it is and leaves it there
 	const dockRow = rows.find((r) => /Animation/.test(r.label));
 	h.check(
-		!!dockRow && /Animation\s*Dock$/.test(dockRow.label) && !/＋/.test(dockRow.label),
-		`11.2 the ＋ menu's Animation row says Dock (41 G22 hint), not Open — the row moves a window, it does not open a second copy (${rows
+		!!dockRow && /Animation\s*Floating$/.test(dockRow.label) && !/＋/.test(dockRow.label),
+		`11.2 the ＋ menu's Animation row says Floating (44 M5 hint), not Open — the row never opens a second copy (${rows
 			.map((r) => r.label)
 			.join(' | ')})`
 	);
@@ -733,10 +735,9 @@ h.run(async () => {
 	);
 	await A.page.waitForTimeout(900);
 	f = await floatState();
-	h.check(f.docked, `11.3 clicking it DOCKS the floating window (docked=${f.docked})`);
-	h.check(f.visible === 'animation', `11.4 ...and makes it the visible tab (${f.visible})`);
-	h.check(!f.window, '11.5 ...and the floating window is gone, not left behind beside its tab');
-	h.check(f.open, '11.6 ...and it was never closed on the way (a dock is a move, not a reopen)');
+	h.check(!f.docked && f.window, `11.3 clicking it brings the floating window forward and does NOT dock it (docked=${f.docked}, window=${f.window})`);
+	h.check(f.visible === 'flow', `11.4 ...the dock keeps its own tab (${f.visible})`);
+	h.check(f.open, '11.6 ...and it was never closed on the way');
 
 	await h.finish(browser);
 });
