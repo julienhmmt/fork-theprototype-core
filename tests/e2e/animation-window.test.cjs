@@ -68,6 +68,21 @@ h.run(async () => {
 	// --- Play drives the object per frame ---
 	await A.page.evaluate((id) => window.__stores.animationPreview.play(id), uuid);
 	await A.page.waitForTimeout(280);
+	// Play drives the object PER RENDERED FRAME, and a loaded e2e box renders software GL at
+	// ~4 fps (frames 230-270 ms apart, measured: logs/p1-probe4.log) — so 280 ms after Play
+	// there may not have been a driven frame yet (y read 0.00). Wait for one, bounded: an
+	// object that is never driven still fails the check below.
+	await A.page
+		.waitForFunction(
+			(id) => {
+				let g;
+				window.__stores.objectsGroup.subscribe((x) => (g = x))();
+				return (g.getObjectByProperty('uuid', id)?.position.y ?? 0) > 0.01;
+			},
+			uuid,
+			{ timeout: 5000, polling: 50 }
+		)
+		.catch(() => {});
 	const during = await A.page.evaluate((id) => {
 		const s = window.__stores;
 		let g;

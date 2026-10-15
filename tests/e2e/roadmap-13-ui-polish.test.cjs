@@ -269,10 +269,14 @@ h.run(async () => {
 	);
 	// cloud plugin removes the banner
 	await A.page.evaluate(() => window.__stores.appNotice.set(null));
-	await A.page.waitForTimeout(200);
-	h.check(
-		(await A.page.getByText('local, open-source version', { exact: false }).count()) === 0,
-		'appNotice.set(null) removes the banner (cloud override seam)'
+	// the notice is an info TOAST now (Toasts.svelte showInfoToast 'app-notice'), and a dismissed
+	// toast plays its outro before it leaves the DOM — still there at 300 ms, gone by 1.8 s
+	// (logs/p1-probe1.log). So wait for it to go, bounded: a seam that never removes it stays red.
+	await h.eventually(
+		() => A.page.getByText('local, open-source version', { exact: false }).count(),
+		(n) => n === 0,
+		'appNotice.set(null) removes the banner (cloud override seam)',
+		5000
 	);
 	await A.page.evaluate(() => localStorage.setItem('hasSeenDisclaimer', 'true'));
 

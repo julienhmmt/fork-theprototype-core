@@ -41,6 +41,20 @@ const { unzipSync, zipSync, strFromU8 } = require('fflate');
 
 const srcUrl = (f) => pathToFileURL(path.join(__dirname, '..', '..', 'src', 'lib', f)).href;
 
+// saveName.js imports `./safeStorage` WITHOUT an extension (Vite resolves that; the storage
+// hardening routed every localStorage read through it), and Node's ESM loader refuses an
+// extensionless specifier — so section 0's pure, browser-free import died before its first
+// check. Resolve exactly that case the way Vite does (append `.js` to a relative specifier
+// under src/ that has no extension); everything else resolves untouched.
+const SRC_DIR = pathToFileURL(path.join(__dirname, '..', '..', 'src') + path.sep).href;
+require('node:module').registerHooks({
+	resolve(specifier, context, next) {
+		if (/^\.\.?\//.test(specifier) && !path.extname(specifier) && context.parentURL?.startsWith(SRC_DIR))
+			return next(specifier + '.js', context);
+		return next(specifier, context);
+	}
+});
+
 /** fflate hands out typed-array VIEWS over a shared buffer — slice by
  * byteOffset..byteLength before hashing, or the digest is of the whole archive */
 const sha256 = (view) =>

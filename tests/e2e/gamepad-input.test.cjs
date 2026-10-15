@@ -578,6 +578,9 @@ h.run(async () => {
 
 	await h.freshReload(A);
 	await page.waitForFunction(() => !!window.__stores?.gamepadPrefs, { timeout: 30000 });
+	// 41 G16: "Restore previous session?" is a blocking modal after a reload of a page that
+	// autosaved objects — answer it (the snapshot stays saved) or every click lands on it
+	await h.answerRestore(A);
 	// a reload gives the page a NEW peer id — re-read it before the connect below
 	A.id = await page.evaluate(
 		() => new Promise((r) => window.__stores.peers.subscribe((x) => r(x?.peer?.id))())

@@ -55,33 +55,56 @@ h.run(async () => {
 
 	// drop the pack zip into the Packs view -> imported
 	await dropFile(A.page, 'dropped.zip', 'application/zip', Array.from(zipBytes));
-	await A.page.waitForTimeout(700);
-	const registered = await A.page.evaluate(() => {
-		let list;
-		window.__stores.packs.packs.subscribe((x) => (list = x))();
-		return list.some((p) => p.name === 'dropped');
-	});
-	h.check(registered, 'dropping a pack .zip into the Packs view imports it');
+	// the import is ASYNC (fflate import, each asset stored + thumbnailed) and registers the pack
+	// LAST — under e2e load that took longer than the old fixed 700 ms (43-tests logs/r2-p-probe3b.log:
+	// the same drop registers "dropped"). Wait for it, bounded; a drop that never imports stays red.
+	await h.eventually(
+		() =>
+			A.page.evaluate(() => {
+				let list;
+				window.__stores.packs.packs.subscribe((x) => (list = x))();
+				return list.some((p) => p.name === 'dropped');
+			}),
+		(v) => v === true,
+		'dropping a pack .zip into the Packs view imports it',
+		15000
+	);
 
 	// drop a non-zip into Packs -> rejected, NOT imported into the library
 	await A.page.evaluate(() => window.__stores.explorer.activeFolder.set('packs'));
 	await A.page.waitForTimeout(200);
 	const before = await itemCount(A.page);
 	await dropFile(A.page, 'foo.png', 'image/png', Array.from(Uint8Array.from(atob(TINY_PNG), (c) => c.charCodeAt(0))));
-	await A.page.waitForTimeout(500);
+	// a positive signal that the drop was HANDLED (the refusal toast), then the count: a fixed
+	// 500 ms said nothing either way, and read the first import's last items still landing
+	await h.eventually(
+		() =>
+			A.page.evaluate(() => {
+				let n;
+				window.__stores.notifications.subscribe((x) => (n = x))();
+				return n.some((x) => /Only pack \.zip files can be dropped into Packs/.test(x.text));
+			}),
+		(v) => v === true,
+		'the Packs view answers a non-zip drop with its refusal',
+		10000
+	);
 	h.check((await itemCount(A.page)) === before, 'a non-zip dropped into Packs is rejected (not imported)');
 
 	// drop a supported file in the Library root -> still imports (regression)
 	await A.page.evaluate(() => window.__stores.explorer.activeFolder.set(null));
 	await A.page.waitForTimeout(200);
 	await dropFile(A.page, 'lib.png', 'image/png', Array.from(Uint8Array.from(atob(TINY_PNG), (c) => c.charCodeAt(0))));
-	await A.page.waitForTimeout(700);
-	const libImported = await A.page.evaluate(() => {
-		let it;
-		window.__stores.explorer.explorerItems.subscribe((x) => (it = x))();
-		return it.some((i) => i.name === 'lib.png');
-	});
-	h.check(libImported, 'a supported file dropped in the Library root still imports');
+	await h.eventually(
+		() =>
+			A.page.evaluate(() => {
+				let it;
+				window.__stores.explorer.explorerItems.subscribe((x) => (it = x))();
+				return it.some((i) => i.name === 'lib.png');
+			}),
+		(v) => v === true,
+		'a supported file dropped in the Library root still imports',
+		15000
+	);
 
 	await h.finish(browser);
 });

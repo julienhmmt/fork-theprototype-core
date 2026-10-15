@@ -185,20 +185,22 @@ h.run(async () => {
 	}
 
 	// ------------- 3b. THE BINDING NAMES THE TOOL, not a toolbar slot
-	// The five optional dock views (Flow Code / Animation / UV / Shader / HUD) are in
-	// the roster but NOT on the bar of a fresh profile — they are listed in Customize
-	// unchecked. So this is the real case: their keys must work while their button does
-	// not exist. If the binding were an index into the button strip, it could not.
+	// The optional dock views (Flow Code / UV / Shader / HUD) are in the roster but NOT on
+	// the bar of a fresh profile — they are listed in Customize unchecked. So this is the
+	// real case: their keys must work while their button does not exist. If the binding
+	// were an index into the button strip, it could not. (33 E1 promoted Animation to the
+	// DEFAULT bar — Controls.svelte DEFAULT_ORDER / PROMOTED_DEFAULTS — so it is no longer
+	// one of the button-less views; it was five when this section was written.)
 	await clearDock(A.page);
 	const barTitles = await A.page.evaluate(() =>
 		[...document.querySelectorAll('nav p[title]')].map((p) => p.getAttribute('title'))
 	);
-	const optionalOnBar = ['UV editor', 'Shader editor', 'HUD editor', 'Animation', 'Flow Code'].filter((t) =>
-		barTitles.includes(t)
+	const optionalOnBar = ['UV editor', 'Shader editor', 'HUD editor', 'Flow Code'].filter((t) =>
+		barTitles.some((b) => b === t || b.startsWith(t + ' ('))
 	);
 	h.check(
 		optionalOnBar.length === 0,
-		`3b.1 premise: none of the five optional views has a toolbar button on a fresh profile (on bar: ${optionalOnBar.join(',') || 'none'})`
+		`3b.1 premise: none of the four optional views has a toolbar button on a fresh profile (on bar: ${optionalOnBar.join(',') || 'none'})`
 	);
 	await press(A.page, 'Alt+u');
 	const uvOpen = await storeVal(A.page, 'uvEditorClose');

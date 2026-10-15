@@ -137,12 +137,37 @@ async function setupPage(browser, name, options = {}) {
 	// Absent means an unchanged URL, so every existing caller is untouched.
 	await page.goto(URL + (options.hash ?? ''), { waitUntil: 'domcontentloaded', timeout: 60000 });
 	await page.waitForTimeout(4000);
-	await page.waitForFunction(() => window.__stores && !!window.__stores.moduleSDK, { timeout: 30000 });
+	// 43-tests: a THIRD page in one browser boots in ~50 s on a loaded e2e box (two pages already
+	// rendering software GL starve it: logs/p1-probe6.log — no error, no crash, just slow), so the
+	// old 30 s cap killed every three-peer suite (invite-link-live, script-nodes) at `setupPage(C)`.
+	// This waits for the same state; it only stops calling a slow boot a dead one. The options are
+	// the THIRD argument: passed second (as this line did) they are the page-function's `arg`, and
+	// Playwright's default 30 s applied whatever the number said.
+	await page.waitForFunction(() => window.__stores && !!window.__stores.moduleSDK, null, { timeout: 90000 });
 	const id = await page.evaluate(
 		() => new Promise((r) => window.__stores.peers.subscribe((p) => r(p?.peer?.id))())
 	);
 	console.log(name + ' id: ' + id);
 	return { ctx, page, id };
+}
+
+/**
+ * `setupPage` for a LATE page while `others` are already up. Every page in one headless browser
+ * renders software GL continuously, so on a loaded e2e box a third page's boot was starved past
+ * 90 s by the two already drawing (43-tests: script-nodes, invite-link-live). The others' DRAWING
+ * is paused through the app's own overload-guard pause (`overloadGuard.pauseRendering` — what the
+ * app does itself when frames freeze) for the length of the boot, and resumed after: their
+ * sessions, sockets and stores keep running, only the frames stop. Use it only where the suite
+ * does not assert on what those pages draw during the boot.
+ * @param {any} browser @param {string} name @param {any[]} others @param {any=} options
+ */
+async function setupPageQuiet(browser, name, others, options = {}) {
+	for (const peer of others) await peer.page.evaluate(() => window.__stores.overloadGuard.pauseRendering('e2e: another page boots'));
+	try {
+		return await setupPage(browser, name, options);
+	} finally {
+		for (const peer of others) await peer.page.evaluate(() => window.__stores.overloadGuard.resumeRendering()).catch(() => {});
+	}
 }
 
 /** Connect `from` to `to` (approve on `to`), then let the mesh settle. */
@@ -267,6 +292,74 @@ function projectPoint(page, world) {
 async function freshReload(peer) {
 	await peer.page.reload({ waitUntil: 'domcontentloaded' });
 	await peer.page.waitForFunction(() => window.__stores && !!window.__stores.moduleSDK, { timeout: 30000 });
+}
+
+/**
+ * 41 G16 made "Restore previous session?" a TRUE modal (SessionPrompts.svelte): after a
+ * reload of a page that autosaved objects, every click lands on its backdrop until it is
+ * answered, so a suite that reloads and then clicks timed out at 30 s on the restore
+ * dialog. This answers it — `'dismiss'` (the default: the snapshot stays in storage) or
+ * `'restore'` — and waits for the modal to be GONE, not for a fixed time.
+ *
+ * Deterministic both ways: with no autosave snapshot in IndexedDB no offer can come, so
+ * it returns false at once; with one it waits for the offer (`autosave.restoreAvailable`),
+ * presses the real button and waits for the store to clear. A snapshot that never turns
+ * into an offer (auto-restore on, or the world already holds objects) returns false
+ * after `timeout`.
+ * @param {any} peer @param {'dismiss'|'restore'} [choice] @param {number} [timeout]
+ * @returns {Promise<boolean>} whether a restore question was answered
+ */
+async function answerRestore(peer, choice = 'dismiss', timeout = 10000) {
+	const page = peer.page;
+	const snapshot = await page.evaluate(
+		() =>
+			new Promise((resolve) => {
+				try {
+					const open = indexedDB.open('theprototype');
+					open.onerror = () => resolve(false);
+					open.onsuccess = () => {
+						const db = open.result;
+						if (!db.objectStoreNames.contains('snapshots')) return db.close(), resolve(false);
+						const get = db.transaction('snapshots', 'readonly').objectStore('snapshots').get('latest');
+						get.onsuccess = () => {
+							const v = get.result;
+							db.close();
+							resolve(!!v && (!!v.scene || !!v.nodes?.length));
+						};
+						get.onerror = () => (db.close(), resolve(false));
+					};
+				} catch {
+					resolve(false);
+				}
+			})
+	);
+	if (!snapshot) return false;
+	const offered = await page
+		.waitForFunction(
+			async () => {
+				const m = window.__stores?.autosave;
+				if (!m?.restoreAvailable) return false;
+				let v;
+				m.restoreAvailable.subscribe((x) => (v = x))();
+				return !!v;
+			},
+			null,
+			{ timeout, polling: 200 }
+		)
+		.then(() => true)
+		.catch(() => false);
+	if (!offered) return false;
+	await page.locator(choice === 'restore' ? '#restore-session-restore' : '#restore-session-dismiss').click({ timeout: 10000 });
+	await page.waitForFunction(
+		() => {
+			let v;
+			window.__stores.autosave.restoreAvailable.subscribe((x) => (v = x))();
+			return !v && !document.querySelector('#restore-session-modal[open]');
+		},
+		null,
+		{ timeout: 10000, polling: 100 }
+	);
+	return true;
 }
 
 /** Everything the page threw, for a suite that wants to assert on it.
@@ -431,6 +524,17 @@ async function framePixelsOffColor(page, frame, rgb, tolerance = 24) {
  * a module's own console noise) still only prints. */
 const FATAL_ERROR = /each_key_duplicate|effect_update_depth_exceeded|store\.set is not a function|is not a function.*svelte|Cannot read properties of undefined \(reading 'call'\)|derived_references_self|state_unsafe_mutation/;
 
+/**
+ * Close ONE peer's context early (a suite done with it, freeing the box for the pages still to
+ * boot) WITHOUT losing what `finish` would have checked: its render-crash errors are asserted here.
+ * @param {any} peer
+ */
+async function closePeer(peer) {
+	const fatal = (peer.page.__errors ?? []).filter((/** @type {string} */ m) => FATAL_ERROR.test(m));
+	for (const message of fatal) check(false, 'the page threw a render error: ' + message.split('\n')[0]);
+	await peer.ctx.close();
+}
+
 /** Close up and exit with the right code. */
 async function finish(browser) {
 	// collect before the browser goes away
@@ -513,6 +617,9 @@ async function leavePlay(peer) {
 function run(body) {
 	body().catch((error) => {
 		console.error('SCRIPT FAILED:', error.message);
+		// which line of which suite/helper threw — a Playwright timeout message alone does not say
+		const at = String(error?.stack ?? '').split('\n').filter((l) => /\.cjs:\d+/.test(l)).slice(0, 4);
+		if (at.length) console.error(at.join('\n'));
 		process.exit(1);
 	});
 }
@@ -872,4 +979,4 @@ function envelopeDelta(a, b) {
 	return { maxDelta, meanDelta: n ? sum / n : 0, worstSlice };
 }
 
-module.exports = { URL, GPU_ARGS, check, launch, setupPage, connect, leavePlay, eventually, projectPoint, freshReload, finish, run, installModule, moduleZipPath, makeCollectibleChains, pageErrors, grabFrame, centeredClip, frameDelta, framePixelsOffColor, AUDIO_ARGS, audioMetrics, renderOffline, envelopeDelta };
+module.exports = { URL, GPU_ARGS, check, launch, setupPage, setupPageQuiet, connect, leavePlay, eventually, projectPoint, freshReload, answerRestore, closePeer, finish, run, installModule, moduleZipPath, makeCollectibleChains, pageErrors, grabFrame, centeredClip, frameDelta, framePixelsOffColor, AUDIO_ARGS, audioMetrics, renderOffline, envelopeDelta };
