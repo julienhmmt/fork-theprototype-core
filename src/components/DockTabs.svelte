@@ -41,7 +41,7 @@
 	// what the tab's right-click menu already offered in words, which is what keeps the
 	// feature reachable on a device that cannot drag.
 	import { dockTabs, bottomDockActive, activateDock, dockMinimized, reorderDockTabs, armDockMode, undockButtonMode, setDockEmptyOpen } from '$lib/bottomDock';
-	import { dockAddItems, dockTabItems, closeDockView, undockFromDock, undockInto, canUndockTab, moveToSidebar } from '$lib/dockMenu';
+	import { dockAddMenuAt, dockTabItems, closeDockView, undockFromDock, undockInto, canUndockTab, moveToSidebar } from '$lib/dockMenu';
 	import { sideAt, sideOpen, showDropTarget } from '$lib/sidebarDrop';
 	import { canDockFloating } from '$lib/bottomDock';
 	import { windowAt, nodeOf } from '$lib/windowTabs';
@@ -52,10 +52,6 @@
 	import ContextMenu from './ContextMenu.svelte';
 	import Icon from './ui/Icon.svelte';
 
-	let addMenu = $state(/** @type {{x:number,y:number}|null} */ (null));
-	// Rebuilt per OPEN, not once at init: the list drops views that are already docked,
-	// and that set changes every time a tab opens or closes.
-	let addItems = $state(/** @type {any[]} */ ([]));
 	// 40 F9: on a phone (with floating windows off) "+" is a sheet listing EVERY window with
 	// a show/hide toggle; with floating windows on, a phone behaves like the desktop.
 	const sheetMode = $derived($phoneShell && !$mobileUndockAllowed);
@@ -66,8 +62,8 @@
 			return;
 		}
 		const r = /** @type {HTMLElement} */ (e.currentTarget).getBoundingClientRect();
-		addItems = dockAddItems();
-		addMenu = { x: r.left, y: r.bottom + 4 };
+		// 44 M8: PhoneDockHost draws it (it outlives this strip — see dockAddMenuAt)
+		dockAddMenuAt.set({ x: r.left, y: r.bottom + 4 });
 	}
 
 	let tabMenu = $state(/** @type {{x:number,y:number,items:any[]}|null} */ (null));
@@ -386,9 +382,6 @@
 
 {#if sheetOpen}
 	<DockViewsSheet bind:open={sheetOpen} />
-{/if}
-{#if addMenu}
-	<ContextMenu x={addMenu.x} y={addMenu.y} items={addItems} on:close={() => (addMenu = null)} />
 {/if}
 {#if tabMenu}
 	<ContextMenu x={tabMenu.x} y={tabMenu.y} items={tabMenu.items} on:close={() => (tabMenu = null)} />

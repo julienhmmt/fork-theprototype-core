@@ -21,6 +21,8 @@
 	// box (top-edge resize, full width), rendered only while one of them is the tab in front.
 	import { onMount, tick } from 'svelte';
 	import DockTabs from '../DockTabs.svelte';
+	import ContextMenu from '../ContextMenu.svelte';
+	import { dockAddMenuAt, dockAddItems, rebuildAfterPick } from '$lib/dockMenu';
 	import EmptyState from '../ui/EmptyState.svelte';
 	import WorkspaceLayouts from '../menu/WorkspaceLayouts.svelte';
 	import { dockHeight, dockEmptyShown } from '$lib/bottomDock';
@@ -47,6 +49,13 @@
 	// 44 M5: the EMPTY dock ("T" with nothing docked) is this frame too, on a wider screen — its strip
 	// with only the "+", and a helper line where a tab's body would be
 	const emptyDock = $derived(!$phoneShell && $dockEmptyShown);
+
+	// 44 M8 — THE DOCK'S "+" MENU, drawn here for every strip (`dockAddMenuAt`): Ctrl/Shift-click picks
+	// several windows and the rows rebuild after each pick (their checks and hints change)
+	let addItems = $state(/** @type {any[]} */ ([]));
+	$effect(() => {
+		if ($dockAddMenuAt) addItems = dockAddItems();
+	});
 	/** the tab in front, whichever posture hosts it */
 	const shownTab = $derived($phoneShell ? $phoneDockShown : $hostedDockShown);
 	// Properties with nothing selected has nothing to show (the Inspector would show the last
@@ -190,6 +199,16 @@
 			{/if}
 		</div>
 	</div>
+{/if}
+
+{#if $dockAddMenuAt}
+	<ContextMenu
+		x={$dockAddMenuAt.x}
+		y={$dockAddMenuAt.y}
+		items={addItems}
+		onclose={() => dockAddMenuAt.set(null)}
+		onpicked={() => rebuildAfterPick(() => $dockAddMenuAt && (addItems = dockAddItems()))}
+	/>
 {/if}
 
 <style>

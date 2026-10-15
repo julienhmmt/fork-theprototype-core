@@ -12,7 +12,7 @@ import {
 	inspectorKind
 } from '../stores/appStore';
 import { imageEditorClose } from './image/imageEditorState';
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { activateDock, armDockMode, armDockModes, dockOccupants, dockTabs, moveDockTab, visibleDockKey, undockButtonMode, placeDockTabs, canDockFloating, DOCK_TITLES, DOCK_ICONS, PHONE_DOCK_TABS, HOSTED_DOCK_TABS } from './bottomDock';
 import { phoneShell } from './ui/phoneShell.js';
 import { queueMerge, groupOfKey, activateTab, nodeOf } from './windowTabs';
@@ -354,6 +354,26 @@ export function addWindowItems({ target = 'dock', exclude = [] } = {}) {
 		rows.push({ key: view.key, label: title, icon, hint: 'Open', checked: false, multiPick: true, tooltip: view.tooltip, action: open });
 	}
 	return rows;
+}
+
+/**
+ * 44 M8 — WHERE THE DOCK'S "+" MENU IS OPEN (null = closed). Every docked panel draws its own strip
+ * (DockTabs), and the empty dock's strip unmounts the moment a window docks — so a menu owned by the
+ * strip died on the first Ctrl-pick there. The strips only SET this; one always-mounted renderer
+ * (PhoneDockHost) draws the menu, so it outlives whichever strip opened it.
+ * @type {import('svelte/store').Writable<{x: number, y: number}|null>}
+ */
+export const dockAddMenuAt = writable(/** @type {{x: number, y: number}|null} */ (null));
+
+/**
+ * 44 M8 — rebuild a "+" menu's rows after a multi-pick: now, and once more when the picked window
+ * has settled (a window opened into a sidebar joins its column as it MOUNTS, a frame or two later —
+ * read at once its row would still say "Floating").
+ * @param {() => void} rebuild
+ */
+export function rebuildAfterPick(rebuild) {
+	rebuild();
+	setTimeout(rebuild, 450);
 }
 
 /** the bottom dock's "+" (and the floating Node editor's, which passes `exclude: ['flow']`)

@@ -277,7 +277,8 @@ h.run(async () => {
 	// bring the dock to a KNOWN showing state, whatever the reload restored, then
 	// assert the full round trip on the key alone
 	if (!st.visible) {
-		await press(A.page, 't');
+		// 44 M5: T on an empty dock opens it EMPTY, so a view comes in by its own key (N)
+		await press(A.page, 'n');
 		st = await dockState(A.page);
 	}
 	h.check(!!st.visible && !st.minimized, `4.14 ...and T reaches a showing dock from whatever the reload left (visible=${st.visible})`);

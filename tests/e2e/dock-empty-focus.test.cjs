@@ -34,8 +34,11 @@ const S = (page, fn, arg) => page.evaluate(fn, arg);
 const read = (page, path) =>
 	S(page, (path) => {
 		const [mod, name] = path.split('.');
+		// tolerant: a store a build does not have reads null (the counterfactual runs on past it)
+		const st = name ? window.__stores[mod]?.[name] : window.__stores[mod];
+		if (!st?.subscribe) return null;
 		let v;
-		(name ? window.__stores[mod][name] : window.__stores[mod]).subscribe((x) => (v = x))();
+		st.subscribe((x) => (v = x))();
 		return v;
 	}, path);
 
@@ -179,8 +182,11 @@ h.run(async () => {
 		const r = el.getBoundingClientRect();
 		return { x: Math.round(r.left + 14), y: Math.round(r.top + r.height / 2) };
 	});
+	// (no #dock-empty on a build without the empty dock: aim at the dock's middle, so the counterfactual runs on)
 	const body = await S(page, () => {
-		const r = document.querySelector('#dock-empty').getBoundingClientRect();
+		const el = document.querySelector('#dock-empty');
+		if (!el) return { x: Math.round(innerWidth / 2), y: innerHeight - 160 };
+		const r = el.getBoundingClientRect();
 		return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
 	});
 	await page.mouse.move(head.x, head.y);
@@ -189,7 +195,7 @@ h.run(async () => {
 	for (let i = 1; i <= steps; i++) await page.mouse.move(head.x + ((body.x - head.x) * i) / steps, head.y + ((body.y - head.y) * i) / steps);
 	await page.mouse.up();
 	await page.waitForTimeout(1300);
-	let docked = await read(page, 'bottomDock.dockTabs');
+	let docked = (await read(page, 'bottomDock.dockTabs')) ?? [];
 	v = await dockView(page);
 	h.check(docked.map((t) => t.key).join() === 'explorer' && !v.empty, `2.1 the Explorer dropped on the empty dock's body docks (${docked.map((t) => t.key)})`);
 	// back to empty for the next part: float it out through its tab menu's Undock
@@ -216,7 +222,7 @@ h.run(async () => {
 	const fc = (rows ?? []).find((r) => r.title === 'Flow Code');
 	h.check(!!fc && !fc.checked && fc.hint === 'Open', `3.4 a closed window's row says Open (${JSON.stringify(fc)})`);
 	await clickRow(page, 'Flow Code');
-	docked = await read(page, 'bottomDock.dockTabs');
+	docked = (await read(page, 'bottomDock.dockTabs')) ?? [];
 	v = await dockView(page);
 	h.check(docked.map((t) => t.key).join() === 'flowcode' && !v.empty && v.tabs === 1, `3.5 ...and opens it docked, which ends the empty state (${docked.map((t) => t.key)} ${JSON.stringify(v)})`);
 	h.check(!(await read(page, 'bottomDock.dockEmptyOpen')), '3.6 the empty flag cleared itself when a tab arrived');
@@ -243,7 +249,7 @@ h.run(async () => {
 	await clickRow(page, 'Statistics');
 	shown = await read(page, 'sidebars.sidebarShown');
 	const hosted = await read(page, 'dockHost.hostedDocked');
-	docked = (await read(page, 'bottomDock.dockTabs')).map((t) => t.key);
+	docked = ((await read(page, 'bottomDock.dockTabs')) ?? []).map((t) => t.key);
 	const copies = await S(page, () => document.querySelectorAll('#stats-window').length);
 	h.check(shown.right === 'stats', `4.2 "+" ▸ Statistics brings its SIDEBAR tab to the front (${shown.right})`);
 	h.check(!hosted.stats && !docked.includes('stats') && copies === 1, `4.3 ...and no second copy: not docked, one window (${JSON.stringify({ hosted: hosted.stats, docked, copies })})`);
@@ -269,7 +275,7 @@ h.run(async () => {
 	h.check(!!ex?.checked && ex.hint === 'Left sidebar', `4.5 the Explorer row names the left sidebar (${JSON.stringify(ex)})`);
 	await clickRow(page, 'Explorer');
 	shown = await read(page, 'sidebars.sidebarShown');
-	docked = (await read(page, 'bottomDock.dockTabs')).map((t) => t.key);
+	docked = ((await read(page, 'bottomDock.dockTabs')) ?? []).map((t) => t.key);
 	h.check(shown.left === 'explorer' && !docked.includes('explorer'), `4.6 "+" ▸ Explorer focuses its left tab, it stays out of the dock (${shown.left}; dock ${docked})`);
 
 	// ---- 5. a floating window: raised where it floats -----------------------------------------------
@@ -313,18 +319,29 @@ h.run(async () => {
 	/** @type {Record<string, number>} */
 	const rights = {};
 	for (const key of Object.keys(panes)) {
+		// one at a time: the dock-mode arm is a write-once slot, so the next view must not arm before this one
+		// has consumed it (a slow-mounting editor otherwise opens in its remembered floating mode)
 		await S(page, async (key) => {
 			const s = window.__stores;
 			s.bottomDock.armDockMode(key, true);
 			s.dockMenu.closeStoreFor(key)?.set(false);
-			await new Promise((r) => setTimeout(r, 700));
+			for (let t = 0; t < 40; t++) {
+				let o;
+				s.bottomDock.dockOccupants.subscribe((x) => (o = x))();
+				if (o?.[key]?.present) break;
+				await new Promise((r) => setTimeout(r, 200));
+			}
 			s.bottomDock.activateDock(key);
 		}, key);
-		await page.waitForTimeout(700);
-		rights[key] = await S(page, (sel) => {
-			const el = [...document.querySelectorAll(sel)].find((x) => x.getBoundingClientRect().width > 0 && !x.classList.contains('hidden'));
-			return el ? Math.round(el.getBoundingClientRect().right) : -1;
-		}, panes[key]);
+		// a heavy editor (the Profiler, the code workspace) can take a few seconds to mount on a loaded box
+		for (let t = 0; t < 20; t++) {
+			rights[key] = await S(page, (sel) => {
+				const el = [...document.querySelectorAll(sel)].find((x) => x.getBoundingClientRect().width > 0 && !x.classList.contains('hidden'));
+				return el ? Math.round(el.getBoundingClientRect().right) : -1;
+			}, panes[key]);
+			if (rights[key] > 0) break;
+			await page.waitForTimeout(400);
+		}
 	}
 	const off = Object.entries(rights).filter(([, r]) => Math.abs(r - (m6.w - m6.col)) > 1);
 	h.check(!off.length, `6.2 every editor's docked pane stops at the column too (${JSON.stringify(rights)} vs ${m6.w - m6.col})`);
