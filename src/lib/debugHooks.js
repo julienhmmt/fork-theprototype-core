@@ -362,6 +362,9 @@ export const DEBUG_HOOKS = [
 	['wireErrors', () => import('./wireErrors')],
 	['safeStorage', () => import('./safeStorage')],
 	['sceneBudget', () => import('./sceneBudget')],
+	// 46 B1/B2: the budget chip + Statistics ▸ Budget (budgetTarget, sceneCost, sampleBudget, openBudget, TARGETS)
+	['budgetMeter', () => import('./budgetMeter')],
+	['budgetMeterCore', () => import('./budgetMeterCore')],
 	['overloadGuard', () => import('./overloadGuard')],
 	['qualityGovernor', () => import('./qualityGovernor')],
 	['importBudget', () => import('./importBudget')],
