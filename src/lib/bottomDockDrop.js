@@ -1,7 +1,9 @@
 import { isHeaderDrag } from './windowGrip';
 import { armDockMode, activateDock, canDockFloating } from './bottomDock';
 import { groupOfKey, headerTargetAt } from './windowTabs';
-import { dockAtStrip, canDockHere } from './dockMenu';
+import { dockAtStrip, canDockHere, moveToSidebar, canMoveToSidebar } from './dockMenu';
+import { windowDropTarget, windowDropZoneId, showDropTarget } from './sidebarDrop';
+import { PHONE_QUERY } from './ui/phoneShell.js';
 
 // W7 — DRAG A FLOATING PANEL INTO THE BOTTOM DOCK.
 //
@@ -155,33 +157,16 @@ export function clearStripFeedback() {
 	ghostWindows([], false);
 }
 
-/** @type {any} */ let zoneEl = null;
-/** @param {boolean} on */
-function showZone(on) {
-	if (!on) {
-		zoneEl?.remove();
-		zoneEl = null;
-		return;
-	}
-	if (!zoneEl) {
-		zoneEl = document.createElement('div');
-		zoneEl.id = 'bottom-dock-zone';
-		zoneEl.style.cssText =
-			'position:fixed;left:0;right:0;bottom:0;z-index:calc(var(--z-chrome) - 1);pointer-events:none;background:rgb(37 99 235 / .25);border:2px dashed rgb(96 165 250 / .8);';
-		document.body.appendChild(zoneEl);
-	}
-	zoneEl.style.height = EDGE + 'px';
-}
-
-// touch: the same stance docking.js takes. A band drag has no hover feedback to read
-// and fights touch scrolling, and on a coarse pointer a dockable panel is forced
-// docked anyway unless the user opted into `mobileUndockAllowed` — so the window this
-// would act on usually does not exist. The header's "⇩ Dock" button stays the touch path.
-const isCoarse = () =>
-	typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+// touch: since 44 M2 a touch screen wider than a phone (the unfolded N6) gets every target a mouse
+// does — the window claims its own touch gesture (windows.css `[data-body-drag]`), so a drag no longer
+// fights a pan. A PHONE keeps the old stance: its floating windows are bottom sheets and the dock hosts
+// its own content tabs. Asked per gesture, since a window outlives a fold.
+const onPhone = () => typeof window !== 'undefined' && !!window.matchMedia?.(PHONE_QUERY).matches;
 
 /**
- * svelte action: dragging this floating window's header into the bottom band docks it.
+ * svelte action: a floating window dragged by its header (or its body, 44 M1) docks where it is
+ * dropped — the bottom dock's tab strip or bottom band, or (43 J4/44 M3) a sidebar column — through
+ * the ONE drop model ($lib/sidebarDrop `windowDropTarget`), painted by its one highlight.
  * @param {any} node @param {{key: string}} options `key` is the DOCK key, which is ALSO
  *   windowTabs' key — this note used to record that Flow Code was 'flowcode' here and
  *   'flowCode' there, and that divergence was not a quirk but a defect: both
@@ -192,11 +177,10 @@ const isCoarse = () =>
  */
 export function bottomDockable(node, { key }) {
 	// 43 J4: every window that can be a bottom-dock tab can be a SIDEBAR tab too — docking.js's edge
-	// action rides along (it stands itself down on a coarse pointer, and twice-wired is once)
+	// action rides along (its registry, a persisted side, and dragging a side-docked window back out)
 	const side = canDockFloating(key) ? (sideDockable?.(node, { key }) ?? null) : null;
-	// 42 I6: every floating window that can be a dock tab (FLOAT_DOCKABLE — the hosted ones too);
-	// the posture is asked per gesture, since a window can outlive a fold
-	if (isCoarse() || !canDockFloating(key)) return { destroy: () => side?.destroy() };
+	node.dataset.windowKey = key; // 44 M3: the header menu acts on this window by its dock key
+	if (!canDockFloating(key)) return { destroy: () => side?.destroy() };
 
 	let dragging = false;
 	// THE VERDICT IS TAKEN ON THE LAST MOVE, NEVER RE-DERIVED AT THE DROP. Three modules
@@ -206,52 +190,54 @@ export function bottomDockable(node, { key }) {
 	// of a merge that just happened (measured: the pair merged AND the dragged window
 	// docked, dissolving the group again). Deciding from the last move also makes the drop
 	// agree with the feedback the user was looking at, which is the honest contract.
-	/** @type {null | {strip: ReturnType<typeof dockStripTarget>} | {band: true}} */
+	/** @type {import('./sidebarDrop').DropTarget|null} */
 	let armed = null;
-	let stripGhost = false;
+	let ghosted = false;
 	/** @param {any} e */
 	const down = (e) => {
 		if (!isHeaderDrag(e.target) || e.button !== 0) return; // 36 F4: not on a header control
-		if (node.dataset?.docked) return; // edge-docked: docking.js's own drag undocks it first
-		if (groupOfKey(key)) return; // a tab group drags as one (TabStrips docks a group)
-		if (!canDockHere(key)) return; // 42 I6: a hosted window on a phone posture keeps floating
+		if (node.dataset?.docked) return; // side-docked: docking.js's own drag undocks it first
+		if (groupOfKey(key)) return; // a tab group drags as one (TabStrips)
+		if (onPhone()) return;
 		dragging = true;
 		armed = null;
 	};
-	/** PRECEDENCE, and it is the whole design: a header-merge target WINS, because it is
-	 * the smaller and more specific target — a window header you are pointing at is a
-	 * deliberate aim. Then the docked TAB STRIP (41 G7: the caret, at an index), then the
-	 * bottom edge band. docking.js's left/right edges LOSE to both, which it enforces on its
-	 * own side by asking `bottomDockWouldTake`, so the bottom-left corner docks to the bottom
-	 * rather than to both at once.
+	/** PRECEDENCE: a header-merge target WINS, because it is the smaller and more specific
+	 * target — a window header you are pointing at is a deliberate aim. Then the one drop model:
+	 * the docked tab strip (41 G7's caret, at an index), the bottom edge band, a sidebar.
 	 * @param {any} e */
 	const verdict = (e) => {
 		if (headerTargetAt(e.clientX, e.clientY, key)) return null;
-		const strip = dockStripTarget(e.clientX, e.clientY);
-		if (strip) return { strip };
-		return inBottomBand(e.clientY) ? /** @type {{band: true}} */ ({ band: true }) : null;
+		return windowDropTarget({ x: e.clientX, y: e.clientY, key, canDock: canDockHere(key), canSide: canSideHere(key) });
+	};
+	/** @param {import('./sidebarDrop').DropTarget|null} t */
+	const paint = (t) => {
+		showDropTarget(t, { id: windowDropZoneId(t) });
+		// the window goes see-through over a strip or a column, so the target under it reads (41 G7)
+		const ghost = !!t && (t.kind === 'side' || (t.kind === 'dock' && !!t.strip));
+		if (ghost || ghosted) ghostWindows([node], ghost);
+		ghosted = ghost;
 	};
 	/** @param {any} e */
 	const move = (e) => {
 		if (!dragging) return;
 		armed = verdict(e);
-		const strip = armed && 'strip' in armed ? armed.strip : null;
-		showDockCaret(strip);
-		// 43 J4: only take back a ghost THIS target made — the side-dock target (docking.js, the same
-		// gesture) ghosts the window too, and a blanket clear here un-ghosted it on every move
-		if (strip || stripGhost) ghostWindows([node], !!strip);
-		stripGhost = !!strip;
-		showZone(!!armed && 'band' in armed);
+		paint(armed);
 	};
 	const up = () => {
 		if (!dragging) return;
 		const take = armed;
 		dragging = false;
 		armed = null;
-		showZone(false);
+		paint(null);
 		clearStripFeedback();
 		if (!take) return;
-		if ('strip' in take && take.strip) {
+		if (take.kind === 'side') {
+			moveToSidebar(key, take.side);
+			return;
+		}
+		if (take.kind !== 'dock') return;
+		if (take.strip) {
 			dockAtStrip([key], take.strip.before);
 			return;
 		}
@@ -259,9 +245,10 @@ export function bottomDockable(node, { key }) {
 		activateDock(key);
 	};
 	const cancel = () => {
+		if (!dragging) return;
 		dragging = false;
 		armed = null;
-		showZone(false);
+		paint(null);
 		clearStripFeedback();
 	};
 	node.addEventListener('pointerdown', down);
@@ -275,10 +262,16 @@ export function bottomDockable(node, { key }) {
 			window.removeEventListener('pointermove', move);
 			window.removeEventListener('pointerup', up);
 			window.removeEventListener('pointercancel', cancel);
-			if (dragging) cancel();
+			cancel();
 			side?.destroy();
 		}
 	};
+}
+
+/** can this window join a sidebar column here? (any dockable window, wider than a phone — docking.js
+ * registers the mover) @param {string} key */
+export function canSideHere(key) {
+	return canDockFloating(key) && !onPhone() && canMoveToSidebar();
 }
 
 /**
