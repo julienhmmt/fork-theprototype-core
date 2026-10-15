@@ -22,7 +22,8 @@ Everything from your review of the 1.34 preview, plus four bugs the test clean-u
 
 - ➕ **T opens an empty dock** with only its "+" when nothing is docked, and the empty dock takes a drop.
 - 🎯 **Every "+" lists every window**: one that is already open is ticked, says where it is and comes to the front there
-  — no second copy. **Ctrl/Cmd- or Shift-click** picks several without closing the menu.
+  — no second copy (the dock's "+" no longer docks or removes a window: Undock and Close stay on the tab and its menu).
+  **Ctrl/Cmd- or Shift-click** picks several without closing the menu.
 - 🗃️ **Sidebars get a "+" too**, stay open when you empty them, and **Ctrl+B / Ctrl+Alt+B** show and hide the left and
   right sidebar (their tabs stay open).
 - ↔️ **The dock splits side by side**: a Split button (and Split right / Split with / Swap sides / Unsplit in the tab
@@ -54,8 +55,10 @@ Everything from your review of the 1.34 preview, plus four bugs the test clean-u
   second — it could stay offline until a reload.
 - ⚡ Opening a big scene no longer stalls the window past 200 ms on a phone (the object list's icons are much cheaper).
 - 🔁 "ResizeObserver loop completed with undelivered notifications" no longer appears when the toolbar changes size
-  beside a pinned sidebar.
+  beside a pinned sidebar, or when a crowded top row turns the Connect bar compact.
 - 🧾 Typing with the Node editor open no longer floods the diagnostics log; a repeated identical line is counted (×N).
+- 🍔 Under a pinned Connect bar an open left sidebar starts below the logo, so the menu stays in reach (the unfolded
+  phone pins the bar by default now); in focus mode the Exit focus pill sits clear of the dock's new Split button.
 
 ## 1.34.0 — Your 1.33 review: copy and paste any value, a toolbar that fits, and a real full-screen focus 📋
 
