@@ -235,7 +235,11 @@ h.run(async () => {
 	await page.mouse.move(head.x, head.y);
 	await page.mouse.down();
 	for (let i = 1; i <= 14; i++) await page.mouse.move(head.x + ((target.x - head.x) * i) / 14, head.y + ((target.y - head.y) * i) / 14);
-	const zone = await S(page, () => document.getElementById('dock-zone')?.textContent ?? '');
+	// (45 N7: a window's target carries a hint line under its label)
+	const zone = await S(page, () => {
+		const z = document.getElementById('dock-zone');
+		return (z?.querySelector('.sb-drop-label') ?? z)?.textContent ?? '';
+	});
 	await page.mouse.up();
 	await page.waitForTimeout(1200);
 	l = await side(page, 'left');

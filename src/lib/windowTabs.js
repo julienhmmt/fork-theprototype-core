@@ -2,6 +2,7 @@ import { isHeaderDrag } from './windowGrip';
 import { writable, get } from 'svelte/store';
 import { safeStorage } from './safeStorage';
 import { onLayoutRestore } from './uiLayoutsCore';
+import { placeFree, watchPlaceFree } from './placeFree'; // 45 N7 (a leaf)
 
 // Window tab groups (phase 83, floating windows only — docked splits stay in
 // pending/81). Grouped windows share ONE rect; the active member is visible,
@@ -529,18 +530,33 @@ export function tabbable(node, { key, title, openStore, isOpen = (v) => !!v, clo
 		downX = e.clientX;
 		downY = e.clientY;
 		travelled = false;
+		unwatch?.();
+		unwatch = watchPlaceFree(onFree);
+	};
+	// 45 N7: Ctrl (Cmd) held = no merge either — the window is placed where it is dropped, over another
+	// window's header too; pressing / releasing the key mid-drag flips the highlight at once
+	let lastX = 0;
+	let lastY = 0;
+	/** @type {(() => void) | null} */ let unwatch = null;
+	const onFree = () => {
+		if (draggingHeader && travelled) setMergeTarget(placeFree() ? null : targetAt(lastX, lastY));
 	};
 	const move = (/** @type {any} */ e) => {
 		if (!draggingHeader) return;
 		if (!travelled && Math.hypot(e.clientX - downX, e.clientY - downY) > 4) travelled = true;
+		lastX = e.clientX;
+		lastY = e.clientY;
 		// live feedback (104): the header you would merge into lights up
-		if (travelled) setMergeTarget(targetAt(e.clientX, e.clientY));
+		if (travelled) setMergeTarget(placeFree(e) ? null : targetAt(e.clientX, e.clientY));
 	};
 	const up = (/** @type {any} */ e) => {
 		if (!draggingHeader) return;
 		draggingHeader = false;
+		unwatch?.();
+		unwatch = null;
 		setMergeTarget(null);
 		if (!travelled) return;
+		if (placeFree(e)) return;
 		const otherKey = targetAt(e.clientX, e.clientY);
 		if (otherKey) mergeWindows(otherKey, key);
 	};
@@ -556,6 +572,7 @@ export function tabbable(node, { key, title, openStore, isOpen = (v) => !!v, clo
 			node.removeEventListener('pointerdown', down);
 			window.removeEventListener('pointermove', move);
 			window.removeEventListener('pointerup', up);
+			unwatch?.();
 			setMergeTarget(null);
 			unsub?.();
 			removeFromGroup(key, false);

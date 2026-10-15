@@ -3,6 +3,7 @@ import { armDockMode, activateDock, canDockFloating } from './bottomDock';
 import { groupOfKey, headerTargetAt } from './windowTabs';
 import { dockAtStrip, canDockHere, moveToSidebar, canMoveToSidebar } from './dockMenu';
 import { windowDropTarget, windowDropZoneId, showDropTarget } from './sidebarDrop';
+import { placeFree, watchPlaceFree, placeFreeHint, showPlaceFreeChip } from './placeFree';
 import { PHONE_QUERY } from './ui/phoneShell.js';
 
 // W7 — DRAG A FLOATING PANEL INTO THE BOTTOM DOCK.
@@ -207,6 +208,18 @@ export function bottomDockable(node, { key }) {
 	/** @type {import('./sidebarDrop').DropTarget|null} */
 	let armed = null;
 	let ghosted = false;
+	/** 45 N7: what the window WOULD dock into at the last move (Ctrl held or not), and where */
+	/** @type {import('./sidebarDrop').DropTarget|null} */
+	let would = null;
+	let at = { x: 0, y: 0 };
+	/** @type {(() => void) | null} */
+	let unwatch = null;
+	/** 45 N7: the key pressed or released with the pointer still flips the target at once */
+	const onFree = () => {
+		if (!dragging) return;
+		armed = placeFree() ? null : would;
+		paint(armed);
+	};
 	/** @param {any} e */
 	const down = (e) => {
 		if (!isHeaderDrag(e.target) || e.button !== 0) return; // 36 F4: not on a header control
@@ -215,18 +228,26 @@ export function bottomDockable(node, { key }) {
 		if (onPhone()) return;
 		dragging = true;
 		armed = null;
+		would = null;
+		unwatch?.();
+		unwatch = watchPlaceFree(onFree);
 	};
 	/** PRECEDENCE: a header-merge target WINS, because it is the smaller and more specific
 	 * target — a window header you are pointing at is a deliberate aim. Then the one drop model:
 	 * the docked tab strip (41 G7's caret, at an index), the bottom edge band, a sidebar.
 	 * @param {any} e */
 	const verdict = (e) => {
-		if (headerTargetAt(e.clientX, e.clientY, key)) return null;
-		return windowDropTarget({ x: e.clientX, y: e.clientY, key, canDock: canDockHere(key), canSide: canSideHere(key) });
+		at = { x: e.clientX, y: e.clientY };
+		would = headerTargetAt(e.clientX, e.clientY, key)
+			? null
+			: windowDropTarget({ x: e.clientX, y: e.clientY, key, canDock: canDockHere(key), canSide: canSideHere(key) });
+		// 45 N7: Ctrl (Cmd) held = every target stands down — the window is placed where it is dropped
+		return placeFree(e) ? null : would;
 	};
 	/** @param {import('./sidebarDrop').DropTarget|null} t */
 	const paint = (t) => {
-		showDropTarget(t, { id: windowDropZoneId(t) });
+		showDropTarget(t, { id: windowDropZoneId(t), hint: placeFreeHint() });
+		showPlaceFreeChip(dragging && !t && would && placeFree() ? at : null);
 		// the window goes see-through over a strip or a column, so the target under it reads (41 G7)
 		const ghost = !!t && (t.kind === 'side' || (t.kind === 'dock' && !!t.strip));
 		if (ghost || ghosted) ghostWindows([node], ghost);
@@ -243,6 +264,8 @@ export function bottomDockable(node, { key }) {
 		const take = armed;
 		dragging = false;
 		armed = null;
+		unwatch?.();
+		unwatch = null;
 		paint(null);
 		clearStripFeedback();
 		if (!take) return;
@@ -262,6 +285,8 @@ export function bottomDockable(node, { key }) {
 		if (!dragging) return;
 		dragging = false;
 		armed = null;
+		unwatch?.();
+		unwatch = null;
 		paint(null);
 		clearStripFeedback();
 	};
