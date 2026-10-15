@@ -13,7 +13,7 @@
 	import Segmented from '../ui/Segmented.svelte';
 	import DragRow from '../ui/DragRow.svelte';
 	import Button from '../ui/Button.svelte';
-	import { importSettings, setImportSettings, resetImportSettings } from '$lib/importOptimize';
+	import { importSettings, setImportSettings, resetImportSettings } from '$lib/importSettings';
 
 	const SIZES = [
 		{ value: '512', label: '512' },

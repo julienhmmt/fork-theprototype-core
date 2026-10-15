@@ -1,5 +1,4 @@
 import { writable, get } from 'svelte/store';
-import { safeStorage } from './safeStorage';
 import { showToast, showInfoToast, dismissToastById } from '../stores/appStore';
 import { objectsGroup } from '../stores/sceneStore';
 import { addItemFromBytes, itemByHash, hashBytes, patchRecord, deleteItem, itemBlob } from './explorer';
@@ -9,8 +8,6 @@ import { generatedGroup } from './lodGroupCore';
 import { parseGltfSceneSafe } from './ktx2Twins';
 import { optimizeGltf, OptimizeUnsupported } from './gltfOptimize.js';
 import {
-	IMPORT_DEFAULTS,
-	normalizeImportSettings,
 	importDecision,
 	importOptions,
 	shortBytes,
@@ -38,59 +35,10 @@ import {
 // models' LOD chain (a level cannot carry weights), and the texture work on OBJ/STL/FBX — the
 // engine is glTF-only, so those get the LOD chain only.
 
-const KEY = 'import:settings';
-
-/** Settings ▸ Import — this device's defaults for new imports.
- * @type {import('svelte/store').Writable<import('./gltfOptimize/presets.js').ImportSettings>} */
-export const importSettings = writable(read());
-
-function read() {
-	try {
-		const raw = typeof localStorage === 'undefined' ? null : safeStorage.getItem(KEY);
-		return normalizeImportSettings(raw ? JSON.parse(raw) : IMPORT_DEFAULTS);
-	} catch {
-		return normalizeImportSettings(IMPORT_DEFAULTS);
-	}
-}
-
-/** @param {Partial<import('./gltfOptimize/presets.js').ImportSettings>} patch */
-export function setImportSettings(patch) {
-	const next = normalizeImportSettings({ ...get(importSettings), ...patch });
-	safeStorage.setItem(KEY, JSON.stringify(next));
-	importSettings.set(next);
-	return next;
-}
-
-/** Back to the shipped defaults. */
-export function resetImportSettings() {
-	return setImportSettings(normalizeImportSettings(IMPORT_DEFAULTS));
-}
-
-/**
- * @typedef {{mode?: 'auto' | 'always' | 'never', lodLevels?: number, lodRatios?: number[],
- *   maxTextureSize?: number, compress?: boolean}} AssetOverride
- */
-
-/** An asset override, normalised: unknown keys dropped, `mode` one of three. @param {any} raw
- * @returns {AssetOverride} */
-export function normalizeOverride(raw) {
-	const r = raw && typeof raw === 'object' ? raw : {};
-	/** @type {AssetOverride} */
-	const out = { mode: r.mode === 'always' || r.mode === 'never' ? r.mode : 'auto' };
-	if (Number.isFinite(Number(r.lodLevels))) out.lodLevels = Number(r.lodLevels);
-	if (Array.isArray(r.lodRatios)) out.lodRatios = r.lodRatios.map(Number);
-	if (Number.isFinite(Number(r.maxTextureSize))) out.maxTextureSize = Number(r.maxTextureSize);
-	if (typeof r.compress === 'boolean') out.compress = r.compress;
-	return out;
-}
-
-/** The settings an import of this asset runs under: the device defaults with the override on top.
- * @param {AssetOverride | null | undefined} override */
-export function effectiveSettings(override) {
-	const o = normalizeOverride(override);
-	const { mode, ...rest } = o;
-	return { mode, settings: normalizeImportSettings({ ...get(importSettings), ...rest }) };
-}
+// The settings half (the store, the override, effectiveSettings) is the leaf importSettings.js, so
+// Settings ▸ Import and the Explorer panel do not pull this module into the main bundle.
+export { importSettings, setImportSettings, resetImportSettings, normalizeOverride, effectiveSettings, setAssetOverride } from './importSettings.js';
+import { effectiveSettings } from './importSettings.js';
 
 /** What a parsed tree weighs, in the two units the thresholds use. @param {any} root */
 export function measureImport(root) {
@@ -316,10 +264,4 @@ async function rebuildOnly(blob, ext, name) {
 	const result = await maybeOptimizeImport(parsed, { file, extension: ext, label: name });
 	disposeTree(result?.parsed?.root ?? parsed.root);
 	return result;
-}
-
-/** Set (or clear, with null) an asset's import override on its Library record. @param {string} itemId
- * @param {AssetOverride | null} override */
-export function setAssetOverride(itemId, override) {
-	return patchRecord(itemId, { importSettings: override ? normalizeOverride(override) : undefined });
 }

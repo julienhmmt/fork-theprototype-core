@@ -8,7 +8,7 @@
 	import Segmented from '../ui/Segmented.svelte';
 	import Toggle from '../ui/Toggle.svelte';
 	import { explorerItems, hiddenItems, revealItem } from '$lib/explorer';
-	import { importSettings, effectiveSettings, setAssetOverride, reimportAsset } from '$lib/importOptimize';
+	import { importSettings, effectiveSettings, setAssetOverride } from '$lib/importSettings';
 	import { shortBytes, percentChange } from '$lib/gltfOptimize/presets.js';
 
 	let { item = null } = $props();
@@ -57,7 +57,7 @@
 		if (!record || busy) return;
 		busy = true;
 		try {
-			await reimportAsset(record.hash);
+			await (await import('$lib/importOptimize')).reimportAsset(record.hash);
 		} finally {
 			busy = false;
 		}
