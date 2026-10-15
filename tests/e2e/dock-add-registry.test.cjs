@@ -5,8 +5,8 @@
 //   1  the desktop dock "+" lists EVERY window the phone "+" Windows sheet lists (one registry,
 //      `dockMenu.DOCK_WINDOWS`) — read from both real surfaces, the phone's in a phone context
 //   2  it includes the Node editor and the Image editor (G24)
-//   3  it ADDS and REMOVES: a docked row is marked and removes; a closed one opens docked
-//      (the Node editor too); a floating one is brought into the dock
+//   3  44 M5: an open row is marked with WHERE it is and brings it to the front there; a closed one
+//      opens docked (the Node editor too); a floating one stays floating
 //
 // Real mouse on desktop, real taps on the phone. Run:
 //   APP_URL=http://localhost:5404/ npm run e2e -- dock-add-registry
@@ -106,28 +106,35 @@ h.run(async () => {
 	const flowRow = (rows ?? []).find((r) => r.title === 'Node editor');
 	const exRow = (rows ?? []).find((r) => r.title === 'Explorer');
 	const fcRow = (rows ?? []).find((r) => r.title === 'Flow Code');
-	h.check(!!flowRow?.checked && flowRow.hint === 'Remove' && !!exRow?.checked, `3.1 docked windows are marked and say Remove (${JSON.stringify([flowRow, exRow])})`);
+	// 44 M5: ONE registry rule — an OPEN window (docked, in a sidebar, floating) is checked, its hint says
+	// where, and its row brings it to the front THERE; only a closed one opens (into the dock). The 41 G22
+	// "Remove" / "Dock" rows are gone (closing is the tab's ×; docking a floating window is its drag/menu).
+	h.check(!!flowRow?.checked && flowRow.hint === 'In dock' && !!exRow?.checked, `3.1 docked windows are marked and say "In dock" (${JSON.stringify([flowRow, exRow])})`);
 	h.check(!!fcRow && !fcRow.checked && fcRow.hint === 'Open', `3.2 a closed one says Open (${JSON.stringify(fcRow)})`);
 
-	// remove the Node editor from the dock through its row
+	// the Explorer in front, then the Node editor's row brings ITS tab forward (nothing closes)
+	await S(page, () => window.__stores.bottomDock.activateDock('explorer'));
+	await page.waitForTimeout(400);
+	await page.keyboard.press('Escape');
+	await page.waitForTimeout(200);
+	rows = await plusRows(page);
 	await clickRow(page, 'Node editor');
 	let d = await dockState(page);
-	h.check(!d.docked.includes('flow') && d.docked.includes('explorer'), `3.3 its row removes the Node editor from the dock (${JSON.stringify(d)})`);
-	// ...and bring it back the same way
+	h.check(d.docked.includes('flow') && d.docked.includes('explorer') && d.visible === 'flow', `3.3 its row brings the docked Node editor to the front — nothing is removed (${JSON.stringify(d)})`);
+	// a closed window opens docked, in front
 	rows = await plusRows(page);
-	h.check((rows ?? []).find((r) => r.title === 'Node editor')?.hint === 'Open', '3.4 now its row says Open');
-	await clickRow(page, 'Node editor');
-	d = await dockState(page);
-	h.check(d.docked.includes('flow') && d.visible === 'flow', `3.5 ...and opens it docked, in front (${JSON.stringify(d)})`);
-
-	// a floating window: its row docks it
-	await S(page, () => window.__stores.flowCodeClose.set(false));
-	await page.waitForTimeout(900);
-	rows = await plusRows(page);
-	h.check((rows ?? []).find((r) => r.title === 'Flow Code')?.hint === 'Dock', `3.6 a floating window's row says Dock (${JSON.stringify((rows ?? []).find((r) => r.title === 'Flow Code'))})`);
 	await clickRow(page, 'Flow Code');
 	d = await dockState(page);
-	h.check(d.docked.includes('flowcode') && !(await page.locator('#flow-code-window').count()), `3.7 ...and brings it into the dock (${JSON.stringify(d)})`);
+	h.check(d.docked.includes('flowcode') && d.visible === 'flowcode', `3.4 a closed window's row opens it docked, in front (${JSON.stringify(d)})`);
+
+	// a floating window: its row raises it where it floats
+	await S(page, () => window.__stores.bottomDock.armDockMode('flowcode', false));
+	await page.waitForTimeout(900);
+	rows = await plusRows(page);
+	h.check((rows ?? []).find((r) => r.title === 'Flow Code')?.hint === 'Floating', `3.6 a floating window's row says Floating (${JSON.stringify((rows ?? []).find((r) => r.title === 'Flow Code'))})`);
+	await clickRow(page, 'Flow Code');
+	d = await dockState(page);
+	h.check(!d.docked.includes('flowcode') && !!(await page.locator('#flow-code-window').count()), `3.7 ...and leaves it floating (${JSON.stringify(d)})`);
 
 	// light theme shot of the menu
 	await S(page, () => {

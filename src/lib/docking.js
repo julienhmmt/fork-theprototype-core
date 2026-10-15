@@ -3,8 +3,8 @@ import { isHeaderDrag } from './windowGrip';
 import { bottomDockWouldTake, setSideDockable, ghostWindows } from './bottomDockDrop';
 import { safeStorage } from './safeStorage';
 import { onLayoutRestore } from './uiLayoutsCore';
-import { reportMember, sidebarShown, sidebarTabs, setDockMover, activateSidebarTab } from './sidebars';
-import { showDropTarget } from './sidebarDrop';
+import { reportMember, sidebarShown, setDockMover, activateSidebarTab } from './sidebars';
+import { showDropTarget, sideOpen } from './sidebarDrop';
 import { canDockFloating, armDockMode, dockOccupants, forgetDockTab, HOSTED_DOCK_TABS } from './bottomDock';
 import { hostedDocked, setHostedDocked } from './dockHost';
 import { registerSideMover } from './dockMenu';
@@ -264,10 +264,6 @@ function showZone(target, node) {
 const isCoarse = () =>
 	typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
 
-/** the sides whose column is on screen right now */
-let tabsNow = { left: /** @type {string[]} */ ([]), right: /** @type {string[]} */ ([]) };
-sidebarTabs.subscribe((v) => (tabsNow = v));
-
 /**
  * svelte action: makes a floating window dockable to the screen edges.
  * @param {any} node @param {{key: string}} options
@@ -336,7 +332,7 @@ export function dockable(node, { key }) {
 		if (bottomDockWouldTake(key, e.clientY, e.clientX)) return null;
 		const root = getComputedStyle(document.documentElement);
 		for (const side of /** @type {const} */ (['left', 'right'])) {
-			const occupied = tabsNow[side].some((k) => k !== key);
+			const occupied = sideOpen(side, key); // 44 M7: an empty open column takes a drop too
 			const w = parseFloat(root.getPropertyValue(`--sb-${side}-w`)) || 320;
 			const x0 = side === 'left' ? parseFloat(root.getPropertyValue('--sb-left-x')) || 0 : window.innerWidth - w;
 			const top = parseFloat(root.getPropertyValue(`--sb-${side}-top`)) || 0;

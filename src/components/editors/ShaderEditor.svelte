@@ -1112,8 +1112,10 @@
 <style>
 	.shader-editor {
 		position: fixed;
-		left: 0;
-		right: 0;
+		/* 44 M6: beside a Full-height sidebar, never under it (.tp-dock-panel's rule — this scoped one
+		   outranks it, so it has to say the same) */
+		left: var(--sb-dock-left, 0px);
+		right: var(--sb-dock-right, 0px);
 		bottom: 0;
 		z-index: var(--z-dock, 35);
 		display: flex;

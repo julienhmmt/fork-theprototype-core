@@ -22,7 +22,7 @@
 	import { dockable } from '$lib/docking';
 	import { setDockOccupant, dockHeight, visibleDockKey, dockMinimized, activateDock, dockModeArm, forgetDockTab } from '$lib/bottomDock';
 	import { bottomDockable } from '$lib/bottomDockDrop';
-	import { dockAddItems } from '$lib/dockMenu';
+	import { dockAddItems, rebuildAfterPick } from '$lib/dockMenu';
 	import { fly } from 'svelte/transition';
 	import { safeStorage } from '$lib/safeStorage';
 	import { readPanelOpen } from '$lib/ui/handheldPanels.js';
@@ -273,5 +273,5 @@
 <NodeDesigner />
 
 {#if addMenu}
-	<ContextMenu x={addMenu.x} y={addMenu.y} items={addItems} on:close={() => (addMenu = null)} />
+	<ContextMenu x={addMenu.x} y={addMenu.y} items={addItems} on:close={() => (addMenu = null)} onpicked={() => rebuildAfterPick(() => addMenu && (addItems = dockAddItems({ exclude: ['flow'] })))} />
 {/if}

@@ -55,7 +55,7 @@ export function inBottomBand(y) {
  */
 export function bottomDockWouldTake(key, y, x) {
 	if (!canDockHere(key)) return false;
-	return inBottomBand(y) || (typeof x === 'number' && !!dockStripTarget(x, y));
+	return inBottomBand(y) || (typeof x === 'number' && (!!dockStripTarget(x, y) || overEmptyDock(x, y)));
 }
 
 // ---- 41 G7: THE TAB STRIP AS A DROP TARGET ----------------------------------------------
@@ -87,8 +87,9 @@ export function dockStripTarget(x, y) {
 	const r = row.getBoundingClientRect();
 	if (x < r.left || x > r.right || y < r.top - STRIP_REACH || y > r.bottom + STRIP_REACH) return null;
 	const tabs = [...row.querySelectorAll('[data-dock-tab]')];
-	if (!tabs.length) return null;
 	const scroller = row.querySelector('.dt-scroll')?.getBoundingClientRect() ?? r;
+	// 44 M5: the EMPTY dock's strip (only its "+") takes a drop too — the caret at its start
+	if (!tabs.length) return { index: 0, before: null, caretX: Math.round(scroller.left + 2), top: r.top, height: r.height };
 	// each tab with its own ✕ is one slot — the caret goes between slots, never inside one
 	const slots = tabs.map((t) => (t.closest('.tp-dtab-group') ?? t).getBoundingClientRect());
 	const keys = tabs.map((t) => /** @type {HTMLElement} */ (t).dataset.dockTab ?? '');
@@ -96,6 +97,19 @@ export function dockStripTarget(x, y) {
 	const raw = index < slots.length ? slots[index].left - 1 : slots[slots.length - 1].right + 1;
 	const caretX = Math.min(Math.max(raw, scroller.left + 1), scroller.right - 1);
 	return { index, before: keys[index] ?? null, caretX, top: r.top, height: r.height };
+}
+
+/**
+ * 44 M5 — over the EMPTY dock's body ("Press + or drag a tab here")? The whole frame is a target
+ * there, the way the edge band is: there is no strip of tabs to aim between.
+ * @param {number} x @param {number} y
+ */
+export function overEmptyDock(x, y) {
+	if (typeof document === 'undefined') return false;
+	const frame = document.querySelector('#phone-dock[data-dock-empty]');
+	if (!frame) return false;
+	const r = frame.getBoundingClientRect();
+	return r.height > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
 }
 
 /** @type {HTMLElement|null} */ let caretEl = null;
@@ -229,7 +243,7 @@ export function bottomDockable(node, { key }) {
 		if (headerTargetAt(e.clientX, e.clientY, key)) return null;
 		const strip = dockStripTarget(e.clientX, e.clientY);
 		if (strip) return { strip };
-		return inBottomBand(e.clientY) ? /** @type {{band: true}} */ ({ band: true }) : null;
+		return inBottomBand(e.clientY) || overEmptyDock(e.clientX, e.clientY) ? /** @type {{band: true}} */ ({ band: true }) : null;
 	};
 	/** @param {any} e */
 	const move = (e) => {

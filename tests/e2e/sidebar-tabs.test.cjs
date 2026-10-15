@@ -213,7 +213,9 @@ h.run(async () => {
 	list = await probe(page, '#object-list');
 	h.check(left2?.tabs.join() === 'inspector,objects' && left2.front === 'objects', `the list joins the left sidebar, in front (${JSON.stringify(left2)})`);
 	h.check(list?.docked === 'left' && list.x < 3, `the list is docked left (${JSON.stringify(list)})`);
-	h.check(!(await strip(page, 'right')), 'the right side is empty now: no header there');
+	// 44 M7: the emptied side STAYS open — its header with "+" and no tabs, the helper line in the column
+	const empty1 = await strip(page, 'right');
+	h.check(!!empty1 && empty1.tabs.length === 0 && (await page.evaluate(() => !!document.querySelector('#sidebar-empty-right'))), `the right side is empty now: its header has no tabs, and it stays open with "+" (44 M7) (${JSON.stringify(empty1)})`);
 
 	// ---------- 8. a FLOATING window dropped on an occupied column becomes one of its tabs ----------
 	await page.locator('p[title="Node editor (N)"]').click();
@@ -269,7 +271,8 @@ h.run(async () => {
 	ins = await probe(page, '#inspector');
 	h.check(back?.tabs.join() === 'inspector,objects,flow', `after a reload the left sidebar has the same three tabs (${JSON.stringify(back)})`);
 	h.check(ins?.shown && ins.x < 3 && Math.abs(ins.w - flowWide.w) < 3, `...the Inspector still docks left at the dragged width (${JSON.stringify(ins)})`);
-	h.check(!(await strip(page, 'right')), '...and nothing came back on the right');
+	const empty2 = await strip(page, 'right');
+	h.check(!empty2 || empty2.tabs.length === 0, `...and no tab came back on the right (44 M7: the emptied column is remembered open) (${JSON.stringify(empty2)})`);
 
 	// ---------- 11. drag-away undocks one tab; the others keep the column ----------
 	// 43 J7: in a sidebar the window has no header of its own — its TAB is the handle (43 J4: a tab

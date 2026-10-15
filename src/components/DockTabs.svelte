@@ -40,8 +40,8 @@
 	// strip it UNDOCKS that view into a floating window. Both are the fast paths for
 	// what the tab's right-click menu already offered in words, which is what keeps the
 	// feature reachable on a device that cannot drag.
-	import { dockTabs, bottomDockActive, activateDock, dockMinimized, reorderDockTabs, armDockMode, undockButtonMode } from '$lib/bottomDock';
-	import { dockAddItems, dockTabItems, closeDockView, undockFromDock, undockInto, canUndockTab, moveToSidebar } from '$lib/dockMenu';
+	import { dockTabs, bottomDockActive, activateDock, dockMinimized, reorderDockTabs, armDockMode, undockButtonMode, setDockEmptyOpen } from '$lib/bottomDock';
+	import { dockAddMenuAt, dockTabItems, closeDockView, undockFromDock, undockInto, canUndockTab, moveToSidebar } from '$lib/dockMenu';
 	import { sideAt, sideOpen, showDropTarget } from '$lib/sidebarDrop';
 	import { canDockFloating } from '$lib/bottomDock';
 	import { windowAt, nodeOf } from '$lib/windowTabs';
@@ -52,10 +52,6 @@
 	import ContextMenu from './ContextMenu.svelte';
 	import Icon from './ui/Icon.svelte';
 
-	let addMenu = $state(/** @type {{x:number,y:number}|null} */ (null));
-	// Rebuilt per OPEN, not once at init: the list drops views that are already docked,
-	// and that set changes every time a tab opens or closes.
-	let addItems = $state(/** @type {any[]} */ ([]));
 	// 40 F9: on a phone (with floating windows off) "+" is a sheet listing EVERY window with
 	// a show/hide toggle; with floating windows on, a phone behaves like the desktop.
 	const sheetMode = $derived($phoneShell && !$mobileUndockAllowed);
@@ -66,8 +62,8 @@
 			return;
 		}
 		const r = /** @type {HTMLElement} */ (e.currentTarget).getBoundingClientRect();
-		addItems = dockAddItems();
-		addMenu = { x: r.left, y: r.bottom + 4 };
+		// 44 M8: PhoneDockHost draws it (it outlives this strip — see dockAddMenuAt)
+		dockAddMenuAt.set({ x: r.left, y: r.bottom + 4 });
 	}
 
 	let tabMenu = $state(/** @type {{x:number,y:number,items:any[]}|null} */ (null));
@@ -364,7 +360,8 @@
 		<!-- 40 F8: undock lives HERE, left of "minimize the dock", not inside each docked window.
 		     It undocks the ACTIVE tab (or, per Settings, every tab as one tabbed window). A phone
 		     whose windows cannot float has nothing to undock to, so it shows no button. -->
-		{#if !sheetMode}
+		<!-- 44 M5: the EMPTY dock has nothing to undock -->
+		{#if !sheetMode && $dockTabs.length}
 			<button
 				id="dock-undock"
 				class="tab-note dt-btn tp-dtab tp-dtab-icon"
@@ -378,16 +375,13 @@
 			class="tab-note dt-btn tp-dtab tp-dtab-icon"
 			title="Minimize the dock"
 			aria-label="Minimize the dock"
-			onclick={() => dockMinimized.set(true)}><Icon name="panel-bottom" size={16} aria-hidden="true" /></button
+			onclick={() => ($dockTabs.length ? dockMinimized.set(true) : setDockEmptyOpen(false))}><Icon name="panel-bottom" size={16} aria-hidden="true" /></button
 		>
 	</div>
 </div>
 
 {#if sheetOpen}
 	<DockViewsSheet bind:open={sheetOpen} />
-{/if}
-{#if addMenu}
-	<ContextMenu x={addMenu.x} y={addMenu.y} items={addItems} on:close={() => (addMenu = null)} />
 {/if}
 {#if tabMenu}
 	<ContextMenu x={tabMenu.x} y={tabMenu.y} items={tabMenu.items} on:close={() => (tabMenu = null)} />
