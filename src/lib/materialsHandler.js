@@ -4,6 +4,7 @@ import { objectsGroup, pokeScene } from '../stores/sceneStore';
 // D2: shared materials. A leaf (stores + THREE), so importing it here closes no cycle.
 import { fanTargets } from './materialSharing';
 import { peers, showToast } from '../stores/appStore';
+import { heicToJpegFile } from './heic.js';
 import { recordEntry, registerHistoryKind } from '$lib/history';
 
 // Custom materials and image textures for scene objects, replicated to peers
@@ -485,6 +486,11 @@ export async function setObjectsTexture(uuids, file, slot = 0, opts = {}) {
 		return 0;
 	}
 	const source = opts.source ? String(opts.source) : null;
+	// 46-media H1: a HEIC photo picked straight into a texture slot is decoded first (heic.js) —
+	// createImageBitmap cannot read one outside Safari, and the wire carries the JPEG's pixels
+	const decoded = await heicToJpegFile(file, { onError: showToast });
+	if (!decoded) return 0;
+	file = decoded;
 	/** @type {string} */
 	let dataURL;
 	try {

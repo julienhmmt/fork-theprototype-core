@@ -63,12 +63,12 @@ const shadowState = (page) =>
 			authored: cam ? [cam.left, cam.right, cam.top, cam.bottom].map((v) => Math.round(v * 10) / 10) : null,
 			// the live projection's x scale: 2 / (right - left) of whatever three used last frame
 			liveSpan: cam ? Math.round(2 / cam.projectionMatrix.elements[0]) : null,
-			budget: s.shadowBudget.shadowBudgetDebug(),
-			kept: s.shadowClaims.shadowsKeptInXR(),
+			budget: s.shadowBudget?.shadowBudgetDebug?.() ?? { active: false },
+			kept: !!s.shadowClaims?.shadowsKeptInXR?.(),
 			claims: (() => {
 				let c;
-				s.shadowClaims.shadowClaims.subscribe((v) => (c = v))();
-				return c.map((x) => ({ owner: x.owner, radius: x.radius }));
+				s.shadowClaims?.shadowClaims.subscribe((v) => (c = v))();
+				return (c ?? []).map((x) => ({ owner: x.owner, radius: x.radius }));
 			})()
 		};
 	});
@@ -107,10 +107,10 @@ h.run(async () => {
 		q.startXRQuality(null, 72);
 		const kept = { level: q.xrQualityDebug().level, floor: q.xrQualityDebug().floor, shadowsOff: read(q.qualityOverrides).shadowsOff };
 		// COUNTERFACTUAL in-page: take the claim away mid-session — the old floor comes back
-		const held = read(c.shadowClaims);
-		c.shadowClaims.set([]);
+		const held = c ? read(c.shadowClaims) : [];
+		c?.shadowClaims.set([]);
 		const without = { level: q.xrQualityDebug().level, floor: q.xrQualityDebug().floor, shadowsOff: read(q.qualityOverrides).shadowsOff, reason: read(q.qualityState).reason };
-		c.shadowClaims.set(held);
+		c?.shadowClaims.set(held);
 		const back = { level: q.xrQualityDebug().level, shadowsOff: read(q.qualityOverrides).shadowsOff, reason: read(q.qualityState).reason };
 		q.endXRQuality();
 		q.setAutoQuality(false); // the measurement below must not be stepped by a busy runner

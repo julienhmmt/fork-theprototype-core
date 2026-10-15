@@ -11,6 +11,7 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { idbGet, idbPut, idbDelete } from './idb';
 import { showToast } from '../stores/appStore';
+import { heicToJpegFile } from './heic.js';
 import { measureDims } from './placementDims';
 
 // Explorer (phase 95): a LOCAL asset library (like prefabs — nothing here
@@ -477,10 +478,14 @@ export async function importFiles(files, folderId = null, opts = {}) {
 	/** @type {any[]} */
 	const dupes = [];
 	let fresh = 0;
-	for (const file of [...files]) {
+	for (const picked of [...files]) {
+		// 46-media H1: a HEIC/HEIF photo enters as the JPEG it decodes to (heic.js) — the item, its
+		// hash, its thumbnail and every byte a peer pulls are the JPEG's; the decoder loads only here
+		const file = await heicToJpegFile(picked, { onError: showToast });
+		if (!file) continue;
 		const kind = kindOf(file.name);
 		if (!kind) {
-			showToast('Unsupported: ' + file.name + ' (images, audio, text/config, 3D objects)');
+			showToast('Unsupported: ' + file.name + ' (images incl. HEIC photos, audio, text/config, 3D objects)');
 			continue;
 		}
 		if (file.size > MAX_ITEM_BYTES) {

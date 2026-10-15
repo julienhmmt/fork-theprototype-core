@@ -1,5 +1,6 @@
 <script>
 	import { onLayoutRestore, storedPanelLayout } from '$lib/uiLayoutsCore';
+	import { isHeicFileLike } from '$lib/heicCore.js';
 	// UV editor (UV1). A 2D view of the selected mesh's `uv` attribute: the slot's
 	// texture underneath, its UV triangles on top, draggable vertices. DOCKED mode
 	// is a Flow-family tab in the bottom dock; UNDOCKED is a floating window —
@@ -1382,7 +1383,9 @@
 	let fileInputEl = $state(/** @type {HTMLInputElement|null} */ (null));
 	let pendingSlot = 0;
 
-	const IMAGE_TYPES = 'image/png,image/jpeg,image/webp';
+	// 46-media H1: HEIC photos too (setObjectTexture decodes them) — `.heic` because a browser
+	// often reports no MIME type for one
+	const IMAGE_TYPES = 'image/png,image/jpeg,image/webp,image/heic,image/heif,.heic,.heif';
 
 	/** @param {DragEvent} e @param {number} index */
 	function onSlotDragOver(e, index) {
@@ -1405,7 +1408,7 @@
 			if (!ok) showToast('That Explorer item is not an image');
 			return;
 		}
-		const file = [...(e.dataTransfer?.files ?? [])].find((f) => f.type.startsWith('image/'));
+		const file = [...(e.dataTransfer?.files ?? [])].find((f) => f.type.startsWith('image/') || isHeicFileLike(f));
 		if (!file) {
 			showToast('Drop an image to texture this material');
 			return;

@@ -125,6 +125,8 @@ export const DEBUG_HOOKS = [
 	// 46-media R1: the budgeted shadow (claims, fit state) — the perf gate reads shadowsKeptInXR
 	['shadowClaims', () => import('./shadowClaims')],
 	['shadowBudget', () => import('./shadowBudget')],
+	// 46-media H1: HEIC import (heicDebug: was the decoder ever started, how many photos it made)
+	['heic', () => import('./heic.js')],
 	['shadowDefaults', () => import('./shadowDefaults')],
 	['palette', () => import('./palette')],
 	['viewModeCtl', () => import('./viewMode')],

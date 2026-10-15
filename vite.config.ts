@@ -151,7 +151,8 @@ export default defineConfig({
 			// Pre-bundle it up front so the first reduction is as quiet as the rest.
 			// 36: the code editor's read-only + highlight extensions are separate bare imports
 			// (CodeEditor.svelte); discovered on first use they reloaded the page the same way
-			include: ['lodash.groupby', 'meshoptimizer/simplifier', '@codemirror/state', '@codemirror/language', '@lezer/highlight']
+			// 46-media H1: libheif's loader is CJS reached only from inside the HEIC worker — the same rule
+			include: ['lodash.groupby', 'meshoptimizer/simplifier', '@codemirror/state', '@codemirror/language', '@lezer/highlight', 'libheif-js/libheif-wasm/libheif.js']
 		},
 	// dev https via the repo's local certs (vite-plugin-mkcert stayed on vite<=5;
 	// certs/ was already how CI-less https worked before mkcert)

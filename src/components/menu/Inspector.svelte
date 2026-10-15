@@ -4085,7 +4085,7 @@
 						<input
 							type="file"
 							id="texture-file"
-							accept="image/png, image/jpeg, image/webp"
+							accept="image/png, image/jpeg, image/webp, image/heic, image/heif, .heic, .heif"
 							style="display: none"
 							onchange={(e) => {
 								const file = e.currentTarget.files?.[0];
