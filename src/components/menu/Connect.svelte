@@ -270,19 +270,6 @@
 		if (peek && e.key === 'Escape') peek = false;
 	}
 
-	// 44-int: the observers decide on the NEXT frame. Since 44 M14 a crowded pill stays in the logo's row (compact)
-	// instead of taking its own row, so the touch row (which observes the pill and stacks on its width) and this
-	// pill (which observes the touch row) could resize each other inside one observer delivery — a
-	// "ResizeObserver loop" (ro-loop-guard K4). One frame apart, they settle (stacked row + full pill).
-	let roRaf = 0;
-	function measureNextFrame() {
-		if (roRaf) return;
-		roRaf = requestAnimationFrame(() => {
-			roRaf = 0;
-			measureDock();
-		});
-	}
-
 	// 43 K4: the walls change without the window or the pill changing — a button added to / removed from
 	// the top-right group or the row beside the logo (Edit positions, Customize, a layout), the row
 	// switched on, the group emptying. Re-measure after each, and WATCH the walls themselves (a peer
@@ -295,7 +282,7 @@
 		tick().then(measureDock);
 		const t = setTimeout(measureDock, 160);
 		if (typeof ResizeObserver === 'undefined') return () => clearTimeout(t);
-		const ro = new ResizeObserver(measureNextFrame);
+		const ro = new ResizeObserver(() => measureDock());
 		for (const id of WALL_IDS) {
 			const el = document.getElementById(id);
 			if (el) ro.observe(el);
@@ -374,13 +361,11 @@
 	});
 	onMount(() => {
 		measureDock();
-		const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measureNextFrame) : null;
+		const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measureDock()) : null;
 		ro?.observe(document.body);
 		window.addEventListener('resize', measureDock);
 		return () => {
 			ro?.disconnect();
-			if (roRaf) cancelAnimationFrame(roRaf);
-			roRaf = 0;
 			window.removeEventListener('resize', measureDock);
 		};
 	});

@@ -126,14 +126,27 @@
 	// Connect pill's width changes with its own state (a peer connects, the host name
 	// appears, the drawer opens) without the window resizing or Connect re-docking, and
 	// every one of those moves the wall this row measures itself against.
+	// 44-int: decided on the NEXT frame — deciding inside the delivery restacks this row, which Connect and the
+	// clusters observe, while the delivery is still running: since 44 M14 the compact pill stays on this row, so a
+	// pill resize -> restack -> pending observation of the row was a "ResizeObserver loop" (ro-loop-guard K4).
 	$effect(() => {
 		if (typeof ResizeObserver === 'undefined') return;
-		const observer = new ResizeObserver(() => measure());
+		let raf = 0;
+		const observer = new ResizeObserver(() => {
+			if (raf) return;
+			raf = requestAnimationFrame(() => {
+				raf = 0;
+				measure();
+			});
+		});
 		for (const selector of ['#logo-menu', ...NEIGHBOURS]) {
 			const el = document.querySelector(selector);
 			if (el) observer.observe(el);
 		}
-		return () => observer.disconnect();
+		return () => {
+			observer.disconnect();
+			if (raf) cancelAnimationFrame(raf);
+		};
 	});
 </script>
 
