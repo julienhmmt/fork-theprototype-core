@@ -52,6 +52,7 @@
 	import ConnectionSettings from './settings/ConnectionSettings.svelte';
 	import { settingsOpen, settingsSection, settingsSearchSeed, hidePanels, restorePanels, showToast } from '../../stores/appStore.js';
 	import { cloudPluginInfo } from '$lib/cloudHooks';
+	import { phoneShellActive } from '$lib/ui/phoneShell.js';
 	import { versionString } from '$lib/version.js';
 	// 27-B: the diagnostics bundle — clipboard only, nothing leaves the browser
 	import { copyDiagnostics } from '$lib/diagnostics';
@@ -78,9 +79,27 @@
 
 
 	// Hide open panels while settings is shown, restore them after (initial value is null,
-	// so nothing happens until the modal is opened the first time)
-	$: if ($settingsOpen) {
+	// so nothing happens until the modal is opened the first time).
+	// 44 M10 (the user, 1.34: "Burger Menu > Settings closes the right sidebar … this behavior is not
+	// required anymore"): Settings has been a NON-modal window since 38 R11, beside the panels rather
+	// than over them, so on desktop and the unfolded phone it hides nothing — an open sidebar, dock or
+	// window stays where it is. Only the folded phone shell, where Settings is a full-screen sheet over
+	// the one dock, still steps the panels aside (and its dock bookkeeping, `panelsHook`, expects it).
+	// `hidForSettings` makes the restore OURS: restorePanels() is a single shared snapshot, and closing
+	// Settings must not hand back a snapshot spectating took.
+	// (functions, so the `$:` block below keeps depending on what it always did and not on this flag)
+	let hidForSettings = false;
+	function stepPanelsAside() {
+		if (hidForSettings || !get(phoneShellActive)) return;
 		hidePanels();
+		hidForSettings = true;
+	}
+	function bringPanelsBack() {
+		if (hidForSettings) restorePanels();
+		hidForSettings = false;
+	}
+	$: if ($settingsOpen) {
+		stepPanelsAside();
 		shortcutsExpanded = $settingsSection === 'shortcuts';
 		aiExpanded = $settingsSection === 'ai';
 		sceneExpanded = $settingsSection === 'scene';
@@ -96,7 +115,7 @@
 		// 37-settings: a phone opens on the category LIST unless a deep link names a page
 		if (narrowSettings && !$settingsSection) settingsNav.showHome();
 	} else if ($settingsOpen === false) {
-		restorePanels();
+		bringPanelsBack();
 		$settingsSection = null;
 	}
 
