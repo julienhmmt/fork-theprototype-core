@@ -5,18 +5,35 @@
 	import { onMount } from 'svelte';
 	import Button from '../ui/Button.svelte';
 	import { focusMode, exitFocus, startFocusMode } from '$lib/focusMode';
+	// 44 M15: the viewport preview's own switch, beside the way out — so a closed preview comes back without
+	// leaving focus mode. Shown only while the preview COULD show (a docked window at full size, not the
+	// folded phone); open / closed is remembered across focus sessions ($lib/viewportPip, default open).
+	import { viewportPipClosed, viewportPipAvailable, toggleViewportPip } from '$lib/viewportPip';
 
 	onMount(() => startFocusMode());
 </script>
 
 {#if $focusMode}
 	<div id="focus-exit" class="focus-exit" data-focus-kind={$focusMode}>
+		{#if $viewportPipAvailable}
+			<Button
+				id="focus-pip-toggle"
+				variant={$viewportPipClosed ? 'outline' : 'secondary'}
+				size="sm"
+				icon="picture-in-picture-2"
+				pressed={!$viewportPipClosed}
+				title={$viewportPipClosed ? 'Show the viewport preview' : 'Hide the viewport preview'}
+				onclick={toggleViewportPip}>Viewport</Button
+			>
+		{/if}
 		<Button variant="secondary" size="sm" icon="minimize-2" title="Leave focus mode (Esc or Ctrl+Space)" onclick={exitFocus}>Exit focus</Button>
 	</div>
 {/if}
 
 <style>
 	.focus-exit {
+		display: flex;
+		gap: var(--space-1);
 		position: fixed;
 		top: var(--space-2);
 		left: 50%;

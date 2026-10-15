@@ -381,7 +381,7 @@ h.run(async () => {
 	await page.keyboard.press('Control+Space');
 	await page.waitForTimeout(1000);
 	st = await look(page);
-	h.check(st.focus === 'dock' && !!st.pip, `8.5 the next maximize shows the PiP again (closing lasts one focus session) (${st.focus}, ${!!st.pip})`);
+	h.check(st.focus === 'dock' && !!st.pip, `8.5 the next maximize shows the PiP again (it was reopened in 7; open / closed is remembered since 44 M15) (${st.focus}, ${!!st.pip})`);
 	h.check(st.pip && Math.abs(st.pip.r - st.pip.l - nowW) <= 2, `8.6 ...at the remembered size (${st.pip && st.pip.r - st.pip.l} ~ ${nowW})`);
 	await page.keyboard.press('Escape');
 	await page.waitForTimeout(600);

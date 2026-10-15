@@ -27,6 +27,7 @@
 		viewportPipPosition,
 		viewportPipClosed,
 		viewportPipView,
+		viewportPipAvailable,
 		resetViewportPipSize,
 		resetViewportPipSession,
 		VIEWPORT_PIP_MIN_H
@@ -40,6 +41,11 @@
 	// the dock fills the window (a 4-px slack for rounding); `vh` is read so a window resize re-decides
 	const full = $derived($focusMode === 'dock' && (void vh, $dockHeight >= fullDockHeight() - 4));
 	const shown = $derived(full && !$viewportPipClosed && !$phoneShell);
+	// 44 M15: whether the PiP COULD show — the "Exit focus" pill offers its show / hide toggle only then
+	$effect(() => {
+		viewportPipAvailable.set(full && !$phoneShell);
+		return () => viewportPipAvailable.set(false);
+	});
 
 	// the dock covers the whole 3D view: the render loop stops drawing the main frame (pipViews)
 	$effect(() => {
@@ -47,7 +53,7 @@
 		return () => setMainViewCovered(false);
 	});
 
-	// a new focus session parks it bottom-right and shows it again
+	// a new focus session parks it bottom-right (44 M15: open or closed stays as the user left it)
 	let lastFocus = /** @type {string|null} */ (null);
 	$effect(() => {
 		const f = $focusMode;
@@ -258,7 +264,7 @@
 		z="calc(var(--z-dock) + 2)"
 		interactive
 		data-key-scope="pip"
-		closeTitle="Close the viewport picture-in-picture (it comes back the next time you maximize)"
+		closeTitle="Hide the viewport preview (bring it back with the button beside Exit focus)"
 		onclose={() => viewportPipClosed.set(true)}
 		bind:canvas
 	>
