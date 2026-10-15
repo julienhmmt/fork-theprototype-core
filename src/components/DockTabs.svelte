@@ -352,7 +352,8 @@
      through — transparent-tab-header), and the edge fade masked the box that held the paint, so
      the fade faded into the scene. Now the fade masks only the tabs, over the bar's own paint. -->
 <div class="dt-row absolute -top-6 left-3 z-20 flex" class:right-28={!sheetMode} class:right-14={sheetMode}>
-	<div class="tp-ui tp-dtabs tp-dtabs-slim dt-bar">
+	<!-- 45 N8: with no tab the bar has nothing to hold — hidden, not unmounted (the drag measures stripEl) -->
+	<div class="tp-ui tp-dtabs tp-dtabs-slim dt-bar" class:dt-bar-none={!$dockStripTabs.length}>
 		<div
 			bind:this={stripEl}
 			class="tp-noscrollbar dt-scroll relative flex min-w-0 overflow-x-auto"
@@ -502,6 +503,11 @@
 	.dt-bar {
 		display: flex;
 		min-width: 0;
+	}
+	/* 45 N8: an EMPTY bar still painted its border, padding and inset surface — a 4px sliver of "tabs"
+	   left of the "+" on the empty dock */
+	.dt-bar.dt-bar-none {
+		display: none;
 	}
 	/* 44 M9: a split pair's two names — the half in front full-strength, the other muted */
 	.dt-half {
