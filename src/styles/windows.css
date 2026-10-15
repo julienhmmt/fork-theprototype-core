@@ -637,10 +637,11 @@
 :root[data-focus='dock']:not(.phone-shell) .tp-dock-panel:not(.hidden) {
 	box-shadow: 0 -24px 0 0 var(--surface-deep);
 }
-/* ...and the tab row stops short of the Exit-focus pill that shares its row (FocusModeExit: right 96 px,
-   ~104 px wide), so a long row of tabs scrolls instead of sliding under it */
+/* ...and the tab row stops short of the Exit-focus pill that shares its row (FocusModeExit publishes where
+   it ends: 44-int, the Split button and the Viewport toggle made both widths vary), so a long row of tabs
+   scrolls instead of sliding under it */
 :root[data-focus='dock']:not(.phone-shell) .dt-row {
-	right: 208px;
+	right: var(--focus-exit-reach, 208px);
 }
 /* (html:root outranks phone.css's `:root.phone-shell [data-pd-host]` bottom, which stops at the bar) */
 html:root[data-focus='dock'] [data-pd-host='shown'] {
@@ -672,7 +673,7 @@ html:root[data-focus='dock'] [data-pd-host='shown'] {
 /* ONE strip for the pair: the left pane's strip reaches across the right pane (its chrome back on the
    dock's right edge); the right pane's own strip and chrome stand down */
 :root[data-dock-split] .tp-dock-panel[data-dock-pane='a'] .dt-row {
-	right: calc(6rem - var(--dock-split-bw));
+	right: calc(7rem - var(--dock-split-bw));
 }
 :root[data-dock-split] .tp-dock-panel[data-dock-pane='a'] .dt-chrome {
 	right: calc(0.75rem - var(--dock-split-bw));
@@ -682,5 +683,5 @@ html:root[data-focus='dock'] [data-pd-host='shown'] {
 	display: none;
 }
 :root[data-dock-split][data-focus='dock']:not(.phone-shell) .tp-dock-panel[data-dock-pane='a'] .dt-row {
-	right: calc(208px - var(--dock-split-bw));
+	right: calc(var(--focus-exit-reach, 208px) - var(--dock-split-bw));
 }

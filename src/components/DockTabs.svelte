@@ -18,7 +18,7 @@
 	// the same panel-relative band (`-top-6`), one at `left-3` and one at `right-3` —
 	// and since the dock panel is `inset-x-0`, the right group lands on the browser's
 	// right edge, which is where window chrome belongs. The tab group is capped at
-	// `right-24` so a strip full of tabs SCROLLS under the cluster instead of running
+	// `right-28` (44-int: room for 44 M9's Split button) so a strip full of tabs SCROLLS under the cluster instead of running
 	// beneath it. The three buttons became lucide icons (Plus / Minus / X): they are
 	// chrome, and a text "–" next to a text "✕" reads as punctuation.
 	//
@@ -351,7 +351,7 @@
      shrank to the visible width and every tab scrolled past it had no background (the scene showed
      through — transparent-tab-header), and the edge fade masked the box that held the paint, so
      the fade faded into the scene. Now the fade masks only the tabs, over the bar's own paint. -->
-<div class="dt-row absolute -top-6 left-3 z-20 flex" class:right-24={!sheetMode} class:right-14={sheetMode}>
+<div class="dt-row absolute -top-6 left-3 z-20 flex" class:right-28={!sheetMode} class:right-14={sheetMode}>
 	<div class="tp-ui tp-dtabs tp-dtabs-slim dt-bar">
 		<div
 			bind:this={stripEl}
