@@ -90,6 +90,36 @@ export function toggleSidebarFull(side, on) {
 }
 
 /**
+ * 44 M7 — WHETHER A SIDE'S COLUMN IS ON SCREEN, per side (LOCAL, persisted — VS Code keeps its
+ * sidebars' visibility the same way):
+ *   'auto'    on screen while it has a tab (what the columns always did)
+ *   'open'    on screen EVEN EMPTY — its strip with only "+" and "Press + or drag a tab here"
+ *             (the user: "when all tabs are dragged to somewhere else or closed it should keep panel
+ *             opened empty"). A side becomes 'open' when the user empties it (its last tab closed,
+ *             moved or floated — `keepSideOpen`) or opens it with its shortcut.
+ *   'hidden'  collapsed by its shortcut (Ctrl+B left, Ctrl+Alt+B right): every tab stays OPEN and
+ *             mounted, only the column is off screen; a panel arriving on a hidden side (opened,
+ *             docked there, brought forward) shows the side again. Not persisted (see below).
+ * @typedef {'auto'|'open'|'hidden'} SideMode
+ */
+/** @param {Side} side @returns {SideMode} */
+function readMode(side) {
+	const v = ls ? safeStorage.getItem('sidebar:mode:' + side) : null;
+	return v === 'open' ? 'open' : 'auto';
+}
+export const sidebarMode = writable(/** @type {Record<Side, SideMode>} */ ({ left: readMode('left'), right: readMode('right') }));
+sidebarMode.subscribe((v) => {
+	if (!ls) return;
+	// 'hidden' is NOT remembered (the dock's `dockMinimized` rule): a column off screen leaves no trace,
+	// so a reload brings it back rather than handing somebody a sidebar with no visible way to it
+	for (const side of /** @type {Side[]} */ (['left', 'right'])) safeStorage.setItem('sidebar:mode:' + side, v[side] === 'open' ? 'open' : 'auto');
+});
+/** @param {Side} side @param {SideMode} mode */
+function setMode(side, mode) {
+	sidebarMode.update((v) => (v[side] === mode ? v : { ...v, [side]: mode }));
+}
+
+/**
  * 43 K1 — the side whose column is being RESIZED right now (its grip held), else null. PUBLIC (with
  * the rest of this module's stores — 43-controls and 43-focus read them): while it is set, <html>
  * carries `sb-resizing` and nothing that follows the column edge animates (windows.css), so the logo,
@@ -183,22 +213,62 @@ function rank(side, key) {
 	return i < 0 ? 1e6 : i;
 }
 
-/** the tab in front on each side (null = the side is empty) */
-export const sidebarShown = derived([sidebarTabs, mru], ([$tabs, $mru]) => {
+/** the tab in front on each side (null = the side is empty, or 44 M7: hidden) */
+export const sidebarShown = derived([sidebarTabs, mru, sidebarMode], ([$tabs, $mru, $mode]) => {
 	/** @type {Record<Side, string|null>} */
 	const out = { left: null, right: null };
 	for (const side of SIDES) {
 		const tabs = $tabs[side];
-		if (!tabs.length) continue;
+		if (!tabs.length || $mode[side] === 'hidden') continue;
 		out[side] = $mru[side].find((k) => tabs.includes(k)) ?? tabs[0];
 	}
 	return out;
 });
 
+/**
+ * 44 M7 — is each side's column on screen: not hidden, and holding a tab or kept open empty.
+ * @type {import('svelte/store').Readable<Record<Side, boolean>>}
+ */
+export const sidebarVisible = derived([sidebarTabs, sidebarMode], ([$tabs, $mode]) => ({
+	left: $mode.left !== 'hidden' && ($tabs.left.length > 0 || $mode.left === 'open'),
+	right: $mode.right !== 'hidden' && ($tabs.right.length > 0 || $mode.right === 'open')
+}));
+
+/** 44 M7: is this side an open column with NO tab (the "+" and the helper line)? @param {Side} side */
+export function sidebarEmptyOpen(side) {
+	return get(sidebarVisible)[side] && !get(sidebarTabs)[side].length;
+}
+
+/**
+ * 44 M7 — the sidebar shortcut (Ctrl+B left, Ctrl+Alt+B right): on screen -> hidden (every tab stays
+ * open, the column goes); off screen -> open (its tabs come back, or an empty column with "+").
+ * @param {Side} side @param {boolean=} on force shown (true) / hidden (false)
+ */
+export function toggleSidebar(side, on) {
+	const show = on ?? !get(sidebarVisible)[side];
+	setMode(side, show ? (get(sidebarTabs)[side].length ? 'auto' : 'open') : 'hidden');
+}
+
+/**
+ * 44 M7 — the USER is about to take `key` out of its side (its × / Close, a drag or a menu move to
+ * another side, the dock or a floating window): when it is the side's LAST tab, the column stays
+ * open, empty, with its "+". Programmatic closes (a deselect closing Properties) never call this, so
+ * a column that only ever held the Inspector still goes away with it as before.
+ * @param {string} key
+ */
+export function keepSideOpen(key) {
+	const m = get(members)[key];
+	if (!m || !m.present) return;
+	const tabs = get(sidebarTabs)[m.side];
+	if (tabs.length === 1 && tabs[0] === key && get(sidebarMode)[m.side] !== 'hidden') setMode(m.side, 'open');
+}
+
 /** bring a panel's tab to the front of its side @param {string} key */
 export function activateSidebarTab(key) {
 	const m = get(members)[key];
 	if (!m) return;
+	// 44 M7: bringing a tab forward shows a hidden side
+	if (get(sidebarMode)[m.side] === 'hidden') setMode(m.side, 'auto');
 	mru.update((v) => ({ ...v, [m.side]: [key, ...v[m.side].filter((k) => k !== key)].slice(0, 12) }));
 	if (ls) safeStorage.setItem('sidebar:active:' + m.side, key);
 }
@@ -225,6 +295,7 @@ export function setDockMover(fn) {
 }
 /** move a panel to a side (the tab drag's drop) @param {string} key @param {Side} side */
 export function moveSidebarTab(key, side) {
+	if (get(members)[key]?.side !== side) keepSideOpen(key);
 	if (key === 'inspector') inspectorSide.set(side);
 	else if (!dockMover?.(key, side)) return false;
 	activateSidebarTab(key);
@@ -266,6 +337,7 @@ onLayoutRestore(() => {
 		right: safeStorage.getItem('sidebar:full:right') === 'true'
 	});
 	inspectorSide.set(asSide(safeStorage.getItem('sidebar:inspectorSide')));
+	sidebarMode.set({ left: readMode('left'), right: readMode('right') });
 	for (const side of SIDES) order[side] = readOrder(side);
 	mru.update((v) => {
 		const next = { ...v };
@@ -302,14 +374,14 @@ function measureLeftInset() {
 }
 
 export const geometry = derived(
-	[sidebarShown, sidebarFull, sidebarWidth, connectDocked, connectBarHeight, leftInsetTick, sidebarsWide],
-	([$shown, $full, $w, $cDocked, $cBar, _tick, $wide]) => {
+	[sidebarShown, sidebarFull, sidebarWidth, connectDocked, connectBarHeight, leftInsetTick, sidebarsWide, sidebarVisible],
+	([$shown, $full, $w, $cDocked, $cBar, _tick, $wide, $visible]) => {
 		/** @param {Side} side */
 		const col = (side) => {
 			const full = !!$full[side];
 			const top = full ? ($cDocked ? $cBar : 0) : $cDocked ? $cBar + 4 : TOP;
 			const bottom = full ? '0px' : 'calc(var(--bottom-inset, 0px) + var(--controls-inset, 0px))';
-			return { shown: $shown[side], full, top, bottom, w: $w[side] };
+			return { shown: $shown[side], visible: $visible[side], full, top, bottom, w: $w[side] };
 		};
 		const left = col('left');
 		const right = col('right');
@@ -318,8 +390,8 @@ export const geometry = derived(
 			right,
 			wide: $wide,
 			leftX: left.full || !$wide ? 0 : measureLeftInset(),
-			dockLeft: $wide && left.shown && left.full ? left.w : 0,
-			dockRight: $wide && right.shown && right.full ? right.w : 0
+			dockLeft: $wide && left.visible && left.full ? left.w : 0,
+			dockRight: $wide && right.visible && right.full ? right.w : 0
 		};
 	}
 );

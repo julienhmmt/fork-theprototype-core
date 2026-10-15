@@ -373,11 +373,30 @@ export const visibleDockKey = derived([dockOccupants, bottomDockActive], ([$o, $
 	return Object.keys($o).find((k) => $o[k]?.present) ?? null;
 });
 
+/**
+ * 44 M5 — THE EMPTY DOCK. "T" with every window dragged out of the dock used to open the last
+ * view again (the user: "'T' only should show empty docked window view with '+' in tab"); now it
+ * opens the dock with nothing in it — its frame, its strip with only the "+", and a helper line
+ * (PhoneDockHost draws it on a wider screen). It is a fact about THIS moment, like `dockMinimized`:
+ * not persisted (a reload with nothing docked shows no dock), and it ends by itself the moment a
+ * tab arrives — so a dock that later loses its last tab closes as it always did, and "T" is the
+ * way back to the empty one.
+ */
+export const dockEmptyOpen = writable(false);
+
+/** the empty dock is on screen: asked for, nothing docked, not minimized */
+export const dockEmptyShown = derived([dockEmptyOpen, visibleDockKey, dockMinimized], ([$open, $key, $min]) => $open && !$key && !$min);
+
+visibleDockKey.subscribe((key) => {
+	if (key && get(dockEmptyOpen)) dockEmptyOpen.set(false);
+});
+
 /** height of the visible docked panel (0 when nothing is docked, and 0 while the dock
- * is minimized — a minimized dock draws nothing, so it may not reserve any space) */
+ * is minimized — a minimized dock draws nothing, so it may not reserve any space).
+ * 44 M5: the EMPTY dock reserves the dock's height like any tab. */
 export const bottomInset = derived(
-	[dockOccupants, visibleDockKey, dockMinimized],
-	([$o, $key, $min]) => ($min ? 0 : $key && $o[$key]?.present ? $o[$key].height : 0)
+	[dockOccupants, visibleDockKey, dockMinimized, dockEmptyShown, dockHeight],
+	([$o, $key, $min, $empty, $h]) => ($min ? 0 : $key && $o[$key]?.present ? $o[$key].height : $empty ? $h : 0)
 );
 
 /**
@@ -406,6 +425,16 @@ export const viewportInset = derived([bottomInset, viewPrefs], ([$inset, $prefs]
 export function activateDock(key) {
 	bottomDockActive.set(key);
 	dockMinimized.set(false);
+}
+
+/**
+ * 44 M5: open the dock EMPTY (only its "+"), or close an empty one again. Nothing here docks a
+ * view; the "+" in the strip is how one arrives.
+ * @param {boolean} on
+ */
+export function setDockEmptyOpen(on) {
+	if (on) dockMinimized.set(false);
+	dockEmptyOpen.set(!!on);
 }
 
 // publish the visible dock height as a CSS var so drawers/docked windows adjust (105)

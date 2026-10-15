@@ -3,7 +3,7 @@ import { isHeaderDrag } from './windowGrip';
 import { setSideDockable } from './bottomDockDrop';
 import { safeStorage } from './safeStorage';
 import { onLayoutRestore } from './uiLayoutsCore';
-import { reportMember, sidebarShown, sidebarTabs, setDockMover, activateSidebarTab } from './sidebars';
+import { reportMember, sidebarShown, setDockMover, activateSidebarTab } from './sidebars';
 import { canDockFloating, armDockMode, dockOccupants, forgetDockTab, HOSTED_DOCK_TABS } from './bottomDock';
 import { hostedDocked, setHostedDocked } from './dockHost';
 import { registerSideMover } from './dockMenu';

@@ -1,7 +1,7 @@
 import { get } from 'svelte/store';
-import { sidebarTabs } from './sidebars';
+import { sidebarTabs, sidebarVisible } from './sidebars';
 import { canDockFloating, bottomInset } from './bottomDock';
-import { dockStripTarget, inBottomBand, showDockCaret } from './bottomDockDrop';
+import { dockStripTarget, inBottomBand, overEmptyDock, showDockCaret } from './bottomDockDrop';
 
 // 43 J4 — ONE DROP-TARGET MODEL for a panel on the move: a SIDEBAR TAB dragged out of its strip
 // and a FLOATING WINDOW dragged by its header ask the same question here — where would this land —
@@ -39,9 +39,12 @@ export function columnBox(side) {
 	return { x0, w, top };
 }
 
-/** does this side have an open column (any tab)? @param {Side} side @param {string=} except */
+/** does this side have an open column — a tab other than `except`, or (44 M7) an EMPTY column kept open
+ * with its "+"? A hidden side (Ctrl+B) has no column on screen. @param {Side} side @param {string=} except */
 export function sideOpen(side, except) {
-	return get(sidebarTabs)[side].some((k) => k !== except);
+	if (!get(sidebarVisible)[side]) return false;
+	const tabs = get(sidebarTabs)[side];
+	return !tabs.length || tabs.some((k) => k !== except);
 }
 
 /**
@@ -100,7 +103,8 @@ export function windowDropTarget({ x, y, key, canDock, canSide }) {
 	if (canDock) {
 		const strip = dockStripTarget(x, y);
 		if (strip) return { kind: 'dock', strip };
-		if (inBottomBand(y)) return { kind: 'dock', strip: null };
+		// 44 M5: the EMPTY dock's body takes a drop like the edge band
+		if (inBottomBand(y) || overEmptyDock(x, y)) return { kind: 'dock', strip: null };
 	}
 	if (canSide) {
 		const side = sideAt(x, y, { except: key });

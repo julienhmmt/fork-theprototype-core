@@ -20,7 +20,8 @@
 	import ContextMenu from '../ContextMenu.svelte';
 	import { stripScroll } from '$lib/ui/stripScroll.js';
 	import { tabDropTarget, showDropTarget, canFloatPanel } from '$lib/sidebarDrop';
-	import { canDockHere } from '$lib/dockMenu';
+	import { canDockHere, addWindowItems, rebuildAfterPick } from '$lib/dockMenu';
+	import { bindingOf } from '$lib/shortcuts';
 	import { floatSizeOf } from '$lib/docking';
 	import { sidebarTabItems, closeSidebarTab, floatSidebarTab, sidebarTabToDock } from '$lib/sidebarMenu';
 	import { stickyPanelHeads, toggleStickyHead } from '$lib/panelHeaderPrefs';
@@ -37,7 +38,10 @@
 		setSidebarWidth,
 		sidebarWidth,
 		sidebarResizing,
-		inspectorTabTitle
+		inspectorTabTitle,
+		sidebarVisible,
+		toggleSidebar,
+		memberPlacement
 	} from '$lib/sidebars';
 	import { inspectorKind } from '../../stores/appStore.js';
 	import { DOCK_TITLES, DOCK_ICONS } from '$lib/bottomDock';
@@ -129,6 +133,18 @@
 
 	// ---- the tab's menu ----
 	let menu = $state<{ x: number; y: number; items: any[] } | null>(null);
+
+	// ---- 44 M7: the strip's "+" — the same one-registry menu as the dock's "+" ($lib/dockMenu
+	// addWindowItems): an open window is focused where it is, a closed one opens IN THIS COLUMN ----
+	let addMenu = $state<{ x: number; y: number; side: Side; items: any[] } | null>(null);
+	function openAdd(e: MouseEvent, side: Side) {
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		addMenu = { x: side === 'left' ? r.left : Math.max(8, r.right - 260), y: r.bottom + 4, side, items: addWindowItems({ target: side }) };
+	}
+	/** the side's shortcut, as Settings ▸ Shortcuts has it bound (rebindable) */
+	function keyOfSide(side: Side) {
+		return bindingOf(side === 'left' ? 'panels.sidebar-left' : 'panels.sidebar-right') ?? '';
+	}
 	function openTabMenu(x: number, y: number, key: string, side: Side) {
 		menu = { x, y, items: sidebarTabItems(key, side, titleOf(key, $inspectorTabTitle)) };
 	}
@@ -214,7 +230,7 @@
 
 {#if $sidebarsWide}
 	{#each SIDES as side (side)}
-		{#if $sidebarTabs[side].length}
+		{#if $sidebarVisible[side]}
 			{@const lockPanel = lockPanelOf($sidebarShown[side], $inspectorKind)}
 			<div
 				id="sidebar-strip-{side}"
@@ -257,6 +273,16 @@
 						</span>
 					{/each}
 				</div>
+				<button
+					type="button"
+					id="sidebar-add-{side}"
+					class="sb-pin sb-add"
+					aria-label="Add a window to the {side} sidebar"
+					title="Add a window to this sidebar — Ctrl-click or Shift-click to pick several"
+					onclick={(e) => openAdd(e, side)}
+				>
+					<Icon name="plus" size={16} aria-hidden="true" />
+				</button>
 				{#if lockPanel}
 					{@const sticky = $stickyPanelHeads[lockPanel] !== false}
 					{@const panelName = lockPanel === 'scene' ? 'Configure Scene' : 'Properties'}
@@ -287,7 +313,27 @@
 				>
 					<Icon name="unfold-vertical" size={16} aria-hidden="true" />
 				</button>
+				<!-- the hide button only on an EMPTY column: with tabs the strip has no room to spare (two tabs
+				     must still fit a 320 px column), and the tab menu's "Hide this sidebar" + the shortcut do it -->
+				{#if !$sidebarTabs[side].length}
+				<button
+					type="button"
+					id="sidebar-hide-{side}"
+					class="sb-pin"
+					aria-label="Hide the {side} sidebar"
+					title="Hide this sidebar — its tabs stay open{keyOfSide(side) ? ' (' + keyOfSide(side) + ' brings it back)' : ''}"
+					onclick={() => toggleSidebar(side, false)}
+				>
+					<Icon name={side === 'left' ? 'panel-left-close' : 'panel-right-close'} size={16} aria-hidden="true" />
+				</button>
+				{/if}
 			</div>
+			{#if !$sidebarTabs[side].length}
+				<!-- 44 M7: an EMPTY column stays open (VS Code / Blender style): one quiet centred line -->
+				<div id="sidebar-empty-{side}" class="sb-empty tp-ui" data-side={side} style={memberPlacement(side)}>
+					<p>Press + or drag a tab here</p>
+				</div>
+			{/if}
 			<!-- the column's width belongs to the SIDE: one grip on its inner edge resizes every tab -->
 			<div
 				id="sidebar-grip-{side}"
@@ -321,6 +367,16 @@
 
 {#if menu}
 	<ContextMenu x={menu.x} y={menu.y} items={menu.items} sizeKey="sidebartab" onclose={() => (menu = null)} />
+{/if}
+{#if addMenu}
+	<ContextMenu
+		x={addMenu.x}
+		y={addMenu.y}
+		items={addMenu.items}
+		sizeKey="sidebaradd"
+		onclose={() => (addMenu = null)}
+		onpicked={() => rebuildAfterPick(() => addMenu && (addMenu = { ...addMenu, items: addWindowItems({ target: addMenu.side }) }))}
+	/>
 {/if}
 
 <style>
@@ -417,6 +473,28 @@
 		color: var(--text);
 		background: var(--surface-hover);
 	}
+	/* 44 M7: the empty column's body — the column's own surface, one centred line */
+	.sb-empty {
+		z-index: calc(var(--z-dock) - 1);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-4);
+		background: var(--surface-1);
+		border-left: 1px solid var(--border);
+		color: var(--text-faint);
+		font-size: var(--fs-desc);
+		text-align: center;
+		user-select: none;
+		box-sizing: border-box;
+	}
+	.sb-empty[data-side='left'] {
+		border-left: 0;
+		border-right: 1px solid var(--border);
+	}
+	:global(:root.connect-docked) .sb-empty {
+		z-index: calc(var(--z-chrome-top) + 1);
+	}
 	.sb-ghost-hint {
 		margin-left: 4px;
 		color: var(--text-faint);
@@ -434,6 +512,11 @@
 	.sb-pin:hover {
 		color: var(--text);
 		background: var(--surface-hover);
+	}
+	/* 44 M7: the "+" is pinned outside the scrolling tabs (the dock strip's rule: always reachable) and
+	   narrow, so two tabs still fit beside it in a 320 px column */
+	.sb-add {
+		width: 24px;
 	}
 	.sb-pin.on {
 		color: var(--accent-text);
