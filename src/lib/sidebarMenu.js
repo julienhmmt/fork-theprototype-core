@@ -1,5 +1,5 @@
 import { get } from 'svelte/store';
-import { sidebarTabs, moveSidebarTab } from './sidebars';
+import { sidebarTabs, moveSidebarTab, keepSideOpen, toggleSidebar } from './sidebars';
 import { inspectorClose } from '../stores/appStore';
 import { closeDockView, canDockHere, dockTab, dockAtStrip } from './dockMenu';
 import { undock } from './docking';
@@ -19,6 +19,7 @@ import { canFloatPanel } from './sidebarDrop';
 
 /** close the panel behind a sidebar tab (it leaves the sidebar; its side is remembered) @param {string} key */
 export function closeSidebarTab(key) {
+	keepSideOpen(key); // 44 M7: an emptied sidebar stays open with its "+"
 	if (key === 'inspector') inspectorClose.set(true);
 	else closeDockView(key);
 }
@@ -26,6 +27,7 @@ export function closeSidebarTab(key) {
 /** take a sidebar tab out into a floating window (at x, y when a drag dropped it there) @param {string} key @param {number=} x @param {number=} y */
 export function floatSidebarTab(key, x, y) {
 	if (!canFloatPanel(key)) return false;
+	keepSideOpen(key);
 	undock(key, x, y);
 	return true;
 }
@@ -33,6 +35,7 @@ export function floatSidebarTab(key, x, y) {
 /** move a sidebar tab into the bottom dock (before the tab `before`, else at the end) @param {string} key @param {string|null=} before */
 export function sidebarTabToDock(key, before) {
 	if (key === 'inspector' || !canDockHere(key)) return false;
+	keepSideOpen(key);
 	undock(key);
 	if (before !== undefined) dockAtStrip([key], before);
 	else dockTab(key);
@@ -77,6 +80,13 @@ export function sidebarTabItems(key, side, title) {
 			tooltip: dock ? `Make ${title} a tab of the bottom dock` : `${title} has no place in the bottom dock`,
 			disabled: !dock,
 			action: () => sidebarTabToDock(key)
+		},
+		// 44 M7: the column itself — every tab stays open (its shortcut, Ctrl+B / Ctrl+Alt+B, brings it back)
+		{
+			label: 'Hide this sidebar',
+			icon: side === 'left' ? 'panel-left-close' : 'panel-right-close',
+			tooltip: `Hide the ${side} sidebar — its tabs stay open, and its shortcut (Settings ▸ Shortcuts) brings it back`,
+			action: () => toggleSidebar(side, false)
 		}
 	];
 }

@@ -151,7 +151,8 @@ h.run(async () => {
 	list = await probe(page, '#object-list');
 	h.check(list && !list.docked && list.shown, `dropped on the viewport the list floats (${JSON.stringify(list)})`);
 	h.check(list && Math.abs(list.x + 120 - 560) < 140 && Math.abs(list.y - 380) < 120, `the floating list lands where it was dropped (${JSON.stringify(list)})`);
-	h.check(!(await strip(page, 'right')), 'the right sidebar is gone with its only tab');
+	// 44 M7: an emptied sidebar STAYS open with its "+" and the helper line (the user's ask)
+	h.check(!!(await strip(page, 'right')) && (await page.evaluate(() => !!document.querySelector('#sidebar-empty-right'))), 'the right sidebar stays open, empty, with its "+" (44 M7)');
 	h.check((await highlights(page)).length === 0, 'the highlight ends with the drop');
 
 	// ---------- 2. a tab dragged to the bottom: "Move to dock", and it lands in the dock ----------
@@ -166,7 +167,7 @@ h.run(async () => {
 	const hosted = await store(page, 'dockHost', 'hostedDocked');
 	list = await probe(page, '#object-list');
 	h.check(hosted?.objects === true && list?.host === 'shown' && !list.docked, `dropped there the list is a bottom-dock tab (${JSON.stringify({ hosted, list })})`);
-	h.check(!(await strip(page, 'right')), 'and it left the right sidebar');
+	h.check(!(await page.evaluate(() => !!document.querySelector('#sidebar-strip-right [data-sidebar-tab="objects"]'))), 'and it left the right sidebar');
 	// back out of the dock, closed — the next sections start clean
 	await page.evaluate(() => window.__stores.dockHost.setHostedDocked('objects', false));
 	await page.waitForTimeout(300);
