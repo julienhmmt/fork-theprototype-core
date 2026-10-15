@@ -4,13 +4,14 @@
 	// drag the strip background to move the whole group, drag a tab out to
 	// re-float it, ✕ closes the active member through its own path.
 	import { stripScroll } from '$lib/ui/stripScroll.js';
-	import { tabGroups, activateTab, moveGroup, tearOff, titleOf, closeGroup, closeMember, nodeOf, ungroupTab } from '$lib/windowTabs';
+	import { tabGroups, activateTab, moveGroup, tearOff, titleOf, closeGroup, closeMember, nodeOf } from '$lib/windowTabs';
 	import { focusTick, raiseWindowNode } from '$lib/windowFocus';
-	import ContextMenu from '../ContextMenu.svelte';
+	import { windowMenu, openWindowMenu } from '$lib/windowMenu';
 	import Icon from '../ui/Icon.svelte';
 	import { DOCK_ICONS, activateDock } from '$lib/bottomDock';
-	import { dockAllOf, dockTab, dockAtStrip, canDockHere } from '$lib/dockMenu';
-	import { dockStripTarget, showDockCaret, ghostWindows, clearStripFeedback } from '$lib/bottomDockDrop';
+	import { dockAllOf, dockTab, dockAtStrip, canDockHere, moveToSidebar } from '$lib/dockMenu';
+	import { ghostWindows, clearStripFeedback, canSideHere } from '$lib/bottomDockDrop';
+	import { windowDropTarget, windowDropZoneId, showDropTarget } from '$lib/sidebarDrop';
 
 	// 38 NOTES-38 #23: the view icon before each tab's name — the dock's icons plus the
 	// windows that only ever float
@@ -26,8 +27,6 @@
 		return Number.isFinite(z) ? z : 44;
 	}
 
-	/** @type {any} */
-	let tabMenu = null; // {x, y, key} — right-click / long-press a tab
 	/** @type {any} */
 	let stripDrag = null; // {groupId, x, y, id}
 	/** @type {any} */
@@ -84,47 +83,55 @@
 			}, LONG_PRESS_MS);
 		}
 	}
-	/** @param {number} x @param {number} y @param {string} key */
+	/** 41 G6 / 44 M3: a group tab's menu (long-press on touch, right-click with a mouse) is the floating
+	 * window menu ($lib/windowMenu) for that tab's window — Float (undock) takes it out of the group
+	 * @param {number} x @param {number} y @param {string} key */
 	function openTabMenu(x, y, key) {
-		tabMenu = { x, y, key };
+		const node = nodeOf(key);
+		if (node) openWindowMenu(node, x, y, key);
 	}
-	/** 41 G6: the group tab's menu (long-press on touch, right-click with a mouse) */
-	function tabMenuItems(/** @type {string} */ key) {
-		const title = titleOf(key);
-		const canDock = canDockHere(key);
-		return [
-			{ label: 'Ungroup this tab', icon: 'app-window', tooltip: `Float ${title} as its own window`, action: () => ungroupTab(key) },
-			{
-				label: 'Dock this tab',
-				icon: 'panel-bottom',
-				tooltip: canDock ? `Move ${title} into the bottom dock` : `${title} has no docked mode`,
-				disabled: !canDock,
-				action: () => dockTab(key)
-			},
-			{ label: 'Close', icon: 'x', tooltip: `Close ${title}`, action: () => closeMember(key) }
-		];
-	}
-	// 41 G7 — over the docked TAB STRIP a dragged group / torn-out tab shows the caret where
-	// it would dock, and goes see-through (bottomDockDrop.js owns the hit test and the paint)
+	// 41 G7 / 44 M3 — a dragged group or torn-out tab asks the ONE drop model ($lib/sidebarDrop) what an
+	// ungrouped window asks: the docked tab strip (a caret, at an index), the bottom band, or a sidebar
+	// column; it goes see-through over a strip or a column so the target under it reads
 	/** @param {string} groupId */
 	const groupOf = (groupId) => $tabGroups.find((g) => g.id === groupId) ?? null;
-	/** the strip insertion point for a dragged GROUP, if any of its members can dock
+	/** paint a target (or clear) for the dragged elements @param {any} t @param {any[]} nodes */
+	function paintTarget(t, nodes) {
+		showDropTarget(t, { id: windowDropZoneId(t) });
+		ghostWindows(nodes, !!t && (t.kind === 'side' || !!t.strip));
+	}
+	/** where a dragged GROUP would land — if any of its members can dock / join a sidebar
 	 * @param {any} drag @param {any} e */
 	function groupHit(drag, e) {
 		const group = groupOf(drag.groupId);
-		if (!group || !group.members.some((/** @type {string} */ k) => canDockHere(k))) return null;
-		const hit = dockStripTarget(e.clientX, e.clientY);
-		showDockCaret(hit);
-		ghostWindows([drag.el, nodeOf(group.active)], !!hit);
-		return hit;
+		if (!group) return null;
+		const canDock = group.members.some((/** @type {string} */ k) => canDockHere(k));
+		const canSide = group.members.some((/** @type {string} */ k) => canSideHere(k));
+		const t = canDock || canSide ? windowDropTarget({ x: e.clientX, y: e.clientY, key: group.active, canDock, canSide }) : null;
+		paintTarget(t, [drag.el, nodeOf(group.active)]);
+		return t;
 	}
-	/** dock a dropped group at the caret: its dockable members in tab order, its active tab shown
+	/** a dropped group lands as a whole: its dockable members in tab order, its active tab shown
 	 * @param {string} groupId @param {any} hit */
 	function dockGroupAt(groupId, hit) {
 		const group = groupOf(groupId);
 		if (!group) return;
-		const n = dockAtStrip([...group.members], hit.before);
-		if (n && canDockHere(group.active)) activateDock(group.active);
+		const members = [...group.members];
+		if (hit.kind === 'side') {
+			for (const k of members) if (canSideHere(k)) moveToSidebar(k, hit.side);
+			if (canSideHere(group.active)) moveToSidebar(group.active, hit.side); // its active tab in front
+			return;
+		}
+		if (hit.strip) {
+			const n = dockAtStrip(members, hit.strip.before);
+			if (n && canDockHere(group.active)) activateDock(group.active);
+		} else dockAllOf(members, group.active);
+	}
+	/** a torn-out tab (one window) lands like an ungrouped window @param {string} key @param {any} hit */
+	function dockTornAt(key, hit) {
+		if (hit.kind === 'side') moveToSidebar(key, hit.side);
+		else if (hit.strip) dockAtStrip([key], hit.strip.before);
+		else dockTab(key);
 	}
 	/** @param {any} e */
 	function onMove(e) {
@@ -160,9 +167,9 @@
 				node.style.left = Math.max(0, e.clientX - 100) + 'px';
 				node.style.top = Math.max(0, e.clientY - 12) + 'px';
 			}
-			const hit = canDockHere(tabDrag.key) ? dockStripTarget(e.clientX, e.clientY) : null;
-			showDockCaret(hit);
-			ghostWindows([node], !!hit);
+			const k = tabDrag.key;
+			const hit = windowDropTarget({ x: e.clientX, y: e.clientY, key: k, canDock: canDockHere(k), canSide: canSideHere(k) });
+			paintTarget(hit, [node]);
 			tabDrag.hit = hit;
 		}
 	}
@@ -171,6 +178,7 @@
 		if (stripDrag && e.pointerId === stripDrag.id) {
 			const { hit, groupId } = stripDrag;
 			stripDrag = null;
+			paintTarget(null, []);
 			clearStripFeedback();
 			if (hit) dockGroupAt(groupId, hit);
 		}
@@ -178,8 +186,9 @@
 		clearPress();
 		const drop = tabDrag.hit;
 		if (drop) {
+			paintTarget(null, []);
 			clearStripFeedback();
-			if (tabDrag.torn) dockAtStrip([tabDrag.key], drop.before);
+			if (tabDrag.torn) dockTornAt(tabDrag.key, drop);
 			else if (tabDrag.moving) dockGroupAt(tabDrag.groupId, drop);
 			tabDrag = null;
 			return;
@@ -192,7 +201,10 @@
 	}
 	/** the browser took the gesture (or the captured element went away): end it, change nothing */
 	function onCancel(/** @type {any} */ e) {
-		if ((stripDrag && e.pointerId === stripDrag.id) || (tabDrag && e.pointerId === tabDrag.id)) clearStripFeedback();
+		if ((stripDrag && e.pointerId === stripDrag.id) || (tabDrag && e.pointerId === tabDrag.id)) {
+			paintTarget(null, []);
+			clearStripFeedback();
+		}
 		if (stripDrag && e.pointerId === stripDrag.id) stripDrag = null;
 		if (tabDrag && e.pointerId === tabDrag.id) {
 			clearPress();
@@ -211,6 +223,11 @@
 		tabindex="-1"
 		data-key-scope="panel"
 		onpointerdown={(e) => onStripDown(e, group)}
+		oncontextmenu={(e) => {
+			if (/** @type {any} */ (e.target).closest('.tab-note, button')) return;
+			e.preventDefault();
+			openTabMenu(e.clientX, e.clientY, group.active);
+		}}
 	>
 		<!-- NOTES-38 #39: more tabs than width scroll sideways (wheel / swipe, fade edge); the
 		     close-all ✕ stays pinned at the end -->
@@ -222,7 +239,7 @@
 						class="tab-note tp-dtab ts-tab relative"
 						role="tab"
 						aria-selected={key === group.active}
-						title="Click to switch — drag out to detach — right-click (long-press) for Ungroup / Dock / Close"
+						title="Click to switch — drag out to detach — right-click (long-press) to dock, float, group or close"
 						onpointerdown={(e) => {
 							e.stopPropagation();
 							onTabDown(e, group.id, key);
@@ -231,7 +248,7 @@
 							e.preventDefault();
 							e.stopPropagation();
 							// Android's own long-press may ALSO fire this: one menu, not two
-							if (tabMenu?.key === key) return;
+							if ($windowMenu?.key === key) return;
 							clearPress();
 							if (tabDrag) tabDrag.menu = true;
 							openTabMenu(e.clientX, e.clientY, key);
@@ -276,14 +293,7 @@
 	</div>
 {/each}
 
-{#if tabMenu}
-	<ContextMenu
-		x={tabMenu.x}
-		y={tabMenu.y}
-		items={tabMenuItems(tabMenu.key)}
-		on:close={() => (tabMenu = null)}
-	/>
-{/if}
+
 
 <style>
 	/* 38 R6: the strip IS the group's window header, so it has the header's box — the tool

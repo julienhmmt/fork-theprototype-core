@@ -52,9 +52,10 @@ const bodyPoint = (page, sel, fx = 0.5, fy = 0.6, clear = 0) =>
 		const head = node.querySelector('.move-handle')?.getBoundingClientRect();
 		const top = (head?.bottom ?? r.top) + 2;
 		// base (no M1) has no predicate: the same rule, written out, so the counterfactual presses the same spot
+		// (a [role] INSIDE the window is a control; the window's own role=region is not)
 		const isBodyDragStart =
 			window.__stores.windowBodyDrag?.isBodyDragStart ??
-			((el, n) => n.contains(el) && !el.closest('button, input, select, textarea, label, a[href], [role], .move-handle, canvas, [draggable="true"]') && getComputedStyle(el).overflowY !== 'auto');
+			((el, n) => n.contains(el) && !el.closest('button, input, select, textarea, label, a[href], .move-handle, canvas, [draggable="true"]') && !(el.closest('[role]') !== n && n.contains(el.closest('[role]'))) && getComputedStyle(el).overflowY !== 'auto');
 		const cands = [];
 		for (let y = top; y < r.bottom - 4; y += 3) for (let x = r.left + 3; x < r.right - 4; x += 3) cands.push([x, y]);
 		const tx = r.left + r.width * fx;

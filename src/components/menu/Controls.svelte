@@ -52,7 +52,7 @@
 	import SimControls from './SimControls.svelte';
 	import { focusStack } from '$lib/windowFocus';
 	import { tabbable, groupRectOf, moveGroupOf, resizeGroup } from '$lib/windowTabs';
-	import { clampWinSize, clampResize, anchorOf } from '$lib/windowSize';
+	import { clampWinSize, clampResize, anchorOf, registerSizeReset } from '$lib/windowSize';
 	import { dockable } from '$lib/docking';
 	import { bottomDockable } from '$lib/bottomDockDrop';
 	import { visibleDockKey, dockOccupants, bottomInset, FLOW_FAMILY, armDockMode, DOCK_TITLES } from '$lib/bottomDock';
@@ -943,13 +943,18 @@
 		// 18-B: double-click the grip — back to the default size, position kept.
 		// A direct listener, like every other gesture in this action: the panel
 		// chrome swallows delegated events.
-		node.addEventListener('dblclick', (e: any) => {
-			if (!e.target?.classList?.contains('resize-handle') || grouped()) return;
+		const resetSize = () => {
+			if (grouped()) return;
 			({ w: width, h: height } = clampWinSize(OBJ_WIN_DEFAULT.w, OBJ_WIN_DEFAULT.h, OBJ_WIN_MIN));
 			node.style.width = `${width}px`;
 			node.style.height = `${height}px`;
 			persist();
+		};
+		node.addEventListener('dblclick', (e: any) => {
+			if (!e.target?.classList?.contains('resize-handle')) return;
+			resetSize();
 		});
+		registerSizeReset(node, resetSize); // 44 M3: the header menu's "Reset size"
 
 		// 169: Settings "Reset window positions" recentres the object list too
 		registerWindowReset(() => {

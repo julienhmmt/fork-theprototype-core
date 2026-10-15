@@ -128,3 +128,20 @@ export function anchorOf(node) {
 	const r = node?.getBoundingClientRect?.();
 	return { left: r?.left ?? 0, top: r?.top ?? 0 };
 }
+
+// 44 M3 — "Reset size" in a window's header menu: each window that owns a size it can reset registers
+// how, against its NODE (dragWindow's `resizable` grip, the object list's own). A window absent from
+// here sizes itself from its content or a store of its own, and the menu says so.
+/** @type {WeakMap<object, () => void>} */
+const sizeResets = new WeakMap();
+/** @param {object} node @param {() => void} fn @returns {() => void} unregister */
+export function registerSizeReset(node, fn) {
+	sizeResets.set(node, fn);
+	return () => {
+		if (sizeResets.get(node) === fn) sizeResets.delete(node);
+	};
+}
+/** @param {object} node @returns {(() => void) | null} */
+export function sizeResetOf(node) {
+	return sizeResets.get(node) ?? null;
+}

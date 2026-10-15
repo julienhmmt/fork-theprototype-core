@@ -6,7 +6,8 @@
 //   1  a touch drag on the group's strip follows the finger at EVERY step (no pointercancel —
 //      the strip had touch-action:auto, so the browser took the gesture as a pan)
 //   2  a touch drag on a TAB NAME moves the whole group the same way (QUESTIONS Q1)
-//   3  a long-press on a tab opens the kit menu: Ungroup this tab / Dock this tab / Close,
+//   3  a long-press on a tab opens the kit menu (44 M3: the floating-window menu — Float (undock) is the old
+//      Ungroup this tab, Dock to bottom the old Dock this tab),
 //      and each row does what it says
 //   4  desktop: right-click on a tab opens the same menu; a mouse drag of a tab still tears it out
 //
@@ -108,11 +109,15 @@ const tabCentre = (page, label) =>
 		return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
 	}, label);
 
+// 44 M3: the group tab's menu is the floating-window menu ($lib/windowMenu)
+const ROWS = ['Dock to bottom', 'Move to left sidebar', 'Move to right sidebar', 'Float (undock)', 'Group with…', 'Bring to front', 'Reset size', 'Close'];
 const menuRows = (page) =>
-	page.evaluate(() =>
-		[...document.querySelectorAll('.ctx-menu button, [role="menu"] button, [role="menuitem"]')]
-			.map((b) => b.textContent.trim())
-			.filter((t) => /^(Ungroup this tab|Dock this tab|Close|Hide tab)$/.test(t))
+	page.evaluate(
+		(rows) =>
+			[...document.querySelectorAll('.ctx-menu button, [role="menu"] button, [role="menuitem"]')]
+				.map((b) => b.textContent.replace(/\s*▸\s*$/, '').trim()) // a submenu row ends in its arrow
+				.filter((t) => rows.includes(t)),
+		ROWS
 	);
 
 async function tapRow(page, cdp, label) {
@@ -172,11 +177,11 @@ h.run(async () => {
 		await longPress(page, cdp, fc);
 		const rows = await menuRows(page);
 		h.check(
-			JSON.stringify(rows) === JSON.stringify(['Ungroup this tab', 'Dock this tab', 'Close']),
-			`${name} 3.1 a long-press on a group tab opens Ungroup this tab / Dock this tab / Close (${JSON.stringify(rows)})`
+			JSON.stringify(rows) === JSON.stringify(ROWS),
+			`${name} 3.1 a long-press on a group tab opens the window menu (${JSON.stringify(rows)})`
 		);
 		await page.screenshot({ path: (process.env.OUT || '/tmp') + `/g6-${name}-longpress-menu.png` });
-		h.check(await tapRow(page, cdp, 'Ungroup this tab'), `${name} 3.2 the Ungroup row is tappable`);
+		h.check(await tapRow(page, cdp, 'Float (undock)'), `${name} 3.2 the Float (undock) row is tappable`);
 		const un = await page.evaluate(() => {
 			const vis = (s) => {
 				const n = document.querySelector(s);
@@ -189,7 +194,7 @@ h.run(async () => {
 		// Dock this tab
 		await makeGroup(page, { x: 20, y: 300 });
 		await longPress(page, cdp, await tabCentre(page, 'Flow Code'));
-		await tapRow(page, cdp, 'Dock this tab');
+		await tapRow(page, cdp, 'Dock to bottom');
 		await page.waitForTimeout(600);
 		const dk = await page.evaluate(() => {
 			let o, a;
@@ -198,7 +203,7 @@ h.run(async () => {
 			const ol = document.querySelector('#object-list');
 			return { present: !!o.flowcode?.present, visible: a, strip: !!document.querySelector('.tab-strip'), ol: !!ol && getComputedStyle(ol).display !== 'none' };
 		});
-		h.check(dk.present && dk.visible === 'flowcode' && !dk.strip && dk.ol, `${name} 3.4 Dock this tab: Flow Code is the visible dock tab, Objects floats alone (${JSON.stringify(dk)})`);
+		h.check(dk.present && dk.visible === 'flowcode' && !dk.strip && dk.ol, `${name} 3.4 Dock to bottom: Flow Code is the visible dock tab, Objects floats alone (${JSON.stringify(dk)})`);
 
 		// Close (on a window that has no docked mode, Dock is offered but disabled)
 		await page.evaluate(() => localStorage.setItem('flowCodeDocked', 'false'));
@@ -207,13 +212,13 @@ h.run(async () => {
 		await makeGroup(page, { x: 20, y: 300 });
 		await longPress(page, cdp, await tabCentre(page, 'Objects'));
 		const dis = await page.evaluate(() => {
-			const b = [...document.querySelectorAll('[role="menuitem"], .ctx-menu button, [role="menu"] button')].find((x) => x.textContent.trim() === 'Dock this tab');
+			const b = [...document.querySelectorAll('[role="menuitem"], .ctx-menu button, [role="menu"] button')].find((x) => x.textContent.trim() === 'Dock to bottom');
 			return b ? b.classList.contains('ctx-disabled') : null;
 		});
 		// 42 I6: on a wider screen (unfolded) the Objects list docks as a hosted tab, so its row is
 		// enabled; in the phone posture (folded) the dock hosts only phone content tabs, so it stays off
 		const phonePosture = await page.evaluate(() => document.documentElement.classList.contains('phone-shell'));
-		h.check(dis === phonePosture, `${name} 3.5 Objects' "Dock this tab" is ${phonePosture ? 'disabled in the phone posture' : 'enabled on a wider screen (42 I6)'} (${dis})`);
+		h.check(dis === phonePosture, `${name} 3.5 Objects' "Dock to bottom" is ${phonePosture ? 'disabled in the phone posture' : 'enabled on a wider screen (42 I6)'} (${dis})`);
 		await tapRow(page, cdp, 'Close');
 		const cl = await page.evaluate(() => {
 			let c;
@@ -234,7 +239,7 @@ h.run(async () => {
 		await page.mouse.click(fc.x, fc.y, { button: 'right' });
 		await page.waitForTimeout(300);
 		const rows = await menuRows(page);
-		h.check(JSON.stringify(rows) === JSON.stringify(['Ungroup this tab', 'Dock this tab', 'Close']), `4.1 desktop: right-click on a group tab opens the same menu (${JSON.stringify(rows)})`);
+		h.check(JSON.stringify(rows) === JSON.stringify(ROWS), `4.1 desktop: right-click on a group tab opens the same menu (${JSON.stringify(rows)})`);
 		await page.keyboard.press('Escape');
 		await page.waitForTimeout(300);
 		const ol = await tabCentre(page, 'Objects');
