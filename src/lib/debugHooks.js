@@ -122,6 +122,9 @@ export const DEBUG_HOOKS = [
 	['sessions', () => import('./sessions')],
 	['geometryEdit', () => import('./geometryEdit')],
 	['lightParams', () => import('./lightParams')],
+	// 46-media R1: the budgeted shadow (claims, fit state) — the perf gate reads shadowsKeptInXR
+	['shadowClaims', () => import('./shadowClaims')],
+	['shadowBudget', () => import('./shadowBudget')],
 	['shadowDefaults', () => import('./shadowDefaults')],
 	['palette', () => import('./palette')],
 	['viewModeCtl', () => import('./viewMode')],

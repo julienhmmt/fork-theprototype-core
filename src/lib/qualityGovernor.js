@@ -22,6 +22,7 @@ import { xrThresholds, XR_START_LEVEL, XR_FRAMEBUFFER_SCALE, PHONE_START_LEVEL, 
 import { globalRenderer } from '../stores/sceneStore';
 import { lodBias } from './lod';
 import { lodBiasFor } from './lodCore';
+import { shadowClaims, shadowsKeptInXR } from './shadowClaims';
 
 // 26-D (roadmap 26 section 4, Stage 1) — ADAPTIVE QUALITY: THE WIRING.
 //
@@ -345,8 +346,8 @@ function applyPin(reason) {
 		publish(next, reason);
 	} else if (was !== null) {
 		// back to Auto inside a headset = the headset's auto: its entry floor again
-		const base = xr.active && get(autoQuality) ? XR_START_LEVEL : 0;
-		if (xr.active && get(autoQuality)) governor.setFloor(XR_START_LEVEL);
+		const base = xr.active && get(autoQuality) ? xrEntryLevel() : 0;
+		if (xr.active && get(autoQuality)) governor.setFloor(xrEntryLevel());
 		governor.setLevel(base, now());
 		governor.forget();
 		publish(base, reason);
@@ -433,6 +434,31 @@ function hookXR(r) {
 	r.xr.addEventListener?.('sessionend', () => endXRQuality(r));
 }
 globalRenderer.subscribe((r) => hookXR(r));
+shadowClaims.subscribe(() => onShadowClaimsChange());
+
+/** The level a headset enters at in auto mode: XR_START_LEVEL (shadows off), or full quality
+ * while a scene's shadow is budgeted (46-media R1, shadowClaims.js). */
+export function xrEntryLevel() {
+	return shadowsKeptInXR() ? 0 : XR_START_LEVEL;
+}
+
+/** 46-media R1: a claim arriving or leaving MID-SESSION (the scene loaded in the headset, or a level
+ * hop to a scene without one) moves the entry floor the same way a session start would. A level the
+ * frames earned is never undone here — only the entry step the floor itself raised. */
+function onShadowClaimsChange() {
+	if (!xr.active || !get(autoQuality) || gameForcedLevel !== null) return;
+	const entry = xrEntryLevel();
+	governor.setFloor(entry);
+	if (entry === 0 && xr.raised && governor.level() === XR_START_LEVEL) {
+		governor.setLevel(0, now());
+		xr.raised = false;
+		publish(0, 'headset: shadows kept (budgeted scene)');
+	} else if (entry > 0 && governor.level() < entry) {
+		governor.setLevel(entry, now());
+		xr.raised = true;
+		publish(entry, 'headset: shadows off');
+	}
+}
 
 /** A session began: judge by its rate, feed its frames, take the entry floor.
  * Exported for the suite (a headless page cannot present). @param {any} session @param {number} [hzOverride] */
@@ -454,12 +480,15 @@ export function startXRQuality(session, hzOverride) {
 	xr.before = governor.level();
 	if (get(autoQuality) && gameForcedLevel === null) {
 		// the floor HOLDS for the session: recovery must not switch shadows back on because
-		// frames were fine without them — that is the flap the floor exists to prevent
-		governor.setFloor(XR_START_LEVEL);
-		if (governor.level() < XR_START_LEVEL) {
-			governor.setLevel(XR_START_LEVEL, now());
+		// frames were fine without them — that is the flap the floor exists to prevent.
+		// 46-media R1: a scene whose shadow is BUDGETED (shadowClaims) enters at full quality; the
+		// ladder still takes shadows off when its frames cannot hold
+		const entry = xrEntryLevel();
+		governor.setFloor(entry);
+		if (governor.level() < entry) {
+			governor.setLevel(entry, now());
 			xr.raised = true;
-			publish(XR_START_LEVEL, 'headset: shadows off');
+			publish(entry, 'headset: shadows off');
 		}
 	}
 	const loop = (/** @type {number} */ t) => {

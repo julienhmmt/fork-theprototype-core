@@ -445,6 +445,12 @@
 					return t.data.calls > before;
 				}
 			},
+			// 46-media R1: a budgeted-shadow claim (a headset keeps shadows while it holds)
+			'quality.keepShadowsInVR': {
+				needs: ['shadowClaims'],
+				call: (api) => api.quality.keepShadowsInVR({ radius: 30 }),
+				present: () => get(M.shadowClaims.shadowClaims).some((c) => c.radius === 30)
+			},
 			// 36-water: a volume listener; notify() fires every listener with the current list
 			'water.onChange': {
 				needs: ['waterVolumes'],
