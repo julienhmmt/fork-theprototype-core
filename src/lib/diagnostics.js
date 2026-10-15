@@ -37,7 +37,8 @@ const CAP = 300;
  * would otherwise push the whole ring out of the buffer in one call. */
 const DATA_CAP = 400;
 
-/** @typedef {{t: number, level: 'debug'|'info'|'warn'|'error', scope: string, message: string, data?: string}} Entry */
+/** `n` / `last`: how many times this exact line arrived in a row, and when the latest one did (44 L4)
+ * @typedef {{t: number, level: 'debug'|'info'|'warn'|'error', scope: string, message: string, data?: string, n?: number, last?: number}} Entry */
 
 /** @type {Entry[]} */
 const ring = [];
@@ -81,8 +82,20 @@ function briefly(value) {
  * @param {unknown} [data]
  */
 export function log(level, scope, message, data) {
-	ring.push({ t: Date.now(), level, scope, message, data: briefly(data) });
-	while (ring.length > CAP) ring.shift();
+	const brief = briefly(data);
+	const prev = ring[ring.length - 1];
+	// 44 L4: a line identical to the one before it (level, scope, message and data — the browser
+	// console's rule) is that line again, counted. One library warning repeated per key event was
+	// 180 of the 199 lines of the user's 1.34 bundle, and a 300-line ring that fills with one
+	// sentence has pushed out the lines that explain the failure. Anything in between starts a
+	// new line, so the ORDER of what happened is never lost.
+	if (prev && prev.level === level && prev.scope === scope && prev.message === message && prev.data === brief) {
+		prev.n = (prev.n ?? 1) + 1;
+		prev.last = Date.now();
+	} else {
+		ring.push({ t: Date.now(), level, scope, message, data: brief });
+		while (ring.length > CAP) ring.shift();
+	}
 	diagnosticsCount.update((n) => n + 1);
 	// In DEV the console stays the developer's: `log()` forwards, so a `log('warn', …)`
 	// reads exactly like the `console.log` it replaced. In PROD the shim below is what
@@ -97,16 +110,18 @@ export function log(level, scope, message, data) {
 
 /** The ring as printable lines, oldest first. @returns {string[]} */
 export function lines() {
+	const at = (/** @type {number} */ t) => new Date(t).toISOString().slice(11, 23);
 	return ring.map(
 		(e) =>
-			new Date(e.t).toISOString().slice(11, 23) +
+			at(e.t) +
 			' ' +
 			e.level.toUpperCase().padEnd(5) +
 			' [' +
 			e.scope +
 			'] ' +
 			e.message +
-			(e.data ? ' ' + e.data : '')
+			(e.data ? ' ' + e.data : '') +
+			(e.n && e.n > 1 ? ` (×${e.n}, last ${at(e.last ?? e.t)})` : '')
 	);
 }
 
