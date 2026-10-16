@@ -1,0 +1,74 @@
+[
+ {
+  "id": "Tiles",
+  "title": "Tiles",
+  "type": "material",
+  "numberOfAssets": 164
+ },
+ {
+  "id": "PavingStones",
+  "title": "Paving Stones",
+  "type": "material",
+  "numberOfAssets": 155
+ },
+ {
+  "id": "Ground",
+  "title": "Ground",
+  "type": "material",
+  "numberOfAssets": 128
+ },
+ {
+  "id": "Bricks",
+  "title": "Bricks",
+  "type": "material",
+  "numberOfAssets": 116
+ },
+ {
+  "id": "Wood",
+  "title": "Wood",
+  "type": "material",
+  "numberOfAssets": 102
+ },
+ {
+  "id": "Metal",
+  "title": "Metal",
+  "type": "material",
+  "numberOfAssets": 101
+ },
+ {
+  "id": "Fabric",
+  "title": "Fabric",
+  "type": "material",
+  "numberOfAssets": 89
+ },
+ {
+  "id": "WoodFloor",
+  "title": "Wood Floor",
+  "type": "material",
+  "numberOfAssets": 74
+ },
+ {
+  "id": "Rock",
+  "title": "Rock",
+  "type": "material",
+  "numberOfAssets": 67
+ },
+ {
+  "id": "Concrete",
+  "title": "Concrete",
+  "type": "material",
+  "numberOfAssets": 61
+ },
+ {
+  "id": "Planks",
+  "title": "Planks",
+  "type": "material",
+  "numberOfAssets": 59
+ },
+ {
+  "id": "Leather",
+  "title": "Leather",
+  "type": "material",
+  "numberOfAssets": 50
+ }
+]

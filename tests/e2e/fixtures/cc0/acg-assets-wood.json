@@ -1,0 +1,111 @@
+{
+ "totalResults": 295,
+ "nextPageHttp": "https://ambientcg.com/api/v3/assets?type=material&q=wood&sort=popular&limit=3&offset=3&include=title%2Ctags%2Cthumbnails%2Cdownloads",
+ "currentPageHttp": "https://ambientcg.com/api/v3/assets?type=material&q=wood&sort=popular&limit=3&include=title%2Ctags%2Cthumbnails%2Cdownloads",
+ "previousPageHttp": null,
+ "assets": [
+  {
+   "id": "Wood096",
+   "title": "Wood 096",
+   "tags": [
+    "096",
+    "96",
+    "beige",
+    "grain",
+    "knots",
+    "light",
+    "natural",
+    "smooth",
+    "softwood",
+    "wood",
+    "wood096"
+   ],
+   "thumbnails": {
+    "256-PNG": "https://acg-media.struffelproductions.com/file/ambientCG-Web/media/thumbnail/256-PNG/Wood096.png",
+    "256-JPG-242424": "https://acg-media.struffelproductions.com/file/ambientCG-Web/media/thumbnail/256-JPG-242424/Wood096.jpg"
+   },
+   "downloads": [
+    {
+     "attributes": "1K-JPG",
+     "extension": "zip",
+     "url": "https://ambientcg.com/get?file=Wood096_1K-JPG.zip",
+     "size": 5358165
+    },
+    {
+     "attributes": "2K-JPG",
+     "extension": "zip",
+     "url": "https://ambientcg.com/get?file=Wood096_2K-JPG.zip",
+     "size": 19620619
+    }
+   ]
+  },
+  {
+   "id": "Wood095",
+   "title": "Wood 095",
+   "tags": [
+    "095",
+    "95",
+    "beige",
+    "clean",
+    "indoor",
+    "light",
+    "minimalist",
+    "modern",
+    "natural",
+    "polished",
+    "rustic",
+    "smooth",
+    "subtle",
+    "uniform",
+    "wood"
+   ],
+   "thumbnails": {
+    "256-PNG": "https://acg-media.struffelproductions.com/file/ambientCG-Web/media/thumbnail/256-PNG/Wood095.png",
+    "256-JPG-242424": "https://acg-media.struffelproductions.com/file/ambientCG-Web/media/thumbnail/256-JPG-242424/Wood095.jpg"
+   },
+   "downloads": [
+    {
+     "attributes": "1K-JPG",
+     "extension": "zip",
+     "url": "https://ambientcg.com/get?file=Wood095_1K-JPG.zip",
+     "size": 3882297
+    },
+    {
+     "attributes": "2K-JPG",
+     "extension": "zip",
+     "url": "https://ambientcg.com/get?file=Wood095_2K-JPG.zip",
+     "size": 12931993
+    }
+   ]
+  },
+  {
+   "id": "Wood094",
+   "title": "Wood 094",
+   "tags": [
+    "94",
+    "brown",
+    "smooth",
+    "wood",
+    "wooden"
+   ],
+   "thumbnails": {
+    "256-PNG": "https://acg-media.struffelproductions.com/file/ambientCG-Web/media/thumbnail/256-PNG/Wood094.png",
+    "256-JPG-242424": "https://acg-media.struffelproductions.com/file/ambientCG-Web/media/thumbnail/256-JPG-242424/Wood094.jpg"
+   },
+   "downloads": [
+    {
+     "attributes": "1K-JPG",
+     "extension": "zip",
+     "url": "https://ambientcg.com/get?file=Wood094_1K-JPG.zip",
+     "size": 4166756
+    },
+    {
+     "attributes": "2K-JPG",
+     "extension": "zip",
+     "url": "https://ambientcg.com/get?file=Wood094_2K-JPG.zip",
+     "size": 14806756
+    }
+   ]
+  }
+ ]
+}

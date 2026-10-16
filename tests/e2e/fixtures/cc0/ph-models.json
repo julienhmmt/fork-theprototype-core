@@ -1,0 +1,80 @@
+{
+ "ArmChair_01": {
+  "name": "Arm Chair 01",
+  "categories": [
+   "furniture",
+   "seating"
+  ],
+  "tags": [
+   "gothic",
+   "vintage",
+   "chair",
+   "furniture",
+   "victorian",
+   "couch",
+   "wood",
+   "varnished",
+   "classic"
+  ],
+  "authors": {
+   "Kirill Sannikov": "All"
+  },
+  "download_count": 32380,
+  "type": 2
+ },
+ "potted_plant_02": {
+  "name": "Potted Plant 02",
+  "categories": [
+   "decorative",
+   "plants",
+   "potted plants",
+   "nature"
+  ],
+  "tags": [
+   "potplant",
+   "plant",
+   "pot",
+   "vase",
+   "medium",
+   "leaf",
+   "green",
+   "terracotta"
+  ],
+  "authors": {
+   "Rico Cilliers": "All"
+  },
+  "download_count": 109170,
+  "type": 2
+ },
+ "wooden_crate_02": {
+  "name": "Wooden Crate 02",
+  "categories": [
+   "containers",
+   "props",
+   "collection: smugglers_cove"
+  ],
+  "tags": [
+   "vintage",
+   "wood",
+   "old",
+   "wooden",
+   "worn",
+   "colonial",
+   "commercial",
+   "maritime",
+   "chest",
+   "box",
+   "container",
+   "prop",
+   "farmhouse",
+   "crate",
+   "farm"
+  ],
+  "authors": {
+   "James Ray Cock": "modeling",
+   "Jurita Burger": "graphic design"
+  },
+  "download_count": 13057,
+  "type": 2
+ }
+}
