@@ -24,6 +24,7 @@
 	import MenuButton from './inspector/MenuButton.svelte';
 	import InsToggle from './inspector/InsToggle.svelte';
 	import SceneQualitySection from './inspector/SceneQualitySection.svelte'; // 42 I12
+	import ArrangeSection from './inspector/ArrangeSection.svelte'; // 47 M2
 	import HdriSection from './scene/HdriSection.svelte'; // 37-hdri
 	import PhysicsFloats from '../sim/PhysicsFloats.svelte'; // 36-sim I1
 	import FluidEmitterSection from '../sim/FluidEmitterSection.svelte'; // 36-fb F23
@@ -3537,6 +3538,11 @@
 					{/if}
 				</p>
 			</Section>
+
+			<!-- 47 M2: align / distribute / drop to ground over the set (its own file) -->
+			{#if multiCount}
+				<ArrangeSection count={multiCount} />
+			{/if}
 
 			{#if !isLight}
 				<Section variant="panel" label="Object" clip={{ count: () => insTargets.length, fans: true }}>
