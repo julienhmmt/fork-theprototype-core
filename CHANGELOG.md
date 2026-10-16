@@ -24,7 +24,8 @@ Everything from your review of the 1.35 preview, plus a tooling clean-up.
 
 - 🧲 **Hold Ctrl (Cmd on a Mac) while dragging a floating window** to place it anywhere — over a sidebar or the dock —
   without docking. Docking stays the default; the lit target says "Hold Ctrl to place without docking", and you can press
-  or release the key mid-drag. On touch, the window menu's **Float** does the same.
+  or release the key mid-drag. On touch, drop a window clear of the targets, or take a docked one out with its tab's
+  **Undock into a floating window**.
 
 ### 🐞 Fixed
 
