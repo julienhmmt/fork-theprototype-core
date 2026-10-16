@@ -81,14 +81,25 @@ h.run(async () => {
 		const tri = items.find((i) => i.name === 'tri.obj');
 		await window.__stores.explorerDrop.dropExplorerItem({ id: tri.id, kind: 'object', name: tri.name }, 860, 560);
 	});
-	await A.page.waitForTimeout(2000);
-	aObjects = await objectsOn(A.page);
-	const placedObj = aObjects.find((o) => o.name === 'tri');
+	// 46: an import first loads the (lazy) import optimizer to weigh the model against Settings ▸
+	// Import — on a loaded dev server that alone can take over 2 s, so wait for the object, not a clock
+	/** @type {any} */
+	let placedObj;
+	for (let t = 0; t < 40 && !placedObj; t++) {
+		await A.page.waitForTimeout(250);
+		aObjects = await objectsOn(A.page);
+		placedObj = aObjects.find((o) => o.name === 'tri');
+	}
 	h.check(!!placedObj && (placedObj.pos[0] !== 0 || placedObj.pos[2] !== 0), `OBJ import lands at the drop point (${placedObj?.pos})`);
-	bObjects = await objectsOn(B.page);
-	const bObj = bObjects.find((o) => o.name === 'tri');
+	/** @type {any} */
+	let bObj;
+	for (let t = 0; t < 20 && !bObj; t++) {
+		await B.page.waitForTimeout(250);
+		bObjects = await objectsOn(B.page);
+		bObj = bObjects.find((o) => o.name === 'tri');
+	}
 	h.check(
-		bObj && bObj.pos.join(',') === placedObj.pos.join(','),
+		bObj && placedObj && bObj.pos.join(',') === placedObj.pos.join(','),
 		`imported object replicated in place on B (${bObj?.pos})`
 	);
 
