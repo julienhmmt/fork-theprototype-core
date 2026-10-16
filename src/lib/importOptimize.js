@@ -196,6 +196,11 @@ export async function maybeOptimizeImport(parsed, source) {
 				gltfResult.animations?.length > 0
 					? { result: gltfResult, buffer: out.bytes.slice().buffer, kind: 'gltf' }
 					: null;
+			// 47 C2: a CC0 download's credit rides the root (the GLB's scene extras); the engine's
+			// rewrite must not lose it, or the placed copy and the Inspector forget where it came from
+			const credit = root?.userData?.source;
+			if (credit && gltfResult.scene && !gltfResult.scene.userData?.source)
+				gltfResult.scene.userData = { ...(gltfResult.scene.userData ?? {}), source: credit };
 			disposeTree(root);
 			next = { root: gltfResult.scene, animated, notes: parsed.notes };
 		} catch (error) {
@@ -247,7 +252,9 @@ export async function maybeOptimizeImport(parsed, source) {
 			};
 			patchRecord(optimizedItem.id, {
 				optimizedFrom: original.hash,
-				optimizeReport: summaryForItem
+				optimizeReport: summaryForItem,
+				// 47 C2: the optimized copy names the same CC0 source as its original (Explorer Properties)
+				...(/** @type {any} */ (original).source ? { source: /** @type {any} */ (original).source } : {})
 			});
 			patchRecord(original.id, { optimizedHash: optimizedItem.hash });
 		}

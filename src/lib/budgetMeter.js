@@ -113,6 +113,14 @@ export function sampleBudget() {
 	} catch {
 		/* LOD not started (a bare test page) */
 	}
+	// 47 T2: a terrain's scatter instances live in a scene-root holder (not in objectsGroup) —
+	// cost them on the terrain's row
+	/** @type {Map<string, any[]>} */
+	const scatterOf = new Map();
+	for (const child of scene?.children ?? []) {
+		const of = child.userData?.terrainScatterOf;
+		if (of) scatterOf.set(of, [...(scatterOf.get(of) ?? []), child]);
+	}
 	const reading = measureScene({
 		roots: rootsOf(scene, group),
 		background: scene?.background,
@@ -120,6 +128,7 @@ export function sampleBudget() {
 		kitInstancing: get(kitInstancingEnabled),
 		kitSourceOf: kitMeshSource,
 		optimize: get(importSettings),
+		attachedOf: scatterOf.size ? (/** @type {any} */ node) => scatterOf.get(node.uuid) : undefined,
 		hasLod: (/** @type {any} */ mesh) => {
 			if (lodded.has(mesh.uuid)) return true;
 			for (let n = mesh; n && n !== group; n = n.parent) if (n.userData?.lod) return true;

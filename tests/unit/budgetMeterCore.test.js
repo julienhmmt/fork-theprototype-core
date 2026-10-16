@@ -212,6 +212,30 @@ describe('measureScene', () => {
 		expect(m.totals.triangles).toBe(600);
 	});
 
+	it("47-int T2: a terrain's scatter (a scene-root holder) is costed on the terrain's row via attachedOf", () => {
+		const group = new THREE.Group();
+		const terrain = new THREE.Mesh(new THREE.PlaneGeometry(10, 10, 1, 1), new THREE.MeshStandardMaterial());
+		terrain.name = 'Terrain';
+		const nested = new THREE.Group();
+		nested.add(terrain);
+		group.add(nested);
+		const holder = new THREE.Object3D();
+		holder.userData.terrainScatterOf = terrain.uuid;
+		const set = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial(), 100);
+		set.castShadow = true;
+		holder.add(set);
+		const roots = [{ object: group, kind: 'objects' }];
+		const bare = measureScene({ roots });
+		expect(bare.totals.triangles).toBe(2);
+		const m = measureScene({ roots, attachedOf: (n) => (n.uuid === terrain.uuid ? [holder] : null) });
+		expect(m.rows).toHaveLength(1);
+		expect(m.rows[0].calls).toBe(2);
+		expect(m.rows[0].triangles).toBe(2 + 1200);
+		expect(m.totals.triangles).toBe(1202);
+		holder.visible = false; // a hidden terrain hides its holder: nothing drawn, nothing counted
+		expect(measureScene({ roots, attachedOf: (n) => (n.uuid === terrain.uuid ? [holder] : null) }).totals.triangles).toBe(2);
+	});
+
 	it('what optimizing would save: a LOD chain for meshes past 50k, KTX2 + resize for textures', () => {
 		const { group, b } = scene();
 		const m = measureScene({ roots: [{ object: group, kind: 'objects' }] });

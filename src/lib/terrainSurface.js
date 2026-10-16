@@ -4,6 +4,8 @@ import { get } from 'svelte/store';
 import { objectsGroup, globalScene, sceneRevision, pokeScene } from '../stores/sceneStore';
 import { decodeSplatBlock, encodeSplatBlock, normalizeLayers, baseIsMaterial, base64ToBytes, LAYER_COUNT } from './terrainPaintCore';
 import { normalizeScatter, decodeInstances, buildHeightGrid, sampleHeight } from './terrainScatterCore';
+import { lodObject, releaseOwner } from './lod';
+import { EXPLICIT_MIN_TRIANGLES } from './lodCore';
 
 // 47 T1 + T2 — HOW A PAINTED / SCATTERED TERRAIN LOOKS, on every peer. A LEAF: three, the
 // scene store and the two pure cores; no history, no peers (terrainPaint.js is the write
@@ -421,6 +423,7 @@ function makeHolder(terrain) {
 
 /** @param {any} holder */
 function clearHolder(holder) {
+	releaseOwner(holder); // 47-int: the cells' LOD entries (lod.js holds them until their owner lets go)
 	for (const child of [...holder.children]) {
 		holder.remove(child);
 		child.dispose?.();
@@ -484,25 +487,58 @@ function layoutScatter(object, holder, sets) {
 		const parts = partsOf(set.source);
 		if (!parts || !parts.length) continue;
 		const list = decodeInstances(/** @type {Uint8Array} */ (base64ToBytes(set.data)), b);
+		/** @type {any[]} */
+		const matrices = list.map((inst) => {
+			const h = grid ? sampleHeight(grid, inst.x, inst.z) : { y: 0, nx: 0, ny: 1, nz: 0 };
+			_qy.setFromAxisAngle(UP, inst.yaw);
+			if (set.align) _q.setFromUnitVectors(UP, _n.set(h.nx, h.ny, h.nz)).multiply(_qy);
+			else _q.copy(_qy);
+			return new THREE.Matrix4().compose(_p.set(inst.x, h.y, inst.z), _q, _s.setScalar(inst.scale));
+		});
 		for (const part of parts) {
-			const mesh = new THREE.InstancedMesh(part.geometry, part.material, list.length);
-			mesh.name = 'terrain-scatter:' + set.id;
-			mesh.castShadow = true;
-			mesh.receiveShadow = true;
-			mesh.userData.scatterSet = set.id;
-			list.forEach((inst, k) => {
-				const h = grid ? sampleHeight(grid, inst.x, inst.z) : { y: 0, nx: 0, ny: 1, nz: 0 };
-				_qy.setFromAxisAngle(UP, inst.yaw);
-				if (set.align) _q.setFromUnitVectors(UP, _n.set(h.nx, h.ny, h.nz)).multiply(_qy);
-				else _q.copy(_qy);
-				_m.compose(_p.set(inst.x, h.y, inst.z), _q, _s.setScalar(inst.scale));
-				mesh.setMatrixAt(k, _m);
-			});
-			mesh.instanceMatrix.needsUpdate = true;
-			mesh.computeBoundingSphere();
-			holder.add(mesh);
+			// 47-int (46 LOD): a dense model takes levels. One centre for instances spread over a
+			// whole terrain means nothing, so a LOD'd part is split into cells — each cell picks
+			// its level by its NEAREST instance (lod.js) and is culled on its own. A light part
+			// (a primitive, a low-poly rock) stays ONE draw call per set, as the lane built it.
+			const lodded = trianglesOfGeo(part.geometry) >= EXPLICIT_MIN_TRIANGLES;
+			for (const ids of lodded ? cellsOf(list, b) : [list.map((_, k) => k)]) {
+				const mesh = new THREE.InstancedMesh(part.geometry, part.material, ids.length);
+				mesh.name = 'terrain-scatter:' + set.id;
+				mesh.castShadow = true;
+				mesh.receiveShadow = true;
+				mesh.userData.scatterSet = set.id;
+				ids.forEach((id, k) => mesh.setMatrixAt(k, matrices[id]));
+				mesh.instanceMatrix.needsUpdate = true;
+				mesh.computeBoundingSphere();
+				holder.add(mesh);
+				if (lodded) lodObject(mesh, {}, holder);
+			}
 		}
 	}
+}
+
+/** @param {any} g */
+function trianglesOfGeo(g) {
+	return Math.floor((g.index ? g.index.count : g.attributes.position.count) / 3);
+}
+
+/** the side of a LOD cell: at least SCATTER_CELL_MIN m, at most SCATTER_CELLS per terrain side */
+const SCATTER_CELL_MIN = 24;
+const SCATTER_CELLS = 4;
+
+/** Instance indices grouped by cell over the terrain (empty cells dropped).
+ * @param {{x: number, z: number}[]} list @param {{minX: number, minZ: number, sizeX: number, sizeZ: number}} b */
+function cellsOf(list, b) {
+	const side = Math.max(SCATTER_CELL_MIN, Math.max(b.sizeX, b.sizeZ) / SCATTER_CELLS);
+	/** @type {Map<string, number[]>} */
+	const cells = new Map();
+	list.forEach((inst, k) => {
+		const key = Math.floor((inst.x - b.minX) / side) + ',' + Math.floor((inst.z - b.minZ) / side);
+		const ids = cells.get(key);
+		if (ids) ids.push(k);
+		else cells.set(key, [k]);
+	});
+	return [...cells.values()];
 }
 
 /** @param {string} uuid @param {any} block null = no scatter */

@@ -225,14 +225,17 @@ function texturesOf(mat, add) {
  * `kitSourceOf(mesh)`: the template a placed kit piece was cloned from (packRefs.kitMeshSource) — when
  * kit instancing is on, every pristine copy of one (geometry, material) pair draws as ONE instanced
  * call, so only the first copy counts a call. `hasLod(mesh)`: the mesh already switches detail by
- * distance, so a LOD chain saves nothing more.
+ * distance, so a LOD chain saves nothing more. `attachedOf(node)`: content drawn FOR a node that lives
+ * elsewhere in the scene graph (47 T2: a terrain's scatter instances sit in a scene-root holder) —
+ * walked as part of that node's row.
  *
  * @param {{roots: {object: any, kind: 'objects'|'environment'|'module', label?: string}[],
  *   background?: any, environment?: any, kitInstancing?: boolean,
- *   kitSourceOf?: (mesh: any) => any, hasLod?: (mesh: any) => boolean, optimize?: OptimizeSettings}} input
+ *   kitSourceOf?: (mesh: any) => any, hasLod?: (mesh: any) => boolean, optimize?: OptimizeSettings,
+ *   attachedOf?: (node: any) => any[] | null | undefined}} input
  */
 export function measureScene(input) {
-	const { roots = [], kitInstancing = false, kitSourceOf = () => null, hasLod = () => false } = input ?? {};
+	const { roots = [], kitInstancing = false, kitSourceOf = () => null, hasLod = () => false, attachedOf = () => null } = input ?? {};
 	const optimize = { ...IMPORT_DEFAULTS, ...(input?.optimize ?? {}) };
 	const farRatio = optimize.lodRatios?.length ? optimize.lodRatios[optimize.lodRatios.length - 1] : 1;
 	/** @type {CostRow[]} */
@@ -317,6 +320,7 @@ export function measureScene(input) {
 				}
 			}
 			for (const child of node.children ?? []) visit(child);
+			for (const extra of attachedOf(node) ?? []) visit(extra);
 		};
 		visit(root);
 		row.textureMB = round1(bytes / 1048576);
