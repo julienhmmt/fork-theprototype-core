@@ -103,7 +103,8 @@ export async function maybeOptimizeImport(parsed, source) {
 	if (!decision.optimize && !forced) return null;
 	const lodRatios = !facts.skinned && settings.lodLevels > 0 && (decision.lod || forced) ? settings.lodRatios : [];
 	const gltf = source.extension === 'glb' || source.extension === 'gltf';
-	const runEngine = gltf && !alreadyOptimized && (decision.textures || settings.compress || forced);
+	// the engine is for TEXTURES (resize + KTX2); a texture-less model only needs its LOD group
+	const runEngine = gltf && !alreadyOptimized && facts.maxTextureSide > 0 && (decision.textures || settings.compress || forced);
 	let next = parsed;
 	/** @type {any} */
 	let report = null;

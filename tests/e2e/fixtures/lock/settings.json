@@ -6302,6 +6302,487 @@
 		"Node types": {
 			"rows": []
 		},
+		"Import": {
+			"rows": [
+				{
+					"name": "Optimize big models automatically",
+					"controls": [
+						{
+							"kind": "toggle",
+							"id": "import-auto",
+							"label": "Optimize big models automatically",
+							"where": "control",
+							"default": true,
+							"disabled": false,
+							"state": false,
+							"effects": {
+								"storage": {
+									"import:settings": "{\"auto\":false,\"triangleThreshold\":50000,\"textureThreshold\":2048,\"maxTextureSize\":2048,\"compress\":true,\"lodLevels\":3,\"lodRatios\":[0.5,0.25,0.1]}"
+								},
+								"stores": {
+									"importOptimize.importSettings": "<object>"
+								},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": true,
+							"storageAfterRestore": {
+								"import:settings": "{\"auto\":true,\"triangleThreshold\":50000,\"textureThreshold\":2048,\"maxTextureSize\":2048,\"compress\":true,\"lodLevels\":3,\"lodRatios\":[0.5,0.25,0.1]}"
+							},
+							"exercise": "done"
+						}
+					]
+				},
+				{
+					"name": "Triangle threshold",
+					"controls": [
+						{
+							"kind": "text",
+							"id": "import-triangles",
+							"label": "Triangle threshold",
+							"where": "control",
+							"default": "50000",
+							"disabled": false,
+							"state": "lock-triangle-threshold",
+							"effects": {
+								"storage": {},
+								"stores": {},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": "50000",
+							"storageAfterRestore": {},
+							"exercise": "done"
+						}
+					]
+				},
+				{
+					"name": "Texture threshold",
+					"controls": [
+						{
+							"kind": "segment",
+							"id": "import-texture-threshold-1024",
+							"label": "1024",
+							"where": "control",
+							"default": false,
+							"disabled": false,
+							"state": true,
+							"effects": {
+								"storage": {
+									"import:settings": "{\"auto\":true,\"triangleThreshold\":50000,\"textureThreshold\":1024,\"maxTextureSize\":2048,\"compress\":true,\"lodLevels\":3,\"lodRatios\":[0.5,0.25,0.1]}"
+								},
+								"stores": {
+									"importOptimize.importSettings": "<object>"
+								},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": false,
+							"storageAfterRestore": {},
+							"exercise": "done"
+						},
+						{
+							"kind": "segment",
+							"id": "import-texture-threshold-2048",
+							"label": "2048",
+							"where": "control",
+							"default": true,
+							"disabled": false,
+							"exercise": "skip"
+						},
+						{
+							"kind": "segment",
+							"id": "import-texture-threshold-4096",
+							"label": "4096",
+							"where": "control",
+							"default": false,
+							"disabled": false,
+							"state": true,
+							"effects": {
+								"storage": {
+									"import:settings": "{\"auto\":true,\"triangleThreshold\":50000,\"textureThreshold\":4096,\"maxTextureSize\":2048,\"compress\":true,\"lodLevels\":3,\"lodRatios\":[0.5,0.25,0.1]}"
+								},
+								"stores": {
+									"importOptimize.importSettings": "<object>"
+								},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": false,
+							"storageAfterRestore": {},
+							"exercise": "done"
+						},
+						{
+							"kind": "segment",
+							"id": "import-texture-threshold-8192",
+							"label": "8192",
+							"where": "control",
+							"default": false,
+							"disabled": false,
+							"state": true,
+							"effects": {
+								"storage": {
+									"import:settings": "{\"auto\":true,\"triangleThreshold\":50000,\"textureThreshold\":8192,\"maxTextureSize\":2048,\"compress\":true,\"lodLevels\":3,\"lodRatios\":[0.5,0.25,0.1]}"
+								},
+								"stores": {
+									"importOptimize.importSettings": "<object>"
+								},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": false,
+							"storageAfterRestore": {},
+							"exercise": "done"
+						}
+					]
+				},
+				{
+					"name": "Max texture size",
+					"controls": [
+						{
+							"kind": "segment",
+							"id": "import-max-texture-512",
+							"label": "512",
+							"where": "control",
+							"default": false,
+							"disabled": false,
+							"state": true,
+							"effects": {
+								"storage": {
+									"import:settings": "{\"auto\":true,\"triangleThreshold\":50000,\"textureThreshold\":2048,\"maxTextureSize\":512,\"compress\":true,\"lodLevels\":3,\"lodRatios\":[0.5,0.25,0.1]}"
+								},
+								"stores": {
+									"importOptimize.importSettings": "<object>"
+								},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": false,
+							"storageAfterRestore": {},
+							"exercise": "done"
+						},
+						{
+							"kind": "segment",
+							"id": "import-max-texture-1024",
+							"label": "1024",
+							"where": "control",
+							"default": false,
+							"disabled": false,
+							"state": true,
+							"effects": {
+								"storage": {
+									"import:settings": "{\"auto\":true,\"triangleThreshold\":50000,\"textureThreshold\":2048,\"maxTextureSize\":1024,\"compress\":true,\"lodLevels\":3,\"lodRatios\":[0.5,0.25,0.1]}"
+								},
+								"stores": {
+									"importOptimize.importSettings": "<object>"
+								},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": false,
+							"storageAfterRestore": {},
+							"exercise": "done"
+						},
+						{
+							"kind": "segment",
+							"id": "import-max-texture-2048",
+							"label": "2048",
+							"where": "control",
+							"default": true,
+							"disabled": false,
+							"exercise": "skip"
+						},
+						{
+							"kind": "segment",
+							"id": "import-max-texture-4096",
+							"label": "4096",
+							"where": "control",
+							"default": false,
+							"disabled": false,
+							"state": true,
+							"effects": {
+								"storage": {
+									"import:settings": "{\"auto\":true,\"triangleThreshold\":50000,\"textureThreshold\":2048,\"maxTextureSize\":4096,\"compress\":true,\"lodLevels\":3,\"lodRatios\":[0.5,0.25,0.1]}"
+								},
+								"stores": {
+									"importOptimize.importSettings": "<object>"
+								},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": false,
+							"storageAfterRestore": {},
+							"exercise": "done"
+						}
+					]
+				},
+				{
+					"name": "Compress textures (KTX2)",
+					"controls": [
+						{
+							"kind": "toggle",
+							"id": "import-compress",
+							"label": "Compress textures (KTX2)",
+							"where": "control",
+							"default": true,
+							"disabled": false,
+							"state": false,
+							"effects": {
+								"storage": {
+									"import:settings": "{\"auto\":true,\"triangleThreshold\":50000,\"textureThreshold\":2048,\"maxTextureSize\":2048,\"compress\":false,\"lodLevels\":3,\"lodRatios\":[0.5,0.25,0.1]}"
+								},
+								"stores": {
+									"importOptimize.importSettings": "<object>"
+								},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": true,
+							"storageAfterRestore": {},
+							"exercise": "done"
+						}
+					]
+				},
+				{
+					"name": "LOD levels",
+					"controls": [
+						{
+							"kind": "segment",
+							"id": "import-lod-levels-0",
+							"label": "Off",
+							"where": "control",
+							"default": false,
+							"disabled": false,
+							"state": true,
+							"effects": {
+								"storage": {
+									"import:settings": "{\"auto\":true,\"triangleThreshold\":50000,\"textureThreshold\":2048,\"maxTextureSize\":2048,\"compress\":true,\"lodLevels\":0,\"lodRatios\":[]}"
+								},
+								"stores": {
+									"importOptimize.importSettings": "<object>"
+								},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": false,
+							"storageAfterRestore": {
+								"import:settings": "{\"auto\":true,\"triangleThreshold\":50000,\"textureThreshold\":2048,\"maxTextureSize\":2048,\"compress\":true,\"lodLevels\":3,\"lodRatios\":[0.5,0.25,0.125]}"
+							},
+							"exercise": "done"
+						},
+						{
+							"kind": "segment",
+							"id": "import-lod-levels-2",
+							"label": "2",
+							"where": "control",
+							"default": false,
+							"disabled": false,
+							"state": true,
+							"effects": {
+								"storage": {
+									"import:settings": "{\"auto\":true,\"triangleThreshold\":50000,\"textureThreshold\":2048,\"maxTextureSize\":2048,\"compress\":true,\"lodLevels\":2,\"lodRatios\":[0.5,0.25]}"
+								},
+								"stores": {
+									"importOptimize.importSettings": "<object>"
+								},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": false,
+							"storageAfterRestore": {},
+							"exercise": "done"
+						},
+						{
+							"kind": "segment",
+							"id": "import-lod-levels-3",
+							"label": "3",
+							"where": "control",
+							"default": true,
+							"disabled": false,
+							"exercise": "skip"
+						},
+						{
+							"kind": "segment",
+							"id": "import-lod-levels-4",
+							"label": "4",
+							"where": "control",
+							"default": false,
+							"disabled": false,
+							"state": true,
+							"effects": {
+								"storage": {
+									"import:settings": "{\"auto\":true,\"triangleThreshold\":50000,\"textureThreshold\":2048,\"maxTextureSize\":2048,\"compress\":true,\"lodLevels\":4,\"lodRatios\":[0.5,0.25,0.125,0.063]}"
+								},
+								"stores": {
+									"importOptimize.importSettings": "<object>"
+								},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": false,
+							"storageAfterRestore": {},
+							"exercise": "done"
+						}
+					]
+				},
+				{
+					"name": "LOD 1 keeps",
+					"controls": [
+						{
+							"kind": "text",
+							"id": "import-lod-ratio-1",
+							"label": "LOD 1 keeps (percent)",
+							"where": "control",
+							"default": "50.0",
+							"disabled": false,
+							"state": "lock-lod-keeps",
+							"effects": {
+								"storage": {},
+								"stores": {},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": "50.0",
+							"storageAfterRestore": {},
+							"exercise": "done"
+						}
+					]
+				},
+				{
+					"name": "LOD 2 keeps",
+					"controls": [
+						{
+							"kind": "text",
+							"id": "import-lod-ratio-2",
+							"label": "LOD 2 keeps (percent)",
+							"where": "control",
+							"default": "25.0",
+							"disabled": false,
+							"state": "lock-lod-keeps",
+							"effects": {
+								"storage": {},
+								"stores": {},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": "25.0",
+							"storageAfterRestore": {},
+							"exercise": "done"
+						}
+					]
+				},
+				{
+					"name": "LOD 3 keeps",
+					"controls": [
+						{
+							"kind": "text",
+							"id": "import-lod-ratio-3",
+							"label": "LOD 3 keeps (percent)",
+							"where": "control",
+							"default": "10.0",
+							"disabled": false,
+							"state": "lock-lod-keeps",
+							"effects": {
+								"storage": {},
+								"stores": {},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": "10.0",
+							"storageAfterRestore": {
+								"import:settings": "{\"auto\":true,\"triangleThreshold\":50000,\"textureThreshold\":2048,\"maxTextureSize\":2048,\"compress\":true,\"lodLevels\":3,\"lodRatios\":[0.5,0.25,0.1]}"
+							},
+							"exercise": "done"
+						}
+					]
+				},
+				{
+					"name": "Import defaults",
+					"controls": [
+						{
+							"kind": "button",
+							"id": "import-reset",
+							"label": "Reset",
+							"where": "control",
+							"default": "Reset",
+							"disabled": false,
+							"state": "Reset",
+							"effects": {
+								"storage": {},
+								"stores": {},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"exercise": "done"
+						}
+					]
+				}
+			]
+		},
 		"Export": {
 			"rows": [
 				{
@@ -6327,7 +6808,7 @@
 							"where": "control",
 							"default": false,
 							"disabled": false,
-							"state": "Start fullscreen",
+							"state": true,
 							"effects": {
 								"storage": {
 									"export:prefs": "{\"preset\":\"itch\",\"startFullscreen\":true,\"showFps\":false,\"quality\":\"auto\",\"vrButton\":true,\"useCdnForPacks\":false,\"thumbnail\":true,\"viewportW\":960,\"viewportH\":600,\"embedUrl\":\"\"}"
@@ -6342,7 +6823,7 @@
 								"events": []
 							},
 							"scope": "device",
-							"restored": "Start fullscreen",
+							"restored": false,
 							"storageAfterRestore": {
 								"export:prefs": "{\"preset\":\"itch\",\"startFullscreen\":false,\"showFps\":false,\"quality\":\"auto\",\"vrButton\":true,\"useCdnForPacks\":false,\"thumbnail\":true,\"viewportW\":960,\"viewportH\":600,\"embedUrl\":\"\"}"
 							},
@@ -6360,7 +6841,7 @@
 							"where": "control",
 							"default": false,
 							"disabled": false,
-							"state": "Show FPS",
+							"state": true,
 							"effects": {
 								"storage": {
 									"export:prefs": "{\"preset\":\"itch\",\"startFullscreen\":false,\"showFps\":true,\"quality\":\"auto\",\"vrButton\":true,\"useCdnForPacks\":false,\"thumbnail\":true,\"viewportW\":960,\"viewportH\":600,\"embedUrl\":\"\"}"
@@ -6375,7 +6856,7 @@
 								"events": []
 							},
 							"scope": "device",
-							"restored": "Show FPS",
+							"restored": false,
 							"storageAfterRestore": {},
 							"exercise": "done"
 						}
@@ -6400,7 +6881,7 @@
 							"where": "control",
 							"default": false,
 							"disabled": false,
-							"state": "High",
+							"state": true,
 							"effects": {
 								"storage": {
 									"export:prefs": "{\"preset\":\"itch\",\"startFullscreen\":false,\"showFps\":false,\"quality\":\"high\",\"vrButton\":true,\"useCdnForPacks\":false,\"thumbnail\":true,\"viewportW\":960,\"viewportH\":600,\"embedUrl\":\"\"}"
@@ -6415,7 +6896,7 @@
 								"events": []
 							},
 							"scope": "device",
-							"restored": "High",
+							"restored": false,
 							"storageAfterRestore": {},
 							"exercise": "done"
 						},
@@ -6426,7 +6907,7 @@
 							"where": "control",
 							"default": false,
 							"disabled": false,
-							"state": "Medium",
+							"state": true,
 							"effects": {
 								"storage": {
 									"export:prefs": "{\"preset\":\"itch\",\"startFullscreen\":false,\"showFps\":false,\"quality\":\"medium\",\"vrButton\":true,\"useCdnForPacks\":false,\"thumbnail\":true,\"viewportW\":960,\"viewportH\":600,\"embedUrl\":\"\"}"
@@ -6441,7 +6922,7 @@
 								"events": []
 							},
 							"scope": "device",
-							"restored": "Medium",
+							"restored": false,
 							"storageAfterRestore": {},
 							"exercise": "done"
 						},
@@ -6452,7 +6933,7 @@
 							"where": "control",
 							"default": false,
 							"disabled": false,
-							"state": "Low",
+							"state": true,
 							"effects": {
 								"storage": {
 									"export:prefs": "{\"preset\":\"itch\",\"startFullscreen\":false,\"showFps\":false,\"quality\":\"low\",\"vrButton\":true,\"useCdnForPacks\":false,\"thumbnail\":true,\"viewportW\":960,\"viewportH\":600,\"embedUrl\":\"\"}"
@@ -6467,7 +6948,7 @@
 								"events": []
 							},
 							"scope": "device",
-							"restored": "Low",
+							"restored": false,
 							"storageAfterRestore": {},
 							"exercise": "done"
 						}
@@ -6483,7 +6964,7 @@
 							"where": "control",
 							"default": true,
 							"disabled": false,
-							"state": "Include VR button",
+							"state": false,
 							"effects": {
 								"storage": {
 									"export:prefs": "{\"preset\":\"itch\",\"startFullscreen\":false,\"showFps\":false,\"quality\":\"auto\",\"vrButton\":false,\"useCdnForPacks\":false,\"thumbnail\":true,\"viewportW\":960,\"viewportH\":600,\"embedUrl\":\"\"}"
@@ -6498,7 +6979,7 @@
 								"events": []
 							},
 							"scope": "device",
-							"restored": "Include VR button",
+							"restored": true,
 							"storageAfterRestore": {},
 							"exercise": "done"
 						}
@@ -6514,7 +6995,7 @@
 							"where": "control",
 							"default": false,
 							"disabled": false,
-							"state": "Use CDN for packs",
+							"state": true,
 							"effects": {
 								"storage": {
 									"export:prefs": "{\"preset\":\"itch\",\"startFullscreen\":false,\"showFps\":false,\"quality\":\"auto\",\"vrButton\":true,\"useCdnForPacks\":true,\"thumbnail\":true,\"viewportW\":960,\"viewportH\":600,\"embedUrl\":\"\"}"
@@ -6529,22 +7010,65 @@
 								"events": []
 							},
 							"scope": "device",
-							"restored": "Use CDN for packs",
+							"restored": false,
 							"storageAfterRestore": {},
 							"exercise": "done"
 						}
 					]
 				},
 				{
-					"name": "Compress textures",
+					"name": "Optimize for",
 					"controls": [
 						{
-							"kind": "toggle",
-							"id": "export-compress-textures",
-							"label": "Compress textures (not available yet)",
+							"kind": "segment",
+							"id": "export-optimize-full",
+							"label": "Full quality",
+							"where": "control",
+							"default": true,
+							"disabled": false,
+							"exercise": "skip"
+						},
+						{
+							"kind": "segment",
+							"id": "export-optimize-quest",
+							"label": "For Quest / web",
 							"where": "control",
 							"default": false,
-							"disabled": true
+							"disabled": false,
+							"state": true,
+							"effects": {
+								"storage": {
+									"exportPreset": "quest",
+									"saveFormat": "tp",
+									"showGltfFormat": "false",
+									"showJsonFormat": "false",
+									"tpProjectVersions": "true",
+									"tpsceneAssets": "true",
+									"tpsceneFlow": "true",
+									"tpscenePacks": "false"
+								},
+								"stores": {
+									"saveOptions.saveOptions": "<object>"
+								},
+								"html": [],
+								"body": [],
+								"dialogs": [],
+								"broadcasts": [],
+								"events": []
+							},
+							"scope": "device",
+							"restored": false,
+							"storageAfterRestore": {
+								"exportPreset": "full",
+								"saveFormat": "tp",
+								"showGltfFormat": "false",
+								"showJsonFormat": "false",
+								"tpProjectVersions": "true",
+								"tpsceneAssets": "true",
+								"tpsceneFlow": "true",
+								"tpscenePacks": "false"
+							},
+							"exercise": "done"
 						}
 					]
 				}
@@ -10063,6 +10587,153 @@
 				]
 			}
 		],
+		"Import": [
+			{
+				"name": "Optimize big models automatically",
+				"controls": [
+					{
+						"kind": "toggle",
+						"id": "import-auto",
+						"default": true
+					}
+				]
+			},
+			{
+				"name": "Triangle threshold",
+				"controls": [
+					{
+						"kind": "text",
+						"id": "import-triangles",
+						"default": "50000"
+					}
+				]
+			},
+			{
+				"name": "Texture threshold",
+				"controls": [
+					{
+						"kind": "segment",
+						"id": "import-texture-threshold-1024",
+						"default": false
+					},
+					{
+						"kind": "segment",
+						"id": "import-texture-threshold-2048",
+						"default": true
+					},
+					{
+						"kind": "segment",
+						"id": "import-texture-threshold-4096",
+						"default": false
+					},
+					{
+						"kind": "segment",
+						"id": "import-texture-threshold-8192",
+						"default": false
+					}
+				]
+			},
+			{
+				"name": "Max texture size",
+				"controls": [
+					{
+						"kind": "segment",
+						"id": "import-max-texture-512",
+						"default": false
+					},
+					{
+						"kind": "segment",
+						"id": "import-max-texture-1024",
+						"default": false
+					},
+					{
+						"kind": "segment",
+						"id": "import-max-texture-2048",
+						"default": true
+					},
+					{
+						"kind": "segment",
+						"id": "import-max-texture-4096",
+						"default": false
+					}
+				]
+			},
+			{
+				"name": "Compress textures (KTX2)",
+				"controls": [
+					{
+						"kind": "toggle",
+						"id": "import-compress",
+						"default": true
+					}
+				]
+			},
+			{
+				"name": "LOD levels",
+				"controls": [
+					{
+						"kind": "segment",
+						"id": "import-lod-levels-0",
+						"default": false
+					},
+					{
+						"kind": "segment",
+						"id": "import-lod-levels-2",
+						"default": false
+					},
+					{
+						"kind": "segment",
+						"id": "import-lod-levels-3",
+						"default": true
+					},
+					{
+						"kind": "segment",
+						"id": "import-lod-levels-4",
+						"default": false
+					}
+				]
+			},
+			{
+				"name": "LOD 1 keeps",
+				"controls": [
+					{
+						"kind": "text",
+						"id": "import-lod-ratio-1",
+						"default": "50.0"
+					}
+				]
+			},
+			{
+				"name": "LOD 2 keeps",
+				"controls": [
+					{
+						"kind": "text",
+						"id": "import-lod-ratio-2",
+						"default": "25.0"
+					}
+				]
+			},
+			{
+				"name": "LOD 3 keeps",
+				"controls": [
+					{
+						"kind": "text",
+						"id": "import-lod-ratio-3",
+						"default": "10.0"
+					}
+				]
+			},
+			{
+				"name": "Import defaults",
+				"controls": [
+					{
+						"kind": "button",
+						"id": "import-reset",
+						"default": "Reset"
+					}
+				]
+			}
+		],
 		"Export": [
 			{
 				"name": "Show the Made with ThePrototype badge",
@@ -10140,11 +10811,16 @@
 				]
 			},
 			{
-				"name": "Compress textures",
+				"name": "Optimize for",
 				"controls": [
 					{
-						"kind": "toggle",
-						"id": "export-compress-textures",
+						"kind": "segment",
+						"id": "export-optimize-full",
+						"default": true
+					},
+					{
+						"kind": "segment",
+						"id": "export-optimize-quest",
 						"default": false
 					}
 				]
