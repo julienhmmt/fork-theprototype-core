@@ -129,6 +129,12 @@
 	// 44-int: decided on the NEXT frame — deciding inside the delivery restacks this row, which Connect and the
 	// clusters observe, while the delivery is still running: since 44 M14 the compact pill stays on this row, so a
 	// pill resize -> restack -> pending observation of the row was a "ResizeObserver loop" (ro-loop-guard K4).
+	// 45 N3: ...and on the pill MOVING (a sidebar re-centres it), which no ResizeObserver sees. Connect flushes before it
+	// says so, and a stacking change here re-measures Connect in turn, so both land before the frame is painted.
+	$effect(() => {
+		window.addEventListener('tp:connect-moved', measure);
+		return () => window.removeEventListener('tp:connect-moved', measure);
+	});
 	$effect(() => {
 		if (typeof ResizeObserver === 'undefined') return;
 		let raf = 0;
@@ -222,7 +228,7 @@
 		position: fixed;
 		top: var(--tt-anchor, 20px);
 		left: calc(78px + var(--tt-slide, 0px));
-		transition: left 0.2s ease;
+		/* 45 N3: no slide — the row moves with a sidebar in one frame, like the logo beside it */
 		z-index: var(--z-hud);
 		display: flex;
 		flex-direction: row;
@@ -239,6 +245,24 @@
 		top: calc(var(--tt-anchor, 20px) + 56px);
 		left: calc(16px + (44px - 48px) / 2 + var(--tt-slide, 0px));
 		flex-direction: column;
+	}
+	/* 44 M12b / 45 N2: the row as a CLUSTER (Controls' layoutClusters sets the root classes and the px). HERE, not in
+	   hud.css: that file is a LAYERED import, and the rules above are unlayered, so there they lost to `left / top /
+	   display / flex-direction` above whatever their specificity — the row never moved under its grip (the user:
+	   "I cannot drag its position properly, but other clusters can be moved"), never rotated and never hid. */
+	:global(:root.cl-touch-rotated) #touch-tools {
+		flex-direction: column;
+	}
+	:global(:root.cl-touch-placed) #touch-tools {
+		left: var(--cl-touch-x);
+		top: var(--cl-touch-y);
+	}
+	/* hidden: gone outside Edit positions, a faint placeholder inside it (its menu shows it again) */
+	:global(:root:not(.hud-edit-on).cl-touch-hidden) #touch-tools {
+		display: none;
+	}
+	:global(:root.hud-edit-on.cl-touch-hidden) #touch-tools {
+		opacity: 0.35;
 	}
 	/* 42 I9: GLOBAL — Controls portals placeholders and other roster buttons into this row, and a
 	   scoped class would never match them */

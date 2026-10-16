@@ -364,9 +364,9 @@
 		top: 8px;
 		/* 42 I2: a FULL-HEIGHT left sidebar takes the corner — the logo slides inward by its width */
 		left: calc(8px + var(--sb-dock-left, 0px));
-		transition:
-			left 0.2s ease,
-			transform 150ms;
+		/* 45 N3: the hover scale only — the logo JUMPS beside a pinned / closed sidebar in one frame (the user:
+		   "remove animations when hide/show sidebars on top clusters and burger menu and profile buttons") */
+		transition: transform 150ms;
 		/* .burger is position:absolute in menu.css — that already anchors .update-dot */
 	}
 	/* unseen-update cue: a small accent dot on the logo corner + on the menu row */
