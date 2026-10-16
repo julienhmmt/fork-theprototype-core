@@ -29,21 +29,36 @@ async function decodeImage(bytes, mime, maxSize) {
 	const [w, h] = fitSize(sourceWidth, sourceHeight, maxSize);
 	if (w !== sourceWidth || h !== sourceHeight) {
 		bitmap.close();
-		bitmap = await createImageBitmap(blob, { ...base, resizeWidth: w, resizeHeight: h, resizeQuality: 'high' });
+		bitmap = await createImageBitmap(blob, {
+			...base,
+			resizeWidth: w,
+			resizeHeight: h,
+			resizeQuality: 'high'
+		});
 	}
 	const canvas = new OffscreenCanvas(w, h);
-	const ctx = /** @type {OffscreenCanvasRenderingContext2D} */ (canvas.getContext('2d', { willReadFrequently: true }));
+	const ctx = /** @type {OffscreenCanvasRenderingContext2D} */ (
+		canvas.getContext('2d', { willReadFrequently: true })
+	);
 	ctx.drawImage(bitmap, 0, 0);
 	bitmap.close();
 	const data = ctx.getImageData(0, 0, w, h).data;
-	return { data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), width: w, height: h, sourceWidth, sourceHeight };
+	return {
+		data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
+		width: w,
+		height: h,
+		sourceWidth,
+		sourceHeight
+	};
 }
 
 /** @param {{data: Uint8Array, width: number, height: number}} rgba @param {string} mime */
 async function encodeImage(rgba, mime) {
 	const canvas = new OffscreenCanvas(rgba.width, rgba.height);
 	const ctx = /** @type {OffscreenCanvasRenderingContext2D} */ (canvas.getContext('2d'));
-	const pixels = /** @type {any} */ (new Uint8ClampedArray(rgba.data.buffer, rgba.data.byteOffset, rgba.data.byteLength));
+	const pixels = /** @type {any} */ (
+		new Uint8ClampedArray(rgba.data.buffer, rgba.data.byteOffset, rgba.data.byteLength)
+	);
 	ctx.putImageData(new ImageData(pixels, rgba.width, rgba.height), 0, 0);
 	const type = mime === 'image/jpeg' || mime === 'image/webp' ? mime : 'image/png';
 	const blob = await canvas.convertToBlob({ type, quality: 0.9 });
@@ -53,12 +68,16 @@ async function encodeImage(rgba, mime) {
 /** @param {{data: Uint8Array, width: number, height: number}} rgba @param {{mode: 'etc1s' | 'uastc', srgb: boolean, normal: boolean}} t */
 async function encodeKtx2(rgba, t) {
 	basis ??= new BrowserBasisEncoder();
-	return basis.encode(new Uint8Array(1), { imageDecoder: async () => rgba, ...ktx2EncodeOptions(t) });
+	return basis.encode(new Uint8Array(1), {
+		imageDecoder: async () => rgba,
+		...ktx2EncodeOptions(t)
+	});
 }
 
 self.onmessage = async (/** @type {MessageEvent} */ event) => {
 	const { id, bytes, options, images } = event.data ?? {};
-	const post = (/** @type {any} */ msg, /** @type {Transferable[]} */ transfer = []) => /** @type {any} */ (self).postMessage({ id, ...msg }, transfer);
+	const post = (/** @type {any} */ msg, /** @type {Transferable[]} */ transfer = []) =>
+		/** @type {any} */ (self).postMessage({ id, ...msg }, transfer);
 	try {
 		await Promise.all([MeshoptEncoder.ready, MeshoptDecoder.ready, MeshoptSimplifier.ready]);
 		const env = {
@@ -91,9 +110,15 @@ self.onmessage = async (/** @type {MessageEvent} */ event) => {
 			return;
 		}
 		const { bytes: out, report } = await optimizeGltfBytes(new Uint8Array(bytes), options, env);
-		const buffer = out.byteOffset === 0 && out.byteLength === out.buffer.byteLength ? out.buffer : out.slice().buffer;
+		const buffer =
+			out.byteOffset === 0 && out.byteLength === out.buffer.byteLength
+				? out.buffer
+				: out.slice().buffer;
 		post({ bytes: buffer, report }, [/** @type {ArrayBuffer} */ (buffer)]);
 	} catch (error) {
-		post({ error: String(/** @type {any} */ (error)?.message ?? error), unsupported: error instanceof UnsupportedGltfError });
+		post({
+			error: String(/** @type {any} */ (error)?.message ?? error),
+			unsupported: error instanceof UnsupportedGltfError
+		});
 	}
 };

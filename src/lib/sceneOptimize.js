@@ -20,7 +20,26 @@ import { generatedGroup } from './lodGroupCore';
 const LOD_MIN_TRIANGLES = 3000;
 const COLOR_SLOTS = ['map', 'emissiveMap', 'specularColorMap', 'sheenColorMap'];
 const NORMAL_SLOTS = ['normalMap', 'clearcoatNormalMap'];
-const ALL_SLOTS = [...COLOR_SLOTS, ...NORMAL_SLOTS, 'roughnessMap', 'metalnessMap', 'aoMap', 'alphaMap', 'bumpMap', 'displacementMap', 'emissiveIntensityMap', 'clearcoatMap', 'clearcoatRoughnessMap', 'sheenRoughnessMap', 'transmissionMap', 'thicknessMap', 'specularIntensityMap', 'iridescenceMap', 'anisotropyMap', 'lightMap'];
+const ALL_SLOTS = [
+	...COLOR_SLOTS,
+	...NORMAL_SLOTS,
+	'roughnessMap',
+	'metalnessMap',
+	'aoMap',
+	'alphaMap',
+	'bumpMap',
+	'displacementMap',
+	'emissiveIntensityMap',
+	'clearcoatMap',
+	'clearcoatRoughnessMap',
+	'sheenRoughnessMap',
+	'transmissionMap',
+	'thicknessMap',
+	'specularIntensityMap',
+	'iridescenceMap',
+	'anisotropyMap',
+	'lightMap'
+];
 
 /** @param {string} url @returns {{mime: string, bytes: Uint8Array} | null} */
 function dataUrlBytes(url) {
@@ -35,7 +54,8 @@ function dataUrlBytes(url) {
 /** @param {Uint8Array} bytes */
 function base64(bytes) {
 	let s = '';
-	for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, /** @type {any} */ (bytes.subarray(i, i + 0x8000)));
+	for (let i = 0; i < bytes.length; i += 0x8000)
+		s += String.fromCharCode.apply(null, /** @type {any} */ (bytes.subarray(i, i + 0x8000)));
 	return btoa(s);
 }
 
@@ -84,7 +104,8 @@ export async function optimizeScenePayload(payload, hooks = {}) {
 				slotsOf.set(t, set);
 			}
 		}
-		for (const tex of el.textures ?? []) if (tex?.uuid && typeof tex.image === 'string') textureImage.set(tex.uuid, tex.image);
+		for (const tex of el.textures ?? [])
+			if (tex?.uuid && typeof tex.image === 'string') textureImage.set(tex.uuid, tex.image);
 		for (const img of el.images ?? []) {
 			if (!img?.uuid || typeof img.url !== 'string') continue;
 			const decoded = dataUrlBytes(img.url);
@@ -119,8 +140,20 @@ export async function optimizeScenePayload(payload, hooks = {}) {
 			trianglesInLodObjects += tris;
 		}
 	}
-	const list = [...images.entries()].map(([id, e]) => ({ id, bytes: e.bytes, mime: e.mime, normal: e.normal, srgb: e.srgb }));
-	const results = list.length ? await optimizeImagesInWorker(list, { maxTextureSize: preset.maxTextureSize, ktx2: true }, hooks) : [];
+	const list = [...images.entries()].map(([id, e]) => ({
+		id,
+		bytes: e.bytes,
+		mime: e.mime,
+		normal: e.normal,
+		srgb: e.srgb
+	}));
+	const results = list.length
+		? await optimizeImagesInWorker(
+				list,
+				{ maxTextureSize: preset.maxTextureSize, ktx2: true },
+				hooks
+			)
+		: [];
 	/** @type {Record<string, Uint8Array>} */
 	const files = {};
 	/** @type {Record<string, string>} */
@@ -155,7 +188,17 @@ export async function optimizeScenePayload(payload, hooks = {}) {
 	return {
 		payload: out,
 		files,
-		report: { images: results.length, resized, ktx2Bytes, gpuBefore, gpuAfter, bytesBefore, bytesAfter, lodStamped, trianglesInLodObjects }
+		report: {
+			images: results.length,
+			resized,
+			ktx2Bytes,
+			gpuBefore,
+			gpuAfter,
+			bytesBefore,
+			bytesAfter,
+			lodStamped,
+			trianglesInLodObjects
+		}
 	};
 }
 
@@ -173,6 +216,7 @@ export function restoreKtx2Sidecars(payload, entries) {
 		const bytes = entries[/** @type {string} */ (file)];
 		if (bytes) map[texture] = bytes.slice();
 	}
-	if (Object.keys(map).length) Object.defineProperty(payload, '__ktx2', { value: map, enumerable: false, configurable: true });
+	if (Object.keys(map).length)
+		Object.defineProperty(payload, '__ktx2', { value: map, enumerable: false, configurable: true });
 	return payload;
 }

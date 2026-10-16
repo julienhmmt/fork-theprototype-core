@@ -129,9 +129,20 @@ export function normalizeImportSettings(raw) {
 	}
 	return {
 		auto: r.auto === undefined ? d.auto : !!r.auto,
-		triangleThreshold: Math.round(clampNum(r.triangleThreshold, L.triangleThreshold[0], L.triangleThreshold[1], d.triangleThreshold)),
-		textureThreshold: Math.round(clampNum(r.textureThreshold, L.textureThreshold[0], L.textureThreshold[1], d.textureThreshold)),
-		maxTextureSize: Math.round(clampNum(r.maxTextureSize, L.maxTextureSize[0], L.maxTextureSize[1], d.maxTextureSize)),
+		triangleThreshold: Math.round(
+			clampNum(
+				r.triangleThreshold,
+				L.triangleThreshold[0],
+				L.triangleThreshold[1],
+				d.triangleThreshold
+			)
+		),
+		textureThreshold: Math.round(
+			clampNum(r.textureThreshold, L.textureThreshold[0], L.textureThreshold[1], d.textureThreshold)
+		),
+		maxTextureSize: Math.round(
+			clampNum(r.maxTextureSize, L.maxTextureSize[0], L.maxTextureSize[1], d.maxTextureSize)
+		),
 		compress: r.compress === undefined ? d.compress : !!r.compress,
 		lodLevels,
 		lodRatios: ratios
@@ -173,7 +184,12 @@ export function importOptions(settings, extra = {}) {
 /** Bytes per pixel a transcoded Basis texture takes on the GPU, by mode and alpha: ETC1S lands
  * as ETC2 RGB / BC1 (4 bpp) opaque and ETC2 RGBA / BC3 (8 bpp) with alpha; UASTC as ASTC 4×4 /
  * BC7 (8 bpp). An RGBA8 texture is 4 bytes. Mips add a third. */
-export const GPU_BYTES_PER_PIXEL = Object.freeze({ rgba8: 4, etc1sOpaque: 0.5, etc1sAlpha: 1, uastc: 1 });
+export const GPU_BYTES_PER_PIXEL = Object.freeze({
+	rgba8: 4,
+	etc1sOpaque: 0.5,
+	etc1sAlpha: 1,
+	uastc: 1
+});
 
 /**
  * GPU bytes of one texture of `w`×`h` with mips. @param {number} w @param {number} h
@@ -194,7 +210,7 @@ export function fitSize(w, h, max) {
 /** "12.3 MB" / "840 KB" for a report sentence. @param {number} bytes */
 export function shortBytes(bytes) {
 	if (!Number.isFinite(bytes)) return '?';
-	if (bytes >= 1024 * 1024) return (Math.round((bytes / (1024 * 1024)) * 10) / 10) + ' MB';
+	if (bytes >= 1024 * 1024) return Math.round((bytes / (1024 * 1024)) * 10) / 10 + ' MB';
 	if (bytes >= 1024) return Math.round(bytes / 1024) + ' KB';
 	return bytes + ' B';
 }

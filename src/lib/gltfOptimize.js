@@ -33,7 +33,8 @@ export class OptimizeUnsupported extends Error {
 }
 
 /** The seam a test can replace. @returns {Worker} */
-let makeWorker = () => new Worker(new URL('./gltfOptimize/optimizeWorker.js', import.meta.url), { type: 'module' });
+let makeWorker = () =>
+	new Worker(new URL('./gltfOptimize/optimizeWorker.js', import.meta.url), { type: 'module' });
 /** @param {() => Worker} factory */
 export function setOptimizerWorkerFactory(factory) {
 	makeWorker = factory;
@@ -73,8 +74,16 @@ function ensureWorker() {
 			return;
 		}
 		pending.delete(data.id);
-		if (data.error) job.reject(data.unsupported ? new OptimizeUnsupported(data.error) : new Error(data.error));
-		else if (data.images) job.resolve(data.images.map((/** @type {any} */ r) => ({ ...r, plain: r.plain ? new Uint8Array(r.plain) : null, ktx2: r.ktx2 ? new Uint8Array(r.ktx2) : null })));
+		if (data.error)
+			job.reject(data.unsupported ? new OptimizeUnsupported(data.error) : new Error(data.error));
+		else if (data.images)
+			job.resolve(
+				data.images.map((/** @type {any} */ r) => ({
+					...r,
+					plain: r.plain ? new Uint8Array(r.plain) : null,
+					ktx2: r.ktx2 ? new Uint8Array(r.ktx2) : null
+				}))
+			);
 		else job.resolve({ bytes: new Uint8Array(data.bytes), report: data.report });
 		if (!pending.size)
 			idle = setTimeout(() => {
@@ -109,7 +118,10 @@ export function optimizeGltf(bytes, options, hooks = {}) {
 			});
 			stats.jobs++;
 			try {
-				ensureWorker().postMessage({ id, bytes: copy, options: JSON.parse(JSON.stringify(options ?? {})) }, [copy]);
+				ensureWorker().postMessage(
+					{ id, bytes: copy, options: JSON.parse(JSON.stringify(options ?? {})) },
+					[copy]
+				);
 			} catch (error) {
 				pending.delete(id);
 				reject(error);
@@ -136,7 +148,10 @@ export function optimizeImagesInWorker(images, options, hooks = {}) {
 			pending.set(id, { resolve, reject, onProgress: hooks.onProgress });
 			stats.jobs++;
 			try {
-				ensureWorker().postMessage({ id, images: list, options: { ...options } }, list.map((j) => j.bytes));
+				ensureWorker().postMessage(
+					{ id, images: list, options: { ...options } },
+					list.map((j) => j.bytes)
+				);
 			} catch (error) {
 				pending.delete(id);
 				reject(error);

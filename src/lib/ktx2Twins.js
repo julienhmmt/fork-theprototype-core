@@ -56,15 +56,48 @@ const ownVersion = new WeakMap();
  * @type {WeakMap<Uint8Array, Promise<any>>} */
 const transcodes = new WeakMap();
 
-const stats = { attached: 0, ready: 0, dropped: 0, uploads: 0, swapped: 0, failed: 0, decompressed: 0 };
+const stats = {
+	attached: 0,
+	ready: 0,
+	dropped: 0,
+	uploads: 0,
+	swapped: 0,
+	failed: 0,
+	decompressed: 0
+};
 
 /** The parameters a twin lends its texture for a render. */
-const SWAP_KEYS = ['isCompressedTexture', 'mipmaps', 'format', 'type', 'internalFormat', 'generateMipmaps', 'minFilter', 'flipY', 'premultiplyAlpha'];
+const SWAP_KEYS = [
+	'isCompressedTexture',
+	'mipmaps',
+	'format',
+	'type',
+	'internalFormat',
+	'generateMipmaps',
+	'minFilter',
+	'flipY',
+	'premultiplyAlpha'
+];
 
 /** three r186 WebGLTextures.getTextureCacheKey, verbatim: the key under which a Texture's GL
  * texture lives. Used to tell whether the GL texture bound now is the compressed one. @param {any} t */
 function cacheKeyOf(t) {
-	return [t.wrapS, t.wrapT, t.wrapR || 0, t.magFilter, t.minFilter, t.anisotropy, t.internalFormat, t.format, t.type, t.generateMipmaps, t.premultiplyAlpha, t.flipY, t.unpackAlignment, t.colorSpace].join();
+	return [
+		t.wrapS,
+		t.wrapT,
+		t.wrapR || 0,
+		t.magFilter,
+		t.minFilter,
+		t.anisotropy,
+		t.internalFormat,
+		t.format,
+		t.type,
+		t.generateMipmaps,
+		t.premultiplyAlpha,
+		t.flipY,
+		t.unpackAlignment,
+		t.colorSpace
+	].join();
 }
 
 /** @param {Uint8Array} bytes @returns {Promise<any>} */
@@ -238,8 +271,25 @@ export function twinState(texture) {
 	if (c) {
 		/** @type {any} */
 		const probe = {};
-		for (const k of ['wrapS', 'wrapT', 'wrapR', 'magFilter', 'minFilter', 'anisotropy', 'unpackAlignment', 'colorSpace']) probe[k] = texture[k];
-		Object.assign(probe, { internalFormat: null, format: c.format, type: c.type, generateMipmaps: false, flipY: false, premultiplyAlpha: c.premultiplyAlpha });
+		for (const k of [
+			'wrapS',
+			'wrapT',
+			'wrapR',
+			'magFilter',
+			'minFilter',
+			'anisotropy',
+			'unpackAlignment',
+			'colorSpace'
+		])
+			probe[k] = texture[k];
+		Object.assign(probe, {
+			internalFormat: null,
+			format: c.format,
+			type: c.type,
+			generateMipmaps: false,
+			flipY: false,
+			premultiplyAlpha: c.premultiplyAlpha
+		});
 		if (c.mipmaps.length < 2) probe.minFilter = LinearFilter;
 		key = cacheKeyOf(probe);
 	}
@@ -260,7 +310,29 @@ export function twinStats() {
 	return { ...stats, live: count };
 }
 
-const MAP_SLOTS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap', 'alphaMap', 'bumpMap', 'displacementMap', 'lightMap', 'specularIntensityMap', 'specularColorMap', 'clearcoatMap', 'clearcoatNormalMap', 'clearcoatRoughnessMap', 'sheenColorMap', 'sheenRoughnessMap', 'transmissionMap', 'thicknessMap', 'iridescenceMap', 'anisotropyMap'];
+const MAP_SLOTS = [
+	'map',
+	'normalMap',
+	'roughnessMap',
+	'metalnessMap',
+	'emissiveMap',
+	'aoMap',
+	'alphaMap',
+	'bumpMap',
+	'displacementMap',
+	'lightMap',
+	'specularIntensityMap',
+	'specularColorMap',
+	'clearcoatMap',
+	'clearcoatNormalMap',
+	'clearcoatRoughnessMap',
+	'sheenColorMap',
+	'sheenRoughnessMap',
+	'transmissionMap',
+	'thicknessMap',
+	'iridescenceMap',
+	'anisotropyMap'
+];
 
 /** Every (material, slot, texture) under a parsed tree. @param {any} root */
 function textureSlots(root) {
@@ -268,10 +340,15 @@ function textureSlots(root) {
 	const out = [];
 	const seen = new Set();
 	root?.traverse?.((/** @type {any} */ o) => {
-		for (const material of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) {
+		for (const material of Array.isArray(o.material)
+			? o.material
+			: o.material
+				? [o.material]
+				: []) {
 			if (seen.has(material)) continue;
 			seen.add(material);
-			for (const slot of MAP_SLOTS) if (material[slot]?.isTexture) out.push({ material, slot, texture: material[slot] });
+			for (const slot of MAP_SLOTS)
+				if (material[slot]?.isTexture) out.push({ material, slot, texture: material[slot] });
 		}
 	});
 	return out;
@@ -282,7 +359,8 @@ function indexBySource(gltf) {
 	/** @type {Map<any, number>} */
 	const out = new Map();
 	for (const [object, ref] of gltf?.parser?.associations ?? []) {
-		if (object?.isTexture && Number.isInteger(ref?.textures) && !out.has(object.source)) out.set(object.source, ref.textures);
+		if (object?.isTexture && Number.isInteger(ref?.textures) && !out.has(object.source))
+			out.set(object.source, ref.textures);
 	}
 	return out;
 }
@@ -362,7 +440,8 @@ export async function sceneSafeGltf(gltf, input) {
 			plain.anisotropy = texture.anisotropy;
 			plain.userData = { ...(texture.userData ?? {}) };
 			plain.generateMipmaps = true;
-			if (plain.minFilter === LinearFilter && texture.mipmaps?.length > 1) plain.minFilter = texture.minFilter;
+			if (plain.minFilter === LinearFilter && texture.mipmaps?.length > 1)
+				plain.minFilter = texture.minFilter;
 			const index = bySource.get(texture.source);
 			const bytes = index === undefined ? null : ktx.get(index)?.bytes;
 			if (bytes) attachTwin(plain, bytes, texture);
@@ -391,7 +470,9 @@ export async function parseGltfSceneSafe(bytes, resourcePath = '') {
 	const allFallback = !required && ktx.size > 0 && [...ktx.values()].every((e) => e.fallback);
 	if (allFallback) {
 		/** @type {any} */
-		const gltf = await new Promise((resolve, reject) => createGltfLoader().parse(bytes, resourcePath, resolve, reject));
+		const gltf = await new Promise((resolve, reject) =>
+			createGltfLoader().parse(bytes, resourcePath, resolve, reject)
+		);
 		await attachTwinsFromGltf(gltf, bytes);
 		return gltf;
 	}
@@ -423,7 +504,8 @@ export const isCompressed = (/** @type {any} */ t) => t instanceof CompressedTex
 /** @param {Uint8Array} bytes */
 function base64(bytes) {
 	let s = '';
-	for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, /** @type {any} */ (bytes.subarray(i, i + 0x8000)));
+	for (let i = 0; i < bytes.length; i += 0x8000)
+		s += String.fromCharCode.apply(null, /** @type {any} */ (bytes.subarray(i, i + 0x8000)));
 	return btoa(s);
 }
 
@@ -449,12 +531,18 @@ export function twinExporterPlugin(writer) {
 				json.images = json.images ?? [];
 				/** @type {any} */
 				const def = { mimeType: 'image/ktx2' };
-				if (writer.options.binary === true) def.bufferView = await writer.processBufferViewImage(new Blob([/** @type {any} */ (bytes)]));
+				if (writer.options.binary === true)
+					def.bufferView = await writer.processBufferViewImage(
+						new Blob([/** @type {any} */ (bytes)])
+					);
 				else def.uri = 'data:image/ktx2;base64,' + base64(bytes);
 				image = json.images.push(def) - 1;
 				written.set(bytes, /** @type {number} */ (image));
 			}
-			textureDef.extensions = { ...(textureDef.extensions ?? {}), KHR_texture_basisu: { source: image } };
+			textureDef.extensions = {
+				...(textureDef.extensions ?? {}),
+				KHR_texture_basisu: { source: image }
+			};
 			writer.extensionsUsed.KHR_texture_basisu = true;
 		}
 	};

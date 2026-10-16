@@ -122,7 +122,9 @@ function hasAlpha(data) {
  * @param {any} env @returns {any} a WebIO with every extension the engine reads or writes.
  */
 function makeIo(env) {
-	const io = new WebIO().setLogger(new Logger(Logger.Verbosity.ERROR)).registerExtensions(ALL_EXTENSIONS);
+	const io = new WebIO()
+		.setLogger(new Logger(Logger.Verbosity.ERROR))
+		.registerExtensions(ALL_EXTENSIONS);
 	/** @type {Record<string, any>} */
 	const deps = {};
 	if (env.MeshoptDecoder) deps['meshopt.decoder'] = env.MeshoptDecoder;
@@ -137,16 +139,26 @@ async function readDocument(io, bytes) {
 		const json = JSON.parse(new TextDecoder().decode(bytes));
 		for (const buffer of json.buffers ?? [])
 			if (buffer.uri && !/^data:/.test(buffer.uri))
-				throw new UnsupportedGltfError('This .gltf points at an external file (' + buffer.uri + '). Use a .glb, or embed its buffers.');
+				throw new UnsupportedGltfError(
+					'This .gltf points at an external file (' +
+						buffer.uri +
+						'). Use a .glb, or embed its buffers.'
+				);
 		for (const image of json.images ?? [])
 			if (image.uri && !/^data:/.test(image.uri))
-				throw new UnsupportedGltfError('This .gltf points at an external image (' + image.uri + '). Use a .glb, or embed its images.');
+				throw new UnsupportedGltfError(
+					'This .gltf points at an external image (' +
+						image.uri +
+						'). Use a .glb, or embed its images.'
+				);
 		return await io.readJSON({ json, resources: {} });
 	} catch (error) {
 		if (error instanceof UnsupportedGltfError) throw error;
 		const message = String(/** @type {any} */ (error)?.message ?? error);
 		if (/draco/i.test(message))
-			throw new UnsupportedGltfError('This file is Draco-compressed; the optimizer cannot read Draco. It imports as it is.');
+			throw new UnsupportedGltfError(
+				'This file is Draco-compressed; the optimizer cannot read Draco. It imports as it is.'
+			);
 		throw error;
 	}
 }
@@ -246,7 +258,8 @@ async function processTextures(doc, options, env, report) {
 			width,
 			height,
 			bytes: image?.byteLength ?? 0,
-			gpu: mime === 'image/ktx2' ? gpuBytes(width, height, 'uastc') : gpuBytes(width, height, 'rgba8'),
+			gpu:
+				mime === 'image/ktx2' ? gpuBytes(width, height, 'uastc') : gpuBytes(width, height, 'rgba8'),
 			after: { mime, width, height, bytes: image?.byteLength ?? 0, ktx2Bytes: 0, gpu: 0 }
 		};
 		row.after.gpu = row.gpu;
@@ -283,12 +296,18 @@ async function processTextures(doc, options, env, report) {
 		row.after.gpu = gpuBytes(rgba.width, rgba.height, 'rgba8');
 		if (wantKtx2 && rgba.width * rgba.height <= MAX_KTX2_TEXELS) {
 			const normal = slots.some((s) => NORMAL_SLOTS.test(s));
-			const srgb = getTextureColorSpace(texture) === 'srgb' || slots.some((s) => COLOR_SLOTS.test(s) && !NORMAL_SLOTS.test(s));
+			const srgb =
+				getTextureColorSpace(texture) === 'srgb' ||
+				slots.some((s) => COLOR_SLOTS.test(s) && !NORMAL_SLOTS.test(s));
 			const mode = normal ? 'uastc' : 'etc1s';
 			try {
 				const ktx2 = await env.encodeKtx2(rgba, { mode, srgb, normal });
 				row.after.ktx2Bytes = ktx2.byteLength;
-				row.after.gpu = gpuBytes(rgba.width, rgba.height, mode === 'uastc' ? 'uastc' : alpha ? 'etc1sAlpha' : 'etc1sOpaque');
+				row.after.gpu = gpuBytes(
+					rgba.width,
+					rgba.height,
+					mode === 'uastc' ? 'uastc' : alpha ? 'etc1sAlpha' : 'etc1sOpaque'
+				);
 				if (options.textures === 'ktx2') {
 					texture.setImage(ktx2).setMimeType('image/ktx2');
 					if (texture.getURI()) texture.setURI(texture.getURI().replace(/\.\w+$/, '') + '.ktx2');
@@ -315,10 +334,13 @@ async function processTextures(doc, options, env, report) {
 
 /** PNG / JPEG / WebP by magic bytes. @param {Uint8Array} b @returns {string | null} */
 export function sniffMime(b) {
-	if (b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
+	if (b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47)
+		return 'image/png';
 	if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
-	if (b.length > 12 && b[0] === 0x52 && b[1] === 0x49 && b[8] === 0x57 && b[9] === 0x45) return 'image/webp';
-	if (b.length > 12 && b[0] === 0xab && b[1] === 0x4b && b[2] === 0x54 && b[3] === 0x58) return 'image/ktx2';
+	if (b.length > 12 && b[0] === 0x52 && b[1] === 0x49 && b[8] === 0x57 && b[9] === 0x45)
+		return 'image/webp';
+	if (b.length > 12 && b[0] === 0xab && b[1] === 0x4b && b[2] === 0x54 && b[3] === 0x58)
+		return 'image/ktx2';
 	return null;
 }
 
@@ -363,15 +385,22 @@ export async function optimizeGltfBytes(input, opts, env) {
 	// prune BEFORE the LOD chain: its level nodes sit outside every scene on purpose. Empty leaves
 	// and extras are kept — an app group or a marker can be an empty node that carries data.
 	if (options.prune) await doc.transform(prune({ keepLeaves: true, keepExtras: true }));
-	const simplifying = (options.reduce != null && options.reduce < 1) || (options.embedLods && options.lods.length > 0);
+	const simplifying =
+		(options.reduce != null && options.reduce < 1) ||
+		(options.embedLods && options.lods.length > 0);
 	if (options.weld || simplifying) await doc.transform(weld());
 	if (options.reduce != null && options.reduce > 0 && options.reduce < 1)
-		await doc.transform(simplify({ simplifier: env.MeshoptSimplifier, ratio: options.reduce, error: 0.01 }));
-	if (options.embedLods && options.lods.length) buildLodChain(doc, options.lods, env.MeshoptSimplifier, report);
+		await doc.transform(
+			simplify({ simplifier: env.MeshoptSimplifier, ratio: options.reduce, error: 0.01 })
+		);
+	if (options.embedLods && options.lods.length)
+		buildLodChain(doc, options.lods, env.MeshoptSimplifier, report);
 	const twins = await processTextures(doc, options, env, report);
 	env.onProgress?.({ step: 'packing' });
-	if (options.meshopt) await doc.transform(meshopt({ encoder: env.MeshoptEncoder, level: 'medium' }));
-	else if (options.reorder && env.MeshoptEncoder) await doc.transform(reorder({ encoder: env.MeshoptEncoder, target: 'performance' }));
+	if (options.meshopt)
+		await doc.transform(meshopt({ encoder: env.MeshoptEncoder, level: 'medium' }));
+	else if (options.reorder && env.MeshoptEncoder)
+		await doc.transform(reorder({ encoder: env.MeshoptEncoder, target: 'performance' }));
 	const after = sceneStats(doc);
 	report.trianglesAfter = after.triangles;
 	report.verticesAfter = after.vertices;
@@ -425,7 +454,19 @@ export async function optimizeImages(list, options, env) {
 	for (const job of list) {
 		env.onProgress?.({ step: 'textures', done: done++, total: list.length });
 		/** @type {ImageResult} */
-		const row = { id: job.id, sourceWidth: 0, sourceHeight: 0, width: 0, height: 0, plain: null, plainMime: job.mime, ktx2: null, alpha: false, gpuBefore: 0, gpuAfter: 0 };
+		const row = {
+			id: job.id,
+			sourceWidth: 0,
+			sourceHeight: 0,
+			width: 0,
+			height: 0,
+			plain: null,
+			plainMime: job.mime,
+			ktx2: null,
+			alpha: false,
+			gpuBefore: 0,
+			gpuAfter: 0
+		};
 		out.push(row);
 		/** @type {Rgba} */
 		let rgba;
@@ -450,7 +491,11 @@ export async function optimizeImages(list, options, env) {
 			const mode = job.normal ? 'uastc' : 'etc1s';
 			try {
 				row.ktx2 = await env.encodeKtx2(rgba, { mode, srgb: !!job.srgb, normal: !!job.normal });
-				row.gpuAfter = gpuBytes(rgba.width, rgba.height, mode === 'uastc' ? 'uastc' : row.alpha ? 'etc1sAlpha' : 'etc1sOpaque');
+				row.gpuAfter = gpuBytes(
+					rgba.width,
+					rgba.height,
+					mode === 'uastc' ? 'uastc' : row.alpha ? 'etc1sAlpha' : 'etc1sOpaque'
+				);
 			} catch (error) {
 				row.skipped = 'KTX2 encode failed: ' + String(/** @type {any} */ (error)?.message ?? error);
 			}

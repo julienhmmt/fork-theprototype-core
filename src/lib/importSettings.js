@@ -64,5 +64,7 @@ export function effectiveSettings(override) {
 /** Set (or clear, with null) an asset's import override on its Library record. @param {string} itemId
  * @param {AssetOverride | null} override */
 export function setAssetOverride(itemId, override) {
-	return patchRecord(itemId, { importSettings: override ? normalizeOverride(override) : undefined });
+	return patchRecord(itemId, {
+		importSettings: override ? normalizeOverride(override) : undefined
+	});
 }

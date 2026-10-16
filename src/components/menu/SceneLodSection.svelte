@@ -18,10 +18,11 @@
 		min={0.25}
 		max={4}
 		step={0.05}
-		value={value}
+		{value}
 		onchange={(v) => setSceneLodBias(v)}
 	/>
-	<p class="text-[length:var(--fs-badge)] italic text-text-muted">
-		Above 1 keeps full detail further away; below 1 switches to lighter levels sooner. Applies to every model with an LOD chain, for everyone in the scene.
+	<p class="text-text-muted text-[length:var(--fs-badge)] italic">
+		Above 1 keeps full detail further away; below 1 switches to lighter levels sooner. Applies to
+		every model with an LOD chain, for everyone in the scene.
 	</p>
 </Section>

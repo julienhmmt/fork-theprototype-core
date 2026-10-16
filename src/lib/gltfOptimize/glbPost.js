@@ -18,7 +18,8 @@ const CHUNK_BIN = 0x004e4942; // 'BIN\0'
 /** @param {ArrayBuffer | ArrayBufferView} input @returns {Uint8Array} */
 export function asBytes(input) {
 	if (input instanceof Uint8Array) return input;
-	if (ArrayBuffer.isView(input)) return new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
+	if (ArrayBuffer.isView(input))
+		return new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
 	return new Uint8Array(input);
 }
 
@@ -97,7 +98,8 @@ export function packGlb(json, bin) {
 /** @param {any} json @param {string} name @param {boolean} [required] */
 function useExtension(json, name, required = false) {
 	json.extensionsUsed = Array.from(new Set([...(json.extensionsUsed ?? []), name]));
-	if (required) json.extensionsRequired = Array.from(new Set([...(json.extensionsRequired ?? []), name]));
+	if (required)
+		json.extensionsRequired = Array.from(new Set([...(json.extensionsRequired ?? []), name]));
 }
 
 /**
