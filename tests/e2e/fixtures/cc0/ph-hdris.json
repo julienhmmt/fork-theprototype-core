@@ -1,0 +1,50 @@
+{
+ "kloofendal_48d_partly_cloudy_puresky": {
+  "name": "Kloofendal 48d Partly Cloudy (Pure Sky)",
+  "categories": [
+   "outdoor",
+   "skies",
+   "nature",
+   "midday",
+   "partly cloudy",
+   "high contrast",
+   "natural light",
+   "pure skies"
+  ],
+  "tags": [
+   "pure skies"
+  ],
+  "authors": {
+   "Greg Zaal": "Original",
+   "Jarod Guest": "Sky edits"
+  },
+  "download_count": 879429,
+  "type": 0
+ },
+ "meadow_2": {
+  "name": "Meadow 2",
+  "categories": [
+   "outdoor",
+   "natural light",
+   "nature",
+   "partly cloudy",
+   "clear",
+   "high contrast",
+   "morning-afternoon"
+  ],
+  "tags": [
+   "grass",
+   "tree",
+   "sun",
+   "clearing",
+   "path",
+   "park",
+   "backplates"
+  ],
+  "authors": {
+   "Sergej Majboroda": "All"
+  },
+  "download_count": 496572,
+  "type": 0
+ }
+}
