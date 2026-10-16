@@ -26,8 +26,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: npm
+      # 45 D2: ONE toolchain. .nvmrc (read above), .mise.toml and package.json's
+      # packageManager + devEngines pin the same Node and npm. Locally a mismatch only
+      # warns (devEngines onFail: warn); here it fails, so a half-done bump cannot land.
+      - name: toolchain pins agree
+        run: |
+          node_pin=$(cat .nvmrc)
+          npm_pin=$(node -p "require('./package.json').packageManager.replace(/^npm@/, '')")
+          fail() { echo "::error::$1"; exit 1; }
+          grep -qx "node = \"$node_pin\"" .mise.toml || fail ".mise.toml node is not $node_pin (.nvmrc)"
+          [ "$(node -p "require('./package.json').devEngines.runtime.version")" = "$node_pin" ] || fail "devEngines.runtime is not $node_pin (.nvmrc)"
+          [ "$(node -p "require('./package.json').devEngines.packageManager.version")" = "$npm_pin" ] || fail "devEngines.packageManager is not $npm_pin (packageManager)"
+          [ "$(node -v)" = "v$node_pin" ] || fail "runner node $(node -v), pinned $node_pin"
+          [ "$(npm -v)" = "$npm_pin" ] || fail "runner npm $(npm -v), pinned $npm_pin — Node $node_pin bundles a different npm; bump packageManager + devEngines with it"
       - run: npm ci
       - run: npm run build
 
@@ -37,7 +50,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       # ONE source of truth for the baseline: check-baseline.json, read by the same
@@ -72,7 +85,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - name: the scenes ref (perf/budgets.json)
@@ -92,13 +105,40 @@ jobs:
       - name: scene-lint
         run: node scripts/scene-lint.cjs static/templates .perf-deps/scenes --packs .perf-deps/packs
 
+  # 45 D3: what the repo depends on, and whether any of it is known-bad. syft writes an SPDX
+  # SBOM of both lockfiles (root + tools/agent, dev dependencies included — .syft.yaml says
+  # why) and grype FAILS the job on any critical or high finding. Accepted findings go in
+  # .grype.yaml, one rule per advisory with a reason; RELEASING.md has the ritual. No npm ci:
+  # the lockfiles are the whole input, so this runs in seconds.
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: SBOM (syft, SPDX JSON)
+        uses: anchore/sbom-action@v0.24.3
+        with:
+          path: .
+          config: .syft.yaml
+          format: spdx-json
+          output-file: sbom.spdx.json
+          artifact-name: sbom.spdx.json
+      - name: vulnerability gate (grype, fails on critical/high)
+        uses: anchore/scan-action@v7.4.2
+        with:
+          sbom: sbom.spdx.json
+          config: .grype.yaml
+          severity-cutoff: high
+          fail-build: true
+          output-format: table
+          only-fixed: false
+
   unit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npm run test:unit
@@ -112,7 +152,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
@@ -159,7 +199,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium

@@ -7,7 +7,7 @@
 	// 43 K3/K4: whether the pill is shown (Edit positions / Customize), and the top-row items it measures against
 	import { toolbarSlots } from '$lib/toolbarSlots';
 	import { peers, userdata, waitingForApproval, pendingApprovals, showToast, settingsOpen, settingsSection, connectDrawerOpen, connectDrawerTab, connectDrawerPinned, showRoomsButton, connectDocked, connectBarHeight, toastStore, toastsInDrawerOnly, touchTools } from '../../stores/appStore'
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, flushSync } from 'svelte';
 	import { createPeer, PeerConnection } from '$lib/peerHandler.svelte';
 	import { peerServerStatus, inviteServerParam } from '$lib/peerServer';
 	// 27-F: the signaling link's retry state (audit H2). A chip, not a toast per attempt.
@@ -169,6 +169,7 @@
 	// next frame; decide once it has landed (capped, so a stuck transition cannot freeze the pill).
 	const WALL_IDS = ['logo-menu', 'touch-tools', 'hud-tr', 'avatar-trigger'];
 	let settleRaf = 0;
+	let lastPlaced = '';
 	let settleSince = 0;
 	function wallsSliding() {
 		for (const id of WALL_IDS) {
@@ -239,6 +240,17 @@
 		}
 		if (!squeezed) peek = false;
 		(window as any).__connectDock = { docked, squeezed, peek, pinned: $connectPinned, naturalWidth, available, left: leftRight, right: rightLeft };
+		// 45 N3: the pill moved — tell the row beside the logo, whose stacking is measured against the pill (and the
+		// pill against the row: its class change re-measures us through the MutationObserver below). Flushed first so
+		// the row reads where the pill now IS; the exchange settles in microtasks, so it is painted ONCE, at the end.
+		const placedKey = `${docked}|${squeezed}|${cxShift}`;
+		if (placedKey !== lastPlaced) {
+			lastPlaced = placedKey;
+			queueMicrotask(() => {
+				flushSync();
+				window.dispatchEvent(new Event('tp:connect-moved'));
+			});
+		}
 	}
 
 	/** 44 M12b: the pill has a place of its own (Edit positions ▸ the Connect bar's grip / Move) */
@@ -322,12 +334,11 @@
 		}
 	});
 
-	// 42 I2: a FULL-HEIGHT sidebar slides the corner chrome inward (a 0.2 s CSS transition) —
-	// measure where it ENDS, not where it is mid-slide
+	// 42 I2: a FULL-HEIGHT sidebar moves the corner chrome inward. 45 N3: in ONE frame now (no slide), so measure
+	// as soon as the DOM has it — the 260 ms wait for the old 0.2 s slide made the pill land in a second jump
 	$effect(() => {
 		$sidebarGeometry; // track
-		const t = setTimeout(measureDock, 260);
-		return () => clearTimeout(t);
+		tick().then(measureDock);
 	});
 	// 43-int: ...and where it REALLY ends. Under load the slide outlasts that 260 ms timer (a frame can take
 	// 250 ms on a busy box), the timer reads the walls mid-slide, and nothing re-measures afterwards — a
@@ -704,11 +715,19 @@
 		/* 42 I2: centred in the gap between the corner chrome while a full-height column is pinned
 		   (measureDock; 0 = the window's centre) */
 		left: calc(50% + var(--cx-shift, 0px));
-		transition: left 0.2s ease;
+		/* 45 N3: no slide when a sidebar re-centres it — the top clusters move in one frame */
 		transform: translateX(-50%);
 		z-index: var(--z-chrome-top);
 		pointer-events: none;
 		max-width: 100vw;
+	}
+	/* 44 M12b / 45 N1: a pill the person PLACED (Edit positions, or Move from its menu) is drawn where Controls'
+	   layoutClusters put it. Here, not in hud.css: that file is a LAYERED import and the unlayered rule above won. */
+	:global(:root.cl-connect-placed) .connect-wrap:not(.docked) {
+		left: var(--cl-connect-x);
+		top: var(--cl-connect-y);
+		right: auto;
+		transform: none;
 	}
 	/* when the drawer BODY is open, lift the whole pill+drawer above the corner chrome
 	   (logo/profile/notifications/notes all sit at or below --z-menu) */

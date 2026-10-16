@@ -111,6 +111,8 @@
 	import CloudSlot from '../CloudSlot.svelte';
 	import { usersSlot, profileSlot, rolesInfo, scenePresence } from '$lib/cloudHooks';
 	import { safeStorage } from '$lib/safeStorage';
+	// 45 N4: a pinned / closed right sidebar moves the profile circle while its menu may be open
+	import { geometry as sidebarGeometry } from '$lib/sidebars';
 
 	// N3: latency-band dot color for a peer's network-quality indicator
 	const qColor = (level: string) =>
@@ -508,6 +510,12 @@
 		if (!dropdownEl || !triggerEl) return;
 		const r = triggerEl.getBoundingClientRect();
 		dropdownEl.style.top = `${r.bottom + 2}px`;
+		// 45 N4: the RIGHT edge follows the circle too. It was pinned at the corner's 20 px, so with a pinned
+		// right sidebar (which moves the circle inward by its width) the menu opened over the sidebar, far from the
+		// button ("clicking profile button when right sidebar pinned opens menu in wrong place"). The edge is
+		// still the CIRCLE's right edge, read from its rect (never floating-ui's drifting maths, the mobile-
+		// viewport trap below), so the notch's circle sits exactly over the trigger wherever it is.
+		dropdownEl.style.setProperty('--pm-right', `${Math.max(0, Math.round(window.innerWidth - r.right))}px`);
 	}
 	/** focus moving OUT of the menu or its trigger (to a real element) closes it */
 	function dropdownFocusOut(e: FocusEvent) {
@@ -568,6 +576,7 @@
 	$effect(() => {
 		void $connectDocked;
 		void $connectBarHeight;
+		void $sidebarGeometry; // 45 N4: the circle moves with a pinned right sidebar
 		if (openDropdown) queueMicrotask(placeDropdown);
 	});
 
@@ -766,8 +775,10 @@
 
 <!-- when Connect docks to a full-width top bar, drop this corner chrome below it (plus
 	 its tab strip when pinned) so nothing overlaps — connectBarHeight is the bar's height -->
-<!-- 42 I2: a FULL-HEIGHT right sidebar takes the corner — the cluster slides inward by its width -->
-<div class="top-right-chrome" style="position: fixed; right: var(--sb-dock-right, 0px); transition: right 0.2s ease; z-index: var(--z-chrome-top); top: {$connectDocked ? $connectBarHeight + 'px' : '0px'};">
+<!-- 42 I2: a FULL-HEIGHT right sidebar takes the corner — the cluster moves inward by its width.
+     45 N3: in ONE frame (no `right` transition): the user asked for no animation on the profile and the top
+     clusters when a sidebar opens, closes or hides -->
+<div class="top-right-chrome" style="position: fixed; right: var(--sb-dock-right, 0px); z-index: var(--z-chrome-top); top: {$connectDocked ? $connectBarHeight + 'px' : '0px'};">
 	<!-- 38 R8: one glass group (styles/hud.css) — notes, notifications, peers — sitting just
 	     left of the profile circle, which keeps its own place (its dropdown is anchored to it) -->
 	<div id="hud-tr" class="tp-ui hud-glass hud-tr" style="position: absolute; top: 10px; right: 76px; z-index: 2;">
@@ -1234,7 +1245,8 @@
 	   panel is rendered by a child component (no scope class). */
 	:global(#avatar-dropdown) {
 		left: auto !important;
-		right: 20px !important;
+		/* 45 N4: the circle's CURRENT right edge (placeDropdown measures it); 20 px = the corner's own inset */
+		right: var(--pm-right, 20px) !important;
 	}
 	/* 38 R8: the profile menu's rows (design page "Profile and peers") */
 	.pm-head {

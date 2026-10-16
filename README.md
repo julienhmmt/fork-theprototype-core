@@ -79,12 +79,12 @@ at your own signalling server or self-host the whole thing.
 **Just use it:** open [theprototype.app](https://theprototype.app). Nothing to install, no
 sign-up. To collaborate, send someone the peer ID in the top bar and approve their request.
 
-**Run it yourself:** (needs **node 24 or newer**)
+**Run it yourself:** (needs **node 24** — `.nvmrc` / `.mise.toml` pin the exact Node and npm; `mise install` or `nvm use` picks them up)
 
 ```bash
 git clone https://github.com/theprototype-app/core.git
 cd core
-npm install
+npm ci
 npm run dev       # https://localhost:5173
 ```
 

@@ -7,7 +7,9 @@ agents can land changes that hold up.
 ## Quick start
 
 ```bash
-npm i --legacy-peer-deps    # three vs postprocessing peer conflict, known
+mise install                # or `nvm use`: Node + npm exactly as .mise.toml / .nvmrc pin them
+npm ci                      # never --legacy-peer-deps (it skews the svelte-check baseline)
+npm run certs               # once per clone: the self-signed dev TLS pair
 npm run dev                 # https dev server on :5173
 ```
 

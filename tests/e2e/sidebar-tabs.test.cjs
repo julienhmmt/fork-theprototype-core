@@ -230,9 +230,11 @@ h.run(async () => {
 	await drag(page, [flow0.x + 60, flow0.y + 14], [150, 500]);
 	const tabZone = await page.evaluate(() => {
 		const z = document.querySelector('#dock-zone');
-		return z ? { tab: z.dataset.tab, side: z.dataset.side, text: z.textContent } : null;
+		// 45 N7: the zone carries a label line and (for a floating window) a hint line under it
+		return z ? { tab: z.dataset.tab, side: z.dataset.side, text: z.querySelector('.sb-drop-label')?.textContent ?? z.textContent, hint: z.querySelector('.sb-drop-hint')?.textContent ?? '' } : null;
 	});
 	h.check(tabZone?.tab === 'true' && tabZone.side === 'left' && tabZone.text === 'Add as tab', `over the left column the drop target says it adds a tab (${JSON.stringify(tabZone)})`);
+	h.check(/Ctrl/.test(tabZone?.hint ?? ''), `...with the hint that Ctrl places the window without docking (${JSON.stringify(tabZone?.hint)})`);
 	await page.mouse.up();
 	await page.waitForTimeout(500);
 	const left3 = await strip(page, 'left');

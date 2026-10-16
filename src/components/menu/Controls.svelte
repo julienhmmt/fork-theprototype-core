@@ -1618,6 +1618,7 @@
 		playMenu = null;
 		if (toolbarGrab.active()) toolbarGrab.cancel();
 		editing = placements(controlsLayout, HOME_ONLY);
+		touchShowDraft = null;
 		editFocus = focusId && (focusId === SPACER || (focusId === MORE && controlsLayout.more) || regionOf(controlsLayout, focusId)) ? focusId : null;
 		tick().then(() => focusEditItem(editFocus ?? visualIds()[0]));
 	}
@@ -1627,7 +1628,11 @@
 		// 43 J12: the row beside the logo is drawn in edit mode on every device; an edit that CHANGED it
 		// (added, moved or removed a button there) means "show this row", so a mouse user's Touch tools
 		// turns on — an edit that left it alone leaves the setting as it was
-		if (!$touchTools && editing.touch.join() !== controlsLayout.touch.join() && editing.touch.length) touchTools.set(true);
+		// 45 N2: ...unless the person said what they want with the row's own Show / Hide cluster, which wins
+		if (touchShowDraft !== null) {
+			if (touchShowDraft !== $touchTools) touchTools.set(touchShowDraft);
+		} else if (!$touchTools && editing.touch.join() !== controlsLayout.touch.join() && editing.touch.length) touchTools.set(true);
+		touchShowDraft = null;
 		const next = fromPlacements(controlsLayout, editing);
 		editing = null;
 		editDrag = null;
@@ -1636,6 +1641,7 @@
 	}
 
 	function cancelEditPositions() {
+		touchShowDraft = null;
 		editing = null;
 		editDrag = null;
 		editAddMenu = null;
@@ -1998,6 +2004,17 @@
 
 	const isRotated = (id: string, cl = liveClusters) => !!cl[id]?.rotated;
 	const isVertical = (id: string, cl = liveClusters) => (HOME_VERTICAL[id] ?? false) !== isRotated(id, cl);
+	/** 45 N2: whether the row beside the logo shows once Edit positions is applied. That is the Touch tools setting
+	 *  (remembered, layout chrome, OFF by default on a desktop) — so the row's Show / Hide cluster drafts it here and ✓
+	 *  writes it, Cancel leaves it as it was. Before, the menu offered "Hide cluster" for a row a desktop never showed,
+	 *  had no "Show cluster" at all, and ✓ made the row the person had just arranged vanish. */
+	let touchShowDraft: boolean | null = $state(null);
+	const touchRowOn = $derived(editing && touchShowDraft !== null ? touchShowDraft : $touchTools);
+	/** hidden once applied: its own record, the row beside the logo also by the setting, Connect by the draft's "−" */
+	function clusterHidden(id: string, cl = liveClusters) {
+		if (id === 'connect') return editing?.connect === false;
+		return !!cl[id]?.hidden || (id === 'touch' && !touchRowOn);
+	}
 	/** a cluster with a place of its own (a pinned Connect pill lives on the top row, whatever it was given) */
 	function isPlaced(id: string, cl = liveClusters) {
 		const c = cl[id];
@@ -2054,7 +2071,7 @@
 		root.classList.toggle('hud-edit-on', editing !== null);
 		for (const id of CLUSTERS) {
 			root.classList.toggle(`cl-${id}-rotated`, isRotated(id, cl));
-			root.classList.toggle(`cl-${id}-hidden`, !!cl[id]?.hidden && id !== 'connect');
+			root.classList.toggle(`cl-${id}-hidden`, id !== 'connect' && clusterHidden(id, cl));
 		}
 		const area = clusterArea();
 		const obstacles: Box[] = [];
@@ -2063,7 +2080,7 @@
 			if (b) obstacles.push(b);
 		}
 		for (const id of CLUSTERS) {
-			if (isPlaced(id, cl) || cl[id]?.hidden) continue;
+			if (isPlaced(id, cl) || clusterHidden(id, cl)) continue;
 			const b = shown(clusterEl(id));
 			if (b) obstacles.push(b);
 		}
@@ -2091,6 +2108,7 @@
 	$effect(() => {
 		void liveClusters;
 		void editing;
+		void touchRowOn;
 		void $sidebarGeometry;
 		void $bottomInset;
 		void $connectDocked;
@@ -2149,7 +2167,7 @@
 	function snapTargets(id: string): Box[] {
 		const out: Box[] = [];
 		for (const other of CLUSTERS) {
-			if (other === id || liveClusters[other]?.hidden) continue;
+			if (other === id || clusterHidden(other)) continue;
 			const b = shown(clusterEl(other));
 			if (b) out.push(b);
 		}
@@ -2236,11 +2254,75 @@
 		lastMenuAt = { x, y };
 		clusterMenu = { x, y, id };
 	}
+
+	// ── 45 N1: THE CONNECT PILL'S MENU OUTSIDE EDIT POSITIONS ─────────────────────────────────────────
+	// The user: "allow right click on connect.svelte to adjust position". A right-click (a long press on touch) on the
+	// pill opens the cluster menu the other clusters have in Edit positions — Move, Pin to top row / Float, Reset
+	// position, Reset all. Window listeners in CAPTURE, so Connect.svelte's own buttons never see the gesture. A text
+	// field keeps its own menu (the dial box is where a person pastes an invite id), and Edit positions keeps its own
+	// path (the pill's outline there is an edit item). Not on the folded phone: its Connect is a chip and a sheet.
+	function pillMenuTarget(t: EventTarget | null) {
+		const el = t as Element | null;
+		if (editing || $phoneShell || !el?.closest?.('.connect-pill')) return false;
+		return !el.closest('input, textarea, [contenteditable="true"]');
+	}
+	function onPillContext(e: MouseEvent) {
+		if (!pillMenuTarget(e.target)) return;
+		e.preventDefault();
+		e.stopPropagation();
+		// a held finger raises this too (Android) — the timer below already opened the menu
+		if ((e as PointerEvent).pointerType === 'touch' || performance.now() - longPressAt < 1200) return;
+		openClusterMenu('connect', e.clientX, e.clientY);
+	}
+	let pillHold: { id: number; x: number; y: number; timer: number } | null = null;
+	function pillHoldEnd() {
+		if (pillHold) clearTimeout(pillHold.timer);
+		pillHold = null;
+	}
+	function onPillDown(e: PointerEvent) {
+		pillHoldEnd();
+		if (e.pointerType === 'mouse' || !pillMenuTarget(e.target)) return;
+		const hold = { id: e.pointerId, x: e.clientX, y: e.clientY, timer: 0 };
+		hold.timer = window.setTimeout(() => {
+			if (pillHold !== hold) return;
+			pillHold = null;
+			longPressAt = performance.now();
+			openClusterMenu('connect', hold.x, hold.y);
+			// the lift that ends the hold must not also press the pill button it was held on
+			const eat = (ev: MouseEvent) => {
+				if (!(ev.target as Element | null)?.closest?.('.connect-pill')) return;
+				ev.stopPropagation();
+				ev.preventDefault();
+			};
+			window.addEventListener('click', eat, true);
+			setTimeout(() => window.removeEventListener('click', eat, true), 700);
+		}, LONG_PRESS_MS);
+		pillHold = hold;
+	}
+	function onPillMove(e: PointerEvent) {
+		if (pillHold && e.pointerId === pillHold.id && Math.abs(e.clientX - pillHold.x) + Math.abs(e.clientY - pillHold.y) >= DRAG_SLOP) pillHoldEnd();
+	}
+	onMount(() => {
+		window.addEventListener('contextmenu', onPillContext, true);
+		window.addEventListener('pointerdown', onPillDown, true);
+		window.addEventListener('pointermove', onPillMove, true);
+		window.addEventListener('pointerup', pillHoldEnd, true);
+		window.addEventListener('pointercancel', pillHoldEnd, true);
+		return () => {
+			pillHoldEnd();
+			window.removeEventListener('contextmenu', onPillContext, true);
+			window.removeEventListener('pointerdown', onPillDown, true);
+			window.removeEventListener('pointermove', onPillMove, true);
+			window.removeEventListener('pointerup', pillHoldEnd, true);
+			window.removeEventListener('pointercancel', pillHoldEnd, true);
+		};
+	});
+
 	function clusterMenuItems(id: string) {
 		const cl = liveClusters;
 		const placed = isPlaced(id, cl);
 		const anyPlaced = CLUSTERS.some((c) => isPlaced(c, cl)) || controlsLayout.posX != null;
-		const anyHidden = CLUSTERS.some((c) => (c === 'connect' ? editing?.connect === false : !!cl[c]?.hidden));
+		const anyHidden = CLUSTERS.some((c) => clusterHidden(c, cl));
 		const vertical = isVertical(id, cl);
 		const items: any[] = [{ section: CLUSTER_LABEL[id] }];
 		items.push({
@@ -2275,19 +2357,24 @@
 				tooltip: 'Put every cluster back where it started (rotations stay)',
 				disabled: !anyPlaced,
 				action: () => resetAllPositions()
-			},
+			}
+		);
+		// 45 N1: the Connect pill's menu OUTSIDE Edit positions is the four rows the user asked for (Move, Pin / Float,
+		// Reset position, Reset all); hiding it is an Edit positions act (its "+" there is the way back)
+		if (id === 'connect' && !editing) return items;
+		items.push(
 			{ section: '' },
 			id === 'connect'
 				? editing?.connect === false
 					? { label: 'Show cluster', action: () => editing && (editing = { ...editing, connect: true }) }
 					: { label: 'Hide cluster', tooltip: 'Hide the Connect bar ("+ Connect" brings it back)', action: () => editRemove(CONNECT) }
-				: cl[id]?.hidden
-					? { label: 'Show cluster', action: () => setCluster(id, { hidden: false }) }
+				: clusterHidden(id, cl)
+					? { label: 'Show cluster', tooltip: id === 'touch' ? 'Show these buttons beside the logo (Touch tools on)' : undefined, action: () => showCluster(id) }
 					: {
 							label: 'Hide cluster',
 							tooltip: id === 'bar' ? 'The toolbar holds Play — it cannot be hidden' : 'Hide these buttons (Show all brings them back)',
 							disabled: id === 'bar',
-							action: () => setCluster(id, { hidden: true })
+							action: () => hideCluster(id)
 						},
 			{
 				label: 'Show all',
@@ -2322,8 +2409,20 @@
 		if (controlsLayout.posX != null) setLayout({ posX: null });
 	}
 	function showAllClusters() {
-		for (const id of CLUSTERS) if (liveClusters[id]?.hidden) setCluster(id, { hidden: false });
+		for (const id of CLUSTERS) if (id !== 'connect' && clusterHidden(id)) showCluster(id);
 		if (editing && editing.connect === false) editing = { ...editing, connect: true };
+	}
+	/** 45 N2: the row beside the logo shows / hides through the Touch tools setting (drafted while editing) */
+	function showCluster(id: string) {
+		if (liveClusters[id]?.hidden) setCluster(id, { hidden: false });
+		if (id !== 'touch' || ($touchTools && touchShowDraft !== false)) return;
+		if (editing) touchShowDraft = true;
+		else touchTools.set(true);
+	}
+	function hideCluster(id: string) {
+		if (id !== 'touch') return setCluster(id, { hidden: true });
+		if (editing) touchShowDraft = false;
+		else touchTools.set(false);
 	}
 
 	/** a cluster's grip in Edit positions: drag = move the cluster, tap / right-click = its menu */
@@ -3825,7 +3924,7 @@
 				class="cl-grip"
 				id="cluster-grip-{id}"
 				data-cluster-grip={id}
-				class:cl-grip-hidden={id !== 'connect' && !!liveClusters[id]?.hidden}
+				class:cl-grip-hidden={id !== 'connect' && clusterHidden(id)}
 				style={gripStyle(id)}
 				title="{CLUSTER_LABEL[id]} — drag to move, tap for more"
 				aria-label="{CLUSTER_LABEL[id]}: drag to move, press for its menu"

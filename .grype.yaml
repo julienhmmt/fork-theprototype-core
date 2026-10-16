@@ -1,0 +1,17 @@
+# grype (45 D3) — ci.yml's supply-chain job and release.yml scan the syft SBOM (.syft.yaml)
+# and FAIL on any critical or high finding. Fix it first: bump inside the range
+# (`npm update <pkg>`), or an npm `overrides` entry when a parent pins the old range —
+# never `--legacy-peer-deps`.
+#
+# ONLY when there is no fixed version yet, or the finding cannot reach this project, add
+# an ignore rule here — one per advisory, with the package and version it covers, a
+# `reason`, and the date to look again (grype has no expiry field; the comment is the
+# contract and the next release re-reads this list):
+#
+#   - vulnerability: GHSA-xxxx-xxxx-xxxx
+#     package: { name: some-pkg, version: 1.2.3, type: npm }
+#     reason: "dev-only, reached only by <script>; no fixed release (recheck 2026-11-15)"
+#
+# A rule pinned to a version stops matching once the package moves, so a stale rule
+# cannot hide a new finding. Medium and lower print but never fail.
+ignore: []

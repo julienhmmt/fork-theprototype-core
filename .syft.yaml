@@ -1,0 +1,12 @@
+# syft (45 D3) — the SBOM ci.yml scans and release.yml attaches to every GitHub Release.
+# It reads the two lockfiles (package-lock.json + tools/agent/package-lock.json) and the
+# workflows' actions. Dev dependencies are IN: they are the toolchain that builds the
+# release zip, and Dependabot reports them too. Installed trees and build output are out
+# (they repeat the lockfiles, or are bundles syft cannot see into).
+javascript:
+  include-dev-dependencies: true
+exclude:
+  - ./node_modules/**
+  - ./**/node_modules/**
+  - ./build/**
+  - ./.svelte-kit/**

@@ -693,24 +693,16 @@
 	left: var(--cl-right-x);
 	top: var(--cl-right-y);
 }
-:root.cl-touch-placed #touch-tools {
-	left: var(--cl-touch-x);
-	top: var(--cl-touch-y);
-	transition: none;
-}
+/* 45 N2: the row beside the logo's place / rotation / hidden rules live in TouchTools.svelte, and the placed Connect
+   pill's in Connect.svelte — this file is imported into `layer(utilities)` (app.css), and a LAYERED rule loses to an
+   UNLAYERED one whatever its specificity, so those components' own scoped `left / top / display / flex-direction`
+   silently beat them: the row never moved under its grip, never rotated, never hid. */
 /* Users.svelte places the group with an INLINE `position: absolute; top; right` — only !important beats inline */
 :root.cl-top-placed #hud-tr {
 	position: fixed !important;
 	left: var(--cl-top-x) !important;
 	top: var(--cl-top-y) !important;
 	right: auto !important;
-}
-:root.cl-connect-placed .connect-wrap {
-	left: var(--cl-connect-x);
-	top: var(--cl-connect-y);
-	right: auto;
-	transform: none;
-	transition: none;
 }
 /* rotated: the corner stacks lie in a row (each from its own corner), the rows stand in a column */
 :root.cl-left-rotated #hud-stack-left.hud-stack {
@@ -723,9 +715,6 @@
 	flex-direction: column;
 	height: auto;
 	padding: 5px 0;
-}
-:root.cl-touch-rotated #touch-tools {
-	flex-direction: column;
 }
 /* the vertical bar: a column of cells, Play's well as wide as the bar */
 :root.cl-bar-rotated #controls-pill {
@@ -767,13 +756,11 @@
 /* hidden: gone outside Edit positions, a faint placeholder inside it (its menu shows it again) */
 :root:not(.hud-edit-on).cl-left-hidden #hud-stack-left,
 :root:not(.hud-edit-on).cl-right-hidden #hud-stack-right,
-:root:not(.hud-edit-on).cl-touch-hidden #touch-tools,
 :root:not(.hud-edit-on).cl-top-hidden #hud-tr {
 	display: none;
 }
 :root.hud-edit-on.cl-left-hidden #hud-stack-left,
 :root.hud-edit-on.cl-right-hidden #hud-stack-right,
-:root.hud-edit-on.cl-touch-hidden #touch-tools,
 :root.hud-edit-on.cl-top-hidden #hud-tr {
 	opacity: 0.35;
 }

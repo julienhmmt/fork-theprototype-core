@@ -554,6 +554,47 @@
 .sb-drop-zone[data-drop-target='dock'] {
 	border-radius: 0;
 }
+/* 45 N7: a floating window's target names the way out of docking under its label */
+.sb-drop-zone {
+	flex-direction: column;
+	gap: 4px;
+	text-align: center;
+}
+.sb-drop-hint {
+	color: var(--text-muted);
+	font-size: var(--fs-section);
+	font-weight: 500;
+}
+/* over a busy column the two lines sit on the surface, so they read over any content */
+.sb-drop-zone:has(.sb-drop-hint) {
+	gap: 0;
+}
+.sb-drop-zone:has(.sb-drop-hint) > span {
+	padding: 2px 10px;
+	background: var(--surface-2);
+}
+.sb-drop-zone:has(.sb-drop-hint) > .sb-drop-label {
+	padding-top: 6px;
+	border-radius: var(--radius-input) var(--radius-input) 0 0;
+}
+.sb-drop-zone:has(.sb-drop-hint) > .sb-drop-hint {
+	padding-bottom: 6px;
+	border-radius: 0 0 var(--radius-input) var(--radius-input);
+}
+/* …and while the key holds every target off, a chip beside the pointer says so */
+.place-free-chip {
+	position: fixed;
+	z-index: var(--z-portal);
+	pointer-events: none;
+	padding: 4px 10px;
+	border-radius: var(--radius-input);
+	background: var(--surface-2);
+	border: 1px solid var(--border-strong);
+	box-shadow: var(--shadow-window);
+	color: var(--text);
+	font-size: var(--fs-section);
+	white-space: nowrap;
+}
 
 /* 42 I6 ($lib/dockHost.js) — a floating window with no docked layout of its own (Objects,
    Statistics, the Live profiler, Chat, the AI assistant) DOCKED on a wider screen: the dock

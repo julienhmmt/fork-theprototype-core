@@ -1,0 +1,7 @@
+# The toolchain every clone, lane and CI job builds with (45 D2). Node is pinned to the exact
+# release; npm is the one that release bundles, pinned again in package.json
+# (packageManager + devEngines) — bump all three together. .nvmrc carries the same Node
+# version for nvm/fnm/volta and for CI (actions/setup-node `node-version-file: .nvmrc`);
+# ci.yml fails when the pins disagree.
+[tools]
+node = "24.19.0"
