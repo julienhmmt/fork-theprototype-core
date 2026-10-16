@@ -131,7 +131,9 @@ export function canFloatPanel(key) {
 /**
  * Paint a target (or clear with null). `id` keeps each caller's long-standing element id
  * (`sidebar-drop-zone` for a tab drag, `dock-zone` for a window drag), which suites address.
- * @param {DropTarget|null} target @param {{id?: string, label?: string}} [opts]
+ * 45 N7: `hint` is a second, quieter line under the label (a floating window's target says how to
+ * place it without docking).
+ * @param {DropTarget|null} target @param {{id?: string, label?: string, hint?: string}} [opts]
  */
 export function showDropTarget(target, opts = {}) {
 	if (typeof document === 'undefined') return;
@@ -167,7 +169,7 @@ export function showDropTarget(target, opts = {}) {
 		s.width = `var(--sb-${side}-w, 320px)`;
 		if (side === 'left') s.left = 'var(--sb-left-x, 0px)';
 		else s.right = '0px';
-		z.textContent = opts.label ?? (tab ? 'Add as tab' : `Move to the ${side} side`);
+		label(z, opts.label ?? (tab ? 'Add as tab' : `Move to the ${side} side`), opts.hint);
 		return;
 	}
 	delete z.dataset.side;
@@ -177,7 +179,7 @@ export function showDropTarget(target, opts = {}) {
 		s.right = 'var(--sb-dock-right, 0px)';
 		s.bottom = '0px';
 		s.height = Math.max(EDGE, get(bottomInset) || 0) + 'px';
-		z.textContent = opts.label ?? 'Move to dock';
+		label(z, opts.label ?? 'Move to dock', opts.hint);
 		return;
 	}
 	const w = Math.min(target.w, window.innerWidth - target.x);
@@ -186,5 +188,20 @@ export function showDropTarget(target, opts = {}) {
 	s.top = target.y + 'px';
 	s.width = Math.max(120, w) + 'px';
 	s.height = Math.max(80, h) + 'px';
-	z.textContent = opts.label ?? 'Float here';
+	label(z, opts.label ?? 'Float here', opts.hint);
+}
+
+/** the zone's words: its label, and (45 N7) an optional hint line under it
+ * @param {HTMLElement} z @param {string} text @param {string} [hint] */
+function label(z, text, hint) {
+	z.textContent = '';
+	const a = document.createElement('span');
+	a.className = 'sb-drop-label';
+	a.textContent = text;
+	z.appendChild(a);
+	if (!hint) return;
+	const b = document.createElement('span');
+	b.className = 'sb-drop-hint';
+	b.textContent = hint;
+	z.appendChild(b);
 }

@@ -12,6 +12,8 @@
 	import { dockAllOf, dockTab, dockAtStrip, canDockHere, moveToSidebar } from '$lib/dockMenu';
 	import { ghostWindows, clearStripFeedback, canSideHere } from '$lib/bottomDockDrop';
 	import { windowDropTarget, windowDropZoneId, showDropTarget } from '$lib/sidebarDrop';
+	import { placeFree, watchPlaceFree, placeFreeHint, showPlaceFreeChip } from '$lib/placeFree';
+	import { onMount } from 'svelte';
 
 	// 38 NOTES-38 #23: the view icon before each tab's name — the dock's icons plus the
 	// windows that only ever float
@@ -97,9 +99,25 @@
 	const groupOf = (groupId) => $tabGroups.find((g) => g.id === groupId) ?? null;
 	/** paint a target (or clear) for the dragged elements @param {any} t @param {any[]} nodes */
 	function paintTarget(t, nodes) {
-		showDropTarget(t, { id: windowDropZoneId(t) });
+		showDropTarget(t, { id: windowDropZoneId(t), hint: placeFreeHint() });
 		ghostWindows(nodes, !!t && (t.kind === 'side' || !!t.strip));
+		if (!t) showPlaceFreeChip(null);
 	}
+	/** 45 N7 — Ctrl (Cmd) held: the target the group / torn tab WOULD dock into stands down (the chip says
+	 * so); the dragged window is placed where it is dropped @param {any} would @param {any} e @param {any[]} nodes */
+	function freeOr(would, e, nodes) {
+		const t = placeFree(e) ? null : would;
+		paintTarget(t, nodes);
+		showPlaceFreeChip(!t && would ? { x: e.clientX, y: e.clientY } : null);
+		return t;
+	}
+	// the key pressed or released with the pointer still: re-ask at the last pointer position
+	/** @type {any} */ let lastMove = null;
+	onMount(() =>
+		watchPlaceFree((held) => {
+			if (lastMove && (stripDrag || (tabDrag && (tabDrag.torn || tabDrag.moving)))) onMove({ ...lastMove, ctrlKey: held, metaKey: false, still: true });
+		})
+	);
 	/** where a dragged GROUP would land — if any of its members can dock / join a sidebar
 	 * @param {any} drag @param {any} e */
 	function groupHit(drag, e) {
@@ -107,9 +125,8 @@
 		if (!group) return null;
 		const canDock = group.members.some((/** @type {string} */ k) => canDockHere(k));
 		const canSide = group.members.some((/** @type {string} */ k) => canSideHere(k));
-		const t = canDock || canSide ? windowDropTarget({ x: e.clientX, y: e.clientY, key: group.active, canDock, canSide }) : null;
-		paintTarget(t, [drag.el, nodeOf(group.active)]);
-		return t;
+		const would = canDock || canSide ? windowDropTarget({ x: e.clientX, y: e.clientY, key: group.active, canDock, canSide }) : null;
+		return freeOr(would, e, [drag.el, nodeOf(group.active)]);
 	}
 	/** a dropped group lands as a whole: its dockable members in tab order, its active tab shown
 	 * @param {string} groupId @param {any} hit */
@@ -135,6 +152,7 @@
 	}
 	/** @param {any} e */
 	function onMove(e) {
+		if (!e.still) lastMove = { clientX: e.clientX, clientY: e.clientY, pointerId: e.pointerId };
 		if (stripDrag && e.pointerId === stripDrag.id) {
 			moveGroup(stripDrag.groupId, e.clientX - stripDrag.x, e.clientY - stripDrag.y);
 			stripDrag = { ...stripDrag, x: e.clientX, y: e.clientY };
@@ -168,9 +186,8 @@
 				node.style.top = Math.max(0, e.clientY - 12) + 'px';
 			}
 			const k = tabDrag.key;
-			const hit = windowDropTarget({ x: e.clientX, y: e.clientY, key: k, canDock: canDockHere(k), canSide: canSideHere(k) });
-			paintTarget(hit, [node]);
-			tabDrag.hit = hit;
+			const would = windowDropTarget({ x: e.clientX, y: e.clientY, key: k, canDock: canDockHere(k), canSide: canSideHere(k) });
+			tabDrag.hit = freeOr(would, e, [node]);
 		}
 	}
 	/** @param {any} e */

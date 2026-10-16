@@ -78,6 +78,9 @@
 		for (const el of document.querySelectorAll('[data-pd-host]')) el.removeAttribute('data-pd-host');
 	}
 	function markHosts() {
+		// 45 N5: measure the body BEFORE a hosted window is shown in it — the frame was hidden a moment
+		// ago (an editor tab with a frame of its own was in front), so the last published top may be stale
+		publishTop();
 		const shown = shownTab;
 		const hostOf = /** @type {Record<string, string>} */ ($phoneShell ? HOST_OF : WIDE_HOST_OF);
 		const open = /** @type {Record<string, boolean>} */ ($phoneShell ? $phoneTabsOpen : $hostedTabsOpen);
@@ -148,15 +151,27 @@
 
 	// ---- the body rect the reused elements are placed into ----------------------------------
 	let bodyEl = $state(/** @type {HTMLElement | undefined} */ (undefined));
+	/**
+	 * 45 N5 — publish the body's top edge, but ONLY while the frame is on screen. A hidden frame (an
+	 * editor with its own frame — the Image editor, the Node editor — is the tab in front) measures
+	 * 0, and a hosted window shown against `--pd-top: 0px` spans the whole browser window
+	 * (top 0 → bottom 0) until the next measurement: the one-frame full-screen flash on a tab switch.
+	 */
+	function publishTop() {
+		const el = bodyEl;
+		if (!el) return;
+		const r = el.getBoundingClientRect();
+		if (!r.width && !r.height) return; // display: none — keep the last real edge
+		const root = document.documentElement.style;
+		root.setProperty('--pd-top', Math.round(r.top) + 'px');
+		// the frame's own top edge (a note card opened from the Notes tab covers the whole frame)
+		if (el.parentElement) root.setProperty('--pd-frame-top', Math.round(el.parentElement.getBoundingClientRect().top) + 'px');
+	}
 	$effect(() => {
 		const el = bodyEl;
 		if (!el) return;
 		const root = document.documentElement.style;
-		const publish = () => {
-			root.setProperty('--pd-top', Math.round(el.getBoundingClientRect().top) + 'px');
-			// the frame's own top edge (a note card opened from the Notes tab covers the whole frame)
-			if (el.parentElement) root.setProperty('--pd-frame-top', Math.round(el.parentElement.getBoundingClientRect().top) + 'px');
-		};
+		const publish = publishTop;
 		publish();
 		// on the NEXT frame: the write moves the re-seated panel, which has observers of its own
 		// (minimalScroll), and a synchronous write inside this callback re-entered them in the same
