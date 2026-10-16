@@ -198,7 +198,7 @@
 				>
 			</div>
 			<div class="tbx-row text-xs">
-				<label class="flex items-center gap-1.5" title="Instances per square metre">
+				<label class="flex items-center gap-1.5" title="Instances per square metre (the footer shows /m²)">
 					Density
 					<input
 						id="sculpt-scatter-density"
@@ -210,7 +210,7 @@
 						value={$scatterDensity}
 						oninput={(e) => scatterDensity.set(+e.currentTarget.value)}
 					/>
-					<span class="w-9">{$scatterDensity.toFixed(2)}/m²</span>
+					<span class="w-7">{$scatterDensity.toFixed(2)}</span>
 				</label>
 			</div>
 			<div class="tbx-row text-xs">
@@ -240,10 +240,16 @@
 				</label>
 			</div>
 			<div class="tbx-row text-xs">
-				<Checkbox id="sculpt-scatter-rotate" label="Random rotation" checked={$scatterRandomRotation} onchange={(v) => scatterRandomRotation.set(!!v)} />
+				<label class="flex items-center gap-1.5">
+					<Checkbox id="sculpt-scatter-rotate" label="Random rotation" checked={$scatterRandomRotation} onchange={(v) => scatterRandomRotation.set(!!v)} />
+					Random rotation
+				</label>
 			</div>
 			<div class="tbx-row text-xs">
-				<Checkbox id="sculpt-scatter-align" label="Align to slope" checked={$scatterAlign} onchange={(v) => scatterAlign.set(!!v)} />
+				<label class="flex items-center gap-1.5">
+					<Checkbox id="sculpt-scatter-align" label="Align to slope" checked={$scatterAlign} onchange={(v) => scatterAlign.set(!!v)} />
+					Align to slope
+				</label>
 			</div>
 		{/if}
 

@@ -136,7 +136,10 @@
 				<div class="flex items-center gap-2 text-xs" data-scatter-set={s.id}>
 					<span class="min-w-0 flex-1 truncate" title={setName(s)}>{setName(s)}</span>
 					<span class="text-text-muted">{s.count}</span>
-					<Checkbox label="Align" checked={s.align} onchange={(/** @type {boolean} */ v) => editScatterSet(uuid, s.id, { align: !!v })} />
+					<label class="flex items-center gap-1">
+						<Checkbox label="Align to slope" checked={s.align} onchange={(/** @type {boolean} */ v) => editScatterSet(uuid, s.id, { align: !!v })} />
+						Align
+					</label>
 					<button class="ui-button-quiet" title="Remove every instance of this model" onclick={() => editScatterSet(uuid, s.id, null)}>Remove</button>
 				</div>
 			{/each}
