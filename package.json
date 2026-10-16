@@ -33,7 +33,6 @@
 		"@sveltejs/vite-plugin-svelte": "^7.3.1",
 		"@tailwindcss/vite": "^4.3.3",
 		"flowbite": "^3.1.2",
-		"gh-pages": "^6.3.0",
 		"peer": "^1.0.2",
 		"playwright": "^1.63.0",
 		"prettier": "^3.9.9",
@@ -68,7 +67,25 @@
 		"three-bvh-csg": "^0.0.18",
 		"three-mesh-bvh": "^0.9.15"
 	},
+	"overrides": {
+		"@sveltejs/kit": {
+			"cookie": "^0.7.2"
+		}
+	},
 	"engines": {
 		"node": ">=24"
+	},
+	"packageManager": "npm@11.17.0",
+	"devEngines": {
+		"runtime": {
+			"name": "node",
+			"version": "24.19.0",
+			"onFail": "warn"
+		},
+		"packageManager": {
+			"name": "npm",
+			"version": "11.17.0",
+			"onFail": "warn"
+		}
 	}
 }

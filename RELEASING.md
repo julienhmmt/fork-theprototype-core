@@ -26,6 +26,25 @@ publishes a GitHub Release with generated notes.
 MAJOR = a breaking file-format or wire-protocol change (`SESSION_FORMAT` /
 `MODULE_FORMAT` bumps, incompatible peer messages).
 
+## Supply chain: the SBOM and the vulnerability gate
+
+Every GitHub Release carries `theprototype-vX.Y.Z.spdx.json` beside the zip: an SPDX
+SBOM written by syft from both lockfiles (`package-lock.json` + `tools/agent/package-lock.json`,
+dev dependencies included, config `.syft.yaml`). The same SBOM is scanned by grype in
+`release.yml` and in ci.yml's `supply-chain` job on every PR: a **critical or high**
+finding fails the run; medium and lower print only.
+
+When grype goes red: fix it first — `npm update <pkg>` inside the declared range, or an
+npm `overrides` entry when a parent pins the old range (never `--legacy-peer-deps`).
+Only when no fixed version exists, or the finding cannot reach this project, add a rule
+to `.grype.yaml` — one per advisory, pinned to the package version, with a `reason` and
+a recheck date (the file's header shows the shape). Re-read that list at every release
+and delete rules whose package has moved on (a version-pinned rule stops matching anyway).
+
+The toolchain is pinned too: `.nvmrc` / `.mise.toml` (Node) and `packageManager` /
+`devEngines` in package.json (npm). Bump them together — ci.yml's "toolchain pins agree"
+step fails when they disagree.
+
 ## Recreate `release/next` after the tag push
 
 The repo has `delete_branch_on_merge: true`, so merging the release PR DELETES

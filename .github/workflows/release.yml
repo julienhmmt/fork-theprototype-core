@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npm run build
@@ -41,9 +41,32 @@ jobs:
       - name: svelte-check baseline gate
         run: node scripts/check-ratchet.cjs
 
+      # 45 D3: every release carries its SBOM (SPDX JSON, both lockfiles — .syft.yaml), and a
+      # tag cannot ship a known critical/high vulnerability: the same grype gate ci.yml's
+      # supply-chain job runs on every PR, with the same .grype.yaml ignore list.
+      - name: SBOM (syft, SPDX JSON)
+        uses: anchore/sbom-action@v0.24.3
+        with:
+          path: .
+          config: .syft.yaml
+          format: spdx-json
+          output-file: theprototype-${{ github.ref_name }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: vulnerability gate (grype, fails on critical/high)
+        uses: anchore/scan-action@v7.4.2
+        with:
+          sbom: theprototype-${{ github.ref_name }}.spdx.json
+          config: .grype.yaml
+          severity-cutoff: high
+          fail-build: true
+          output-format: table
+
       - name: zip the build
         run: cd build && zip -r "../theprototype-${GITHUB_REF_NAME}.zip" .
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: theprototype-*.zip
+          files: |
+            theprototype-*.zip
+            theprototype-*.spdx.json
