@@ -255,6 +255,9 @@ export const DEBUG_HOOKS = [
 	['proportionalRing', () => import('./proportionalRing')],
 	['scenePick', () => import('./scenePick')],
 	['snapEngine', () => import('./snapEngine')],
+	// 47 M1/M2: the measure tool (chains, pins, snap pref) and its pure arithmetic
+	['measure', () => import('./measure')],
+	['measureCore', () => import('./measureCore')],
 	['meshPivot', () => import('./meshPivot')],
 	['selectionPrefs', () => import('./selectionPrefs')],
 	['editOverlays', () => import('./editOverlays')],

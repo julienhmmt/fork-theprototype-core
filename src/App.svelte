@@ -61,6 +61,7 @@
   import DrawToolbar from './components/menu/DrawToolbar.svelte'
   import SculptToolbar from './components/menu/SculptToolbar.svelte'
   import SplineToolbar from './components/menu/SplineToolbar.svelte'
+  import MeasureToolbar from './components/menu/MeasureToolbar.svelte' // 47 M1
   import ModuleToolboxLayer from './components/ui/ModuleToolboxLayer.svelte'
   import { isLocked } from './stores/sceneStore'
   // 29-E: `?embed=1` — the editor windows and the dock inset stand down for the page's
@@ -422,6 +423,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
 <DrawToolbar />
 <SculptToolbar />
 <SplineToolbar />
+<MeasureToolbar />
 <!-- A5: module toolboxes. OUTSIDE the {#if !$isLocked} block — a toolbox that opted
      into playMode has to survive Play mode, and the layer decides per box. -->
 <ModuleToolboxLayer />
