@@ -27,6 +27,7 @@ const META = {
 	scene: { group: 'workspace', order: 6, description: 'How the 3D view draws, saves and behaves on this device.' },
 	explorer: { group: 'workspace', order: 7, description: 'Files, sharing and the recycle bin.' },
 	nodetypes: { group: 'workspace', order: 8, description: 'Hide the node types you never use from the palette, add menus and search on this device.' },
+	import: { group: 'workspace', order: 8.5, description: 'What happens to big models and textures as they come in.' },
 	export: { group: 'workspace', order: 9, description: 'What the next exported game starts with.' },
 	vr: { group: 'devices', order: 10, description: 'Comfort, body, buttons and display in the headset — the same table as the headset’s own Settings.' },
 	ai: { group: 'devices', order: 11, description: 'The scene assistant, voice typing and mesh generation.' },

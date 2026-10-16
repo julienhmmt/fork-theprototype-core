@@ -201,7 +201,11 @@ export async function buildExport(opts, onProgress = () => {}) {
 	const { buildSessionPayload, exportSessionZip } = await import('../sessions');
 	const payload = buildSessionPayload(title);
 	if (!payload?.objects?.length) throw new Error('The scene is empty — add something to play first.');
-	const scene = await exportSessionZip(payload, { assets: true, flow: true, packs: false });
+	// 46 P3: the export preset (Settings ▸ Export ▸ Optimize for, shared with Save) — For Quest / web
+	// bundles resized textures with KTX2 twins and LOD chains (the runtime ships the transcoder)
+	const { saveOptions } = await import('../saveOptions');
+	const sceneOpts = { assets: true, flow: true, packs: false, preset: get(saveOptions).exportPreset };
+	const scene = await exportSessionZip(payload, sceneOpts);
 	out['scene.tpscene'] = scene;
 	breakdown.scene = scene.byteLength;
 

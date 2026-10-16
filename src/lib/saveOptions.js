@@ -8,7 +8,14 @@
 import { writable, get } from 'svelte/store';
 import { safeStorage } from './safeStorage';
 
-/** @typedef {{format: string, showGltf: boolean, showJson: boolean, tpAssets: boolean, tpPacks: boolean, tpFlow: boolean, tpProjectVersions: boolean}} SaveOptions */
+/** @typedef {{format: string, showGltf: boolean, showJson: boolean, tpAssets: boolean, tpPacks: boolean, tpFlow: boolean, tpProjectVersions: boolean, exportPreset: 'full' | 'quest'}} SaveOptions */
+
+/** 46 P3: the export presets a GLTF / .tpscene save (and the Publish / Export bundle) is made with.
+ * `exportPreset` is the LAST CHOICE, remembered on this device. */
+export const EXPORT_PRESET_OPTIONS = [
+	{ value: 'full', label: 'Full quality', title: 'Today\'s output: textures and geometry exactly as they are' },
+	{ value: 'quest', label: 'For Quest / web', title: 'KTX2/Basis textures at most 2048 px, an LOD chain, and (GLTF) meshopt compression — smaller files, a fraction of the GPU memory' }
+];
 
 export const SAVE_FORMATS = [
 	{ value: 'tp', label: 'Project', ext: '.tp', title: 'Saves the whole project as .tp — the Explorer library, scene history and manifest' },
@@ -46,7 +53,8 @@ export function readSaveOptions() {
 		tpAssets: readBool('tpsceneAssets', true),
 		tpPacks: readBool('tpscenePacks', false),
 		tpFlow: readBool('tpsceneFlow', true),
-		tpProjectVersions: readBool('tpProjectVersions', true)
+		tpProjectVersions: readBool('tpProjectVersions', true),
+		exportPreset: (typeof localStorage !== 'undefined' ? safeStorage.getItem('exportPreset') : null) === 'quest' ? 'quest' : 'full'
 	};
 }
 
@@ -70,6 +78,8 @@ export function setSaveOptions(patch) {
 	safeStorage.setItem('tpscenePacks', String(next.tpPacks));
 	safeStorage.setItem('tpsceneFlow', String(next.tpFlow));
 	safeStorage.setItem('tpProjectVersions', String(next.tpProjectVersions));
+	next.exportPreset = next.exportPreset === 'quest' ? 'quest' : 'full';
+	safeStorage.setItem('exportPreset', next.exportPreset);
 	saveOptions.set(next);
 	return next;
 }

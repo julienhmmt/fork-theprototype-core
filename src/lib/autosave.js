@@ -11,6 +11,7 @@ import { serializeNode, serializeEdge } from './nodesHandler';
 import { parkAnimatedAtBase } from './flowRuntime';
 import { shaderGraphsSnapshot, shaderGraphsRestore } from './shaderGraph';
 import { stripEditOverlays } from './editOverlays';
+import { withTwins, attachTwinsFromGltf } from './ktx2Twins';
 // B7: a spawner's copies must never reach a snapshot — a crash mid-run would otherwise
 // restore them as permanent scene content
 import { isTransient, parkTransientObjects } from './transientObjects';
@@ -226,7 +227,8 @@ function exportScene() {
 			group.traverse((/** @type {any} */ child) => {
 				if (child.userData && '__uuid' in child.userData) delete child.userData.__uuid;
 			});
-		const exporter = new GLTFExporter();
+		// 46: KTX2 twins are kept across a reload (KHR_texture_basisu beside the plain image)
+		const exporter = withTwins(new GLTFExporter());
 		exporter.register(() => ({ afterParse: putPiecesBack }));
 		exporter.parse(
 			group,
@@ -660,6 +662,7 @@ async function applyRestore(snapshot, offer = null) {
 			const result = await new Promise((resolve, reject) =>
 				loader.parse(snapshot.scene, '', resolve, reject)
 			);
+			void attachTwinsFromGltf(result, snapshot.scene);
 			// cancelled or superseded (another scene opened) while the snapshot parsed
 			if (!isLive(job)) {
 				releaseFrames();

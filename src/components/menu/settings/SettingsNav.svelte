@@ -190,6 +190,12 @@
 		margin-top: auto;
 		padding-top: 10px;
 		border-top: 1px solid var(--border);
+		/* 46: pinned to the bottom of the menu even when the categories outgrow its height (a short
+		   window, or a section another lane adds) — the menu scrolls UNDER it. The surface is the
+		   sidebar's own (.settings-side), so the rows scrolling beneath do not show through. */
+		position: sticky;
+		bottom: 0;
+		background: color-mix(in srgb, var(--surface-1) 70%, var(--bg-app));
 	}
 	.sn-row {
 		display: flex;

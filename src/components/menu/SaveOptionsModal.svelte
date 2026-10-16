@@ -15,7 +15,7 @@
 	import Toggle from '../ui/Toggle.svelte';
 	import Button from '../ui/Button.svelte';
 	import { get } from 'svelte/store';
-	import { saveOptions, saveOptionsOpen, setSaveOptions, visibleFormat, SAVE_FORMATS } from '$lib/saveOptions';
+	import { saveOptions, saveOptionsOpen, setSaveOptions, visibleFormat, SAVE_FORMATS, EXPORT_PRESET_OPTIONS } from '$lib/saveOptions';
 	import { save } from '$lib/fileHandler.svelte';
 
 	/** @type {import('$lib/saveOptions').SaveOptions} */
@@ -69,6 +69,12 @@
 		<Section variant="card" label="Save as">
 			<SettingRow id="row-save-format" label="Format" description="Project keeps everything (.tp); Scene is the open scene alone (.tpscene).">
 				<Segmented id="save-format" label="Format" options={formats} value={draft.format} onchange={(v) => edit({ format: v })} />
+			</SettingRow>
+		</Section>
+		<!-- 46 P3: the export presets (the last choice is remembered on this device) -->
+		<Section variant="card" label="Scene and GLTF files are made for">
+			<SettingRow id="row-export-preset" label="Optimize for" description="For Quest / web: KTX2-compressed textures at most 2048 px and an LOD chain (GLTF adds meshopt geometry) — much smaller, loads on a headset." wide>
+				<Segmented id="export-preset" label="Optimize for" options={EXPORT_PRESET_OPTIONS} value={draft.exportPreset} onchange={(v) => edit({ exportPreset: /** @type {any} */ (v) })} />
 			</SettingRow>
 		</Section>
 		<Section variant="card" label="A scene (.tpscene) includes">

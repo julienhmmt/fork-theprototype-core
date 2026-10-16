@@ -1,6 +1,6 @@
 <script module>
 	// what the I4 settings search matches this section by, beyond its row names
-	export const keywords = ['export', 'publish', 'itch', 'itch.io', 'zip', 'html', 'badge', 'made with', 'fullscreen', 'fps', 'quality', 'vr', 'cdn', 'packs', 'embed', 'static host'];
+	export const keywords = ['export', 'publish', 'itch', 'itch.io', 'zip', 'html', 'badge', 'made with', 'fullscreen', 'fps', 'quality', 'vr', 'cdn', 'packs', 'embed', 'static host', 'ktx2', 'compress', 'quest', 'optimize', 'lod'];
 	import { registerSettingsKeywords } from '$lib/settingsSearch';
 	registerSettingsKeywords('show the made with theprototype badge', ['show made with theprototype badge', 'badge', 'logo']);
 </script>
@@ -18,6 +18,7 @@
 	import Toggle from '../ui/Toggle.svelte';
 	import Segmented from '../ui/Segmented.svelte';
 	import { exportPrefs, setExportPrefs } from '$lib/export/exportStores.js';
+	import { saveOptions, setSaveOptions, EXPORT_PRESET_OPTIONS } from '$lib/saveOptions';
 
 	const QUALITY = [
 		{ value: 'auto', label: 'Auto' },
@@ -46,8 +47,10 @@
 	<SettingRow id="row-export-cdn" label="Use CDN for packs" description="A smaller zip: kit pieces load from the packs CDN, so the game needs internet.">
 		<Toggle id="export-cdn-packs" label="Use CDN for packs" checked={$exportPrefs.useCdnForPacks} onchange={(on) => setExportPrefs({ useCdnForPacks: on })} />
 	</SettingRow>
-	<SettingRow id="row-export-compress" label="Compress textures" badge="Not yet" description="Not in this release: textures go into the export as authored.">
-		<Toggle id="export-compress-textures" label="Compress textures (not available yet)" checked={false} disabled={true} />
+	<!-- 46 P3: the deferred "Compress textures" row became the export PRESET — one choice for this
+	     bundle's scene, a Scene (.tpscene) save and a GLTF export, remembered on this device -->
+	<SettingRow id="row-export-optimize" label="Optimize for" description="For Quest / web: KTX2-compressed textures at most 2048 px and an LOD chain — a smaller download and a fraction of the GPU memory on a headset." wide>
+		<Segmented id="export-optimize" label="Optimize for" options={EXPORT_PRESET_OPTIONS} value={$saveOptions.exportPreset} onchange={(v) => setSaveOptions({ exportPreset: /** @type {any} */ (v) })} />
 	</SettingRow>
 </div>
 
