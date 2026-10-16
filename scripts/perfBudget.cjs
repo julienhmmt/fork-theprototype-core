@@ -41,6 +41,7 @@ function validateBudgets(b) {
 			for (const k of Object.keys(over ?? {})) if (!METRICS.includes(k) && k !== 'note') errors.push(`${kind}.${slug}.${k} is not a gated metric (${METRICS.join(', ')})`);
 		}
 	}
+	errors.push(...validateTargets(b?.targets));
 	const seen = new Set();
 	(b?.allow ?? []).forEach((/** @type {any} */ a, /** @type {number} */ i) => {
 		const at = `allow[${i}]`;
@@ -53,6 +54,36 @@ function validateBudgets(b) {
 		if (seen.has(key)) errors.push(`${at} duplicates an earlier entry for ${key}`);
 		seen.add(key);
 	});
+	return errors;
+}
+
+/** 46 B1: the editor chip's three targets. Quest's gated metrics live in `defaults` ONLY. */
+const TARGET_IDS = ['quest', 'phone', 'desktop'];
+/** 46 B2: rows the meter shows and the gate does not hold */
+const METER_METRICS = ['shadowLights', 'shadowCasters'];
+
+/**
+ * 46 B1 — the optional `targets` block (the budget chip's Quest / Phone / Desktop). The gate never reads
+ * it; what is checked here is that it cannot DISAGREE with the gate: Quest's four gated numbers are
+ * `defaults` and a copy under `targets.quest` is refused, while phone and desktop carry every metric.
+ * @param {any} t @returns {string[]}
+ */
+function validateTargets(t) {
+	if (t === undefined) return [];
+	/** @type {string[]} */
+	const errors = [];
+	if (!t || typeof t !== 'object') return ['targets must be an object'];
+	for (const id of TARGET_IDS) {
+		const target = t[id];
+		if (!target || typeof target !== 'object') {
+			errors.push(`targets.${id} is required`);
+			continue;
+		}
+		if (typeof target.label !== 'string' || !target.label) errors.push(`targets.${id}.label is required`);
+		const own = id === 'quest' ? METER_METRICS : [...METRICS, ...METER_METRICS];
+		for (const m of own) if (!(Number.isFinite(target[m]) && target[m] > 0)) errors.push(`targets.${id}.${m} must be a positive number`);
+		if (id === 'quest') for (const m of METRICS) if (m in target) errors.push(`targets.quest.${m} repeats the gate — Quest's ${m} is defaults.${m}`);
+	}
 	return errors;
 }
 
@@ -141,4 +172,4 @@ function report(verdict) {
 	return md;
 }
 
-module.exports = { BUDGETS_FILE, METRICS, loadBudgets, validateBudgets, limitsFor, judge, report };
+module.exports = { BUDGETS_FILE, METRICS, METER_METRICS, TARGET_IDS, loadBudgets, validateBudgets, validateTargets, limitsFor, judge, report };

@@ -91,6 +91,8 @@
 	import { aiReady } from '$lib/ai/providers';
 	import { canvasCenter } from '$lib/canvasRect';
 	import { statsOpen } from '$lib/sceneBudget';
+	// 46 B1: the budget chip's phone form (an item of the bar catalog — in More ▸ Tools & View by default)
+	import { budgetTarget, sceneCost, TARGETS, verdictFor, openBudget } from '$lib/budgetMeter';
 	const moreTipShown = tipShown(TIP_PHONE_MORE);
 
 	// ---- the <html> class + the sheet geometry --------------------------------------
@@ -487,7 +489,7 @@
 	 *  two places (NOTES-38 #7 / 42 I5: any of them may sit on the bar). `short` is the bar's label
 	 *  where the full one would not fit; `pressed` absent = not a toggle; `disabled` keeps the item
 	 *  holdable (aria-disabled, not the attribute — a disabled button takes no pointer events).
-	 * @type {Record<string, {label: string, short?: string, hint?: string, icon: string, run: () => void, pressed?: () => boolean, disabled?: () => boolean, badge?: () => number}>} */
+	 * @type {Record<string, {label: string, short?: string, hint?: string, icon: string, run: () => void, pressed?: () => boolean, disabled?: () => boolean, badge?: () => number, dot?: () => string}>} */
 	const ACTIONS = {
 		play: { label: 'Play', icon: 'play', run: fromMore(() => requestPlay()) },
 		add: { label: 'Add', icon: 'plus', run: () => add() },
@@ -548,7 +550,20 @@
 		interact: { label: 'Interact mode', short: 'Interact', icon: 'hand', run: () => toggleEditorMode(), pressed: () => interactOn },
 		// 42 I5: "Tools, snapping, view and camera…" renamed, and placeable
 		tools: { label: 'Tools & View', short: 'Tools', icon: 'wrench', run: () => viewportTools() },
-		focus: { label: 'Focus mode', short: 'Focus', icon: 'maximize-2', run: () => enterFocusMode() }
+		focus: { label: 'Focus mode', short: 'Focus', icon: 'maximize-2', run: () => enterFocusMode() },
+		// 46 B1: the scene budget for the chosen device (Statistics ▸ Budget picks the device); the dot is its tier
+		budget: {
+			get label() {
+				return `Budget · ${(TARGETS[$budgetTarget] ?? TARGETS.quest).short} ${verdictFor($sceneCost, $budgetTarget).percent}%`;
+			},
+			get short() {
+				return `${verdictFor($sceneCost, $budgetTarget).percent}%`;
+			},
+			hint: 'Does this scene fit the device you ship to? Opens Statistics ▸ Budget',
+			icon: 'gauge',
+			dot: () => verdictFor($sceneCost, $budgetTarget).tier,
+			run: fromMore(() => openBudget())
+		}
 	};
 	/** a press on an item (the bar's and More's): a disabled one does nothing @param {string} key */
 	function runItem(key) {
@@ -829,7 +844,7 @@
 					onclick={() => runItem(key)}
 					oncontextmenu={openMoreFromBar}
 				>
-					<Icon name={act.icon} size={20} />{#if withLabels}<span class="ps-tab-lbl">{act.short ?? act.label}</span>{/if}
+					<Icon name={act.icon} size={20} />{#if act.dot}<span class="budget-dot ps-dot" data-tier={act.dot()} aria-hidden="true"></span>{/if}{#if withLabels}<span class="ps-tab-lbl">{act.short ?? act.label}</span>{/if}
 					{#if n > 0}<span class="ps-nb" aria-label={`${n} unread`}>{n > 99 ? '99+' : n}</span>{/if}
 				</button>
 			{/if}
@@ -913,7 +928,7 @@
 						use:barHold={holdOpts(key, 'more')}
 						onclick={() => runItem(key)}
 					>
-						<span class="ps-gi" class:ps-gi-play={key === 'play'}><Icon name={act.icon} size={20} /></span>{act.label}
+						<span class="ps-gi" class:ps-gi-play={key === 'play'}><Icon name={act.icon} size={20} />{#if act.dot}<span class="budget-dot ps-dot" data-tier={act.dot()} aria-hidden="true"></span>{/if}</span>{act.label}
 						{#if n > 0}<span class="ps-nb ps-nb-tile">{n > 99 ? '99+' : n}</span>{/if}
 					</button>
 				{/snippet}
@@ -1371,6 +1386,21 @@
 	}
 	.ps-gi {
 		position: relative;
+	}
+	/* 46 B1: the budget item's tier — a dot on its icon (bottom-right in More, beside the glyph on the bar) */
+	.ps-dot {
+		position: absolute;
+		right: 4px;
+		bottom: 4px;
+		width: 10px;
+		height: 10px;
+		border: 2px solid var(--surface-1);
+		box-sizing: content-box;
+	}
+	.ps-tab .ps-dot {
+		right: calc(50% - 17px);
+		bottom: auto;
+		top: 10px;
 	}
 	.ps-gi-play {
 		background: var(--live);

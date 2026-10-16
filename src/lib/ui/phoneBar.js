@@ -24,8 +24,9 @@ import { onLayoutRestore } from '../uiLayoutsCore';
 export const WINDOW_ITEMS = ['play', 'add', 'more', 'objects', 'stats', 'chat', 'explorer', 'flow', 'animation', 'scene', 'ai', 'notes', 'flowcode', 'shader', 'uv', 'hud', 'profiler', 'code'];
 /** More ▸ Edit: the selection tools and the history, every one placeable on the bar */
 export const EDIT_ITEMS = ['inspect', 'move', 'rotate', 'scale', 'undo', 'redo', 'multiselect', 'interact'];
-/** More ▸ Tools & View */
-export const VIEW_ITEMS = ['tools', 'focus'];
+/** More ▸ Tools & View (46 B1: + the scene budget — the toolbar chip's phone form; a folded bar has no
+ * room for it by default, so it waits here and can be dragged onto the bar like any item) */
+export const VIEW_ITEMS = ['tools', 'focus', 'budget'];
 
 /** every key the bar may hold */
 export const BAR_CATALOG = [...WINDOW_ITEMS, ...EDIT_ITEMS, ...VIEW_ITEMS];
