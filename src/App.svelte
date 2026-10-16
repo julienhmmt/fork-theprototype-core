@@ -96,6 +96,7 @@
   import { startSnapping } from '$lib/snapping'
   import { startMultiTransform } from '$lib/multiTransform'
   import { startLightParams } from '$lib/lightParams'
+  import { startShadowBudget } from '$lib/shadowBudget'
   import { startShadowDefaults } from '$lib/shadowDefaults'
   import { startPackRefs } from '$lib/packRefs'
   import { startViewMode } from '$lib/viewMode'
@@ -260,6 +261,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
     startLockSweep()
     startMultiTransform()
     startLightParams()
+    startShadowBudget()
     startShadowDefaults()
     startPackRefs()
     startViewMode()

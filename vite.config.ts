@@ -141,7 +141,9 @@ export default defineConfig({
 		// vite pre-bundles deps with esbuild, which a Rollup-style transform hook never
 		// sees (the guardThrelteXr lesson).
 		optimizeDeps: {
-			exclude: ['@shaderfrog/core'],
+			// 46: ktx2-encoder fetches its Basis wasm from `new URL('../basis/…', import.meta.url)`, which a
+			// pre-bundle would move away from the wasm — so it is served as source
+			exclude: ['@shaderfrog/core', 'ktx2-encoder'],
 			// ...but excluding it stops vite pre-bundling its CJS dep too, and
 			// `import groupBy from 'lodash.groupby'` then has no default export. Pre-bundle
 			// that one explicitly so the interop wrapper still exists.
@@ -151,7 +153,10 @@ export default defineConfig({
 			// Pre-bundle it up front so the first reduction is as quiet as the rest.
 			// 36: the code editor's read-only + highlight extensions are separate bare imports
 			// (CodeEditor.svelte); discovered on first use they reloaded the page the same way
-			include: ['lodash.groupby', 'meshoptimizer/simplifier', '@codemirror/state', '@codemirror/language', '@lezer/highlight']
+			// 46: the optimizer Worker's dependencies, for the same reason as the simplifier above — the
+			// first optimize (an import, a Quest export) discovered them and reloaded the page mid-export
+			// 46-media H1: libheif's loader is CJS reached only from inside the HEIC worker — the same rule
+			include: ['lodash.groupby', 'meshoptimizer/simplifier', '@codemirror/state', '@codemirror/language', '@lezer/highlight', 'meshoptimizer', '@gltf-transform/core', '@gltf-transform/extensions', '@gltf-transform/functions', 'ktx-parse', 'libheif-js/libheif-wasm/libheif.js']
 		},
 	// dev https via the repo's local certs (vite-plugin-mkcert stayed on vite<=5;
 	// certs/ was already how CI-less https worked before mkcert)

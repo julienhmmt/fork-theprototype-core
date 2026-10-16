@@ -49,7 +49,8 @@ h.run(async () => {
 	h.check(JSON.stringify(groups) === JSON.stringify(['General', 'Workspace', 'Devices & services']), 'the menu is grouped General · Workspace · Devices & services (' + groups.join(' · ') + ')');
 	const byGroup = (g) => s.rows.filter((r) => r.group === g).map((r) => r.label);
 	h.check(JSON.stringify(byGroup('general')) === JSON.stringify(['Interface', 'Controls', 'Input', 'Touch controls', 'Shortcuts']), 'General: Interface, Controls, Input, Touch controls, Shortcuts (' + byGroup('general').join(', ') + ')');
-	h.check(JSON.stringify(byGroup('workspace')) === JSON.stringify(['Scene', 'Explorer', 'Node types', 'Export']), 'Workspace: Scene, Explorer, Node types, Export');
+	// 46 P2: Settings ▸ Import sits beside Export
+	h.check(JSON.stringify(byGroup('workspace')) === JSON.stringify(['Scene', 'Explorer', 'Node types', 'Import', 'Export']), 'Workspace: Scene, Explorer, Node types, Import, Export');
 	h.check(JSON.stringify(byGroup('devices')) === JSON.stringify(['VR', 'AI', 'Connection']), 'Devices & services: VR, AI, Connection');
 	h.check(labels[labels.length - 1] === 'About & what’s new' && s.rows[s.rows.length - 1].group === 'about', '"About & what’s new" is pinned last');
 	const pinned = await page.evaluate(() => {

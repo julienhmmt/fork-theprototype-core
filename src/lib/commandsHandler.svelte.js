@@ -18,6 +18,7 @@ import { dropAllAnimations } from '$lib/animationPreview'
 import { parkAnimatedAtBase } from '$lib/flowRuntime'
 import { stripEditOverlays } from '$lib/editOverlays'
 import { isPristinePackRef, stubElementOf } from '$lib/packRefs'
+import { withTwins, attachTwinsFromGltf } from '$lib/ktx2Twins'
 import { normalizeLodGroup } from '$lib/lodGroupCore'
 import { normalizeFluid } from '$lib/sim/fluidCore.js'; // 36-sim
 import { normalizeEmitter, normalizeInteraction } from '$lib/sim/fluidEmitterCore.js'; // 36-fb F23
@@ -951,6 +952,9 @@ async function applyCreateObject(object, uuid, override, groupuuid, pos, rot, sc
         const result = await new Promise((resolve, reject) => {
           loader.parse(object.element, '', (gltf) => resolve(gltf), (error) => reject(error));
         });
+        // 46: a texture the sender drew from a KTX2 twin arrives with the twin beside its
+        // plain image (KHR_texture_basisu + fallback): re-form the twin here
+        void attachTwinsFromGltf(result, object.element);
         result.scene.uuid = uuid
         result.scene.children.forEach((object, index) => {
           let mesh = object.clone()
@@ -1210,7 +1214,8 @@ export function sendObject(conn, element, groupuuid, opts = {}) {
             const pos = element.position.toArray();
             const rot = element.rotation.toArray();
             const scale = element.scale.toArray();
-            const exporter = new GLTFExporter();
+            // 46: KTX2 twins ride the wire beside the plain image (ktx2Twins.js)
+            const exporter = withTwins(new GLTFExporter());
             exporter.parse(
                 element,
                 function (result) {

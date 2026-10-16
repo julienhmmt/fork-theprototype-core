@@ -852,11 +852,23 @@ function noteBundledVersions(entries) {
  * there was frequently no history to look up and the box wrote nothing. Downloading
  * versions is a per-SCENE action in the Explorer now — see `noteBundledVersions` above.
  *
+ * 46 P3: `preset: 'quest'` applies the "For Quest / web" preset (sceneOptimize.js) and leaves
+ * its numbers on `opts.report`; `onProgress` follows the texture work.
  * @param {any} payload
- * @param {{assets?: boolean, packs?: boolean, flow?: boolean}} [opts]
+ * @param {{assets?: boolean, packs?: boolean, flow?: boolean, preset?: 'full' | 'quest', onProgress?: (p: any) => void, report?: any}} [opts]
  */
 export async function exportSessionZip(payload, opts = { assets: true, packs: false, flow: true }) {
 	const { zipSync, strToU8 } = await import('fflate');
+	// 46 P3: the "For Quest / web" preset — resized textures + KTX2 sidecars + LOD groups
+	/** @type {Record<string, Uint8Array>} */
+	let presetFiles = {};
+	if (opts.preset === 'quest') {
+		const { optimizeScenePayload } = await import('./sceneOptimize.js');
+		const done = await optimizeScenePayload(payload, { onProgress: opts.onProgress });
+		payload = done.payload;
+		presetFiles = done.files;
+		opts.report = done.report;
+	}
 	const { sceneAssetList } = await import('./sceneAssets');
 	const { itemByHash, itemBlob } = await import('./explorer');
 	// B3 (.tpscene): the include-checkboxes — flow strips nodes/edges, assets
@@ -904,6 +916,7 @@ export async function exportSessionZip(payload, opts = { assets: true, packs: fa
 		wire = { ...payload, library: { folders: payload.library.folders ?? [], items: libIndex } };
 	}
 	files['session.json'] = strToU8(JSON.stringify(wire));
+	Object.assign(files, presetFiles);
 	/** @type {Array<{hash: string, name: string, kind: string, file: string}>} */
 	const index = [];
 	const seen = new Set();
@@ -1007,6 +1020,8 @@ export async function readSessionZip(buffer) {
 	await restoreZipAssets(entries, strFromU8);
 	// R22 round 12: and the library's own files, which session.json carries only an index of
 	await restoreLibraryBlobs(payload, entries);
+	// 46 P3: a "For Quest / web" scene carries KTX2 twins for its textures
+	(await import('./sceneOptimize.js')).restoreKtx2Sidecars(payload, entries);
 	// 21-I5: `versions/` is read by NOTHING — say so rather than ignore it silently
 	noteBundledVersions(entries);
 	return payload;
@@ -1037,6 +1052,7 @@ export async function importSessionZip(buffer) {
 	// an imported PROJECT entry arrives with its files rather than with `{}` where each
 	// Blob used to be (the measured pre-existing loss).
 	await restoreLibraryBlobs(payload, entries);
+	(await import('./sceneOptimize.js')).restoreKtx2Sidecars(payload, entries);
 	// B3: restore bundled packs — re-store each item blob (content-hash deduped;
 	// ids can CHANGE, so remap the pack's item ids), then re-register the pack
 	if (entries['packs/index.json']) {
@@ -1560,6 +1576,8 @@ async function applySessionNow(payload, opts, job) {
 		endSceneBatch();
 	}
 	pokeScene();
+	// 46 P3: the KTX2 twins a "For Quest / web" .tpscene carries beside its pictures
+	if (payload.__ktx2) (await import('./ktx2Twins.js')).attachTwinsByTextureUuid(group, payload.__ktx2);
 	// the objects this load built (kit pieces warm themselves as their packs land) — then draw
 	await within(warmPrograms(group), WARM_WAIT_MS);
 	releaseFrames();

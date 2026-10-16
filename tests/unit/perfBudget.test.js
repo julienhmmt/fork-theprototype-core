@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { judge, validateBudgets, limitsFor, loadBudgets, METRICS } = require('../../scripts/perfBudget.cjs');
+const { judge, validateBudgets, validateTargets, limitsFor, loadBudgets, METRICS, METER_METRICS } = require('../../scripts/perfBudget.cjs');
 
 const base = () => ({
 	version: 1,
@@ -143,5 +143,47 @@ describe('validateBudgets', () => {
 	it('frame time is NOT a gated metric (a runner cannot reproduce it)', () => {
 		expect(METRICS).not.toContain('p95');
 		expect(METRICS).not.toContain('ms');
+	});
+});
+
+// 46 B1 — the budget chip's targets live beside the gate's numbers and must never disagree with them
+describe('targets (the editor budget chip)', () => {
+	const targets = () => ({
+		quest: { label: 'Quest / VR', shadowLights: 1, shadowCasters: 60 },
+		phone: { label: 'Phone', calls: 300, triangles: 500000, lights: 3, textureMB: 256, shadowLights: 1, shadowCasters: 100 },
+		desktop: { label: 'Desktop', calls: 2000, triangles: 4000000, lights: 8, textureMB: 512, shadowLights: 4, shadowCasters: 1000 }
+	});
+	it('the committed file carries all three, and Quest only adds the meter rows', () => {
+		const b = loadBudgets();
+		expect(Object.keys(b.targets)).toEqual(expect.arrayContaining(['quest', 'phone', 'desktop']));
+		for (const m of METRICS) expect(b.targets.quest[m]).toBeUndefined();
+		for (const m of METER_METRICS) expect(b.targets.quest[m]).toBeGreaterThan(0);
+		for (const id of ['phone', 'desktop']) for (const m of [...METRICS, ...METER_METRICS]) expect(b.targets[id][m]).toBeGreaterThan(0);
+	});
+	it('is optional — a budgets file without it is valid (the gate never reads it)', () => {
+		expect(validateBudgets(base())).toEqual([]);
+		expect(validateTargets(undefined)).toEqual([]);
+	});
+	it('refuses a Quest copy of a gated metric — the chip and the gate cannot disagree', () => {
+		const t = targets();
+		t.quest.calls = 150;
+		expect(validateBudgets({ ...base(), targets: t }).join('\n')).toMatch(/targets\.quest\.calls repeats the gate/);
+	});
+	it('refuses a missing target, a missing metric and a non-positive number', () => {
+		const t = targets();
+		delete t.phone;
+		t.desktop.lights = 0;
+		delete t.quest.shadowCasters;
+		const errors = validateTargets(t).join('\n');
+		expect(errors).toMatch(/targets\.phone is required/);
+		expect(errors).toMatch(/targets\.desktop\.lights must be a positive number/);
+		expect(errors).toMatch(/targets\.quest\.shadowCasters must be a positive number/);
+	});
+	it('judging rows ignores the block entirely (the gate does not move)', () => {
+		const rows = [row({ calls: 160 })];
+		const without = judge(base(), rows, { today: '2026-10-15' });
+		const withTargets = judge({ ...base(), targets: targets() }, rows, { today: '2026-10-15' });
+		expect(withTargets.failures).toEqual(without.failures);
+		expect(withTargets.ok).toBe(false);
 	});
 });

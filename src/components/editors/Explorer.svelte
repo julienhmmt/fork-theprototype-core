@@ -106,6 +106,7 @@
 	// route that replaces the world.
 	import { guardSceneReplace, travelToPeerScene } from '$lib/sceneOpenGuard';
 	import VersionHistory from './VersionHistory.svelte';
+	import ImportSettingsPanel from './ImportSettingsPanel.svelte'; // 46 P2
 	// 21-G2: the "update available" dot on old scene versions. The manifest store is
 	// passed as the reactive dependency — a helper reading through get() registers none
 	// (the documented rule), so the badge would otherwise never appear live.
@@ -8217,6 +8218,8 @@
 					<!-- 21-G7: a scene file's PAST belongs with the rest of its facts. Renders
 					     itself away for every other kind, and for a pack card (no history to have). -->
 					<VersionHistory item={selItem} onDownloadAll={downloadSceneVersions} />
+					<!-- 46 P2: a model's import settings (per-asset override + Reimport); away for other kinds -->
+					<ImportSettingsPanel item={selItem} />
 				{:else if selected?.kind === 'folder'}
 					{@const counts = folderCounts(selected.folder.id)}
 					<div class="flex items-center gap-2">

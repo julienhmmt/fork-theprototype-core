@@ -18,6 +18,7 @@
 	import LoadStatePanel from './LoadStatePanel.svelte';
 	import WaterPanel from '../water/WaterPanel.svelte';
 	import SliderRow from '../ui/SliderRow.svelte';
+	import SceneLodSection from './SceneLodSection.svelte'; // 46 P2
 	import PropRow from '../ui/PropRow.svelte';
 	import Chips from '../ui/Chips.svelte';
 	import UiButton from '../ui/Button.svelte';
@@ -2272,6 +2273,9 @@
 				{/if}
 			</Section>
 
+			<!-- 46 P2: the scene's LOD distance (replicated) -->
+			<SceneLodSection />
+
 			<!-- 16-P3: grid + snapping are LOCAL view prefs (like the clip planes and
 			     the render mode above) — peers each get their own. -->
 			<Section variant="panel" label="Grid" badge="This device">
@@ -4085,7 +4089,7 @@
 						<input
 							type="file"
 							id="texture-file"
-							accept="image/png, image/jpeg, image/webp"
+							accept="image/png, image/jpeg, image/webp, image/heic, image/heif, .heic, .heif"
 							style="display: none"
 							onchange={(e) => {
 								const file = e.currentTarget.files?.[0];

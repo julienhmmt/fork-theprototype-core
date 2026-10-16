@@ -5,6 +5,44 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.37.0 — Fast on every device: big models slim down on import, a budget meter, HEIC photos and Race shadows in VR 🚀
+
+Heavy models and photos now come in ready for a Quest or a phone, and you can see at a glance whether a scene fits.
+
+### 📦 Importing and exporting
+
+- 🪶 **Big models are optimized as they come in**: over 50k triangles or with a texture over 2048 px, an import gets a
+  level-of-detail chain and its textures are resized and GPU-compressed (KTX2/Basis — about an eighth of the texture
+  memory on a Quest). The original stays in the Library; the toast offers **Keep original only**.
+- ⚙️ **Settings ▸ Import** holds the defaults (thresholds, LOD levels, max texture size, compression). A file's
+  **Properties** in the Explorer has its own **Import settings** and **Reimport**.
+- 🔭 **Configure Scene ▸ Level of detail**: one LOD distance for the whole scene, shared with everyone in it.
+- 📤 **Export presets**: *Optimize for* **Full quality** or **For Quest / web** — a GLTF becomes a compact `.glb`
+  (KTX2 + meshopt + LOD), a Scene keeps its format with compressed texture copies and LOD chains. The last choice is
+  remembered.
+- 🖼️ **HEIC / HEIF photos** (iPhone pictures) import as images and textures: decoded once to JPEG, so everyone in the
+  room sees them. The decoder downloads only the first time you need it.
+
+### 📊 Will it fit?
+
+- 🚦 **Scene budget chip** beside the toolbar: green / amber / red for a **Quest**, a **phone** or a **desktop**, judged
+  with the perf gate's own numbers. Click it for **Statistics ▸ Budget** — draw calls, triangles, texture memory, lights
+  and shadows against that device, and the heaviest objects (click one to select it, with what optimizing on import
+  would save). On a folded phone it is **More ▸ Tools & View ▸ Budget**.
+
+### 🏎️ Games
+
+- 🌲 **Race keeps its shadows in VR**: one sun, fitted around the player — 89 draw calls / 153k triangles with shadows
+  (was 142 / 306k). Adaptive quality still drops shadows if the headset cannot hold its frame rate.
+
+### 🐞 Fixed
+
+- 🧊 KTX2 files load with their textures compressed on the GPU, and stay that way through the wire and autosave.
+
+### 🔧 For module authors
+
+- 🧩 `api.quality.keepShadowsInVR({radius})` — a game that budgets its shadow keeps it in the headset.
+
 ## 1.36.0 — Your 1.35 review: clusters you can reach, windows you can park anywhere, and a cleaner dock 🧲
 
 Everything from your review of the 1.35 preview, plus a tooling clean-up.

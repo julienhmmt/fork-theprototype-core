@@ -122,6 +122,11 @@ export const DEBUG_HOOKS = [
 	['sessions', () => import('./sessions')],
 	['geometryEdit', () => import('./geometryEdit')],
 	['lightParams', () => import('./lightParams')],
+	// 46-media R1: the budgeted shadow (claims, fit state) — the perf gate reads shadowsKeptInXR
+	['shadowClaims', () => import('./shadowClaims')],
+	['shadowBudget', () => import('./shadowBudget')],
+	// 46-media H1: HEIC import (heicDebug: was the decoder ever started, how many photos it made)
+	['heic', () => import('./heic.js')],
 	['shadowDefaults', () => import('./shadowDefaults')],
 	['palette', () => import('./palette')],
 	['viewModeCtl', () => import('./viewMode')],
@@ -362,6 +367,9 @@ export const DEBUG_HOOKS = [
 	['wireErrors', () => import('./wireErrors')],
 	['safeStorage', () => import('./safeStorage')],
 	['sceneBudget', () => import('./sceneBudget')],
+	// 46 B1/B2: the budget chip + Statistics ▸ Budget (budgetTarget, sceneCost, sampleBudget, openBudget, TARGETS)
+	['budgetMeter', () => import('./budgetMeter')],
+	['budgetMeterCore', () => import('./budgetMeterCore')],
 	['overloadGuard', () => import('./overloadGuard')],
 	['qualityGovernor', () => import('./qualityGovernor')],
 	['importBudget', () => import('./importBudget')],
@@ -379,6 +387,10 @@ export const DEBUG_HOOKS = [
 	['placeholders', () => import('./placeholders')],
 	['replaceModel', () => import('./replaceModel')],
 	['lod', () => import('./lod')],
+	['gltfOptimize', () => import('./gltfOptimize.js')],
+	['gltfLoader', () => import('./gltfLoader.js')],
+	['ktx2Twins', () => import('./ktx2Twins.js')],
+	['importOptimize', () => import('./importOptimize.js')],
 	['lodGroup', () => import('./lodGroup')],
 	['lodGroupCore', () => import('./lodGroupCore')],
 	// 40 F14: the substitutes a fallback group draws

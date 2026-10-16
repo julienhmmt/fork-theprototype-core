@@ -21,6 +21,7 @@ import { shaderDrivenCount } from '$lib/shaderGraph';
 import { originOf, bakeOriginForExport } from '$lib/objectOrigin';
 import { bakeAnimationsForExport } from '$lib/animationPreview';
 import { createGltfLoader, registerAnimatedImport, recordAnimatedImport, sendAnimatedImport } from '$lib/animatedImports';
+import { parseGltfSceneSafe, withTwins } from '$lib/ktx2Twins';
 import { environment } from './environment';
 import { parkAnimatedAtBase } from '$lib/flowRuntime';
 import { stripEditOverlays } from '$lib/editOverlays';
@@ -29,6 +30,7 @@ import { hashBytes } from '$lib/explorer';
 import { saveFileBase } from '$lib/saveName';
 import { peers, fixLight, loadingFile, showToast, showInfoToast, dismissToastById } from '../stores/appStore';
 import { safeStorage } from './safeStorage';
+import { saveOptions } from './saveOptions';
 import { admitModel, verdictFor } from './importGate';
 import { reductionPlan } from './importBudget';
 import { reduceModel, plannedTriangles, retainOriginal, originalOf, textureCapFor } from './decimate';
@@ -89,7 +91,29 @@ async function saveTpScene() {
 	// 36-community (C4): a saved file carries the scene's permanent game id
 	(await import('./gameIdentity.js')).ensureGameId();
 	const payload = buildSessionPayload('Scene export');
-	const zip = await exportSessionZip(payload, tpsceneOptions());
+	// 46 P3: the export preset (Save options, the last choice on this device)
+	const preset = get(saveOptions).exportPreset;
+	const progressId = 'tpscene-optimize';
+	/** @type {any} */
+	const opts = { ...tpsceneOptions(), preset };
+	if (preset === 'quest') {
+		showInfoToast(progressId, 'Making the scene for Quest / web… you can keep working while it runs.', [], undefined, true);
+		opts.onProgress = (/** @type {any} */ p) => {
+			if (p.step === 'textures' && p.total) showInfoToast(progressId, 'Making the scene for Quest / web: textures ' + Math.min(p.total, (p.done ?? 0) + 1) + ' / ' + p.total + '…', [], undefined, true);
+		};
+	}
+	/** @type {any} */
+	let zip;
+	try {
+		zip = await exportSessionZip(payload, opts);
+	} finally {
+		dismissToastById(progressId);
+	}
+	if (opts.report) {
+		const { presetSummary } = await import('./exportPresetReport.js');
+		lastExportReport.set({ kind: 'tpscene', preset, report: opts.report, bytes: zip.byteLength });
+		showToast(presetSummary('tpscene', opts.report, zip.byteLength));
+	}
 	const blob = new Blob([zip], { type: 'application/zip' });
 	const a = document.createElement('a');
 	document.body.appendChild(a);
@@ -98,7 +122,7 @@ async function saveTpScene() {
 	a.href = url;
 	// 21-I5: the scene's NAME still names the file (the save-name template) — that is
 	// the one thing the removed option and this line had in common and it stays
-	a.download = `${saveFileBase(sceneName)}.tpscene`;
+	a.download = `${saveFileBase(sceneName)}${preset === 'quest' ? '-quest' : ''}.tpscene`;
 	a.click();
 	window.URL.revokeObjectURL(url);
 }
@@ -227,7 +251,8 @@ export function gltfBytesFor(roots, opts = {}) {
 	if (animations.length) parseOptions.animations = animations;
 	return new Promise((resolve) => {
 		try {
-			new GLTFExporter().parse(
+			// 46: KTX2 twins ride along (KHR_texture_basisu beside the plain image)
+			withTwins(new GLTFExporter()).parse(
 				payload,
 				(/** @type {any} */ result) => {
 					restore();
@@ -251,6 +276,54 @@ export function gltfBytesFor(roots, opts = {}) {
 			resolve(null);
 		}
 	});
+}
+
+/** 46 P3: what the last preset export did (the suite and the docs measurement read it). LOCAL.
+ * @type {import('svelte/store').Writable<any>} */
+export const lastExportReport = writable(null);
+
+/**
+ * 46 P3 — the GLTF "For Quest / web" export: the same export ritual as bytes (gltfBytesFor: the
+ * origin bake, the clip bake, KTX2 twins carried), then the optimizer's quest preset in its Worker
+ * (KTX2/Basis textures at most 2048 px, quantized + EXT_meshopt_compression geometry, the LOD
+ * chain as MSFT_lod), downloaded as one .glb. Resolves the report, or null when nothing was made.
+ * @param {any[]} roots @param {string} [filename]
+ */
+export async function exportGltfQuest(roots, filename) {
+	const bytes = await gltfBytesFor(roots, { binary: true });
+	if (!bytes) {
+		showToast('Could not export the selection.');
+		return null;
+	}
+	const progressId = 'gltf-optimize';
+	showInfoToast(progressId, 'Making the GLB for Quest / web… you can keep working while it runs.', [], undefined, true);
+	try {
+		const { optimizeGltf, EXPORT_PRESETS } = await import('./gltfOptimize.js');
+		const { bytes: out, report } = await optimizeGltf(new Uint8Array(bytes), EXPORT_PRESETS.quest.options, {
+			onProgress: (p) => {
+				if (p.step === 'textures' && p.total) showInfoToast(progressId, 'Making the GLB for Quest / web: textures ' + Math.min(p.total, (p.done ?? 0) + 1) + ' / ' + p.total + '…', [], undefined, true);
+			}
+		});
+		const blob = new Blob([/** @type {any} */ (out)], { type: 'model/gltf-binary' });
+		const a = document.createElement('a');
+		document.body.appendChild(a);
+		a.style.display = 'none';
+		const url = window.URL.createObjectURL(blob);
+		a.href = url;
+		a.download = (filename || saveFileBase(sceneName)) + '-quest.glb';
+		a.click();
+		window.URL.revokeObjectURL(url);
+		const { presetSummary } = await import('./exportPresetReport.js');
+		lastExportReport.set({ kind: 'gltf', preset: 'quest', report, bytes: out.byteLength });
+		showToast(presetSummary('gltf', report, out.byteLength));
+		return report;
+	} catch (error) {
+		console.error('Quest/web export failed:', error);
+		showToast('Could not make the Quest / web file: ' + String(/** @type {any} */ (error)?.message ?? error));
+		return null;
+	} finally {
+		dismissToastById(progressId);
+	}
 }
 
 /**
@@ -287,8 +360,11 @@ export function save(format) {
 	// selection -> warn + offer the whole scene. JSON keeps its whole-scene behavior.
 	if (String(format).toLowerCase() === 'gltf') {
 		const roots = selectedRoots();
+		// 46 P3: "For Quest / web" writes a .glb through the optimizer instead
+		const quest = get(saveOptions).exportPreset === 'quest';
 		if (roots.length) {
-			exportGltf(format, roots);
+			if (quest) void exportGltfQuest(roots);
+			else exportGltf(format, roots);
 			showToast(roots.length === 1 ? 'Exported 1 selected object (GLTF)' : `Exported ${roots.length} selected objects (GLTF)`);
 		} else {
 			// 41 G16: a question that blocks the export is a modal, not a toast
@@ -296,7 +372,7 @@ export function save(format) {
 				title: 'Nothing selected',
 				message: 'GLTF exports the selection. Export the entire scene instead?',
 				choices: [{ value: 'all', label: 'Export all' }]
-			}).then((answer) => answer === 'all' && exportGltf(format, sceneObjects));
+			}).then((answer) => answer === 'all' && (quest ? void exportGltfQuest([sceneObjects]) : exportGltf(format, sceneObjects)));
 		}
 		return;
 	}
@@ -654,11 +730,11 @@ export async function parseModelFile(file, extension, extras) {
 			: null;
 		return { root: object, animated, notes };
 	}
-	// glb/gltf (default) — draco/meshopt capable
+	// glb/gltf (default) — draco/meshopt capable. 46: KTX2-aware and SCENE-SAFE — a KTX2 texture
+	// arrives as an ordinary texture with its compressed twin (ktx2Twins.js), never as a
+	// CompressedTexture the wire/undo/saves could not write.
 	const buffer = await readAs(file, 'buffer');
-	const result = await new Promise((resolve, reject) =>
-		createGltfLoader().parse(buffer, '', resolve, (/** @type {any} */ error) => reject(error))
-	);
+	const result = await parseGltfSceneSafe(buffer);
 	// animated rigs keep their own pipeline (raw-bytes sync) — unplaced
 	const animated = result.animations?.length > 0 ? { result, buffer, kind: 'gltf' } : null;
 	return { root: result.scene, animated, notes };
@@ -705,6 +781,18 @@ export async function importFile(file, name, ext, position, extras, opts = {}) {
 		return null;
 	}
 	const label = defaultImportName(extension, name);
+	// 46 P2: AUTO-OPTIMIZE above the import thresholds (Settings ▸ Import, or the asset's own
+	// override): resized + KTX2-twinned textures and an LOD group, the original kept in the
+	// Library. Before the budget gate, so the gate measures what will actually be placed.
+	/** @type {any} */
+	let optimized = null;
+	try {
+		const { maybeOptimizeImport } = await import('./importOptimize.js');
+		optimized = await maybeOptimizeImport(parsed, { file, extension, label: label ?? file?.name ?? 'Model', opts });
+		if (optimized) parsed = optimized.parsed;
+	} catch (error) {
+		console.error('Import optimize skipped:', error);
+	}
 	// 26-F phase 2: `opts.reduce` asks for the reduced import directly (true = aim at the
 	// budget the verdict names, or an explicit plan). Phase 3 routes the dialog's own
 	// Reduce answer here. An animated rig is never reduced — it replicates as its original
@@ -752,6 +840,7 @@ export async function importFile(file, name, ext, position, extras, opts = {}) {
 			addAnimatedImport(parsed.animated.result, parsed.animated.buffer, label, parsed.animated.kind, position);
 		else addImported(parsed.root, label, position);
 		for (const note of parsed.notes) showToast(note);
+		if (optimized) void import('./importOptimize.js').then((m) => m.announceOptimized(parsed.root.uuid, label ?? 'Model', optimized));
 		return parsed.root.uuid;
 	} catch (error) {
 		console.error('Error importing file:', error);
@@ -963,18 +1052,16 @@ registerHistoryKind('importswap', applyImportSwap);
 /**
  * Put the ORIGINAL model back in place of its reduced import — same uuid, same place,
  * same name — as ONE undoable step that replicates through the ordinary delete + create.
+ * 46: also "Keep original only" after an auto-optimized import (`strip` names the userData
+ * stamps the original must not keep — the optimize report and the LOD group it added).
  * @param {string} uuid the reduced root
+ * @param {{strip?: string[], label?: string}} [opts]
  * @returns {Promise<boolean>} whether it was restored
  */
-export async function restoreOriginalImport(uuid) {
+export async function restoreOriginalImport(uuid, opts = {}) {
 	const source = originalOf(uuid);
 	if (!source) {
 		showToast('The original file is no longer held — import it again to use it.');
-		return false;
-	}
-	const current = get(objectsGroup)?.getObjectByProperty('uuid', uuid);
-	if (!current) {
-		showToast('That model is no longer in the scene.');
 		return false;
 	}
 	/** @type {any} */
@@ -986,7 +1073,34 @@ export async function restoreOriginalImport(uuid) {
 		showToast('Could not re-read the original of "' + source.name + '".');
 		return false;
 	}
-	const fresh = parsed.root;
+	const strip = opts.strip ?? ['reduced'];
+	const ok = swapInFresh(uuid, parsed.animated ? null : parsed.root, strip, opts.label ?? 'Restore original model');
+	if (!ok) return false;
+	for (const note of parsed.notes) showToast(note);
+	showToast(
+		opts.label
+			? 'Placed the original "' + source.name + '" — Ctrl+Z to go back'
+			: 'Restored the original "' + source.name + '" — Ctrl+Z to go back to the reduced one'
+	);
+	return true;
+}
+
+/**
+ * Swap `fresh` in where `uuid` stands (identity kept: the root's uuid, and every child's when the
+ * tree has the same shape), recording ONE `importswap` entry. False when there is nothing to swap.
+ * @param {string} uuid @param {any} fresh @param {string[]} strip userData keys the old root drops
+ * @param {string} label
+ */
+function swapInFresh(uuid, fresh, strip, label) {
+	const current = get(objectsGroup)?.getObjectByProperty('uuid', uuid);
+	if (!current) {
+		showToast('That model is no longer in the scene.');
+		return false;
+	}
+	if (!fresh) {
+		showToast('An animated model cannot be swapped in place — import it again instead.');
+		return false;
+	}
 	// IDENTITY: the root keeps its uuid (flows, notes, joints and selection are keyed by
 	// it), and so does every child when the tree still has the shape it was imported with
 	// — a reduction never changes the tree, so only a user's own edit can make them differ
@@ -998,22 +1112,55 @@ export async function restoreOriginalImport(uuid) {
 	fresh.traverse((/** @type {any} */ o) => now.push(o));
 	if (was.length === now.length) now.forEach((o, i) => (o.uuid = was[i].uuid));
 	else fresh.uuid = current.uuid;
-	const { reduced, ...keep } = current.userData ?? {};
-	void reduced;
+	/** @type {any} */
+	const keep = { ...(current.userData ?? {}) };
+	for (const key of strip) delete keep[key];
 	fresh.userData = { ...(fresh.userData || {}), ...keep };
 	swapImport(current, fresh);
 	recordEntry({
 		kind: 'importswap',
-		label: 'Restore original model',
+		label,
 		uuid,
 		reduced: current,
 		original: fresh,
 		before: { which: 'reduced', positions: { byteLength: treeBytes(current) } },
 		after: { which: 'original', positions: { byteLength: treeBytes(fresh) } }
 	});
-	for (const note of parsed.notes) showToast(note);
-	showToast('Restored the original "' + fresh.name + '" — Ctrl+Z to go back to the reduced one');
 	return true;
+}
+
+/**
+ * 46 P2 REIMPORT: re-read `file` (an asset's ORIGINAL), run the import optimizer under the asset's
+ * current settings, and swap the result in where `uuid` stands (one undo step). Resolves
+ * `{optimized}` (the optimizer's result, or null when the settings say leave it) or null when
+ * nothing was swapped.
+ * @param {string} uuid @param {File} file @param {string} extension @param {string} name
+ */
+export async function replaceImportFrom(uuid, file, extension, name) {
+	/** @type {any} */
+	let parsed;
+	try {
+		parsed = await parseModelFile(file, extension, []);
+	} catch (error) {
+		console.error('Reimport: could not read the original:', error);
+		showToast('Could not re-read the original of "' + name + '".');
+		return null;
+	}
+	const { maybeOptimizeImport } = await import('./importOptimize.js');
+	const optimized = await maybeOptimizeImport(parsed, { file, extension, label: name });
+	if (optimized) parsed = optimized.parsed;
+	const fresh = parsed.animated ? null : parsed.root;
+	if (!fresh) {
+		disposeParsed(parsed.root);
+		showToast('"' + name + '" is animated: reimport it by placing it again.');
+		return null;
+	}
+	const ok = swapInFresh(uuid, fresh, ['optimized', 'lod', 'reduced'], 'Reimport "' + name + '"');
+	if (!ok) {
+		disposeParsed(fresh);
+		return null;
+	}
+	return { optimized };
 }
 
 /** Free a parsed tree that never reached the scene (a cancelled import). Geometry and

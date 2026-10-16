@@ -600,6 +600,11 @@ export default {
 			'Change the laps, top speed or grip on the Race rules node in the Main graph; move the road\'s points and the race follows.'
 		];
 		/** @type {null | (() => void)} */ let helpOff = null;
+		/** 46-media R1: Race keeps its sun's shadow in a headset — fitted to the 45 m around the
+		 * driver, which puts the shadow pass at the cars, the gantry and the nearest trees instead
+		 * of the whole valley twice over (shadowFitCore.js has the measurement) */
+		/** @type {null | (() => void)} */ let shadowsOff = null;
+		const SHADOW_REACH = 45;
 		let wasActive = false;
 		let lastSweep = 0;
 		let lastTime = 0;
@@ -611,9 +616,12 @@ export default {
 					const r = rules();
 					kit.round.configure?.(r.countdown, 0, 'lose', 4);
 					if (typeof api.game?.setHelp === 'function') helpOff = api.game.setHelp(HELP);
+					if (typeof api.quality?.keepShadowsInVR === 'function') shadowsOff = api.quality.keepShadowsInVR({ radius: SHADOW_REACH });
 				} else {
 					helpOff?.();
 					helpOff = null;
+					shadowsOff?.();
+					shadowsOff = null;
 					syncEngagement();
 				}
 			}
@@ -635,6 +643,8 @@ export default {
 		api.onSceneClear?.(() => {
 			helpOff?.();
 			helpOff = null;
+			shadowsOff?.();
+			shadowsOff = null;
 			for (const k of Object.keys(claims)) delete claims[k];
 			inputs.clear();
 			roadCache = null;

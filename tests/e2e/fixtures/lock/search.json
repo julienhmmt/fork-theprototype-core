@@ -1,5 +1,5 @@
 {
-	"recordedAt": "2026-10-15T08:19:30.544Z",
+	"recordedAt": "2026-10-16T00:04:35.296Z",
 	"settings": {
 		"Theme": {
 			"rows": [
@@ -1506,14 +1506,25 @@
 		"Angle": {
 			"rows": [
 				"Angle",
+				"Compress textures (KTX2)",
 				"Face edit limit",
+				"Import defaults",
+				"LOD 1 keeps",
+				"LOD 2 keeps",
+				"LOD 3 keeps",
+				"LOD levels",
+				"Max texture size",
+				"Optimize big models automatically",
 				"Placement preview",
 				"Preview triangle budget",
 				"Show dimensions",
-				"Snap angle"
+				"Snap angle",
+				"Texture threshold",
+				"Triangle threshold"
 			],
 			"sections": [
 				"Scene",
+				"Import",
 				"VR"
 			]
 		},
@@ -1751,6 +1762,102 @@
 				"Explorer"
 			]
 		},
+		"Optimize big models automatically": {
+			"rows": [
+				"Optimize big models automatically"
+			],
+			"sections": [
+				"Import"
+			]
+		},
+		"Triangle threshold": {
+			"rows": [
+				"Optimize big models automatically",
+				"Texture threshold",
+				"Triangle threshold"
+			],
+			"sections": [
+				"Import"
+			]
+		},
+		"Texture threshold": {
+			"rows": [
+				"Optimize big models automatically",
+				"Texture threshold",
+				"Triangle threshold"
+			],
+			"sections": [
+				"Import"
+			]
+		},
+		"Max texture size": {
+			"rows": [
+				"Max texture size"
+			],
+			"sections": [
+				"Import"
+			]
+		},
+		"Compress textures (KTX2)": {
+			"rows": [
+				"Compress textures (KTX2)"
+			],
+			"sections": [
+				"Import"
+			]
+		},
+		"LOD levels": {
+			"rows": [
+				"Import defaults",
+				"LOD levels"
+			],
+			"sections": [
+				"Import"
+			]
+		},
+		"LOD 1 keeps": {
+			"rows": [
+				"LOD 1 keeps"
+			],
+			"sections": [
+				"Import"
+			]
+		},
+		"LOD 2 keeps": {
+			"rows": [
+				"LOD 1 keeps",
+				"LOD 2 keeps",
+				"LOD 3 keeps"
+			],
+			"sections": [
+				"Import"
+			]
+		},
+		"LOD 3 keeps": {
+			"rows": [
+				"LOD 3 keeps"
+			],
+			"sections": [
+				"Import"
+			]
+		},
+		"Import defaults": {
+			"rows": [
+				"Compress textures (KTX2)",
+				"Import defaults",
+				"LOD 1 keeps",
+				"LOD 2 keeps",
+				"LOD 3 keeps",
+				"LOD levels",
+				"Max texture size",
+				"Optimize big models automatically",
+				"Texture threshold",
+				"Triangle threshold"
+			],
+			"sections": [
+				"Import"
+			]
+		},
 		"Show the Made with ThePrototype badge": {
 			"rows": [
 				"Show the Made with ThePrototype badge"
@@ -1792,7 +1899,6 @@
 				"Carry object flow",
 				"Carry shader graph",
 				"Checkpoint storage",
-				"Compress textures",
 				"Double-click action",
 				"Draw repeated kit pieces together",
 				"Edit mesh wireframe colour",
@@ -1803,6 +1909,7 @@
 				"Keep automatic checkpoints",
 				"Length",
 				"Light helper length",
+				"Optimize for",
 				"Ping colour",
 				"Ping sound",
 				"Placeholder grid texture",
@@ -1853,11 +1960,28 @@
 				"Export"
 			]
 		},
-		"Compress textures": {
+		"Optimize for": {
 			"rows": [
-				"Compress textures"
+				"Compress textures (KTX2)",
+				"Import defaults",
+				"Include VR button",
+				"LOD 1 keeps",
+				"LOD 2 keeps",
+				"LOD 3 keeps",
+				"LOD levels",
+				"Max texture size",
+				"Optimize big models automatically",
+				"Optimize for",
+				"Quality",
+				"Show FPS",
+				"Show the Made with ThePrototype badge",
+				"Start fullscreen",
+				"Texture threshold",
+				"Triangle threshold",
+				"Use CDN for packs"
 			],
 			"sections": [
+				"Import",
 				"Export"
 			]
 		},
@@ -2187,6 +2311,7 @@
 				"Diagnostics",
 				"Keep automatic checkpoints",
 				"Keep versions per scene",
+				"LOD levels",
 				"Simplify distant models",
 				"Version"
 			],
@@ -2194,6 +2319,7 @@
 				"Interface",
 				"Scene",
 				"Explorer",
+				"Import",
 				"About & what’s new"
 			]
 		},
@@ -2240,6 +2366,7 @@
 				"Allow text selection everywhere",
 				"Edit mesh wireframe colour",
 				"Invert look Y",
+				"LOD levels",
 				"Light helper length",
 				"Selection wireframe",
 				"Shadow quality",
@@ -2254,6 +2381,7 @@
 				"Controls",
 				"Input",
 				"Scene",
+				"Import",
 				"VR"
 			]
 		},
@@ -2381,15 +2509,23 @@
 				"Carry object flow",
 				"Carry shader graph",
 				"Checkpoint storage",
+				"Compress textures (KTX2)",
 				"Double-click action",
 				"Draw repeated kit pieces together",
 				"Edit mesh wireframe colour",
 				"Grid colour",
 				"Grid opacity",
 				"Grid size",
+				"Import defaults",
 				"Keep automatic checkpoints",
+				"LOD 1 keeps",
+				"LOD 2 keeps",
+				"LOD 3 keeps",
+				"LOD levels",
 				"Length",
 				"Light helper length",
+				"Max texture size",
+				"Optimize big models automatically",
 				"Ping colour",
 				"Ping sound",
 				"Placeholder grid texture",
@@ -2411,13 +2547,16 @@
 				"Spatial voice",
 				"Stuck after",
 				"Sync animations",
+				"Texture threshold",
+				"Triangle threshold",
 				"Water quality",
 				"When opening another scene",
 				"Wireframe colour"
 			],
 			"sections": [
 				"Interface",
-				"Scene"
+				"Scene",
+				"Import"
 			]
 		},
 		"frame rate": {
@@ -2536,8 +2675,8 @@
 		},
 		"fps": {
 			"rows": [
-				"Compress textures",
 				"Include VR button",
+				"Optimize for",
 				"Quality",
 				"Quality preset",
 				"Reduce quality when the scene is heavy",
@@ -2563,10 +2702,29 @@
 		},
 		"lod": {
 			"rows": [
-				"Simplify distant models"
+				"Compress textures (KTX2)",
+				"Import defaults",
+				"Include VR button",
+				"LOD 1 keeps",
+				"LOD 2 keeps",
+				"LOD 3 keeps",
+				"LOD levels",
+				"Max texture size",
+				"Optimize big models automatically",
+				"Optimize for",
+				"Quality",
+				"Show FPS",
+				"Show the Made with ThePrototype badge",
+				"Simplify distant models",
+				"Start fullscreen",
+				"Texture threshold",
+				"Triangle threshold",
+				"Use CDN for packs"
 			],
 			"sections": [
-				"Scene"
+				"Scene",
+				"Import",
+				"Export"
 			]
 		},
 		"instancing": {
@@ -2686,15 +2844,34 @@
 		},
 		"quest": {
 			"rows": [
+				"Compress textures (KTX2)",
+				"Import defaults",
+				"Include VR button",
+				"LOD 1 keeps",
+				"LOD 2 keeps",
+				"LOD 3 keeps",
+				"LOD levels",
+				"Max texture size",
 				"Offer Enter VR in a headset browser",
+				"Optimize big models automatically",
+				"Optimize for",
+				"Quality",
+				"Show FPS",
 				"Show pop-ups only in the drawer",
+				"Show the Made with ThePrototype badge",
+				"Start fullscreen",
 				"Teleport",
+				"Texture threshold",
+				"Triangle threshold",
+				"Use CDN for packs",
 				"VR welcome tour",
 				"When you add files during a session"
 			],
 			"sections": [
 				"Interface",
 				"Explorer",
+				"Import",
+				"Export",
 				"VR"
 			]
 		},
@@ -2761,12 +2938,10 @@
 		},
 		"release": {
 			"rows": [
-				"Compress textures",
 				"Hold to open menu",
 				"Version"
 			],
 			"sections": [
-				"Export",
 				"VR",
 				"About & what’s new"
 			]
@@ -2832,14 +3007,17 @@
 				"Enable assistant",
 				"Mesh generation",
 				"My hand model",
+				"Optimize big models automatically",
 				"Peer hands",
 				"Placement preview",
 				"Preview triangle budget",
 				"Simplify distant models",
+				"Triangle threshold",
 				"Voice typing provider"
 			],
 			"sections": [
 				"Scene",
+				"Import",
 				"VR",
 				"AI"
 			]
@@ -3240,6 +3418,7 @@
 				"Keep versions per scene",
 				"My hand model",
 				"Offer to merge unsaved work on connect",
+				"Optimize big models automatically",
 				"Save name",
 				"Storage used",
 				"When importing files already in your library",
@@ -3248,6 +3427,7 @@
 			],
 			"sections": [
 				"Explorer",
+				"Import",
 				"VR"
 			]
 		},
@@ -3258,6 +3438,7 @@
 				"Game HUD",
 				"Include VR button",
 				"Offer Enter VR in a headset browser",
+				"Optimize for",
 				"Play on the screen, even in a headset",
 				"Refresh rate",
 				"Show FPS and draw calls",
@@ -3326,6 +3507,7 @@
 			"rows": [
 				"Apply changes",
 				"Colocation",
+				"Compress textures (KTX2)",
 				"Diagnostics",
 				"Keep a recycle bin",
 				"Peer hands",
@@ -3341,6 +3523,7 @@
 				"Interface",
 				"Scene",
 				"Explorer",
+				"Import",
 				"VR",
 				"Connection",
 				"About & what’s new"
@@ -3763,6 +3946,7 @@
 				"Diagnostics",
 				"Keep automatic checkpoints",
 				"Keep versions per scene",
+				"LOD levels",
 				"Simplify distant models",
 				"Version"
 			],
@@ -3770,6 +3954,7 @@
 				"Interface",
 				"Scene",
 				"Explorer",
+				"Import",
 				"About & what’s new"
 			]
 		},
@@ -3887,6 +4072,9 @@
 			"rows": [
 				"Colocation",
 				"Download shared files automatically",
+				"LOD 1 keeps",
+				"LOD 2 keeps",
+				"LOD 3 keeps",
 				"My hand model",
 				"Offer to merge unsaved work on connect",
 				"Ping colour",
@@ -3899,6 +4087,7 @@
 			"sections": [
 				"Scene",
 				"Explorer",
+				"Import",
 				"VR"
 			]
 		},
@@ -3924,9 +4113,9 @@
 		},
 		"export": {
 			"rows": [
-				"Compress textures",
 				"Custom theme",
 				"Include VR button",
+				"Optimize for",
 				"Project actions",
 				"Quality",
 				"Show FPS",
@@ -4059,7 +4248,6 @@
 				"Colocation",
 				"Colocation probe",
 				"Comfort vignette",
-				"Compress textures",
 				"Face edit limit",
 				"Flying",
 				"Game HUD",
@@ -4075,6 +4263,7 @@
 				"Mirror turn",
 				"My hand model",
 				"Offer Enter VR in a headset browser",
+				"Optimize for",
 				"Passthrough",
 				"Peer hands",
 				"Pivot point",
@@ -4112,15 +4301,24 @@
 		"ai": {
 			"rows": [
 				"Colocation probe",
+				"Compress textures (KTX2)",
 				"Download shared files automatically",
 				"Enable assistant",
 				"Focus mode — maximize the area under the pointer (the viewport alone, or a docked window filling the window); again to restore",
 				"Ghost hands",
 				"Height",
 				"Hold to move vertex",
+				"Import defaults",
+				"LOD 1 keeps",
+				"LOD 2 keeps",
+				"LOD 3 keeps",
+				"LOD levels",
 				"Lift the corner buttons above docked panels",
 				"Loop select (faces: again = perpendicular; edges: the chain)",
+				"Max texture size",
 				"Mesh generation",
+				"Optimize big models automatically",
+				"Optimize for",
 				"Placeholder style",
 				"Project actions",
 				"Reset tips",
@@ -4128,7 +4326,9 @@
 				"Stance",
 				"Storage used",
 				"Teleport",
+				"Texture threshold",
 				"Toggle AI prompt bar",
+				"Triangle threshold",
 				"Voice typing provider"
 			],
 			"sections": [
@@ -4137,6 +4337,8 @@
 				"Shortcuts",
 				"Scene",
 				"Explorer",
+				"Import",
+				"Export",
 				"VR",
 				"AI"
 			]
@@ -4319,6 +4521,7 @@
 				"Environment",
 				"Fog",
 				"Grid",
+				"Level of detail",
 				"Music",
 				"Orbit feel",
 				"Overrides — this device",
@@ -4441,6 +4644,9 @@
 				"Saved views",
 				"Start view"
 			],
+			"level of detail": [
+				"Level of detail"
+			],
 			"grid": [
 				"Grid",
 				"Snap to elements",
@@ -4526,7 +4732,9 @@
 				"Advanced",
 				"Selection passes through"
 			],
-			"lod": [],
+			"lod": [
+				"Level of detail"
+			],
 			"render": [
 				"Overrides — this device",
 				"View",
@@ -4535,6 +4743,7 @@
 			"light": [
 				"Components",
 				"Environment",
+				"Level of detail",
 				"Overrides — this device",
 				"Sky image (HDRI)",
 				"View",

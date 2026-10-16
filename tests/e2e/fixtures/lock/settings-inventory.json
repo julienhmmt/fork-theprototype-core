@@ -1014,6 +1014,58 @@
 		}
 	],
 	"Node types": [],
+	"Import": [
+		{
+			"name": "Optimize big models automatically",
+			"kind": "toggle",
+			"desc": ""
+		},
+		{
+			"name": "Triangle threshold",
+			"kind": "number",
+			"desc": ""
+		},
+		{
+			"name": "Texture threshold",
+			"kind": "segment",
+			"desc": ""
+		},
+		{
+			"name": "Max texture size",
+			"kind": "segment",
+			"desc": ""
+		},
+		{
+			"name": "Compress textures (KTX2)",
+			"kind": "toggle",
+			"desc": ""
+		},
+		{
+			"name": "LOD levels",
+			"kind": "segment",
+			"desc": ""
+		},
+		{
+			"name": "LOD 1 keeps",
+			"kind": "number",
+			"desc": ""
+		},
+		{
+			"name": "LOD 2 keeps",
+			"kind": "number",
+			"desc": ""
+		},
+		{
+			"name": "LOD 3 keeps",
+			"kind": "number",
+			"desc": ""
+		},
+		{
+			"name": "Import defaults",
+			"kind": "button:Reset",
+			"desc": ""
+		}
+	],
 	"Export": [
 		{
 			"name": "Show the Made with ThePrototype badge",
@@ -1046,8 +1098,8 @@
 			"desc": ""
 		},
 		{
-			"name": "Compress textures",
-			"kind": "toggle",
+			"name": "Optimize for",
+			"kind": "segment",
 			"desc": ""
 		}
 	],
