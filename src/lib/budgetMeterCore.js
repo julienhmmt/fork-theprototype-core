@@ -19,6 +19,8 @@
 // runtime (budgetMeter.js) hands it the roots and the two facts it cannot know (which meshes batch as
 // kit instances, which already have a LOD). Unit-tested in tests/unit/budgetMeterCore.test.js.
 
+import { IMPORT_DEFAULTS } from './gltfOptimize/presets.js';
+
 /** @typedef {'quest'|'phone'|'desktop'} TargetId */
 /** @typedef {'calls'|'triangles'|'textureMB'|'lights'|'shadowLights'|'shadowCasters'} Metric */
 /** @typedef {'green'|'amber'|'red'} Tier */
@@ -56,15 +58,18 @@ export const AMBER_FROM = 0.8;
  * default sun alone is 1 of 1 shadow lights, and an empty scene must not read amber */
 export const DISCRETE = /** @type {Metric[]} */ (['lights', 'shadowLights']);
 
-// What the 46 import/export pipeline does to a heavy asset (USER-PROMPT.md decision: models over 50k
-// triangles and textures over 2048 px are optimized — LOD chain + meshopt + KTX2/Basis). 46-int: when
-// 46-pipeline's Settings ▸ Import store is merged, read its thresholds here instead.
-export const OPTIMIZE_TRIANGLES = 50000;
-export const OPTIMIZE_TEXTURE_PX = 2048;
+// What the 46 import/export pipeline does to a heavy asset: the shipped Settings ▸ Import defaults
+// (gltfOptimize/presets.js). measureScene takes this device's settings as `optimize` (budgetMeter.js
+// passes the Settings ▸ Import store), so the estimate follows the thresholds and ratios an import uses.
+export const OPTIMIZE_TRIANGLES = IMPORT_DEFAULTS.triangleThreshold;
+export const OPTIMIZE_TEXTURE_PX = IMPORT_DEFAULTS.textureThreshold;
 /** KTX2/Basis stays compressed on the GPU (BC7/ASTC/ETC: 1 byte per texel or less) against RGBA8's 4 */
 export const KTX2_RATIO = 0.25;
-/** the far levels a LOD chain adds, as a share of LOD 0's triangles */
-export const LOD_RATIOS = [0.5, 0.25];
+/** the coarser levels a LOD chain adds, as a share of LOD 0's triangles */
+export const LOD_RATIOS = IMPORT_DEFAULTS.lodRatios;
+
+/** @typedef {{triangleThreshold?: number, textureThreshold?: number, maxTextureSize?: number,
+ *   compress?: boolean, lodRatios?: readonly number[]}} OptimizeSettings */
 
 /**
  * The three targets from perf/budgets.json: Quest = the gate's `defaults` + Quest's meter-only rows,
@@ -154,16 +159,18 @@ function textureSide(texture) {
 }
 
 /**
- * What optimizing this texture would leave on the GPU (resize to OPTIMIZE_TEXTURE_PX, then KTX2).
- * Already compressed = nothing to win.
- * @param {any} texture
+ * What optimizing this texture would leave on the GPU (past the threshold: resize to the max size;
+ * then KTX2 when compression is on). Already compressed = nothing to win.
+ * @param {any} texture @param {OptimizeSettings} [opt]
  */
-export function optimizedTextureBytes(texture) {
+export function optimizedTextureBytes(texture, opt = IMPORT_DEFAULTS) {
 	const bytes = textureBytes(texture);
 	if (texture?.isCompressedTexture) return bytes;
 	const side = textureSide(texture);
-	const scale = side > OPTIMIZE_TEXTURE_PX ? (OPTIMIZE_TEXTURE_PX / side) ** 2 : 1;
-	return bytes * scale * KTX2_RATIO;
+	const over = opt.textureThreshold ?? OPTIMIZE_TEXTURE_PX;
+	const max = opt.maxTextureSize ?? over;
+	const scale = side > over && side > max ? (max / side) ** 2 : 1;
+	return bytes * scale * (opt.compress === false ? 1 : KTX2_RATIO);
 }
 
 /** @param {any} geometry @returns {number} */
@@ -222,10 +229,12 @@ function texturesOf(mat, add) {
  *
  * @param {{roots: {object: any, kind: 'objects'|'environment'|'module', label?: string}[],
  *   background?: any, environment?: any, kitInstancing?: boolean,
- *   kitSourceOf?: (mesh: any) => any, hasLod?: (mesh: any) => boolean}} input
+ *   kitSourceOf?: (mesh: any) => any, hasLod?: (mesh: any) => boolean, optimize?: OptimizeSettings}} input
  */
 export function measureScene(input) {
 	const { roots = [], kitInstancing = false, kitSourceOf = () => null, hasLod = () => false } = input ?? {};
+	const optimize = { ...IMPORT_DEFAULTS, ...(input?.optimize ?? {}) };
+	const farRatio = optimize.lodRatios?.length ? optimize.lodRatios[optimize.lodRatios.length - 1] : 1;
 	/** @type {CostRow[]} */
 	const rows = [];
 	/** every texture source counted so far (the scene total is deduped; a row counts its own) */
@@ -288,10 +297,10 @@ export function measureScene(input) {
 					}
 					row.calls += calls;
 					if (node.isMesh && node.castShadow) row.shadowCasters++;
-					if (node.isMesh && !node.isInstancedMesh && tris > OPTIMIZE_TRIANGLES && !hasLod(node)) {
+					if (node.isMesh && !node.isInstancedMesh && tris > optimize.triangleThreshold && !hasLod(node)) {
 						row.save.heavyMeshes++;
-						// the far levels draw LOD_RATIOS of LOD 0: what the farthest one saves
-						row.save.lodTriangles += Math.round(tris * (1 - LOD_RATIOS[LOD_RATIOS.length - 1]));
+						// the coarser levels draw lodRatios of LOD 0: what the farthest one saves
+						row.save.lodTriangles += Math.round(tris * (1 - farRatio));
 					}
 					const mats = Array.isArray(node.material) ? node.material : [node.material];
 					for (const m of mats)
@@ -302,8 +311,8 @@ export function measureScene(input) {
 							own.add(key);
 							const b = textureBytes(t);
 							bytes += b;
-							optimized += optimizedTextureBytes(t);
-							if (textureSide(t) > OPTIMIZE_TEXTURE_PX) row.save.bigTextures++;
+							optimized += optimizedTextureBytes(t, optimize);
+							if (textureSide(t) > optimize.textureThreshold) row.save.bigTextures++;
 						});
 				}
 			}

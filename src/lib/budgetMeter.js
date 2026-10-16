@@ -24,6 +24,7 @@ import { moduleGroupList } from './moduleContent';
 import { MODULE_WORLD_ROOT } from './moduleWorld';
 import { defaults, targets } from '../../perf/budgets.json';
 import { resolveTargets, measureScene, judgeCost, TARGET_IDS } from './budgetMeterCore';
+import { importSettings } from './importSettings';
 
 /** the three targets, Quest = the gate's defaults */
 export const TARGETS = resolveTargets({ defaults, targets });
@@ -118,6 +119,7 @@ export function sampleBudget() {
 		environment: scene?.environment,
 		kitInstancing: get(kitInstancingEnabled),
 		kitSourceOf: kitMeshSource,
+		optimize: get(importSettings),
 		hasLod: (/** @type {any} */ mesh) => {
 			if (lodded.has(mesh.uuid)) return true;
 			for (let n = mesh; n && n !== group; n = n.parent) if (n.userData?.lod) return true;

@@ -218,7 +218,8 @@ describe('measureScene', () => {
 		const statue = m.rows.find((r) => r.name === 'Statue');
 		expect(statue.triangles).toBeGreaterThan(OPTIMIZE_TRIANGLES);
 		expect(statue.save.heavyMeshes).toBe(1);
-		expect(statue.save.lodTriangles).toBe(Math.round(statue.triangles * 0.75));
+		// the shipped Settings ▸ Import chain ends at 10 % of LOD 0
+		expect(statue.save.lodTriangles).toBe(Math.round(statue.triangles * 0.9));
 		expect(statue.save.bigTextures).toBe(1);
 		expect(statue.save.textureMB).toBeGreaterThan(statue.textureMB * 0.9);
 		const crate = m.rows.find((r) => r.name === 'Crate');
@@ -226,6 +227,21 @@ describe('measureScene', () => {
 		// a mesh that already switches detail by distance gains nothing from a LOD chain
 		const withLod = measureScene({ roots: [{ object: group, kind: 'objects' }], hasLod: (n) => n === b });
 		expect(withLod.rows.find((r) => r.name === 'Statue').save.lodTriangles).toBe(0);
+	});
+
+	it("the estimate follows this device's Settings ▸ Import (46-int: the pipeline's own numbers)", () => {
+		const { group } = scene();
+		const roots = [{ object: group, kind: 'objects' }];
+		const statueOf = (optimize) => measureScene({ roots, optimize }).rows.find((r) => r.name === 'Statue');
+		// a higher triangle threshold: the statue is no longer a heavy mesh
+		expect(statueOf({ triangleThreshold: 10_000_000 }).save.heavyMeshes).toBe(0);
+		// a two-level chain at 50 % / 25 % saves three quarters
+		const two = statueOf({ lodRatios: [0.5, 0.25] });
+		expect(two.save.lodTriangles).toBe(Math.round(two.triangles * 0.75));
+		// compression off: a resize only, no KTX2 quarter
+		expect(optimizedTextureBytes(tex(4096, 4096), { textureThreshold: 2048, maxTextureSize: 2048, compress: false })).toBeCloseTo(textureBytes(tex(2048, 2048)));
+		// a texture past the threshold but within the max size is only compressed
+		expect(optimizedTextureBytes(tex(4096, 4096), { textureThreshold: 2048, maxTextureSize: 4096 })).toBeCloseTo(textureBytes(tex(4096, 4096)) * 0.25);
 	});
 });
 
