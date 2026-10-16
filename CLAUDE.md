@@ -4528,7 +4528,7 @@ loadable play content. Everything a user does must be visible to connected peers
 - `event.code` (`Digit1`) for digit shortcuts — `event.key` breaks with Shift.
 - Stores initialized `writable(null)`/`writable([])` infer `never` — annotate with
   JSDoc `Writable<any>`; keep NEW files clean (legacy implicit-any baseline stays).
-- **Runtime = node >= 24** (engines-gated, engine-strict .npmrc; 2026-08-01). Plain
+- **Runtime = node >= 24**, pinned 24.19.0 + npm 11.17.0 in `.nvmrc`/`.mise.toml` (1.36; engines-gated, engine-strict .npmrc). Plain
   `npm install` works — the old `--legacy-peer-deps` requirement died with three 0.185
   (postprocessing widened its peer range). Dev https uses the repo's own `certs/`
   files via `server.https` in vite.config (vite-plugin-mkcert was dropped). npm 11

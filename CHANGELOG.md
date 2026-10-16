@@ -5,6 +5,40 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.36.0 — Your 1.35 review: clusters you can reach, windows you can park anywhere, and a cleaner dock 🧲
+
+Everything from your review of the 1.35 preview, plus a tooling clean-up.
+
+### 🧩 The top of the screen
+
+- 🖱️ **Right-click the Connect bar** (long press on touch) for Move, Pin to top row / Float, Reset position and Reset all
+  — in Edit positions or outside it. A moved Connect bar now stays where you put it.
+- 👀 **The buttons beside the logo** (hidden by default on desktop) come back from Edit positions: their menu's **Show
+  cluster** turns them on, and their grip really moves them, like every other cluster.
+- ⚡ **No more sliding**: the logo, the buttons beside it, the corner buttons, the profile and the Connect bar jump to
+  their new place at once when a sidebar is pinned, unpinned or closed.
+- 👤 **The profile menu opens under the profile button** wherever it is — beside a pinned right sidebar or moved in Edit
+  positions.
+
+### 🪟 Windows and the dock
+
+- 🧲 **Hold Ctrl (Cmd on a Mac) while dragging a floating window** to place it anywhere — over a sidebar or the dock —
+  without docking. Docking stays the default; the lit target says "Hold Ctrl to place without docking", and you can press
+  or release the key mid-drag. On touch, the window menu's **Float** does the same.
+
+### 🐞 Fixed
+
+- 📸 Switching dock tabs no longer flashes a docked Statistics, Objects, Chat or AI assistant window full screen for a
+  frame (after the docked Image editor or Node editor).
+- 🧹 The empty dock's tab strip no longer shows a sliver of a tab bar left of its "+".
+
+### 🔧 Tooling
+
+- 🛡️ The open Dependabot alerts are cleared (none critical, high or medium left); an unused dev dependency (gh-pages) is
+  gone.
+- 📌 Node 24.19.0 and npm 11.17.0 are pinned in `.nvmrc` / `.mise.toml`, and CI reads the same file.
+- 🧾 Every release now ships an SPDX **SBOM**, and CI fails on a critical or high vulnerability (grype).
+
 ## 1.35.0 — Your 1.34 review: windows that move and dock anywhere, a dock that splits, and a toolbar you place 🪟
 
 Everything from your review of the 1.34 preview, plus four bugs the test clean-up found.
