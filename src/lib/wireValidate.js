@@ -313,6 +313,15 @@ export const VALIDATORS = {
 	// else onto userData)
 	objectParameters: (d) => {
 		if (d.parameter === 'lod') return isUuid(d.uuid) && (d.lod === null || (!!d.lod && typeof d.lod === 'object' && isArray(d.lod.levels)));
+		// 47 T1/T2: splat bytes are raw (ArrayBuffer / typed view) of exactly res² × 4, or null
+		if (d.parameter === 'terrainSplat') {
+			const res = d.res;
+			const len = d.bytes instanceof ArrayBuffer ? d.bytes.byteLength : ArrayBuffer.isView(d.bytes) ? d.bytes.byteLength : -1;
+			return isUuid(d.uuid) && (d.bytes === null || (Number.isInteger(res) && res >= 2 && res <= 1024 && len === res * res * 4));
+		}
+		if (d.parameter === 'terrainLayers') return isUuid(d.uuid) && (d.terrainLayers === null || isArray(d.terrainLayers));
+		if (d.parameter === 'terrainScatter')
+			return isUuid(d.uuid) && (d.terrainScatter === null || (!!d.terrainScatter && typeof d.terrainScatter === 'object' && isArray(d.terrainScatter.sets)));
 		if (d.parameter === 'water' || d.parameter === 'bubbles' || d.parameter === 'pour') {
 			const v = d[d.parameter];
 			return isUuid(d.uuid) && (v === null || (!!v && typeof v === 'object' && !isArray(v)));

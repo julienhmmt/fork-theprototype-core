@@ -87,6 +87,9 @@ describe('terrain splat', () => {
 		expect(l).toHaveLength(4);
 		expect(l[0]).toEqual({ color: '#ff0000', texture: 'abc', tiling: 200 });
 		expect(l[1].color).toBe(DEFAULT_LAYERS[1].color);
+		// layer 0 alone may be colourless (= the material)
+		expect(normalizeLayers([{ color: '' }, { color: '' }])[0].color).toBe('');
+		expect(normalizeLayers([{ color: '' }, { color: '' }])[1].color).toBe(DEFAULT_LAYERS[1].color);
 	});
 });
 

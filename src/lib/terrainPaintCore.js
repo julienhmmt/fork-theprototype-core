@@ -21,9 +21,12 @@ export const LAYER_COUNT = 4;
 export const TILING_MIN = 0.1;
 export const TILING_MAX = 200;
 
-/** The four default layers: grass, dirt, rock, sand. Tiling = repeats across the tile. */
+/** The four default layers. Layer 0 with NO colour and NO texture is "the material": the
+ * terrain's own colour × map (so painting a fresh terrain changes only where you paint,
+ * and the Material section keeps driving the base). Then dirt, rock, sand. Tiling =
+ * repeats across the tile. */
 export const DEFAULT_LAYERS = Object.freeze([
-	Object.freeze({ color: '#5f8f3e', texture: '', tiling: 8 }),
+	Object.freeze({ color: '', texture: '', tiling: 8 }),
 	Object.freeze({ color: '#8a6a45', texture: '', tiling: 8 }),
 	Object.freeze({ color: '#808080', texture: '', tiling: 8 }),
 	Object.freeze({ color: '#d8c690', texture: '', tiling: 8 })
@@ -170,6 +173,11 @@ export function wireSplatBytes(raw, res) {
 const HEX = /^#[0-9a-f]{6}$/i;
 const HASH = /^[0-9a-zA-Z_-]{1,128}$/;
 
+/** Is layer 0 still "the material" (no colour, no texture)? @param {{color: string, texture: string}} layer0 */
+export function baseIsMaterial(layer0) {
+	return !layer0.color && !layer0.texture;
+}
+
 /** Exactly four layers, every field clamped/defaulted. @param {any} layers */
 export function normalizeLayers(layers) {
 	const list = Array.isArray(layers) ? layers : [];
@@ -177,7 +185,8 @@ export function normalizeLayers(layers) {
 		const l = list[i] && typeof list[i] === 'object' ? list[i] : {};
 		const tiling = Number(l.tiling);
 		return {
-			color: typeof l.color === 'string' && HEX.test(l.color) ? l.color.toLowerCase() : def.color,
+			// only layer 0 may be colourless (= the material); a bad colour falls back
+			color: typeof l.color === 'string' && (HEX.test(l.color) || (i === 0 && l.color === '')) ? l.color.toLowerCase() : def.color,
 			texture: typeof l.texture === 'string' && HASH.test(l.texture) ? l.texture : '',
 			tiling: Number.isFinite(tiling) ? Math.min(TILING_MAX, Math.max(TILING_MIN, tiling)) : def.tiling
 		};

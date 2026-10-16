@@ -125,6 +125,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
   import { startHelperLayer, helpersInPlay } from '$lib/helperLayer'
   import { startCloudPlugin } from '$lib/cloudPlugin'
   import { startShaderGraphs } from '$lib/shaderGraph'
+  import { startTerrainSurface } from '$lib/terrainSurface'
   import { startMaterialSharing } from '$lib/materialSharing'
   import { startMaterialTiers } from '$lib/materialTiers.js'
   import { startShaderSync } from '$lib/shaderSync'
@@ -296,6 +297,8 @@ import { startMusicToolbox } from './lib/musicToolbox'
     startHelperLayer()
     // shader graphs: the compile/target wiring + the replication and history seams
     startShaderGraphs()
+    // 47 T1/T2: painted terrains (splat shader) + scatter instances, derived from userData
+    startTerrainSurface()
     // D2: re-unifies shared materials by id whenever the scene changes — every carrier
     // (GLTF, a peer's per-object messages, undo) rebuilds materials, and the id survives
     // where the instance does not

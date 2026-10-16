@@ -24,6 +24,7 @@
 	import MenuButton from './inspector/MenuButton.svelte';
 	import InsToggle from './inspector/InsToggle.svelte';
 	import SceneQualitySection from './inspector/SceneQualitySection.svelte'; // 42 I12
+	import TerrainPaintSection from './inspector/TerrainPaintSection.svelte'; // 47 T1/T2
 	import HdriSection from './scene/HdriSection.svelte'; // 37-hdri
 	import PhysicsFloats from '../sim/PhysicsFloats.svelte'; // 36-sim I1
 	import FluidEmitterSection from '../sim/FluidEmitterSection.svelte'; // 36-fb F23
@@ -3735,6 +3736,11 @@
 						</div>
 					{/if}
 				</Section>
+			{/if}
+
+			{#if $selectedObject?.userData?.terrain && !multiCount}
+				<!-- 47 T1/T2: terrain paint layers + scatter sets -->
+				<TerrainPaintSection object={$selectedObject} />
 			{/if}
 
 			{#if isGroup}
