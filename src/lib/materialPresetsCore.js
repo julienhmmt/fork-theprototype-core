@@ -22,6 +22,8 @@
 // payload), so the wire gains only the library broadcast (`matpresets`, the `envpresets`
 // shape) — an applied preset is an ordinary material replace every peer already understands.
 
+import { normalizeSource } from './cc0/cc0Core.js';
+
 export const PRESET_VERSION = 1;
 
 /** the IndexedDB key prefix (beside `envpreset:`) */
@@ -260,6 +262,9 @@ export function normalizePreset(input) {
 	}
 	if (PROCEDURAL_KINDS.includes(input.procedural)) out.procedural = input.procedural;
 	if (Number.isFinite(input.savedAt)) out.savedAt = input.savedAt;
+	// 47-cc0: a CC0 asset's credit (site / authors / licence / url) — the swatch shows it
+	const source = normalizeSource(input.source);
+	if (source) out.source = source;
 	return out;
 }
 

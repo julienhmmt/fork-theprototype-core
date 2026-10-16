@@ -27,6 +27,7 @@
 		importMaterialPreset
 	} from '$lib/materialPresets';
 	import { sameLook, swatchLayers, NAME_MAX, LOOK_DEFAULTS } from '$lib/materialPresetsCore';
+	import { creditLine } from '$lib/cc0/cc0Core.js'; // 47-cc0: a CC0 preset names its source
 
 	/** @type {{ material: any, count?: number, fan: (label: string, fn: (object: any) => void) => void, primaryUuid?: string }} */
 	let { material, count = 0, fan, primaryUuid = '' } = $props();
@@ -251,7 +252,8 @@
 					data-preset-kind="mine"
 					data-preset-name={p.name}
 					aria-pressed={editing ? picked?.kind === 'mine' && picked.name === p.name : isActive(p.payload)}
-					title={editing ? `${p.name} — pick to rename, export or delete` : `${p.name} — apply to the selection`}
+					title={(editing ? `${p.name} — pick to rename, export or delete` : `${p.name} — apply to the selection`) + (p.payload?.source ? `\n${creditLine(p.payload.source)}` : '')}
+					data-preset-source={p.payload?.source?.site ?? undefined}
 					onclick={() => (editing ? pick('mine', p.name, p.payload) : apply(p.payload, p.name))}
 				>
 					<span class="mp-ball" style:background={swatchStyle(p.payload)} style:background-blend-mode={swatchBlend(p.payload)}></span>

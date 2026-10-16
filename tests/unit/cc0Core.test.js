@@ -1,3 +1,4 @@
+// @ts-nocheck — fixtures of the sites' JSON, deliberately loose
 import { describe, it, expect } from 'vitest';
 import {
 	defaultResolution,

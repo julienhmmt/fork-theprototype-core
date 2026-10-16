@@ -106,6 +106,7 @@
 	// route that replaces the world.
 	import { guardSceneReplace, travelToPeerScene } from '$lib/sceneOpenGuard';
 	import VersionHistory from './VersionHistory.svelte';
+	import Cc0Credit from './Cc0Credit.svelte'; // 47-cc0: a CC0 download names its source
 	// 21-G2: the "update available" dot on old scene versions. The manifest store is
 	// passed as the reactive dependency — a helper reading through get() registers none
 	// (the documented rule), so the badge would otherwise never appear live.
@@ -8216,6 +8217,8 @@
 					</div>
 					<!-- 21-G7: a scene file's PAST belongs with the rest of its facts. Renders
 					     itself away for every other kind, and for a pack card (no history to have). -->
+					<!-- 47-cc0: where a free CC0 download came from (site / authors / licence / link) -->
+					<Cc0Credit id="explorer-cc0-source" source={selItem.source} />
 					<VersionHistory item={selItem} onDownloadAll={downloadSceneVersions} />
 				{:else if selected?.kind === 'folder'}
 					{@const counts = folderCounts(selected.folder.id)}
