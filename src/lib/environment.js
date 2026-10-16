@@ -14,6 +14,7 @@ import { safeStorage } from './safeStorage';
 import { sceneLodBias } from './lod';
 // 37-hdri: the PURE half only (normalize/merge/rotate) — the loader is a registered layer below
 import { mergeHdriPatch, rotateAboutY } from './hdri/hdriCore.js';
+import { ENV_RIG_SUN } from './shadowFitCore.js';
 
 // Environment v2 (phase 70). Everything environmental lives under ONE group at
 // the scene root: `environment-root` — the preset rig (hemi+sun) plus any
@@ -142,7 +143,7 @@ export const peerEnvPresets = writable(/** @type {Record<string, any[]>} */ ({})
 
 export const ENV_ROOT = 'environment-root';
 const RIG_HEMI = 'env-rig-hemi';
-const RIG_SUN = 'env-rig-sun';
+const RIG_SUN = ENV_RIG_SUN;
 const CATCHER = 'env-shadow-catcher';
 const GROUND = 'env-ground';
 const EXTRA_PREFIX = 'env-extra-';

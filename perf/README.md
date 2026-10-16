@@ -21,6 +21,10 @@ same place. The check pins that:
 - **headset analogue**: 1280×720, post stack off, Shaded, shadows off (a headset enters at the governor's
   XR floor, "shadows off"), a fake XR session standing at the spawn (games) or at each named viewpoint
   of `scripts/level-views.cjs` (levels);
+- **shadows KEPT for a game that budgets them** (46-media R1): a module holding
+  `api.quality.keepShadowsInVR` (Race) makes a headset enter at full quality, so the gate counts that game
+  with shadows on — one directional caster, fitted around the player (`src/lib/shadowBudget.js`). The
+  log line says `shadows KEPT (budgeted)`. Race: 89 calls / 153k tris with shadows (142 / 306k before the fit);
 - the **adaptive governor off** (`autoQuality=false`), so a slow runner cannot step quality down;
 - every kit piece refilled and the loader idle before counting;
 - the **median** frame that rendered over 3 s, not a mean over rAF ticks.

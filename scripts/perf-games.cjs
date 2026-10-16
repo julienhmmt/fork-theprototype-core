@@ -150,8 +150,17 @@ async function probeGame(browser, game) {
 			});
 		}
 		// the gate: a headset ENTERS with shadows off (the governor's XR entry floor, step 1) —
-		// the protocol's "shadows off in Interact"; the governor itself is off (CHECK_STORAGE)
-		if (CHECK) await page.evaluate(() => window.__stores.lightParams.shadowQuality.set('off'));
+		// the protocol's "shadows off in Interact"; the governor itself is off (CHECK_STORAGE).
+		// 46-media R1: a scene whose shadow is BUDGETED (a module holds api.quality.keepShadowsInVR —
+		// Race) enters a headset WITH shadows, so the gate counts it with them: the entry the headset
+		// really makes, never a friendlier one. `shadows` in the result says which.
+		let shadows = null;
+		if (CHECK)
+			shadows = await page.evaluate(() => {
+				const kept = !!window.__stores.shadowClaims?.shadowsKeptInXR?.();
+				window.__stores.lightParams.shadowQuality.set(kept ? 'high' : 'off');
+				return kept ? 'kept' : 'off';
+			});
 		await page.locator('#play-button').click({ timeout: 10000 }).catch(() => page.evaluate(() => window.__stores.isLocked.set(true)));
 		await page.waitForTimeout(1500);
 		const start = page.locator('#hud-layer button', { hasText: /^\W*(Play|Start)\b/i }).first();
@@ -193,7 +202,7 @@ async function probeGame(browser, game) {
 		const m = await page.evaluate(readScene);
 		if (profile) m.profile = profile;
 		const errors = h.pageErrors ? h.pageErrors(peer).length : 0;
-		return { slug: game.slug, title: game.title, modules: (game.modules || []).map((x) => x.id), started, pageErrors: errors, ...m };
+		return { slug: game.slug, title: game.title, modules: (game.modules || []).map((x) => x.id), started, pageErrors: errors, ...(shadows ? { shadows } : {}), ...m };
 	} catch (e) {
 		return { slug: game.slug, error: String(e?.message ?? e).split('\n')[0] };
 	} finally {
@@ -320,9 +329,9 @@ async function runCheck() {
 		let r = await probeGame(browser, g);
 		// one retry: a page that lost its recorder or WebGL context is the runner, not the scene
 		if (r.error) r = await probeGame(browser, g);
-		rows.push(r.skipped || r.error ? { kind: 'game', slug: g.slug, error: r.skipped ?? r.error } : { kind: 'game', slug: g.slug, ...counts(r), started: r.started, state: r.state });
+		rows.push(r.skipped || r.error ? { kind: 'game', slug: g.slug, error: r.skipped ?? r.error } : { kind: 'game', slug: g.slug, ...counts(r), ...(r.shadows ? { shadows: r.shadows } : {}), started: r.started, state: r.state });
 		const last = rows[rows.length - 1];
-		console.log(`game ${g.slug}: ${last.error ? 'NOT MEASURED ' + last.error : `${last.calls} calls (max ${last.maxCalls}), ${last.triangles} tris, ${last.lights} lights, ${last.textureMB} MB over ${last.frames} frames`} (${Math.round((Date.now() - t0) / 1000)}s)`);
+		console.log(`game ${g.slug}: ${last.error ? 'NOT MEASURED ' + last.error : `${last.calls} calls (max ${last.maxCalls}), ${last.triangles} tris, ${last.lights} lights, ${last.textureMB} MB over ${last.frames} frames${last.shadows === 'kept' ? ', shadows KEPT (budgeted)' : ''}`} (${Math.round((Date.now() - t0) / 1000)}s)`);
 	}
 	for (const t of levels) {
 		const t0 = Date.now();
@@ -338,7 +347,7 @@ async function runCheck() {
 	const verdict = budgetLib.judge(BUDGETS, rows);
 	const head =
 		`## perf budget gate — ${LABEL}\n\n${new Date().toISOString()} · ${h.URL} · scenes ${SCENES_DIR || SCENES_REF} · ` +
-		`profile: headset analogue (1280x720, post off, Shaded, shadows off, governor off), standing at the spawn/viewpoint, ` +
+		`profile: headset analogue (1280x720, post off, Shaded, shadows off — kept for a game that budgets them, governor off), standing at the spawn/viewpoint, ` +
 		`median display frame over ${SECONDS} s · ${process.env.SWIFTSHADER ? 'SwiftShader' : 'GPU args'}\n\n`;
 	const md = head + budgetLib.report(verdict);
 	fs.mkdirSync(OUT, { recursive: true });

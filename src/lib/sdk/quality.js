@@ -3,6 +3,7 @@
 
 import { qualityState, xrQualityDebug } from '../qualityGovernor';
 import { get } from 'svelte/store';
+import { claimBudgetedShadows } from '../shadowClaims';
 
 /** @param {import('./context.js').SdkContext} ctx */
 export function sdkQuality(ctx) {
@@ -12,6 +13,7 @@ export function sdkQuality(ctx) {
 		 * 31-perf K4: the ADAPTIVE QUALITY LEVEL on this device, so a module can cut its own
 		 * effects/particles/draw distance when the frame rate cannot hold. `level` is 0 (best)
 		 * … `max` (every step taken); a headset session starts at 1 (shadows off) in auto mode
+		 * (at 0 while a `keepShadowsInVR` claim holds)
 		 * and a game's Quality setting can pin it. `labels` names the steps in force.
 		 * `onChange(fn)` calls `fn(level, {max, labels, reason, vr})` on every level CHANGE and
 		 * returns `off()` (also released when the module is disabled). LOCAL: a fact about this
@@ -43,6 +45,18 @@ export function sdkQuality(ctx) {
 					}
 				});
 				return owned('quality.onChange', off);
+			},
+			/**
+			 * 46-media R1: KEEP SHADOWS IN A HEADSET, inside the budget. While the claim holds, this
+			 * device draws ONE directional shadow (the scene's own sun; the environment rig's stands
+			 * down) fitted to a square of `radius` metres around the player, in Play and in a headset
+			 * — and a headset ENTERS at full quality instead of the "shadows off" floor. The ladder
+			 * still takes shadows off when the frames cannot hold. Hold it while your game is in the
+			 * scene; returns `off()` (also released when the module is disabled). LOCAL.
+			 * @param {{radius?: number}} [opts] radius 8..150 m, default 40
+			 */
+			keepShadowsInVR(opts = {}) {
+				return owned('quality.keepShadowsInVR', claimBudgetedShadows({ radius: opts?.radius, owner: ctx.moduleId }));
 			}
 		}
 	};
@@ -56,5 +70,6 @@ sdkQuality.surface = {
 	'quality.max': 'value',
 	'quality.labels': 'value',
 	'quality.vr': 'value',
-	'quality.onChange': 'registers'
+	'quality.onChange': 'registers',
+	'quality.keepShadowsInVR': 'registers'
 };

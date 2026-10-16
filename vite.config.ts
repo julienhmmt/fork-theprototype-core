@@ -155,7 +155,8 @@ export default defineConfig({
 			// (CodeEditor.svelte); discovered on first use they reloaded the page the same way
 			// 46: the optimizer Worker's dependencies, for the same reason as the simplifier above — the
 			// first optimize (an import, a Quest export) discovered them and reloaded the page mid-export
-			include: ['lodash.groupby', 'meshoptimizer/simplifier', '@codemirror/state', '@codemirror/language', '@lezer/highlight', 'meshoptimizer', '@gltf-transform/core', '@gltf-transform/extensions', '@gltf-transform/functions', 'ktx-parse']
+			// 46-media H1: libheif's loader is CJS reached only from inside the HEIC worker — the same rule
+			include: ['lodash.groupby', 'meshoptimizer/simplifier', '@codemirror/state', '@codemirror/language', '@lezer/highlight', 'meshoptimizer', '@gltf-transform/core', '@gltf-transform/extensions', '@gltf-transform/functions', 'ktx-parse', 'libheif-js/libheif-wasm/libheif.js']
 		},
 	// dev https via the repo's local certs (vite-plugin-mkcert stayed on vite<=5;
 	// certs/ was already how CI-less https worked before mkcert)
