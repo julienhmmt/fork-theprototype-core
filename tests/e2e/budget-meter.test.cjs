@@ -169,6 +169,9 @@ h.run(async () => {
 		const tex = new THREE.CanvasTexture(canvas);
 		const m = new THREE.Mesh(new THREE.SphereGeometry(1, 256, 128), new THREE.MeshStandardMaterial({ map: tex }));
 		m.name = 'Statue';
+		// out of the runtime auto LOD (api.lod's opt-out): on a fast build it gives the sphere its levels
+		// within the wait below, and a mesh that already switches detail rightly shows no LOD saving
+		m.userData.lod = false;
 		g.add(m);
 		for (let i = 0; i < 3; i++) {
 			const b = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
