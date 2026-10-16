@@ -32,6 +32,7 @@
 	import { selectObject } from '$lib/objectActions';
 	import { budgetTarget, setBudgetTarget, sceneCost, TARGETS, verdictFor, startBudgetMeter, budgetReveal, sampleBudget } from '$lib/budgetMeter';
 	import { TARGET_IDS, heaviest, formatMetric, formatCount, METRIC_LABELS } from '$lib/budgetMeterCore';
+	import { importSettings } from '$lib/importSettings';
 
 	const profile = $derived($sceneMetrics.profile === 'vr' ? 'vr' : 'desktop');
 	const rows = $derived(budgetRows($sceneMetrics, profile));
@@ -183,7 +184,7 @@
 									</span>
 									{#if row.save.textureMB > 0.05 || row.save.lodTriangles > 0}
 										<span class="sb-save" data-save-mb={row.save.textureMB} data-save-tris={row.save.lodTriangles}>
-											If optimized on import: {row.save.textureMB > 0.05 ? '≈ −' + formatMetric('textureMB', row.save.textureMB) + ' textures (KTX2' + (row.save.bigTextures ? ', ≤ 2048 px' : '') + ')' : ''}{row.save.textureMB > 0.05 && row.save.lodTriangles > 0 ? ' · ' : ''}{row.save.lodTriangles > 0 ? '≈ −' + formatCount(row.save.lodTriangles) + ' tris far away (LOD)' : ''}
+											If optimized on import: {row.save.textureMB > 0.05 ? '≈ −' + formatMetric('textureMB', row.save.textureMB) + ' textures (KTX2' + (row.save.bigTextures ? ', ≤ ' + $importSettings.maxTextureSize + ' px' : '') + ')' : ''}{row.save.textureMB > 0.05 && row.save.lodTriangles > 0 ? ' · ' : ''}{row.save.lodTriangles > 0 ? '≈ −' + formatCount(row.save.lodTriangles) + ' tris far away (LOD)' : ''}
 										</span>
 									{/if}
 								</button>
@@ -191,9 +192,6 @@
 						{/each}
 					</ul>
 				{/if}
-				<p id="stats-budget-live" class="mt-1 text-[11px] text-text-faint">
-					This device, this view: {num($sceneMetrics.calls)} calls · {num($sceneMetrics.triangles)} triangles per frame (editor overlays and post included).
-				</p>
 			</section>
 
 			<p class="mb-1.5 text-[11px] text-text-muted">
@@ -263,6 +261,12 @@
 				</table>
 			{/if}
 		</div>
+		<!-- 46-int: the live reading sits OUTSIDE the scroller. With the Budget section the body overflows,
+		     and a scrolling body is never a body-drag start (44 M1, windowBodyDrag) — this strip keeps
+		     Statistics movable by its body whatever its height. -->
+		<p id="stats-budget-live" class="shrink-0 border-t border-border px-2 py-1 text-[11px] text-text-faint">
+			This device, this view: {num($sceneMetrics.calls)} calls · {num($sceneMetrics.triangles)} triangles per frame (editor overlays and post included).
+		</p>
 	</div>
 {/if}
 
