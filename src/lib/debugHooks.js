@@ -161,6 +161,11 @@ export const DEBUG_HOOKS = [
 	['meshToolParams', () => import('./meshToolParams')],
 	['avatarModel', () => import('./avatarModel')],
 	['explorer', () => import('./explorer')],
+	// 47-cc0: the CC0 asset browser — import paths + jobs, the window's leaf stores, the pure core
+	['cc0', () => import('./cc0/cc0Import.js')],
+	['cc0State', () => import('./cc0/assetBrowserState.js')],
+	['cc0Core', () => import('./cc0/cc0Core.js')],
+	['cc0Fetch', () => import('./cc0/cc0Fetch.js')],
 	['bottomDock', () => import('./bottomDock')],
 	['dockMenu', () => import('./dockMenu')],
 	['phoneDock', () => import('./phoneDock')],

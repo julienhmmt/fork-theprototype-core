@@ -70,24 +70,26 @@ export async function cachedJson(url, ttl, opts = {}) {
 	}
 }
 
-/** Poly Haven: the whole list of one type @param {string} phType */
-export const phList = (phType) => cachedJson(PH_API + '/assets?t=' + encodeURIComponent(phType), CC0_TTL.list);
-/** @param {string} phType */
-export const phCategories = (phType) => cachedJson(PH_API + '/categories/' + encodeURIComponent(phType), CC0_TTL.categories);
+/** Poly Haven: the whole list of one type (`fresh` = a Refresh press: ask even when cached)
+ * @param {string} phType @param {boolean} [fresh] */
+export const phList = (phType, fresh = false) => cachedJson(PH_API + '/assets?t=' + encodeURIComponent(phType), CC0_TTL.list, { fresh });
+/** @param {string} phType @param {boolean} [fresh] */
+export const phCategories = (phType, fresh = false) => cachedJson(PH_API + '/categories/' + encodeURIComponent(phType), CC0_TTL.categories, { fresh });
 /** @param {string} id */
 export const phFiles = (id) => cachedJson(PH_API + '/files/' + encodeURIComponent(id), CC0_TTL.files);
 
 /**
  * ambientCG: one page of materials (through the relay — ambientCG sends no CORS header).
- * @param {{query?: string, category?: string, offset?: number}} q
+ * @param {{query?: string, category?: string, offset?: number, fresh?: boolean}} q
  */
 export function acgPage(q) {
 	const p = new URLSearchParams({ type: 'material', sort: 'popular', limit: String(ACG_PAGE), offset: String(q.offset ?? 0), include: 'title,tags,thumbnails,downloads' });
 	if (q.query) p.set('q', q.query);
 	if (q.category) p.set('category', q.category);
-	return cachedJson(cc0Proxy() + '/acg/assets?' + p.toString(), CC0_TTL.page, { proxy: true });
+	return cachedJson(cc0Proxy() + '/acg/assets?' + p.toString(), CC0_TTL.page, { proxy: true, fresh: !!q.fresh });
 }
-export const acgCategories = () => cachedJson(cc0Proxy() + '/acg/categories', CC0_TTL.categories, { proxy: true });
+/** @param {boolean} [fresh] */
+export const acgCategories = (fresh = false) => cachedJson(cc0Proxy() + '/acg/categories', CC0_TTL.categories, { proxy: true, fresh });
 
 /**
  * Where an ambientCG zip really lives: the relay follows `ambientcg.com/get?file=` (a redirect with

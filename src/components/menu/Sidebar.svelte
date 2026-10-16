@@ -40,6 +40,7 @@
 	import { saveOptions, saveOptionsOpen, setSaveOptions, SAVE_FORMATS } from '$lib/saveOptions'; // 41b H14
 	import { projectActionsLayout } from '$lib/projectActions'; // 41b H14
 	import SaveOptionsModal from './SaveOptionsModal.svelte'; // 41b H14
+	import { openAssetBrowser } from '$lib/cc0/assetBrowserState.js'; // 47-cc0
 
 	// 203: redesigned as a compact floating panel — flat list (order preserved,
 	// no boxed group / section headers / vertical bar), a fast fade-in (was a
@@ -271,6 +272,10 @@
 		</button>
 		<button id="clear-scene" class="side-row" onclick={() => { closeMenu.set(true); void confirmClearScene(); }}>
 			<span class="side-ico"><Icon name="trash-2" size={16} class="ico-danger" aria-hidden="true" /></span><span class="flex-1 whitespace-nowrap">Clear Scene</span>
+		</button>
+		<!-- 47-cc0: free CC0 models, skies and materials (Poly Haven + ambientCG) -->
+		<button id="open-asset-browser" class="side-row" onclick={() => { openAssetBrowser(); closeMenu.set(true); }}>
+			<span class="side-ico"><Icon name="package-open" size={16} aria-hidden="true" /></span><span class="flex-1 whitespace-nowrap">Free assets (CC0)</span>
 		</button>
 		<button id="open-modules-manager" class="side-row" onclick={() => { modulesOpen.set(true); closeMenu.set(true); }}>
 			<span class="side-ico"><Icon name="puzzle" size={16} aria-hidden="true" /></span><span class="flex-1 whitespace-nowrap">Modules</span>

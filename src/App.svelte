@@ -71,6 +71,8 @@
   // 36-export: the Publish / Export modal (core owns the shell + Export tab; a cloud plugin mounts
   // Publish into it) and the exported game's boot (inert on every normal page load)
   import { publishExportOpen } from '$lib/export/exportStores.js'
+  // 47-cc0: the free CC0 asset browser (lazy, like the export modal)
+  import { assetBrowserOpen } from '$lib/cc0/assetBrowserState.js'
   import { recordingOpen, recordingState } from '$lib/recording/recordingStores.js'
   import { exportMode } from '$lib/export/exportBoot.js'
   import { startExportRuntime } from '$lib/export/exportRuntime.js'
@@ -440,6 +442,10 @@ import { startMusicToolbox } from './lib/musicToolbox'
 <MomentReport />
 <ProblemReport />
 <ProfilerLive />
+<!-- 47-cc0: the Asset Browser — loaded the first time it opens, so the boot carries none of it -->
+{#if $assetBrowserOpen}
+{#await import('./components/editors/AssetBrowser.svelte') then m}<m.default />{/await}
+{/if}
 <PlayReticle />
 <!-- 38 R8 (NOTES-38 #4): "Playing · Press Esc to stop" — scene-configurable, play-only -->
 <PlayBanner />
