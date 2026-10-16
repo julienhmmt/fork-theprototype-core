@@ -7,7 +7,7 @@
 	import { nameOf } from '$lib/lockControl';
 	import { snapEnabled, snapSettings, surfaceSnap, snapTargets } from '$lib/snapping';
 	import { startSnapAnchorPick } from '$lib/snapEngine';
-	import { measureMode, toggleMeasure } from '$lib/measure';
+	import { measureMode, toggleMeasure, pinnedMeasurements, clearMeasurements } from '$lib/measure';
 	import { bookmarks, saveBookmark, recallBookmark, clearBookmarks, SHORTCUT_SLOTS } from '$lib/cameraBookmarks';
 	import { showGrid, globalScene, globalCamera, globalRenderer, selectedObject, selectedObjects, lockedObjects } from '../../stores/sceneStore';
 	import { viewportMenu, objectSearch, objectSearchEnabled, openSceneSection } from '../../stores/appStore';
@@ -185,9 +185,19 @@
 				{
 					label: $measureMode ? 'Stop measuring' : 'Measure distance',
 					checked: $measureMode,
-					tooltip: 'Click two points; Esc stops',
+					tooltip: 'Click points (they snap to corners, edges and faces); Enter pins; Esc stops',
 					action: () => toggleMeasure()
 				},
+				// 47 M1: pinned dimensions stay on screen after the tool closes, so their way out is here
+				...($pinnedMeasurements.length
+					? [
+							{
+								label: 'Clear measurements',
+								tooltip: 'Remove every pinned measurement (only you see them)',
+								action: () => clearMeasurements()
+							}
+						]
+					: []),
 				{
 					label: $simulating ? '⏹ Stop simulation' : '▶ Simulate physics',
 					disabled: !!$remoteSimulating,

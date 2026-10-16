@@ -55,7 +55,7 @@ h.run(async () => {
 		return s.objectMenu.flattenMenuItems(s.objectMenu.buildObjectMenuItems(uuid)).map((i) => i.label);
 	});
 	// 'Save as prefab' became Save as… ▸ Prefab in R22 round 11 (saveAs.js) — the leaf is 'Prefab'
-	for (const label of ['Prefab', 'Rename', 'Align to ground', 'Delete', 'Ping this object']) {
+	for (const label of ['Prefab', 'Rename', 'Drop to ground', 'Delete', 'Ping this object']) {
 		h.check(items.includes(label), `object menu includes "${label}" (parity)`);
 	}
 

@@ -6,7 +6,6 @@ import {
 	focusObject,
 	duplicateObject,
 	duplicateSelection,
-	alignToGround,
 	requestDeleteSelection,
 	groupSelection,
 	ungroupObject,
@@ -24,11 +23,27 @@ import { enterEditMode } from './meshEdit';
 // 24-E3: a group's origin from its context menu, and the set's pivot point
 import { originPreset, resetOrigin } from './objectOrigin';
 import { pivotMode, reseatPivot, pivotParentAvailable } from './multiTransform';
+import { alignSelection, distributeSelection, dropSelection } from './align'; // 47 M2
 import { addAnnotation } from './annotationsHandler';
 import { pingObject, pingObjects } from './ping';
 import { hasOriginal } from './decimate';
 import { linkOf } from './prefabSync';
 import { prefabById } from './prefabs';
+
+/**
+ * 47 M2: the nine Align rows (X / Y / Z × min / centre / max) for a set.
+ * @param {string[]} targets @param {'selection'|'active'} to @param {boolean} locked
+ */
+function alignRows(targets, to, locked) {
+	return ['x', 'y', 'z'].flatMap((axis) =>
+		/** @type {const} */ (['min', 'center', 'max']).map((edge) => ({
+			label: `${axis.toUpperCase()} ${edge === 'center' ? 'centre' : edge}`,
+			disabled: locked,
+			tooltip: `Line every object's ${edge === 'center' ? 'centre' : edge} on ${axis.toUpperCase()} up with the ${to === 'active' ? 'active object' : 'selection'} (one undo)`,
+			action: () => alignSelection(/** @type {'x'|'y'|'z'} */ (axis), edge, { to, uuids: targets })
+		}))
+	);
+}
 
 /**
  * 37 R4: the "Prefab" submenu of an object that is (or sits inside) a prefab instance.
@@ -402,12 +417,36 @@ export function buildObjectMenuItems(uuid, opts = {}) {
 	/** @type {any[]} Transform ▸ — where it sits and what it turns about */
 	const transform = [
 		{
-			label: 'Align to ground' + suffix,
+			// 47 M2: one undo for the whole set (it was one per object), lowest first so a stack settles
+			label: 'Drop to ground' + suffix,
 			icon: 'arrow-down-to-line',
 			disabled: locked,
-			tooltip: locked ? lockedTooltip : 'Drop onto the surface below (undoable)',
-			action: forEach((u) => alignToGround(u))
+			tooltip: locked ? lockedTooltip : 'Rest on the surface below, or on the ground (one undo)',
+			action: () => dropSelection({ uuids: targets })
 		},
+		// 47 M2: Align (the selection's bounds, or the ACTIVE object) and Distribute (3+)
+		...(multi
+			? [
+					{ label: 'Align', icon: 'align-start-vertical', children: alignRows(targets, 'selection', locked) },
+					{ label: 'Align to active', icon: 'align-center-vertical', children: alignRows(targets, 'active', locked) },
+					...(targets.length >= 3
+						? [
+								{
+									label: 'Distribute',
+									icon: 'align-horizontal-space-around',
+									children: ['x', 'y', 'z'].flatMap((axis) =>
+										/** @type {const} */ (['centers', 'gaps']).map((mode) => ({
+											label: `${axis.toUpperCase()} even ${mode === 'gaps' ? 'gaps' : 'centres'}`,
+											disabled: locked,
+											tooltip: mode === 'gaps' ? 'Equal space between neighbours; the outer two stay (one undo)' : 'Evenly spaced centres; the outer two stay (one undo)',
+											action: () => distributeSelection(/** @type {'x'|'y'|'z'} */ (axis), mode, { uuids: targets })
+										}))
+									)
+								}
+							]
+						: [])
+				]
+			: []),
 		// 24-E3: a group made by /group or drag-to-group sits at the world centre, so a typed
 		// rotation turned it about (0,0,0); its origin is one right-click away
 		...(isGroup && !multi
