@@ -106,6 +106,7 @@ export const DEBUG_HOOKS = [
 	['terrainPaint', () => import('./terrainPaint')],
 	['terrainSurface', () => import('./terrainSurface')],
 	['terrainPaintCore', () => import('./terrainPaintCore')],
+	['terrainScatterCore', () => import('./terrainScatterCore')],
 	['userModules', () => import('./userModules')],
 	['environment', () => import('./environment')],
 	// 37-hdri: the HDRI layer (hdriDebug, installHdriLayer) + its leaf stores (skyEnv, envToneMapping, hdriStatus) + the pure core

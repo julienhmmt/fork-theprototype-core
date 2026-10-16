@@ -360,7 +360,7 @@ export function buildObjectMenuItems(uuid, opts = {}) {
 							label: 'Sculpt terrain',
 							icon: 'brush',
 							disabled: locked,
-							tooltip: locked ? lockedTooltip : 'Brush raise/lower/smooth/flatten — drag on the terrain',
+							tooltip: locked ? lockedTooltip : 'Brush raise/lower/smooth/flatten, paint layers and scatter models — drag on the terrain',
 							action: () => import('./terrainSculpt').then((m) => m.enterSculpt(uuid))
 						}
 					]
