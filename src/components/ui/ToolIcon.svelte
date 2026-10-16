@@ -276,6 +276,19 @@
 		flatten: {
 			base: ['M4 7h16'],
 			accent: ['M12 7v6', 'M9 10l3 3 3-3', 'M4 18h16']
+		},
+		// 47 T1/T2: terrain paint (a brush over the ground) + scatter (three little trees) / erase
+		paint: {
+			base: ['M3 20c4 0 4.5-2.5 9-2.5s5 2.5 9 2.5'],
+			accent: ['M14.5 3.5l3 3-6 6-3-3z', 'M8.5 9.5l-2.5 2.5a2.1 2.1 0 0 0 3 3l2.5-2.5']
+		},
+		scatter: {
+			base: ['M3 20h18'],
+			accent: ['M6 17l-2.5 0 2.5-6 2.5 6z', 'M12 13l-3 0 3-8 3 8z', 'M18 17l-2.5 0 2.5-6 2.5 6z', 'M6 17v3', 'M12 13v7', 'M18 17v3']
+		},
+		'scatter-erase': {
+			base: ['M3 20h18'],
+			accent: ['M7 16l6-9 4 3-6 9h-3z', 'M13 19h7']
 		}
 	};
 

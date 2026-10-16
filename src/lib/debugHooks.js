@@ -102,6 +102,11 @@ export const DEBUG_HOOKS = [
 	['possess', () => import('./possess')],
 	['handModels', () => import('./handModels')],
 	['terrainSculpt', () => import('./terrainSculpt')],
+	// 47 T1/T2: terrain paint + scatter (the brushes / undo / wire) and the look (shader, instances)
+	['terrainPaint', () => import('./terrainPaint')],
+	['terrainSurface', () => import('./terrainSurface')],
+	['terrainPaintCore', () => import('./terrainPaintCore')],
+	['terrainScatterCore', () => import('./terrainScatterCore')],
 	['userModules', () => import('./userModules')],
 	['environment', () => import('./environment')],
 	// 37-hdri: the HDRI layer (hdriDebug, installHdriLayer) + its leaf stores (skyEnv, envToneMapping, hdriStatus) + the pure core

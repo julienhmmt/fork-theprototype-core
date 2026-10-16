@@ -275,7 +275,7 @@ export function buildSessionPayload(name, opts = {}) {
 			// V4: format gates loading (a NEWER int asks before importing);
 			// appVersion is display-only provenance
 			format: SESSION_FORMAT,
-			appVersion: APP_VERSION,
+			formatMinor: SESSION_FORMAT_MINOR,			appVersion: APP_VERSION,
 			// 36-community (C4): `gameId` / `parentGameId` / `template` — READ ONLY here (a payload is
 			// built for autosave and the dirty check too); the deliberate saves mint it first
 			...gameFields(),
@@ -398,7 +398,7 @@ export function buildSelectionPayload(name, uuids) {
 			name: name || 'Selection',
 			createdAt: Date.now(),
 			format: SESSION_FORMAT,
-			appVersion: APP_VERSION,
+			formatMinor: SESSION_FORMAT_MINOR,			appVersion: APP_VERSION,
 			count: objects.length,
 			thumbnail: null,
 			objects,
@@ -443,7 +443,7 @@ export function emptySessionPayload(name) {
 		name: name || 'New level',
 		createdAt: Date.now(),
 		format: SESSION_FORMAT,
-		appVersion: APP_VERSION,
+		formatMinor: SESSION_FORMAT_MINOR,		appVersion: APP_VERSION,
 		count: 0,
 		thumbnail: null,
 		objects: [],
@@ -610,6 +610,11 @@ export function exportSession(payload) {
 
 /** V4: the .tpscene/.session format this build writes and knows how to read. */
 export const SESSION_FORMAT = 1;
+/** 47 T1/T2: the ADDITIVE revision inside a format — what an older reader can still load
+ * (it just shows less). 1 = terrains may carry `userData.terrainSplat` / `terrainLayers` /
+ * `terrainScatter`; a reader without them loads the bare terrain. Never gates a load —
+ * only `format` does — so bumping it never prompts an older app. Absent = 0. */
+export const SESSION_FORMAT_MINOR = 1;
 
 /** Parse + shape-validate a session JSON string. @param {string} json */
 function parseSessionJson(json) {
