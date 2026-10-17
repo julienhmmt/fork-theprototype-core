@@ -4280,7 +4280,9 @@ function publishDebug(time, ctx, now) {
 	debugPublishedAt = now;
 	debugDirty = false;
 	const head = debugQueue[0];
-	const atNode = debugAt?.nodeId ? nodeById(nodes, debugAt.nodeId) : null;
+	// the BREAKPOINT names the stop (the event's source is the node that fired into it)
+	const atId = debugAt?.bp ?? debugAt?.nodeId ?? null;
+	const atNode = atId ? nodeById(nodes, atId) : null;
 	const status = {
 		mode: /** @type {'off'|'running'|'paused'} */ (paused ? 'paused' : 'running'),
 		playing: dbg.playing,
