@@ -79,8 +79,7 @@ h.run(async () => {
 	// the per-asset override says Always (46 P2), so placing it runs the optimizer on this small file
 	const placedUuid = await page.evaluate(async (id) => {
 		const s = window.__stores;
-		const settings = await import('/src/lib/importSettings.js').catch(() => null);
-		(settings ?? (await s.importOptimize())).setAssetOverride(id, { mode: 'always' });
+		s.importOptimize.setAssetOverride(id, { mode: 'always' }); // the debug hook (a deployed build has no /src paths)
 		let items;
 		s.explorer.explorerItems.subscribe((x) => (items = x))();
 		return s.cc0.placeItem(items.find((i) => i.id === id));

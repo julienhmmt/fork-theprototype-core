@@ -242,7 +242,7 @@ h.run(async () => {
 	h.check(/saved/.test(stale ?? '') && /503/.test(stale ?? '') && (await grid(page))?.count === 3, `8.1 the site down: the saved list stays, and the banner says so (${stale})`);
 	// a tab never saved: the cache entry is dropped first
 	await page.evaluate(async () => {
-		const { idbKeys, idbDelete } = await import('/src/lib/idb.js');
+		const { idbKeys, idbDelete } = window.__stores.idb; // the debug hook: a deployed build has no /src paths
 		for (const k of await idbKeys()) if (String(k).startsWith('cc0:') && /t=hdris|categories\/hdris/.test(String(k))) await idbDelete(k);
 		window.__stores.cc0Fetch.forgetCc0Memo();
 	});
