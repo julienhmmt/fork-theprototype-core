@@ -106,6 +106,7 @@ export const DEBUG_HOOKS = [
 	['terrainPaint', () => import('./terrainPaint')],
 	['terrainSurface', () => import('./terrainSurface')],
 	['terrainPaintCore', () => import('./terrainPaintCore')],
+	['scatterColliders', () => import('./scatterColliders')],
 	['terrainScatterCore', () => import('./terrainScatterCore')],
 	['userModules', () => import('./userModules')],
 	['environment', () => import('./environment')],
