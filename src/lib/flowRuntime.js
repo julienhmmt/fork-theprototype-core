@@ -3157,6 +3157,8 @@ function evalNodeBody(node, allNodes, allEdges, time, seen, ctx) {
  */
 export function resolveInputs(node, allNodes, allEdges, time, ctx = null) {
 	const data = { ...(node.data || {}) };
+	/** the handles whose current value came from an event source (48 D2) @type {Set<string>} */
+	const eventFed = new Set();
 	for (const edge of edgesInto(allEdges, node.id)) {
 		if (!edge.targetHandle) continue;
 		const source = nodeById(allNodes, edge.source);
@@ -3172,7 +3174,17 @@ export function resolveInputs(node, allNodes, allEdges, time, ctx = null) {
 		)
 			continue;
 		const value = unwrapHandle(evalNode(source, allNodes, allEdges, time, new Set(), ctx), edge);
-		if (value !== undefined) data[edge.targetHandle] = value;
+		if (value === undefined) continue;
+		// 48 D2 (DEVX #22, the fan-in half): two EVENT wires into one input OR their pulses. The
+		// last edge used to win even while it read 0, so a press on the first of two HUD Buttons
+		// wired into a module's `press` never arrived — why Football and Dungeon Realms carried a
+		// duplicate Match / Menu Button node per HUD button. One wire reads exactly as before.
+		const handle = edge.targetHandle;
+		const event = outputHandleType(source.type, edge.sourceHandle) === 'event';
+		const prev = data[handle];
+		data[handle] = event && eventFed.has(handle) && typeof prev === 'number' && typeof value === 'number' ? Math.max(prev, value) : value;
+		if (event) eventFed.add(handle);
+		else eventFed.delete(handle);
 	}
 	return data;
 }
