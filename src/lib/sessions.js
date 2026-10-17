@@ -74,6 +74,7 @@ import {
 import { disabledModules } from './moduleSDK';
 import { findNodeSpec } from './nodeCatalog';
 import { hudDocsSnapshot, hudDocsRestore } from './hudDocs';
+import { sequencesSnapshot, sequencesRestore } from './sequences'; // 48 S2
 import { gameStateSnapshot, gameStateRestore } from './gameState';
 // 31 K3: which GAME a scene is decides whose per-game settings apply (a leaf)
 import { noteSceneFileName } from './gameSettings';
@@ -264,6 +265,7 @@ export function buildSessionPayload(name, opts = {}) {
 	const gravity = scenePhysicsSnapshot();
 	const track = musicSnapshot();
 	const clock = transportSnapshot();
+	const seqs = sequencesSnapshot(); // 48 S2
 	const routing = patchSnapshot();
 	const mods = moduleRequirements();
 	const views = flowViewsSnapshot((id) => id === SCENE_GRAPH || !!group?.getObjectByProperty?.('uuid', id));
@@ -333,6 +335,9 @@ export function buildSessionPayload(name, opts = {}) {
 			}),
 			// 21-D6: the game shell, null when pristine so a scene with no game is unchanged
 			game: gameStateSnapshot(),
+			// 48 S2: the Timeline's sequences — OMITTED when there are none, so a scene
+			// without one is byte-identical to a 1.38 save (formatMinor says what it may hold)
+			...(seqs ? { sequences: seqs } : {}),
 			camera: camera
 				? { position: camera.position.toArray(), target: controls?.target?.toArray() ?? [0, 0, 0] }
 				: null,
@@ -458,6 +463,7 @@ export function emptySessionPayload(name) {
 		post: null,
 		hud: null,
 		game: null,
+		sequences: null,
 		camera: null
 	};
 }
@@ -613,8 +619,10 @@ export const SESSION_FORMAT = 1;
 /** 47 T1/T2: the ADDITIVE revision inside a format — what an older reader can still load
  * (it just shows less). 1 = terrains may carry `userData.terrainSplat` / `terrainLayers` /
  * `terrainScatter`; a reader without them loads the bare terrain. Never gates a load —
- * only `format` does — so bumping it never prompts an older app. Absent = 0. */
-export const SESSION_FORMAT_MINOR = 1;
+ * only `format` does — so bumping it never prompts an older app. Absent = 0.
+ * 48 S2: 2 = the payload may carry `sequences` (the Timeline); an older reader ignores
+ * the field and loads the scene without its cutscenes. */
+export const SESSION_FORMAT_MINOR = 2;
 
 /** Parse + shape-validate a session JSON string. @param {string} json */
 function parseSessionJson(json) {
@@ -1645,6 +1653,8 @@ async function applySessionNow(payload, opts, job) {
 	patchRestore(payload.patch, replicate);
 	// and the HUD with it: loading a game scene into a live room must bring its overlay
 	hudDocsRestore(payload.hud ?? null, true, replicate);
+	// 48 S2: and its sequences — absent (every pre-1.39 scene) means none
+	sequencesRestore(payload.sequences ?? null, true, replicate);
 	// and the game with it: loading a game scene into a live room must bring its state.
 	// 21-F4 fork 3: LEVEL TRAVEL passes game:false — state/round/vars CARRY across the
 	// hop (campaign semantics), so the traveller re-asserts the live state after this.

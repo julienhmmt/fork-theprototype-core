@@ -156,6 +156,10 @@ export const VALIDATORS = {
 	hosts: (d) => isArray(d.hosts),
 	// 37 R15: a chat history reply — a bounded list (each entry is checked again on merge)
 	chathistory: (d) => isArray(d.messages) && d.messages.length <= 500,
+	// 48 S2: a sequence document (normalized again on apply) / its delete / the full map
+	seq: (d) => typeof d.id === 'string' && d.id.length <= 64 && !!d.doc && typeof d.doc === 'object' && !Array.isArray(d.doc),
+	seqdelete: (d) => typeof d.id === 'string' && d.id.length <= 64,
+	seqs: (d) => !!d.seqs && typeof d.seqs === 'object' && !Array.isArray(d.seqs),
 	userdata: (d) => isArray(d.userdata),
 	locked: (d) => isArray(d.lockeditems),
 	lock: (d) => isUuid(d.uuid) && (d.uuids === undefined || isArray(d.uuids)),

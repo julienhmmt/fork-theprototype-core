@@ -134,6 +134,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
   import { startMaterialTiers } from '$lib/materialTiers.js'
   import { startShaderSync } from '$lib/shaderSync'
   import { startHudSync } from '$lib/hudSync'
+  import { startSequenceSync } from '$lib/sequenceSync' // 48 S2
   import { startHudImages } from '$lib/hudImages'
   import { startGameSync } from '$lib/gameSync'
   import { startGamePresence } from '$lib/gamePresence'
@@ -312,6 +313,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
     startMaterialTiers()
     startShaderSync()
     startHudSync()
+    startSequenceSync()
     startHudImages()
     startGameSync()
     // 21-F3: publish our play mode when it changes, and watch for an abandoned round

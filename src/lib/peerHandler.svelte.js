@@ -93,6 +93,8 @@ import {
 	sendHudValues
 } from '$lib/hudSync';
 import { applyRemoteGameState, sendGameState, gameStatePayload } from '$lib/gameSync';
+// 48 S2: sequences (Timeline) — scene data, latest-wins per sequence (sequenceSync.js)
+import { applyRemoteSequence, applyRemoteSequenceDelete, applyRemoteSequences, sendSequences } from '$lib/sequenceSync';
 // 34 R2 (T3): the game kit's document + requests (kit/runtime.js; a leaf-side module)
 import { receiveKitMessage, kitPayload } from '$lib/kit/runtime.js';
 import { kitEntityPayloads } from '$lib/kit/entityApp.js'; // 34 R2 (kit-entities)
@@ -1021,6 +1023,16 @@ export class PeerConnection {
 					applyRemoteHuds(data);
 				} else if(data.type == 'gethuds') {
 					if (sameRoomOrUnknown(conn.peer)) sendHuds(data.sender);
+				} else if(data.type == 'seq') {
+					// 48 S2: one authored sequence, latest-wins on changedAt. Playback sends
+					// nothing: every peer plays from the replicated trigger stamp itself.
+					applyRemoteSequence(data);
+				} else if(data.type == 'seqdelete') {
+					applyRemoteSequenceDelete(data);
+				} else if(data.type == 'seqs') {
+					applyRemoteSequences(data);
+				} else if(data.type == 'getseqs') {
+					if (sameRoomOrUnknown(conn.peer)) sendSequences(data.sender);
 				} else if(data.type == 'hudvalue') {
 					// 21-D4: a SHARED input's value - the one runtime HUD message, because what a
 					// player dragged is the only HUD state a peer cannot derive for itself.
@@ -1468,6 +1480,7 @@ export class PeerConnection {
 		conn.send({type: 'getshadergraphs', sender: this.peer.id})
 		conn.send({type: 'gethuds', sender: this.peer.id})
 		conn.send({type: 'gethudvalues', sender: this.peer.id})
+		conn.send({type: 'getseqs', sender: this.peer.id}) // 48 S2
 	}
 
 	// Send the initial handshake (locks, known hosts, whitelist, object/node sync requests).
