@@ -156,7 +156,11 @@ h.run(async () => {
 	await page.evaluate(() => window.__stores.cc0State.openAssetBrowser());
 	await page.waitForSelector(`.ab-card[data-asset-id="${model}"] [data-act="place"]`, { timeout: 20000 });
 	await page.locator(`.ab-card[data-asset-id="${model}"] [data-act="place"]`).click();
-	await page.waitForTimeout(2500);
+	// 47-int: since 46 P2 a model import first loads the lazy import optimizer and hashes the file, so the
+	// object lands 2-10 s after the click on a loaded box — poll (the explorer-drop precedent)
+	await page
+		.waitForFunction((id) => { let g; window.__stores.objectsGroup.subscribe((x) => (g = x))(); return g.children.some((c) => c.userData?.source?.id === id); }, model, { timeout: 20000 })
+		.catch(() => {});
 	const placed = await page.evaluate((id) => {
 		let g;
 		window.__stores.objectsGroup.subscribe((x) => (g = x))();
@@ -198,7 +202,7 @@ h.run(async () => {
 	const g6 = await grid(page);
 	h.check(g6?.kind === 'materials' && g6.count === 3, `6.1 the Materials tab lists ambientCG through the relay (${JSON.stringify(g6)})`);
 	await page.fill('#asset-browser-search', 'oak');
-	await h.eventually(async () => Object.keys(net.counts).filter((k) => k.startsWith('relay-assets:')), (keys) => keys.some((k) => /^relay-assets:oak:/.test(k)), '6.2 a search asks the relay with q=', 8000);
+	await h.eventually(async () => Object.keys(net.counts).filter((k) => k.startsWith('relay-assets:')), (keys) => keys.some((k) => /^relay-assets:oak:/.test(k)), '6.2 a search asks the relay with q=', 20000);
 	await page.waitForTimeout(300);
 	await page.click('#asset-browser-category');
 	await page.getByRole('option', { name: /^Wood/ }).first().click();
