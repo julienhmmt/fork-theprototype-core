@@ -26,6 +26,7 @@
 	import { claimInput, releaseInput, onInput } from '$lib/inputRuntime';
 	import { gamepadPrefs } from '$lib/gamepadPrefs';
 	import { fireHudButton } from '$lib/flowRuntime';
+	import { debugStatus } from '$lib/flowDebug.js'; // 48 D1: a debugger pause owns the pointer
 	// 30b (vr-play): api.announce's banner — drawn here on the desktop, and by the VR game
 	// panel's head-locked banner in a headset (DOM is invisible there)
 	import { gameAnnouncement } from '$lib/gameAnnounce';
@@ -131,8 +132,9 @@
 	// 31 K3: the game shell's pause menu is a menu too — folded in HERE so this component
 	// stays the one writer of playPointerFree (it frees the pointer while the menu is open,
 	// and closing it by any path gives the game its pointer back by construction)
+	// 48 D1: ...and so is a debugger pause (its panel needs the pointer for Step / Resume)
 	const menuWanted = $derived(
-		((screens.some((entry) => entry.screen?.input === 'menu') && anyVisible) || ($shellMenu.open && !$isVRMode)) && playing
+		((screens.some((entry) => entry.screen?.input === 'menu') && anyVisible) || ($shellMenu.open && !$isVRMode) || ($debugStatus.mode === 'paused' && !$isVRMode)) && playing
 	);
 	$effect(() => {
 		playPointerFree.set(menuWanted);

@@ -1487,22 +1487,21 @@ function updateBehaviourInputs(time, ctx) {
 // watch list read it); the other players' own games make the real write. Alone, there is nobody
 // else to make it, so the overlay is null and every write goes through. A stamp only THIS peer
 // saw (a perPlayer press) is nobody else's to write, so it writes through even when sandboxed.
-/** @type {null | {vars: Map<string, number>, state: null | {state: string, outcome: string}, reset: boolean, localStamps: Set<number>}} */
+// `game` is a SNAPSHOT of the singleton taken at the pause, so the paused view does not watch the
+// other players' writes arrive either — it is the game as it stood, plus the steps you took.
+/** @type {null | {game: any, localStamps: Set<number>}} */
 let sharedOverlay = null;
 
 /** the game singleton as the current tick should read it @returns {any} */
 function viewGame() {
-	const g = get(gameState);
-	return sharedOverlay?.state ? { ...g, ...sharedOverlay.state } : g;
+	return sharedOverlay ? sharedOverlay.game : get(gameState);
 }
 
-/** @param {string} name @param {any} fallback */
+/** gameVar, through the paused view's snapshot @param {string} name @param {any} fallback */
 function viewGameVar(name, fallback) {
-	if (sharedOverlay) {
-		if (sharedOverlay.vars.has(name)) return sharedOverlay.vars.get(name);
-		if (sharedOverlay.reset) return fallback;
-	}
-	return gameVar(name, fallback);
+	if (!sharedOverlay) return gameVar(name, fallback);
+	const v = sharedOverlay.game.vars?.[name];
+	return v === undefined ? fallback : v;
 }
 
 /** Does a shared write acting on `stamp` stay in the overlay? @param {number} stamp */
@@ -1545,11 +1544,10 @@ function updateGameNodes(time, ctx) {
 			// (their games make the same write from the same stamp) — see sharedOverlay
 			const state = String(data.state ?? 'playing');
 			const outcome = String(data.outcome ?? '');
-			if (sharedOverlay) sharedOverlay.state = data.reset ? { state: 'menu', outcome: '' } : { state, outcome };
-			if (sharedOverlay && data.reset) {
-				sharedOverlay.vars.clear();
-				sharedOverlay.reset = true;
-			}
+			if (sharedOverlay)
+				sharedOverlay.game = data.reset
+					? { ...sharedOverlay.game, state: 'menu', startedAt: 0, outcome: '' }
+					: { ...sharedOverlay.game, state, outcome };
 			if (!sandboxedWrite(stamp)) {
 				if (data.reset) resetGame();
 				else setGameState(state, { outcome });
@@ -1639,7 +1637,7 @@ function updateGameNodes(time, ctx) {
 				const current = num(viewGameVar(name, 0));
 				const value = op === 'add' ? current + v : op === 'subtract' ? current - v : v;
 				// 48 D1: the paused view's copy first (the watch list reads it), the shared one unless sandboxed
-				if (sharedOverlay) sharedOverlay.vars.set(name, value);
+				if (sharedOverlay) sharedOverlay.game = { ...sharedOverlay.game, vars: { ...sharedOverlay.game.vars, [name]: value } };
 				if (!sandboxedWrite(stamp)) setGameVar(name, value);
 			}
 		}
@@ -4120,7 +4118,7 @@ function enterDebugPause(why, nodeId, bp, at = shownTime()) {
 	/** @type {any} */
 	const peer = get(peers);
 	const others = (peer?.openedPeers?.size ?? 0) > 0;
-	sharedOverlay = others ? { vars: new Map(), state: null, reset: false, localStamps: new Set() } : null;
+	sharedOverlay = others ? { game: { ...get(gameState), vars: { ...get(gameState).vars } }, localStamps: new Set() } : null;
 	pauseSaved = { lastGameState, pauseFrozeAt, pauseOffset };
 	debugAt = { nodeId, why, bp };
 	setDebugPaused(true);
@@ -4151,11 +4149,16 @@ function resumeDebug() {
 	lastLiveTime = null;
 	setDebugPaused(false);
 	debugDirty = true;
+	// said NOW, not on the next publish: with nothing left armed there is no next publish, and a
+	// stale 'paused' would free the pointer the next time Play starts (HudLayer reads it)
+	debugStatusJson = '';
+	debugStatus.update((st) => ({ ...st, mode: dbg.armed ? 'running' : 'off', at: null, queued: 0, dropped: 0, next: '', waiting: false, sandboxed: false }));
 }
 
 /** the earliest Delay / Sequence moment after the debug clock, in the paused view @returns {null | {at: number, nodeId: string}} */
 function nextViewMoment() {
 	const vctx = { triggers: viewTriggers };
+	const clock = logicClock;
 	logicClock = viewTime;
 	/** @type {null | {at: number, nodeId: string}} */
 	let best = null;
@@ -4166,6 +4169,7 @@ function nextViewMoment() {
 			if (at !== null && at > viewTime + 1e-6 && (!best || at < best.at)) best = { at, nodeId: node.id };
 		}
 	}
+	logicClock = clock;
 	return best;
 }
 
@@ -4330,7 +4334,7 @@ export function flowDebugRuntime() {
 		queued: debugQueue.map((e) => ({ ...e })),
 		at: debugAt,
 		sandboxed: !!sharedOverlay,
-		overlay: sharedOverlay ? { vars: Object.fromEntries(sharedOverlay.vars), state: sharedOverlay.state, reset: sharedOverlay.reset } : null,
+		overlay: sharedOverlay ? { state: sharedOverlay.game.state, vars: { ...sharedOverlay.game.vars } } : null,
 		viewTriggers: viewTriggers ? { ...viewTriggers } : null,
 		steps: debugSteps,
 		waiting: stepWaiting

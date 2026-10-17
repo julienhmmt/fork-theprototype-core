@@ -812,6 +812,8 @@ export const shortcuts = [
 		['nodes.cut', 'Ctrl+X', 'cut', 'Cut the selection'],
 		['nodes.paste', 'Ctrl+V', 'paste', 'Paste at the cursor'],
 		['nodes.mute', 'M', 'mute', 'Mute / unmute the selection (a muted node does nothing)'],
+		// 48 D1: F9 is the debugger convention (VS Code, Visual Studio, Unreal)
+		['nodes.breakpoint', 'F9', 'breakpoint', 'Toggle a debugger breakpoint on the selected nodes (Play pauses when an event reaches them)'],
 		['nodes.collapse', 'H', 'collapse', 'Collapse / expand the selected nodes'],
 		['nodes.group', 'Ctrl+G', 'group', 'Group the selection'],
 		['nodes.ungroup', 'Ctrl+Shift+G', 'ungroup', 'Ungroup (the selected group, or the one you are in)'],

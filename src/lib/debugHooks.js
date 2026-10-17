@@ -74,6 +74,8 @@ export const DEBUG_HOOKS = [
 	['annotationsHandler', () => import('./annotationsHandler')],
 	['noteHistory', () => import('./noteHistory')],
 	['flowRuntime', () => import('./flowRuntime')],
+	// 48 D1: the node graph debugger (stores + requests; the runtime half is flowRuntime.flowDebugRuntime)
+	['flowDebug', () => import('./flowDebug.js')],
 	['history', () => import('./history')],
 	['materialsHandler', () => import('./materialsHandler')],
 	// 37 R5: material presets (materialPresets, peerMaterialPresets, applyMaterialPreset, materialPresetsDebug…)
