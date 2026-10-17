@@ -708,6 +708,11 @@ export async function objectParameters(data) {
             else delete mesh.userData.camera;
             pokeScene(); // frustum viz + preview re-read
         }
+    } else if (data.parameter == 'terrainSplat' || data.parameter == 'terrainLayers' || data.parameter == 'terrainScatter') {
+        // 47 T1/T2: terrain paint (splat bytes / layers) + scatter instances. DYNAMIC: the
+        // runtime pulls three-heavy rendering code a plain session never needs
+        const { applyRemoteTerrainParam } = await import('$lib/terrainSurface');
+        await applyRemoteTerrainParam(data);
     } else if (data.parameter == 'renderOrder') {
         let mesh = sceneObjects.getObjectByProperty('uuid', data.uuid);
         if (mesh) mesh.renderOrder = data.renderOrder;

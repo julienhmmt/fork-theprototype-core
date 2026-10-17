@@ -29,6 +29,7 @@
 	import VoiceChat from './menu/VoiceChat.svelte';
 	import AnnotationPopover from './menu/AnnotationPopover.svelte';
 	import AnnotationMarkers from './menu/AnnotationMarkers.svelte';
+	import MeasureLabels from './menu/MeasureLabels.svelte'; // 47 M1
 	import KnifeOverlay from './menu/KnifeOverlay.svelte';
 	import NotesDrawer from './menu/NotesDrawer.svelte';
 	import LayoutsMenu from './menu/LayoutsMenu.svelte'; // 37 R14
@@ -92,6 +93,8 @@
 <VoiceChat />
 <!-- screen-space note markers (badge + leader line); VR uses the in-scene pins -->
 <AnnotationMarkers />
+<!-- 47 M1: measure dimension labels (screen-space, local) -->
+<MeasureLabels />
 <KnifeOverlay />
 <AnnotationPopover />
 <NotesDrawer />

@@ -61,6 +61,7 @@
   import DrawToolbar from './components/menu/DrawToolbar.svelte'
   import SculptToolbar from './components/menu/SculptToolbar.svelte'
   import SplineToolbar from './components/menu/SplineToolbar.svelte'
+  import MeasureToolbar from './components/menu/MeasureToolbar.svelte' // 47 M1
   import ModuleToolboxLayer from './components/ui/ModuleToolboxLayer.svelte'
   import { isLocked } from './stores/sceneStore'
   // 29-E: `?embed=1` — the editor windows and the dock inset stand down for the page's
@@ -71,6 +72,8 @@
   // 36-export: the Publish / Export modal (core owns the shell + Export tab; a cloud plugin mounts
   // Publish into it) and the exported game's boot (inert on every normal page load)
   import { publishExportOpen } from '$lib/export/exportStores.js'
+  // 47-cc0: the free CC0 asset browser (lazy, like the export modal)
+  import { assetBrowserOpen } from '$lib/cc0/assetBrowserState.js'
   import { recordingOpen, recordingState } from '$lib/recording/recordingStores.js'
   import { exportMode } from '$lib/export/exportBoot.js'
   import { startExportRuntime } from '$lib/export/exportRuntime.js'
@@ -126,6 +129,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
   import { startHelperLayer, helpersInPlay } from '$lib/helperLayer'
   import { startCloudPlugin } from '$lib/cloudPlugin'
   import { startShaderGraphs } from '$lib/shaderGraph'
+  import { startTerrainSurface } from '$lib/terrainSurface'
   import { startMaterialSharing } from '$lib/materialSharing'
   import { startMaterialTiers } from '$lib/materialTiers.js'
   import { startShaderSync } from '$lib/shaderSync'
@@ -298,6 +302,8 @@ import { startMusicToolbox } from './lib/musicToolbox'
     startHelperLayer()
     // shader graphs: the compile/target wiring + the replication and history seams
     startShaderGraphs()
+    // 47 T1/T2: painted terrains (splat shader) + scatter instances, derived from userData
+    startTerrainSurface()
     // D2: re-unifies shared materials by id whenever the scene changes — every carrier
     // (GLTF, a peer's per-object messages, undo) rebuilds materials, and the id survives
     // where the instance does not
@@ -424,6 +430,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
 <DrawToolbar />
 <SculptToolbar />
 <SplineToolbar />
+<MeasureToolbar />
 <!-- A5: module toolboxes. OUTSIDE the {#if !$isLocked} block — a toolbox that opted
      into playMode has to survive Play mode, and the layer decides per box. -->
 <ModuleToolboxLayer />
@@ -442,6 +449,10 @@ import { startMusicToolbox } from './lib/musicToolbox'
 <MomentReport />
 <ProblemReport />
 <ProfilerLive />
+<!-- 47-cc0: the Asset Browser — loaded the first time it opens, so the boot carries none of it -->
+{#if $assetBrowserOpen}
+{#await import('./components/editors/AssetBrowser.svelte') then m}<m.default />{/await}
+{/if}
 <PlayReticle />
 <!-- 38 R8 (NOTES-38 #4): "Playing · Press Esc to stop" — scene-configurable, play-only -->
 <PlayBanner />

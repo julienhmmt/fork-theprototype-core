@@ -25,6 +25,8 @@
 	import MenuButton from './inspector/MenuButton.svelte';
 	import InsToggle from './inspector/InsToggle.svelte';
 	import SceneQualitySection from './inspector/SceneQualitySection.svelte'; // 42 I12
+	import ArrangeSection from './inspector/ArrangeSection.svelte'; // 47 M2
+	import TerrainPaintSection from './inspector/TerrainPaintSection.svelte'; // 47 T1/T2
 	import HdriSection from './scene/HdriSection.svelte'; // 37-hdri
 	import PhysicsFloats from '../sim/PhysicsFloats.svelte'; // 36-sim I1
 	import FluidEmitterSection from '../sim/FluidEmitterSection.svelte'; // 36-fb F23
@@ -109,6 +111,7 @@
 	// D2: the shared-material notice and its way out
 	import { fanTargets as fanMaterialTargets, unlinkMaterial } from '$lib/materialSharing';
 	import MaterialPresetsRow from './MaterialPresetsRow.svelte'; // 37 R5
+	import Cc0Credit from '../editors/Cc0Credit.svelte'; // 47-cc0: where a CC0 asset came from
 	import PostStack from './PostStack.svelte';
 	import { showColliders, colliderVizObjects, setColliderViz } from '$lib/colliderHelpers';
 	import { enterColliderEdit } from '$lib/colliderEdit';
@@ -3152,6 +3155,8 @@
 <p id="uuid" class="truncate px-1 text-[length:var(--fs-badge)] text-text-faint" title={$selectedObject.uuid}>
 					{$selectedObject.uuid}
 				</p>
+				<!-- 47-cc0: a CC0 download names where it came from (a placed Poly Haven model) -->
+				<Cc0Credit id="inspector-cc0-source" source={$selectedObject?.userData?.source} />
 				<div onclick={refreshGroups} role="presentation">
 					{#key rerenderSelectGroup}
 						<ThemedSelect
@@ -3542,6 +3547,11 @@
 				</p>
 			</Section>
 
+			<!-- 47 M2: align / distribute / drop to ground over the set (its own file) -->
+			{#if multiCount}
+				<ArrangeSection count={multiCount} />
+			{/if}
+
 			{#if !isLight}
 				<Section variant="panel" label="Object" clip={{ count: () => insTargets.length, fans: true }}>
 					<PropRow label="Render order" labelFor="inspector-render-order" valueBox={false}>
@@ -3739,6 +3749,11 @@
 						</div>
 					{/if}
 				</Section>
+			{/if}
+
+			{#if $selectedObject?.userData?.terrain && !multiCount}
+				<!-- 47 T1/T2: terrain paint layers + scatter sets -->
+				<TerrainPaintSection object={$selectedObject} />
 			{/if}
 
 			{#if isGroup}
@@ -4001,6 +4016,7 @@
 
 					{#if !allShaderDriven}
 					<MaterialPresetsRow {material} count={matCount} fan={fanMat} primaryUuid={$selectedObject?.uuid ?? ''} />
+					<Cc0Credit id="inspector-cc0-material" source={material?.userData?.cc0Source} />
 					<ThemedSelect
 						id="select-material"
 						items={materials}

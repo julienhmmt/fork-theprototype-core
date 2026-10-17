@@ -139,6 +139,8 @@ export function presetWirePayload(preset, current) {
 	material.name = preset.label;
 	material.userData.materialPreset = preset.label;
 	if (preset.normalMap) material.userData.normalMapDataUrl = preset.normalMap;
+	// 47-cc0: the CC0 credit rides the material JSON, so a peer's Inspector can name it too
+	if (preset.source) material.userData.cc0Source = preset.source;
 	const json = material.toJSON();
 	delete json.metadata;
 	material.dispose();

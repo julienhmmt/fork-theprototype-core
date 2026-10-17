@@ -68,7 +68,7 @@
 	import { startVrGameInput, stopVrGameInput } from '$lib/vrGameInput';
 	import { gameFeelActive } from '$lib/gameFeel';
 	import { vrKeyboardTarget } from '$lib/vrKeyboard';
-	import { measureMode, measureClick } from '$lib/measure';
+	import { measureMode, measureClick, measureHoverAt } from '$lib/measure';
 	import { pinsGroup, openAnnotation, showNotePins } from '$lib/annotationsHandler';
 	import { setParticleRoot } from '$lib/particleRuntime';
 	import WaterLayer from './water/WaterLayer.svelte';
@@ -996,6 +996,10 @@
 			if ($TControls?.dragging) setSnapPointer(event.clientX, event.clientY);
 			// M9b: the knife's rubber band follows the pointer while a cut is pending
 			if ($knifePreview) knifeHover([event.clientX, event.clientY]);
+			// 47 M1: where the next measure click would land (the snap marker + rubber band) — a
+			// mouse that is not pressing; a finger has no hover
+			if ($measureMode && !event.buttons && event.pointerType !== 'touch')
+				measureHoverAt([event.clientX, event.clientY], event.target === element);
 			if (marqueeStart) {
 				$marqueeRect = {
 					x0: Math.min(marqueeStart[0], event.clientX),
@@ -1216,7 +1220,7 @@
 			if (capturePathClick(selectionRaycaster)) return;
 			// measure mode captures clicks entirely
 			if ($measureMode) {
-				measureClick(selectionRaycaster, $objectsGroup);
+				measureClick(selectionRaycaster, $objectsGroup, [event.clientX, event.clientY], { touch: touchTap });
 				return;
 			}
 			// while editing a mesh, clicks pick vertex handles instead of objects;

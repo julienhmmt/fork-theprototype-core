@@ -332,10 +332,12 @@ function faceCentroid(mesh, faceIndex) {
  * radiusPx. PURE — the e2e suite drives it headlessly with synthetic lists.
  * @param {{type: string, px: number[]|null, bonus?: number}[]} list
  * @param {number[]} cursorPx @param {number} radiusPx
+ * @param {Record<string, number>} [bias] 47 M1: per-type bias overrides (the Measure tool wants a
+ *   corner to win from further away than a drag does)
  */
-export function scoreCandidates(list, cursorPx, radiusPx) {
+export function scoreCandidates(list, cursorPx, radiusPx, bias) {
 	/** @type {Record<string, number>} */
-	const BIAS = { vertex: -8, edge: -5, face: -3, object: -3, surface: 0 };
+	const BIAS = { vertex: -8, edge: -5, face: -3, object: -3, surface: 0, ...bias };
 	let best = null;
 	let bestScore = Infinity;
 	for (const candidate of list) {
@@ -359,9 +361,13 @@ export function scoreCandidates(list, cursorPx, radiusPx) {
  * misses. Writes `activeSnapCandidate` (null on no result) and returns it.
  * @param {any} camera @param {number[]|null} pointerNdc normalized device coords, or null
  * @param {string[]} excludeUuids
+ * @param {{targets?: Partial<typeof import('./snapping').DEFAULT_SNAP_TARGETS>, bias?: Record<string, number>}} [opts]
+ *   47 M1: the Measure tool searches with its OWN flags (vertex / edge / face on, whatever the
+ *   drag snapping says) laid over the user's, and its own type bias — absent = the drag search,
+ *   byte-identical
  */
-export function findSnapCandidate(camera, pointerNdc, excludeUuids) {
-	const targets = get(snapTargets);
+export function findSnapCandidate(camera, pointerNdc, excludeUuids, opts) {
+	const targets = opts?.targets ? { ...get(snapTargets), ...opts.targets } : get(snapTargets);
 	/** @type {any} */
 	const renderer = get(globalRenderer);
 	const rect = renderer?.domElement?.getBoundingClientRect?.();
@@ -511,7 +517,7 @@ export function findSnapCandidate(camera, pointerNdc, excludeUuids) {
 			});
 		}
 	}
-	const best = scoreCandidates(candidates, referencePx, targets.radiusPx);
+	const best = scoreCandidates(candidates, referencePx, targets.radiusPx, opts?.bias);
 	activeSnapCandidate.set(best ?? null);
 	return best;
 }

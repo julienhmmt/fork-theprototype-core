@@ -7,6 +7,15 @@ import { commitMeshGeoSnapshot } from './faceEdit';
 import { MAX_SNAPSHOT, previewReplicable } from './meshBudget';
 import { selectObject, deselectObject } from './objectActions';
 import { nameOf } from './lockControl';
+import {
+	beginPaintStroke,
+	paintStrokeMove,
+	endPaintStroke,
+	beginScatterStroke,
+	scatterStrokeMove,
+	endScatterStroke,
+	terrainStrokeOpen
+} from './terrainPaint';
 
 // Terrain sculpting (T-2): brush raise/lower/smooth/flatten on the Terrain
 // primitive, replicated through the EXISTING meshgeo channel — live strokes
@@ -25,7 +34,9 @@ export const sculptObject = writable(null);
  * normal-direction brush for ANY mesh (welded by full xyz position).
  * @type {import('svelte/store').Writable<'terrain'|'mesh'>} */
 export const sculptMode = writable('terrain');
-/** @type {import('svelte/store').Writable<'raise'|'lower'|'smooth'|'flatten'>} */
+/** 47 T1/T2: 'paint' (splat layers) and 'scatter' (instances) are terrain-only ops whose
+ * strokes terrainPaint.js runs; the session, lock, radius and strength are shared.
+ * @type {import('svelte/store').Writable<'raise'|'lower'|'smooth'|'flatten'|'paint'|'scatter'>} */
 export const sculptOp = writable('raise');
 export const sculptRadius = writable(3);
 export const sculptStrength = writable(0.5);
@@ -295,12 +306,14 @@ export function enterSculpt(uuid) {
 	if (isTerrain) rebuildWeldMap(object);
 	else rebuildMeshWeldMap(object);
 	sculptMode.set(isTerrain ? 'terrain' : 'mesh');
+	// paint / scatter have no meaning on a plain mesh
+	if (!isTerrain && (get(sculptOp) === 'paint' || get(sculptOp) === 'scatter')) sculptOp.set('raise');
 	sculptObject.set(uuid);
 	return true;
 }
 
 export function exitSculpt() {
-	if (strokeBefore) endStroke(); // commit a stroke in flight
+	if (strokeBefore || terrainStrokeOpen()) endStroke(); // commit a stroke in flight
 	sculptObject.set(null);
 	weld = null;
 	meshWeld = null;
@@ -391,8 +404,17 @@ export function applyBrushAt(uuid, x, z, op, radius, strength, dt = 0.016) {
 	return touched;
 }
 
+/** 47: is the current op a terrainPaint stroke (and on a terrain)? */
+function paintOp() {
+	const op = get(sculptOp);
+	return get(sculptMode) === 'terrain' && (op === 'paint' || op === 'scatter') ? op : null;
+}
+
 /** Stroke begin: snapshot for the ONE undo entry per stroke. @param {string} uuid */
 export function beginStroke(uuid) {
+	const op = paintOp();
+	if (op === 'paint') return void beginPaintStroke(uuid);
+	if (op === 'scatter') return void beginScatterStroke(uuid);
 	const object = objectOf(uuid);
 	if (!object?.geometry?.attributes?.position) return;
 	strokeBefore = object.geometry.attributes.position.array.slice();
@@ -402,8 +424,11 @@ export function beginStroke(uuid) {
  * 3D mesh brush (the terrain brush works in the xz plane and ignores it).
  * @param {string} uuid @param {number} x @param {number} z @param {number=} dt @param {number=} y */
 export function strokeMove(uuid, x, z, dt = 0.016, y = 0) {
+	const paint = paintOp();
+	if (paint === 'paint') return paintStrokeMove(uuid, x, z, dt, get(sculptRadius), get(sculptStrength));
+	if (paint === 'scatter') return scatterStrokeMove(uuid, x, z, get(sculptRadius));
 	if (!strokeBefore) return;
-	const op = get(sculptOp);
+	const op = /** @type {'raise'|'lower'|'smooth'|'flatten'} */ (get(sculptOp));
 	const changed =
 		get(sculptMode) === 'mesh'
 			? applyMeshBrushAt(uuid, x, y, z, op, get(sculptRadius), get(sculptStrength), dt)
@@ -433,6 +458,11 @@ export function strokeMove(uuid, x, z, dt = 0.016, y = 0) {
 
 /** Stroke end: flush the pending preview + ONE snapshot commit + undo entry. */
 export function endStroke() {
+	if (terrainStrokeOpen()) {
+		endPaintStroke();
+		endScatterStroke();
+		return;
+	}
 	const uuid = get(sculptObject);
 	const object = uuid ? objectOf(uuid) : null;
 	if (!strokeBefore || !object) {

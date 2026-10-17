@@ -102,6 +102,11 @@ export const DEBUG_HOOKS = [
 	['possess', () => import('./possess')],
 	['handModels', () => import('./handModels')],
 	['terrainSculpt', () => import('./terrainSculpt')],
+	// 47 T1/T2: terrain paint + scatter (the brushes / undo / wire) and the look (shader, instances)
+	['terrainPaint', () => import('./terrainPaint')],
+	['terrainSurface', () => import('./terrainSurface')],
+	['terrainPaintCore', () => import('./terrainPaintCore')],
+	['terrainScatterCore', () => import('./terrainScatterCore')],
 	['userModules', () => import('./userModules')],
 	['environment', () => import('./environment')],
 	// 37-hdri: the HDRI layer (hdriDebug, installHdriLayer) + its leaf stores (skyEnv, envToneMapping, hdriStatus) + the pure core
@@ -166,6 +171,11 @@ export const DEBUG_HOOKS = [
 	['meshToolParams', () => import('./meshToolParams')],
 	['avatarModel', () => import('./avatarModel')],
 	['explorer', () => import('./explorer')],
+	// 47-cc0: the CC0 asset browser — import paths + jobs, the window's leaf stores, the pure core
+	['cc0', () => import('./cc0/cc0Import.js')],
+	['cc0State', () => import('./cc0/assetBrowserState.js')],
+	['cc0Core', () => import('./cc0/cc0Core.js')],
+	['cc0Fetch', () => import('./cc0/cc0Fetch.js')],
 	['bottomDock', () => import('./bottomDock')],
 	['dockMenu', () => import('./dockMenu')],
 	['phoneDock', () => import('./phoneDock')],
@@ -260,6 +270,9 @@ export const DEBUG_HOOKS = [
 	['proportionalRing', () => import('./proportionalRing')],
 	['scenePick', () => import('./scenePick')],
 	['snapEngine', () => import('./snapEngine')],
+	// 47 M1/M2: the measure tool (chains, pins, snap pref) and its pure arithmetic
+	['measure', () => import('./measure')],
+	['measureCore', () => import('./measureCore')],
 	['meshPivot', () => import('./meshPivot')],
 	['selectionPrefs', () => import('./selectionPrefs')],
 	['editOverlays', () => import('./editOverlays')],

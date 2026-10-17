@@ -5,6 +5,39 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.38.0 — Build precisely: snapping measurements, align and distribute, free CC0 assets and terrain paint 📐
+
+Line things up exactly, bring in free assets without leaving the app, and paint and dress a terrain with a brush.
+
+### 📐 Measure, align and distribute
+
+- 📏 **Measure snaps** to corners, edges and faces, **chains segments** with a running total and the angle between
+  them, and **pins** dimension labels in the viewport that only you see (**Clear measurements** removes them). On touch,
+  tap the points; the toolbox has Pin and Undo point.
+- 🧲 **Align** (min / centre / max on X, Y or Z — to the selection or to the active object), **Distribute** (even
+  centres or even gaps, three or more objects) and **Drop to ground** for a selection: in the Properties **Arrange**
+  section and the object menu's **Transform ▸**. One undo each, live for everyone. (The object menu's "Align to ground"
+  is now **Drop to ground** and moves the whole selection.)
+
+### 🌍 Free assets (CC0)
+
+- 🛍️ **Asset Browser** (main menu or the Add menu): **Poly Haven** models, skies (HDRIs) and textures and **ambientCG**
+  materials — search, categories, thumbnails, 1k / 2k / 4k (1k on a headset or phone, 2k on a desktop). The lists are
+  saved on this device, so the browser still opens offline.
+- 📥 A model lands in your Library (a "Poly Haven" folder) through the same path as a file drop — so a big one is
+  **optimized on import** like any other; a sky lights the scene for everyone; a material becomes a **material preset**
+  with its maps. Every asset keeps its **CC0 credit** (site, authors, licence, link) in the Explorer's Properties and
+  the Inspector — the optimized copy and the placed object included.
+
+### 🏔️ Terrain paint and scatter
+
+- 🎨 **Paint four texture layers** onto a Terrain with the **Paint** brush in the Sculpt toolbox; each layer's colour,
+  texture and tiling are in the Inspector. One stroke = one undo, live for everyone, saved with the scene (older apps
+  open a painted terrain unpainted).
+- 🌲 **Scatter** trees, rocks or any Library model or primitive with a brush: density, scale range, random rotation,
+  align to the slope, paint and erase. Drawn as instances, counted by the **budget chip**, and dense models switch to
+  lighter **levels of detail** with distance.
+
 ## 1.37.0 — Fast on every device: big models slim down on import, a budget meter, HEIC photos and Race shadows in VR 🚀
 
 Heavy models and photos now come in ready for a Quest or a phone, and you can see at a glance whether a scene fits.

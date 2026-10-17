@@ -592,10 +592,22 @@ function swapLevels(camera) {
 		const wz = e[2] * sx + e[6] * sy + e[10] * sz + e[14];
 		const scale = Math.sqrt(Math.max(e[0] * e[0] + e[1] * e[1] + e[2] * e[2], e[4] * e[4] + e[5] * e[5] + e[6] * e[6], e[8] * e[8] + e[9] * e[9] + e[10] * e[10]));
 		const radius = sphere.radius * scale;
-		const dx = wx - cx;
-		const dy = wy - cy;
-		const dz = wz - cz;
-		const auto = pickLevel(Math.sqrt(dx * dx + dy * dy + dz * dz), radius, entry.edges, bias, entry.current, entry.opts.hysteresis);
+		let distance;
+		const spread = mesh.isInstancedMesh ? mesh.boundingSphere : null;
+		if (spread) {
+			// 47-int: an explicit INSTANCED mesh (a terrain's scatter cell) is as near as its nearest
+			// instance — the distance to the instances' sphere, measured in ONE instance's radius
+			const ix = e[0] * spread.center.x + e[4] * spread.center.y + e[8] * spread.center.z + e[12] - cx;
+			const iy = e[1] * spread.center.x + e[5] * spread.center.y + e[9] * spread.center.z + e[13] - cy;
+			const iz = e[2] * spread.center.x + e[6] * spread.center.y + e[10] * spread.center.z + e[14] - cz;
+			distance = Math.max(0, Math.sqrt(ix * ix + iy * iy + iz * iz) - spread.radius * scale);
+		} else {
+			const dx = wx - cx;
+			const dy = wy - cy;
+			const dz = wz - cz;
+			distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+		}
+		const auto = pickLevel(distance, radius, entry.edges, bias, entry.current, entry.opts.hysteresis);
 		const forced = forcedMeshes.get(mesh);
 		const level = forced === undefined ? auto : Math.min(forced, entry.levels.length);
 		entry.current = level;
