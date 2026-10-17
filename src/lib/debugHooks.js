@@ -305,6 +305,7 @@ export const DEBUG_HOOKS = [
 	// 48 S1/S2: the Timeline — data, sync, player
 	['sequences', () => import('./sequences')],
 	['sequenceSync', () => import('./sequenceSync')],
+	['sequencePlayer', () => import('./sequencePlayer')],
 	['idb', () => import('./idb')],
 	['hudKinds', () => import('./hudKinds')],
 	['hudImages', () => import('./hudImages')],

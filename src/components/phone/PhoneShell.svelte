@@ -536,6 +536,7 @@
 		shader: { ...viewAction('shader'), icon: 'palette' },
 		uv: { ...viewAction('uv'), icon: 'grid-2x2' },
 		hud: { ...viewAction('hud'), icon: 'monitor' },
+		timeline: { ...viewAction('timeline'), icon: 'video' },
 		profiler: { ...viewAction('profiler'), icon: 'activity' },
 		code: { ...viewAction('code'), icon: 'braces' },
 		// 42 I5: More ▸ Edit — the selection strip's tools, placeable on the bar (Inspect toggles the

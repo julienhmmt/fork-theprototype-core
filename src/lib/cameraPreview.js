@@ -108,6 +108,27 @@ export function setOrbitEnabled(on) {
 	if (controls) controls.enabled = on;
 }
 
+/**
+ * 48 S1: a POSE SEAM for the preview camera. While a Timeline shot glides between two
+ * camera marks, the sequence player owns the pose (and fov); CameraPreview asks this
+ * every frame before following the marker. Returns true when it posed the camera.
+ * @type {((camera: any, uuid: string) => boolean)|null}
+ */
+let poseHook = null;
+
+/** @param {(camera: any, uuid: string) => boolean} fn */
+export function setPreviewPoseHook(fn) {
+	poseHook = fn;
+	return () => {
+		if (poseHook === fn) poseHook = null;
+	};
+}
+
+/** @param {any} camera @param {string} uuid */
+export function previewPoseOverride(camera, uuid) {
+	return poseHook ? poseHook(camera, uuid) : false;
+}
+
 /** pose the marker had when Control began (for the single undo entry) */
 /** @type {any} */
 let controlBefore = null;

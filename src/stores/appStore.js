@@ -45,6 +45,8 @@ export const uvEditorClose = writable(true);
 export const shaderEditorClose = writable(true);
 // A4: the HUD editor, the 6th FLOW_FAMILY dock tab
 export const hudEditorClose = writable(true);
+// 48 S1: the Timeline (cutscene sequencer), the 7th FLOW_FAMILY dock tab
+export const timelineClose = writable(true);
 // 34 PF: the Profiler — recordings, timeline, who draws most (a dock tab, Explorer-like: not a Flow-family view)
 export const profilerClose = writable(true);
 // 36-code: the code workspace (plan 75) — tabs of scripts, behaviours, files, graph JSON

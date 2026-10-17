@@ -506,6 +506,14 @@ export const shortcuts = [
 		action: () => togglePanel('hud')
 	},
 	{
+		id: 'panels.timeline',
+		keys: 'Alt+T',
+		group: 'Panels',
+		scope: 'global',
+		label: 'Timeline: show / bring to front / hide',
+		action: () => togglePanel('timeline')
+	},
+	{
 		id: 'panels.chat',
 		keys: 'C',
 		group: 'Panels',
