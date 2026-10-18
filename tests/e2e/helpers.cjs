@@ -150,6 +150,11 @@ async function setupPage(browser, name, options = {}) {
 	// E2E_NO_PERF_OFFER=1: a deployed PREVIEW build offers perf reports in a sticky toast that covers clicks and
 	// lands in golden frames — answer it up front for proofs against a preview (36-int-125)
 	if (process.env.E2E_NO_PERF_OFFER === '1') await ctx.addInitScript(() => localStorage.setItem('perfReports:offered', 'no'));
+	// E2E_NO_ERROR_REPORTS=1 (48-int): a deployed build sends REAL anonymous error reports (48 O1), and a proof's
+	// deliberate page errors on theprototype.pages.dev would count as production — the release's error-spike check
+	// (O2's auto-rollback) must not read them. Proofs against Pages builds switch reporting off (a suite's own choice wins)
+	if (process.env.E2E_NO_ERROR_REPORTS === '1')
+		await ctx.addInitScript(() => localStorage.getItem('errorReports:send') ?? localStorage.setItem('errorReports:send', 'false'));
 	// options.audio installs the destination TAP before any app code runs, so
 	// everything the app plays can be measured. Opt-in on purpose: it inserts a
 	// gain node in front of ctx.destination, and `spatial-voice` asserts on the
