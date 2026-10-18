@@ -83,8 +83,10 @@ h.run(async () => {
 		h.check(d.editing && d.bar.length === 10 && d.left.join() === 'ai,add' && d.right.join() === 'chat,mic', T + `edit mode draws the whole layout as placeholders (${JSON.stringify(d)})`);
 		const removers = await P.evaluate(() => [...document.querySelectorAll('.hud-edit-remove')].map((b) => b.closest('[data-edit-wrap]')?.dataset.editWrap));
 		// 42 I9: + the top-right group's three (notes, notifications, peers); 43 J2: + the "…";
-		// 43 J12: + the row beside the logo (undo, redo, multi-select), drawn on a mouse desktop too; 43 K3: + the Connect pill
-		h.check(removers.length === 21 && !removers.includes('__spacer') && removers.includes('__more') && removers.includes('__connect'), T + `a red "−" on every placeholder but Play (${removers.length})`);
+		// 43 J12: + the row beside the logo (undo, redo, multi-select), drawn on a mouse desktop too; 43 K3: + the Connect pill;
+		// 48 F1: + the budget chip's outline (when the chip is drawn)
+		const nRemovers = 21 + (removers.includes('budget') ? 1 : 0);
+		h.check(removers.length === nRemovers && !removers.includes('__spacer') && removers.includes('__more') && removers.includes('__connect'), T + `a red "−" on every placeholder but Play (${removers.length})`);
 		const plusLeft = await P.locator('#hud-stack-left .hud-edit-add').count();
 		const plusRight = await P.locator('#hud-stack-right .hud-edit-add').count();
 		h.check(plusLeft === 1 && plusRight === 1, T + `each corner shows ONE green "+" for its next place (${plusLeft}, ${plusRight})`);
