@@ -207,6 +207,7 @@ export function sceneSetupParts() {
 		if (r.phys?.scenePhysicsSnapshot()) parts.push('play & physics settings');
 		if (r.mus?.musicSnapshot()) parts.push('music');
 		if (r.env?.environmentSnapshot() || r.post?.scenePostSnapshot()) parts.push('sky & look');
+		if (r.seq?.sequencesSnapshot()) parts.push('timeline sequences'); // 48 S2
 	} catch {
 		/* a part we could not read is a part we do not claim */
 	}
@@ -217,7 +218,7 @@ export function sceneSetupParts() {
 /** the singleton modules sceneSetupParts reads — PRIMED dynamic imports (resolved at boot,
  * long before anyone presses Clear), so the click path is synchronous: one await per import
  * cost a frame each on a heavy game scene, and the modal took ~15 s to appear (measured).
- * @type {{hud?: any, game?: any, phys?: any, mus?: any, env?: any, post?: any}} */
+ * @type {{hud?: any, game?: any, phys?: any, mus?: any, env?: any, post?: any, seq?: any}} */
 const setupRefs = {};
 if (typeof window !== 'undefined') {
 	void Promise.all([
@@ -226,9 +227,10 @@ if (typeof window !== 'undefined') {
 		import('./scenePhysics'),
 		import('./sceneMusic'),
 		import('./environment'),
-		import('./scenePost')
+		import('./scenePost'),
+		import('./sequences')
 	])
-		.then(([hud, game, phys, mus, env, post]) => Object.assign(setupRefs, { hud, game, phys, mus, env, post }))
+		.then(([hud, game, phys, mus, env, post, seq]) => Object.assign(setupRefs, { hud, game, phys, mus, env, post, seq }))
 		.catch(() => {});
 }
 

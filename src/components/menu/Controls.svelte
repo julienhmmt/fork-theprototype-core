@@ -3,7 +3,7 @@
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
 	import { objectsGroup, TControls, transformMode, editorMode, isLocked, lockedObjects, globalScene, vrPassthrough, selectedObject, selectedObjects } from '../../stores/sceneStore';
 	import { chatUnread, chatMentioned } from '../../stores/appStore.js'; // 37 R15: the chat button's badge
-	import { chatHidden, flowGraphClose, flowCodeClose, animationClose, uvEditorClose, shaderEditorClose, hudEditorClose, explorerClose, profilerClose, codeWorkspaceClose, objectListClose, objectContextMenu, renamingObject, advancedMode, showEnvInList, showLocalObjects, floatingToolbar, toolbarAlwaysOnTop, hudStackLift, showSimControls, expandedObjects } from '../../stores/appStore.js';
+	import { chatHidden, flowGraphClose, flowCodeClose, animationClose, uvEditorClose, shaderEditorClose, hudEditorClose, timelineClose, explorerClose, profilerClose, codeWorkspaceClose, objectListClose, objectContextMenu, renamingObject, advancedMode, showEnvInList, showLocalObjects, floatingToolbar, toolbarAlwaysOnTop, hudStackLift, showSimControls, expandedObjects } from '../../stores/appStore.js';
 	// 24-B2: keyboard navigation in the object list (the Explorer's gridKeydown shape)
 	import { visibleObjectRows, withExpanded, typeAheadIndex } from '$lib/objectListNav';
 	import { sceneMetrics, statsOpen, worstTier, budgetRows } from '$lib/sceneBudget';
@@ -137,6 +137,7 @@
 			uv: $uvEditorClose,
 			shader: $shaderEditorClose,
 			hud: $hudEditorClose,
+			timeline: $timelineClose,
 			explorer: $explorerClose,
 			profiler: $profilerClose,
 			code: $codeWorkspaceClose
@@ -1163,6 +1164,7 @@
 		uv: 'grid-2x2',
 		shader: 'palette',
 		hud: 'monitor',
+		timeline: 'video',
 		// 34 PF: a pulse trace reads as "performance" beside the five editor glyphs
 		profiler: 'activity',
 		// 36-code: `{}` — the code workspace, distinct from Flow Code's `</>`

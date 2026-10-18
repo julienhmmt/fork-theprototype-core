@@ -66,6 +66,7 @@
 	import KeyPressNode from './nodes/KeyPressNode.svelte';
 	import GamepadNode from './nodes/GamepadNode.svelte';
 	import PlayAnimNode from './nodes/PlayAnimNode.svelte';
+	import TimelineSeqNode from './nodes/TimelineSeqNode.svelte';
 	import AnimStateNode from './nodes/AnimStateNode.svelte';
 	import OnHitNode from './nodes/OnHitNode.svelte';
 	import OnClapNode from './nodes/OnClapNode.svelte'; // 31 (Stars Room S3)
@@ -262,6 +263,8 @@
 		animfinished: OnClickNode, // 17-E: a pulse when a clip ends
 		animmarker: OnClickNode, // 17-E F5: a pulse at a named point in a clip
 		animstate: AnimStateNode, // 17-E F3: the readable half of it
+		playseq: TimelineSeqNode, // 48 S2: Play Sequence
+		onseqevent: TimelineSeqNode, // 48 S2: On Sequence Event
 		// A3: ONE generic card for the whole HUD group (the ShaderNode precedent)
 		hudscreen: HudNode,
 		hudtext: HudNode,

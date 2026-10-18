@@ -28,6 +28,7 @@ import { scenePhysicsState_, scenePhysicsSnapshot, scenePhysicsRestore } from '.
 import { transport, transportSnapshot, transportRestore } from './musicClock';
 import { patch, patchSnapshot, patchRestore } from './audioPatch';
 import { hudDocs, hudDocsSnapshot, hudDocsRestore } from './hudDocs';
+import { sequences, sequencesSnapshot, sequencesRestore } from './sequences'; // 48 S2
 import { gameState, gameStateSnapshot, gameStateRestore } from './gameState';
 import { peers, showToast, showInfoToast, dismissToastById } from '../stores/appStore';
 import { isMultiMaterial, serializeMeshWithGroups } from './materialsHandler';
@@ -375,6 +376,9 @@ async function writeSnapshot() {
 		// would need re-keying through the userData.__uuid stamp like multiMaterial does.
 		// The v1 UI only creates the 'scene' key, which is unaffected.
 		hud: hudDocsSnapshot(),
+		// 48 S2: the Timeline's sequences — scene data with nowhere in a GLTF to live; the
+		// object uuids their tracks name survive through the __uuid stamp above
+		sequences: sequencesSnapshot(),
 		// 21-D6: same reasoning - session state with nowhere in a GLTF to live
 		game: gameStateSnapshot(),
 		// #20 P5: the selection, any open edit session, and the panel LAYOUT. This is the
@@ -751,6 +755,7 @@ async function applyRestore(snapshot, offer = null) {
 		patchRestore(snapshot.patch, true);
 		// same reasoning: replicate, so a restore into a live room brings the HUD too
 		hudDocsRestore(snapshot.hud, true, true);
+		sequencesRestore(snapshot.sequences ?? null, true, true); // 48 S2
 		gameStateRestore(snapshot.game, true);
 		// #20 P5: windows, selection and edit mode — the EXPLICIT-restore path. A plain
 		// reload never reaches here, which is exactly the point.
@@ -856,6 +861,7 @@ export function startAutosave() {
 	// document would sit in the snapshot with nothing ever triggering one being
 	// written (the scenePost lesson, and the notes-disappear-on-reload one before it)
 	hudDocs.subscribe(() => markDirty());
+	sequences.subscribe(() => markDirty()); // 48 S2: authoring a sequence touches no object either
 	// and once more: a game's state changes touch no object either
 	gameState.subscribe(() => markDirty());
 	setInterval(() => {

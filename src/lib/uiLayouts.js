@@ -16,7 +16,7 @@ import {
 	chromeWrites
 } from './uiLayoutsCore';
 import { snapshotWorkspace, applyWorkspace, closeWorkspace } from './workspace';
-import { hudEditorClose, profilerClose, chatHidden, settingsOpen, floatingToolbar, toolbarAlwaysOnTop, hudStackLift, showRoomsButton, touchTools } from '../stores/appStore';
+import { hudEditorClose, timelineClose, profilerClose, chatHidden, settingsOpen, floatingToolbar, toolbarAlwaysOnTop, hudStackLift, showRoomsButton, touchTools } from '../stores/appStore';
 import { phoneShell } from './ui/phoneShell';
 
 // 37 R14 — NAMED WORKSPACE LAYOUTS, the live half (the rules are in uiLayoutsCore).
@@ -86,6 +86,7 @@ export function captureLayout(name) {
 		open: {
 			...ws.open,
 			hud: !get(hudEditorClose),
+			timeline: !get(timelineClose),
 			profiler: !get(profilerClose),
 			chat: get(chatHidden) === ''
 		},
@@ -134,6 +135,7 @@ export function renameLayoutTo(id, name) {
 /** the panels a layout opens beyond the workspace record's own table */
 const EXTRA = [
 	{ name: 'hud', open: () => hudEditorClose.set(false), close: () => hudEditorClose.set(true) },
+	{ name: 'timeline', open: () => timelineClose.set(false), close: () => timelineClose.set(true) },
 	{ name: 'profiler', open: () => profilerClose.set(false), close: () => profilerClose.set(true) },
 	{ name: 'chat', open: () => chatHidden.set(''), close: () => chatHidden.set('hidden') }
 ];

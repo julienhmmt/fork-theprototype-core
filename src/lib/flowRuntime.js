@@ -113,6 +113,9 @@ import { INPUT_LETTERS, socketCount, opFolds, foldMath, foldGate, switcherItems,
 // so a static edge here would close history -> flowRuntime -> animationPreview ->
 // history and TDZ-crash the SSR prerender.
 /** @type {any} */ let animRef = null;
+// 48 S2: the sequence player (Play Sequence) — primed for the same reason: it imports
+// animationPreview and this module statically
+/** @type {any} */ let seqRef = null;
 /** @type {any} */ let physicsRef = null;
 /** @type {any} */ let jointsRef = null;
 /** @type {any} */ let spawnerRef = null;
@@ -1479,7 +1482,7 @@ function updateGameNodes(time, ctx) {
 	// 1. the ACTIONS, on a fresh trigger stamp only
 	for (const node of nodes) {
 		const type = node.type;
-		if (type !== 'setgamestate' && type !== 'setcamera' && type !== 'setvariable' && type !== 'setlook' && type !== 'travel' && type !== 'storevalue' && !GAME_FEEL_ACTIONS.includes(type) && !KIT_ACTION_TYPES.has(type))
+		if (type !== 'setgamestate' && type !== 'setcamera' && type !== 'setvariable' && type !== 'setlook' && type !== 'travel' && type !== 'storevalue' && type !== 'playseq' && !GAME_FEEL_ACTIONS.includes(type) && !KIT_ACTION_TYPES.has(type))
 			continue;
 		seeActionNode(node, time);
 		const stamp = triggerStampFor(node.id, ctx);
@@ -1538,6 +1541,13 @@ function updateGameNodes(time, ctx) {
 			// sends NOTHING: every peer that sees the trigger acts for its own device, which
 			// is the whole semantics of "saved on this device".
 			storeValue(data);
+		} else if (type === 'playseq') {
+			// 48 S2: PLAY SEQUENCE — inside the actionSeenAt family above (a fresh node adopting
+			// an old stamp must not start a cutscene on connect). EVERY peer runs the sequence
+			// itself from the replicated stamp, so shots, clips, sounds and events line up
+			// with no message of their own (the playanim / setcamera reasoning).
+			const ref = typeof data.sequence === 'string' ? data.sequence : '';
+			if (ref && seqRef) seqRef.runSequenceAction(ref, String(data.action ?? 'play'), stamp);
 		} else if (type === 'setcamera') {
 			const uuid = typeof data.camera === 'string' ? data.camera : '';
 			if (uuid) lookThroughCamera(uuid);
@@ -3358,6 +3368,28 @@ export function fireAnimMarker(uuid, name) {
 }
 
 /**
+ * 48 S2: a running sequence's playhead crossed an EVENT item called `name` (or reached its
+ * end: `end`) — pulse every On Sequence Event node listening for it. `sequence` empty =
+ * any sequence, `event` empty = any event. LOCAL on every peer, like animmarker: each
+ * peer runs the same sequence from the same replicated stamp and crosses the item itself.
+ * @param {string} seqId @param {string} seqName @param {string} name
+ */
+export function fireSequenceEvent(seqId, seqName, name) {
+	const want = String(name ?? '').trim().toLowerCase();
+	let fired = 0;
+	nodes.forEach((node) => {
+		if (node.type !== 'onseqevent') return;
+		const seq = String(node.data?.sequence ?? '').trim();
+		if (seq && seq !== seqId && seq.toLowerCase() !== String(seqName).trim().toLowerCase()) return;
+		const ev = String(node.data?.event ?? '').trim().toLowerCase();
+		if (ev && ev !== want) return;
+		applyNodeTrigger(node.id, syncedNow(), false);
+		fired++;
+	});
+	return fired;
+}
+
+/**
  * A1: a module fired one of its own EVENT nodes. `fireObjectClick`'s body with the
  * target filter swapped for a caller-supplied match, ending in the same replicated
  * applyNodeTrigger — a module event is a real event on ONE peer, not a derivation,
@@ -4424,6 +4456,7 @@ export function startFlowRuntime() {
 	});
 	// primed for the Play Animation node (see the TDZ note at the top)
 	import('./animationPreview').then((m) => (animRef = m));
+	import('./sequencePlayer').then((m) => (seqRef = m)); // 48 S2: Play Sequence
 	// B6: physics + joints are reached through PRIMED dynamic imports. A static
 	// edge from here closes history -> flowRuntime -> physics -> history, and
 	// joints.js calls registerHistoryKind in its module BODY, so it may never be

@@ -59,6 +59,7 @@ const OUTPUT = {
 	onenter: 'event', onexit: 'event', // CL-C: sensor overlap edges
 	animfinished: 'event', // 17-E: a clip reached its end
 	animmarker: 'event', // 17-E F5: the playhead crossed a named point in a clip
+	onseqevent: 'event', // 48 S2: a running sequence crossed an event item (or ended)
 	animstate: 'number', // 17-E F3: progress / playing / position, one at a time
 	velocity: 'number', // CL-C: live speed readout
 	measure: 'number', // B6: top / bottom / height / y / speed
@@ -181,6 +182,7 @@ const INPUT = {
 	once: { trigger: 'event', rearm: 'event' },
 	// 17-E A5: the trigger that starts/stops an authored clip, plus a wired speed
 	playanim: { trigger: 'event', speed: 'number' },
+	playseq: { trigger: 'event' }, // 48 S2
 	// PFX-B: drive emission from flow — density, tint, spawn offset, motion, and
 	// a burst fired from any event (On Click / Key Press / On Impact)
 	particle: { count: 'number', color: 'color', offset: 'vector3', speed: 'number', gravity: 'number', size: 'number', trigger: 'event' },

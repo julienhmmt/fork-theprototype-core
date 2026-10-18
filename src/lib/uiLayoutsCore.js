@@ -29,7 +29,7 @@
 
 /** the dock-family panels whose mode + floating size are component state, by the prefix
  *  their keys use (`<prefix>Docked`, `<prefix>WinW`, `<prefix>WinH`) */
-export const PANEL_PREFIXES = ['flow', 'flowCode', 'animation', 'uv', 'shader', 'hud', 'explorer', 'profiler', 'code'];
+export const PANEL_PREFIXES = ['flow', 'flowCode', 'animation', 'uv', 'shader', 'hud', 'timeline', 'explorer', 'profiler', 'code'];
 
 /** exact keys that belong to the layout */
 const EXACT = new Set([

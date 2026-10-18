@@ -631,6 +631,8 @@ export const ROOM_SCOPED = new Set([
 	'shadergraphdelete', 'shadergraphs', 'hud', 'huddelete', 'huds', 'hudvalue',
 	'hudvalues', 'game', 'kit', 'kitreq', 'animdata', 'animplay', 'animations', 'jointcreate',
 	'jointdelete', 'joints', 'annotation', 'annotations',
+	// 48 S2: sequences are room content like the HUD documents
+	'seq', 'seqdelete', 'seqs',
 	// coordination
 	'lock', 'locked', 'lockrequest', 'unlock', 'lockdenied', 'sessionproposal',
 	'sessionanswer', 'ping', 'sceneadopt'

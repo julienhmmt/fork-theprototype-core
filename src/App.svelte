@@ -135,6 +135,8 @@ import { startMusicToolbox } from './lib/musicToolbox'
   import { startMaterialTiers } from '$lib/materialTiers.js'
   import { startShaderSync } from '$lib/shaderSync'
   import { startHudSync } from '$lib/hudSync'
+  import { startSequenceSync } from '$lib/sequenceSync' // 48 S2
+  import { startSequencePlayer } from '$lib/sequencePlayer'
   import { startHudImages } from '$lib/hudImages'
   import { startGameSync } from '$lib/gameSync'
   import { startGamePresence } from '$lib/gamePresence'
@@ -158,6 +160,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
   // 33 (L2-L4): keep/unload modules on a scene switch, and the scope a kept module lives in
   import { startSceneSwitch } from '$lib/sceneSwitch'
   import HudEditor from './components/editors/HudEditor.svelte'
+  import TimelineEditor from './components/editors/TimelineEditor.svelte' // 48 S1
   import { importFile, load } from '$lib/fileHandler.svelte'
   import { showToast, showInfoToast } from './stores/appStore'
   // 34 PF: the Profiler dock tab, loaded the first time it opens (it is closed by default)
@@ -315,6 +318,8 @@ import { startMusicToolbox } from './lib/musicToolbox'
     startMaterialTiers()
     startShaderSync()
     startHudSync()
+    startSequenceSync()
+    startSequencePlayer()
     startHudImages()
     startGameSync()
     // 21-F3: publish our play mode when it changes, and watch for an abandoned round
@@ -394,6 +399,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
 <UvEditor />
 <SvelteFlowProvider><ShaderEditor /></SvelteFlowProvider>
 <HudEditor />
+<TimelineEditor />
 <Explorer />
 {#if !$profilerClose}
 {#await import('./components/editors/Profiler.svelte') then m}<m.default />{/await}
