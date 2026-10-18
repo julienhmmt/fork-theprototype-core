@@ -2350,7 +2350,7 @@
 					]
 				},
 				{
-					"name": "Enter mesh edit mode (inside it Tab cycles Vertices/Edges/Faces; Esc exits)",
+					"name": "Enter mesh edit mode (inside it Tab cycles Vertices/Edges/Faces; Esc exits) — on a measurement, edit its points",
 					"controls": [
 						{
 							"kind": "button",
@@ -11073,7 +11073,7 @@
 				]
 			},
 			{
-				"name": "Enter mesh edit mode (inside it Tab cycles Vertices/Edges/Faces; Esc exits)",
+				"name": "Enter mesh edit mode (inside it Tab cycles Vertices/Edges/Faces; Esc exits) — on a measurement, edit its points",
 				"controls": [
 					{
 						"kind": "button",

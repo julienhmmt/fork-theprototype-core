@@ -154,7 +154,7 @@ const dial = async (from, to) => {
 	await from.page.getByRole('button', { name: 'Connect', exact: true }).click();
 };
 
-const approve = (to) => to.page.getByRole('button', { name: 'Approve' }).click({ timeout: 30000 });
+const approve = (to) => h.approveButton(to.page).click({ timeout: 30000 });
 
 /**
  * Free a pair's WebGL contexts once its section is done — SIX pages is where this suite

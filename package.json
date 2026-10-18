@@ -28,11 +28,13 @@
 		"check:zindex": "node scripts/check-zindex.cjs"
 	},
 	"devDependencies": {
+		"@iwer/devui": "2.6.0",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@sveltejs/kit": "^2.70.3",
 		"@sveltejs/vite-plugin-svelte": "^7.3.1",
 		"@tailwindcss/vite": "^4.3.3",
 		"flowbite": "^3.1.2",
+		"iwer": "2.6.0",
 		"peer": "^1.0.2",
 		"playwright": "^1.63.0",
 		"prettier": "^3.9.9",

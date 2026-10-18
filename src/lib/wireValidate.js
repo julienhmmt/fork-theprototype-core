@@ -156,6 +156,10 @@ export const VALIDATORS = {
 	hosts: (d) => isArray(d.hosts),
 	// 37 R15: a chat history reply — a bounded list (each entry is checked again on merge)
 	chathistory: (d) => isArray(d.messages) && d.messages.length <= 500,
+	// 48 S2: a sequence document (normalized again on apply) / its delete / the full map
+	seq: (d) => typeof d.id === 'string' && d.id.length <= 64 && !!d.doc && typeof d.doc === 'object' && !Array.isArray(d.doc),
+	seqdelete: (d) => typeof d.id === 'string' && d.id.length <= 64,
+	seqs: (d) => !!d.seqs && typeof d.seqs === 'object' && !Array.isArray(d.seqs),
 	userdata: (d) => isArray(d.userdata),
 	locked: (d) => isArray(d.lockeditems),
 	lock: (d) => isUuid(d.uuid) && (d.uuids === undefined || isArray(d.uuids)),
@@ -204,6 +208,9 @@ export const VALIDATORS = {
 	manifest: (d) => !!d.manifest && typeof d.manifest === 'object',
 	// 37 R5: a person's material-preset library; every entry is re-normalised on arrival
 	matpresets: (d) => typeof d.from === 'string' && isArray(d.presets) && d.presets.length <= 200,
+	// 48 F2: a pull of one referenced preset, and one part of the answer (re-checked by hash on reassembly)
+	getmatpreset: (d) => typeof d.ref === 'string' && d.ref.length <= 32,
+	matpresetpart: (d) => typeof d.from === 'string' && typeof d.ref === 'string' && Number.isInteger(d.i) && Number.isInteger(d.n) && d.n >= 1 && d.n <= 256 && d.i >= 0 && d.i < d.n && typeof d.data === 'string' && d.data.length <= 300_000,
 	environment: (d) => !!d && typeof d === 'object',
 	atscene: (d) => typeof d.peerId === 'string',
 	disconnected: (d) => typeof d.peerId === 'string',
@@ -322,6 +329,9 @@ export const VALIDATORS = {
 		if (d.parameter === 'terrainLayers') return isUuid(d.uuid) && (d.terrainLayers === null || isArray(d.terrainLayers));
 		if (d.parameter === 'terrainScatter')
 			return isUuid(d.uuid) && (d.terrainScatter === null || (!!d.terrainScatter && typeof d.terrainScatter === 'object' && isArray(d.terrainScatter.sets)));
+		// 48 B2: a measurement's record — null is not a record (an item is deleted, never emptied)
+		if (d.parameter === 'measure')
+			return isUuid(d.uuid) && !!d.measure && typeof d.measure === 'object' && isArray(d.measure.points) && d.measure.points.length <= 64;
 		if (d.parameter === 'water' || d.parameter === 'bubbles' || d.parameter === 'pour') {
 			const v = d[d.parameter];
 			return isUuid(d.uuid) && (v === null || (!!v && typeof v === 'object' && !isArray(v)));

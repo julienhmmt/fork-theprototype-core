@@ -82,7 +82,7 @@ h.run(async () => {
 	});
 	await B.page.locator('input[placeholder="Enter peer ID to connect"]').fill(live);
 	await B.page.getByRole('button', { name: 'Connect', exact: true }).click();
-	await A.page.getByRole('button', { name: 'Approve' }).click({ timeout: 30000 });
+	await h.approveButton(A.page).click({ timeout: 30000 });
 	await h.eventually(
 		() =>
 			A.page.evaluate(() => {

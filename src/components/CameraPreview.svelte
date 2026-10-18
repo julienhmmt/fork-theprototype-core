@@ -3,7 +3,7 @@
 	import { OrbitControls } from '@threlte/extras';
 	import * as THREE from 'three';
 	import { objectsGroup, TControls } from '../stores/sceneStore';
-	import { cameraPreview, writeBackPose, previewOrbit, seatOrbitBehind } from '$lib/cameraPreview';
+	import { cameraPreview, writeBackPose, previewOrbit, seatOrbitBehind, previewPoseOverride } from '$lib/cameraPreview';
 	import { cameraSpec, aspectRatio, syncCameraToObject } from '$lib/cameraObjects';
 	import { safeStorage } from '$lib/safeStorage';
 
@@ -58,6 +58,8 @@
 			writeBackPose(cameraRef, object);
 			return;
 		}
+		// 48 S1: a Timeline shot gliding between two marks poses the camera itself
+		if (previewPoseOverride(cameraRef, $cameraPreview!.uuid)) return;
 		object.updateWorldMatrix(true, false);
 		object.matrixWorld.decompose(pos, quat, scale);
 		cameraRef.position.copy(pos);

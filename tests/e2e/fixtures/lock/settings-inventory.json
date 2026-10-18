@@ -364,7 +364,7 @@
 			"desc": ""
 		},
 		{
-			"name": "Enter mesh edit mode (inside it Tab cycles Vertices/Edges/Faces; Esc exits)",
+			"name": "Enter mesh edit mode (inside it Tab cycles Vertices/Edges/Faces; Esc exits) — on a measurement, edit its points",
 			"kind": "button:Rebind Enter mesh edit mode (inside it Tab cycles Vertices/E",
 			"desc": ""
 		},

@@ -291,7 +291,12 @@ h.run(async () => {
 			await closeMenus(P);
 			await P.evaluate(() => window.__stores.hudStackLift.set(false));
 			await P.waitForTimeout(300);
-			h.check((await stored(P)) === null && (await topRight(P)).join() === 'notes-toggle,notif-bell', T + 'premise: the toolbar is back to the default');
+			// the default top right also holds the peers trigger, drawn only while someone is there to show — on a
+			// DEPLOYED build the cloud plugin's cross-scene presence (other people online anywhere) is enough
+			// (Users.svelte `crossRooms`), so it comes and goes with production traffic. 48 G1: that is what
+			// made this premise red on production only; the default ORDER is what is asserted.
+			const trReset = (await topRight(P)).filter((id) => id !== 'peers-trigger');
+			h.check((await stored(P)) === null && trReset.join() === 'notes-toggle,notif-bell', T + `premise: the toolbar is back to the default (${trReset.join()})`);
 			const ok = await P.evaluate((id) => window.__stores.uiLayouts.applyLayout(id), rec8.id);
 			await P.waitForTimeout(600);
 			const after = await stored(P);

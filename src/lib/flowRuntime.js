@@ -6,7 +6,7 @@ import { flowGraphs, mutedFlowObjects, syncedAnimations, flowValues, flowTrigger
 // 21-F2: `isLocked` is the LOCAL play substate the recipe gate reads — see gamePlayActive
 import { objectsGroup, isLocked } from '../stores/sceneStore';
 import { peers, showToast, showInfoToast, dismissToastById} from '../stores/appStore';
-import { animationTypes } from './nodeCatalog';
+import { animationTypes, findNodeSpec } from './nodeCatalog';
 // 21-E7.6: hudKinds is a leaf (it reads only moduleHudKinds, itself svelte/store-only)
 import { isIndexValuedKind } from './hudKinds';
 import { moduleEffects, moduleFrameTasks } from './moduleSDK';
@@ -72,6 +72,10 @@ import {
 // 27-B: recovery paths report through the diagnostics ring instead of console.log,
 // so a user can hand over what happened (hardening audit H4). A zero-import leaf.
 import { log } from './diagnostics';
+// 48 D1: the node graph debugger — its stores (a leaf) and its pure rules (an import-free leaf)
+import { dbg, installFlowDebug, setDebugPaused, debugStatus, debugValues, debugOpen } from './flowDebug.js';
+import { breakpointReach, breakpointHit, chooseStep, enqueue, formatValue, formatPulse, watchKey } from './flowDebugCore.js';
+import { outputHandleType, outputType } from './flowSockets';
 import { safeStorage } from './safeStorage';
 // 30 P4: the device-local store Store Value / Stored Value read and write (a leaf)
 import { sceneStorageKey, readStored, writeStored } from './gameStorage';
@@ -113,6 +117,9 @@ import { INPUT_LETTERS, socketCount, opFolds, foldMath, foldGate, switcherItems,
 // so a static edge here would close history -> flowRuntime -> animationPreview ->
 // history and TDZ-crash the SSR prerender.
 /** @type {any} */ let animRef = null;
+// 48 S2: the sequence player (Play Sequence) — primed for the same reason: it imports
+// animationPreview and this module statically
+/** @type {any} */ let seqRef = null;
 /** @type {any} */ let physicsRef = null;
 /** @type {any} */ let jointsRef = null;
 /** @type {any} */ let spawnerRef = null;
@@ -265,7 +272,7 @@ function moduleTriggerInfo(node, ctx) {
 	const raw = ctx?.triggers?.[node.id]?.lastT;
 	const stamp = typeof raw === 'number' ? freshStamp(node, raw) : null;
 	if (stamp === null) return null;
-	let age = syncedNow() - stamp;
+	let age = logicNow() - stamp;
 	if (age < 0) age += 86400; // the trigger clock wraps at midnight (the 43200 rule)
 	return { stamp, age };
 }
@@ -591,7 +598,7 @@ function updatePlayAnim(pairs, ctx) {
 		// arrival time: the nodetrigger message reaches each peer at a different
 		// moment, so reading the clock here would leave every door a message
 		// latency out of phase.
-		const at = triggerStampFor(node.id, ctx) ?? syncedNow();
+		const at = triggerStampFor(node.id, ctx) ?? logicNow();
 
 		// an imported clip NAME funnels to the mixer path, which is already
 		// replicated — one node drives both animation systems
@@ -1472,14 +1479,47 @@ function updateBehaviourInputs(time, ctx) {
 	for (const key of [...behaviourActed.keys()]) if (!live.has(key)) behaviourActed.delete(key);
 }
 
+// --- 48 D1: THE PAUSED VIEW'S SHARED WRITES ------------------------------------------------
+//
+// Set Game State and a `shared` Set Variable are written by EVERY peer from the same replicated
+// stamp (latest-wins, idempotent because everyone computes the same value at the same moment). A
+// debugger that pauses and later steps an old event is the extreme late peer: its `add` would land
+// on a value the others already incremented — a guaranteed double count for everybody — and a
+// stepped `playing` would drag a finished round back. So while the debugger holds a pause WITH
+// OTHER PLAYERS CONNECTED, those two writes go to this overlay instead (the paused view and the
+// watch list read it); the other players' own games make the real write. Alone, there is nobody
+// else to make it, so the overlay is null and every write goes through. A stamp only THIS peer
+// saw (a perPlayer press) is nobody else's to write, so it writes through even when sandboxed.
+// `game` is a SNAPSHOT of the singleton taken at the pause, so the paused view does not watch the
+// other players' writes arrive either — it is the game as it stood, plus the steps you took.
+/** @type {null | {game: any, localStamps: Set<number>}} */
+let sharedOverlay = null;
+
+/** the game singleton as the current tick should read it @returns {any} */
+function viewGame() {
+	return sharedOverlay ? sharedOverlay.game : get(gameState);
+}
+
+/** gameVar, through the paused view's snapshot @param {string} name @param {any} fallback */
+function viewGameVar(name, fallback) {
+	if (!sharedOverlay) return gameVar(name, fallback);
+	const v = sharedOverlay.game.vars?.[name];
+	return v === undefined ? fallback : v;
+}
+
+/** Does a shared write acting on `stamp` stay in the overlay? @param {number} stamp */
+function sandboxedWrite(stamp) {
+	return !!sharedOverlay && inDebugTick && !sharedOverlay.localStamps.has(stamp);
+}
+
 /** @param {number} time @param {any} ctx */
 function updateGameNodes(time, ctx) {
-	const game = get(gameState);
+	const game = viewGame(); // 48 D1: the paused view's own state while it holds a sandbox
 
 	// 1. the ACTIONS, on a fresh trigger stamp only
 	for (const node of nodes) {
 		const type = node.type;
-		if (type !== 'setgamestate' && type !== 'setcamera' && type !== 'setvariable' && type !== 'setlook' && type !== 'travel' && type !== 'storevalue' && !GAME_FEEL_ACTIONS.includes(type) && !KIT_ACTION_TYPES.has(type))
+		if (type !== 'setgamestate' && type !== 'setcamera' && type !== 'setvariable' && type !== 'setlook' && type !== 'travel' && type !== 'storevalue' && type !== 'playseq' && !GAME_FEEL_ACTIONS.includes(type) && !KIT_ACTION_TYPES.has(type))
 			continue;
 		seeActionNode(node, time);
 		const stamp = triggerStampFor(node.id, ctx);
@@ -1503,8 +1543,18 @@ function updateGameNodes(time, ctx) {
 			// Time readout on the menu screen shows 0 instead of the last round's elapsed.
 			// ABSENT/false by default, so every Set Game State written before this is
 			// byte-identical.
-			if (data.reset) resetGame();
-			else setGameState(String(data.state ?? 'playing'), { outcome: String(data.outcome ?? '') });
+			// 48 D1: a paused debugger with other players connected keeps this write to itself
+			// (their games make the same write from the same stamp) — see sharedOverlay
+			const state = String(data.state ?? 'playing');
+			const outcome = String(data.outcome ?? '');
+			if (sharedOverlay)
+				sharedOverlay.game = data.reset
+					? { ...sharedOverlay.game, state: 'menu', startedAt: 0, outcome: '' }
+					: { ...sharedOverlay.game, state, outcome };
+			if (!sandboxedWrite(stamp)) {
+				if (data.reset) resetGame();
+				else setGameState(state, { outcome });
+			}
 		} else if (type === 'travel') {
 			// 21-F4: LEVEL TRAVEL — every peer loads the level ITSELF from the replicated
 			// stamp (the deterministic model; the setcamera reasoning one scene over): the
@@ -1538,6 +1588,13 @@ function updateGameNodes(time, ctx) {
 			// sends NOTHING: every peer that sees the trigger acts for its own device, which
 			// is the whole semantics of "saved on this device".
 			storeValue(data);
+		} else if (type === 'playseq') {
+			// 48 S2: PLAY SEQUENCE — inside the actionSeenAt family above (a fresh node adopting
+			// an old stamp must not start a cutscene on connect). EVERY peer runs the sequence
+			// itself from the replicated stamp, so shots, clips, sounds and events line up
+			// with no message of their own (the playanim / setcamera reasoning).
+			const ref = typeof data.sequence === 'string' ? data.sequence : '';
+			if (ref && seqRef) seqRef.runSequenceAction(ref, String(data.action ?? 'play'), stamp);
 		} else if (type === 'setcamera') {
 			const uuid = typeof data.camera === 'string' ? data.camera : '';
 			if (uuid) lookThroughCamera(uuid);
@@ -1587,8 +1644,11 @@ function updateGameNodes(time, ctx) {
 				const held = num(myPeerVar(name, 0));
 				setPeerVar(name, op === 'add' ? held + v : op === 'subtract' ? held - v : v);
 			} else {
-				const current = num(gameVar(name, 0));
-				setGameVar(name, op === 'add' ? current + v : op === 'subtract' ? current - v : v);
+				const current = num(viewGameVar(name, 0));
+				const value = op === 'add' ? current + v : op === 'subtract' ? current - v : v;
+				// 48 D1: the paused view's copy first (the watch list reads it), the shared one unless sandboxed
+				if (sharedOverlay) sharedOverlay.game = { ...sharedOverlay.game, vars: { ...sharedOverlay.game.vars, [name]: value } };
+				if (!sandboxedWrite(stamp)) setGameVar(name, value);
 			}
 		}
 	}
@@ -1616,7 +1676,7 @@ function updateGameNodes(time, ctx) {
 			const all = presenceRef.allPlayersSatisfied(node.id, mine);
 			const was = allplayersWas.get(node.id) === true;
 			allplayersWas.set(node.id, all);
-			if (all && !was) applyNodeTrigger(node.id, syncedNow(), false);
+			if (all && !was) applyNodeTrigger(node.id, logicNow(), false);
 		}
 		presenceRef.sweepPlayConditions(liveGates);
 		for (const id of [...allplayersWas.keys()]) if (!liveGates.has(id)) allplayersWas.delete(id);
@@ -1633,7 +1693,8 @@ function updateGameNodes(time, ctx) {
 		const pausedNow = game.state === 'paused';
 		const pausedBefore = lastGameState === 'paused';
 		if (pausedNow !== pausedBefore) {
-			import('./physics').then((m) => m.pauseSimulation?.(pausedNow)).catch(() => {});
+			// 48 D1: a sandboxed state is the paused view's alone — it must not pause the real physics
+			if (!(sharedOverlay && inDebugTick)) import('./physics').then((m) => m.pauseSimulation?.(pausedNow)).catch(() => {});
 			if (pausedNow) pauseFrozeAt = time;
 			else if (pauseFrozeAt !== null) {
 				pauseOffset += time - pauseFrozeAt;
@@ -1649,7 +1710,7 @@ function updateGameNodes(time, ctx) {
 			const hit = edge === 'exit' ? from === wanted : game.state === wanted;
 			// replicate: false — every peer reaches this transition itself from the
 			// already-replicated state, so a broadcast would count the pulse N times
-			if (hit) applyNodeTrigger(node.id, syncedNow(), false);
+			if (hit) applyNodeTrigger(node.id, logicNow(), false);
 		}
 		if (from && game.state !== 'playing') cameraShown = '';
 		for (const node of nodes) {
@@ -1907,7 +1968,7 @@ function scheduledFireAt(node, handle, ctx, seen = new Set()) {
 	seen.add(node.id);
 	const at = scheduledMoment(node, handle, ctx, seen);
 	seen.delete(node.id);
-	return at !== null && at <= syncedNow() ? at : null;
+	return at !== null && at <= logicNow() ? at : null;
 }
 
 /** @param {any} node @param {string|null|undefined} handle @param {any} ctx @param {Set<string>} seen */
@@ -1939,7 +2000,9 @@ function pulseAt(at, time, pulse) {
 	return dt >= 0 && dt < pulse ? 1 : 0;
 }
 
-/** derived moments already pushed, keyed `nodeId|handle` @type {Map<string, number>} */
+/** derived moments already pushed, keyed `nodeId|handle` (48 D1: the paused view dedupes in its
+ * own copy, handed to updateDerivedPulses, so a moment the view steps through is never deduped live)
+ * @type {Map<string, number>} */
 const scheduledFired = new Map();
 
 /** A Once's moment is the stamp applyNodeTrigger FROZE on it - null while it is
@@ -1979,9 +2042,9 @@ function onceMoment(node, ctx) {
  * count the pulse once per peer (the animfinished / ongamestate precedent). The
  * map is local, holds one number per handle and is rebuilt from the graph, so a
  * late joiner needs nothing out of it.
- * @param {any} ctx
+ * @param {any} ctx @param {Map<string, number>} [fired] the dedupe map (the paused view passes its own)
  */
-function updateDerivedPulses(ctx) {
+function updateDerivedPulses(ctx, fired = scheduledFired) {
 	for (const node of nodes) {
 		const scheduled = SCHEDULED_TYPES.includes(node.type);
 		if (!scheduled && node.type !== 'once') continue;
@@ -1992,11 +2055,11 @@ function updateDerivedPulses(ctx) {
 			// a cancel, a rearm, or a trigger that has not come round again retires the
 			// moment - so firing later happens afresh instead of being deduped forever
 			if (at === null) {
-				scheduledFired.delete(key);
+				fired.delete(key);
 				continue;
 			}
-			if (scheduledFired.get(key) === at) continue;
-			scheduledFired.set(key, at);
+			if (fired.get(key) === at) continue;
+			fired.set(key, at);
 			// DEVX #18: THE ONE PLACE A RESTORED LOG COULD DESYNC THE NUMBERS. This map is
 			// LOCAL and starts empty, so a joiner holding restored history derives every
 			// past moment as brand new and PUSHES it — bumping a downstream Counter that
@@ -2011,9 +2074,9 @@ function updateDerivedPulses(ctx) {
 			applyNodeTrigger(node.id, at, false, handle);
 		}
 	}
-	for (const key of [...scheduledFired.keys()])
+	for (const key of [...fired.keys()])
 		if (!nodes.some((/** @type {any} */ n) => n.id === key.slice(0, key.lastIndexOf('|'))))
-			scheduledFired.delete(key);
+			fired.delete(key);
 }
 
 /** The shared timestamp of whatever event is wired into this node's `trigger`
@@ -2985,8 +3048,8 @@ function evalNodeBody(node, allNodes, allEdges, time, seen, ctx) {
 		// --- 21-D6: the game shell's readable half ---
 		case 'getvariable':
 			// LOCAL read of REPLICATED state, so every peer computes the same number and
-			// nothing about the read goes on the wire
-			return num(gameVar(String(d.name ?? ''), d.fallback ?? 0));
+			// nothing about the read goes on the wire (48 D1: through the paused view's sandbox)
+			return num(viewGameVar(String(d.name ?? ''), d.fallback ?? 0));
 		// --- 30 P4: what THIS device saved (never replicated, legitimately per-peer) ---
 		case 'storedvalue': {
 			const key = String(d.key ?? '').trim();
@@ -3020,7 +3083,7 @@ function evalNodeBody(node, allNodes, allEdges, time, seen, ctx) {
 		case 'gametime': {
 			// derived from the shared `startedAt` stamp — no clock of its own, so two peers
 			// mid-round agree, and a late joiner converges the moment the state arrives
-			const g = get(gameState);
+			const g = viewGame();
 			const elapsed = gameElapsed();
 			switch (d.read ?? 'elapsed') {
 				case 'remaining':
@@ -3103,7 +3166,11 @@ function evalNodeBody(node, allNodes, allEdges, time, seen, ctx) {
  */
 export function resolveInputs(node, allNodes, allEdges, time, ctx = null) {
 	const data = { ...(node.data || {}) };
-	for (const edge of edgesInto(allEdges, node.id)) {
+	const into = edgesInto(allEdges, node.id);
+	/** 48 D2: handle -> the source type + handle its value came from; tracked only when 2+ wires come in
+	 * (the common single-wire node pays nothing) @type {Map<string, [string, string|null|undefined]> | null} */
+	const held = into.length > 1 ? new Map() : null;
+	for (const edge of into) {
 		if (!edge.targetHandle) continue;
 		const source = nodeById(allNodes, edge.source);
 		if (!source) continue;
@@ -3118,19 +3185,32 @@ export function resolveInputs(node, allNodes, allEdges, time, ctx = null) {
 		)
 			continue;
 		const value = unwrapHandle(evalNode(source, allNodes, allEdges, time, new Set(), ctx), edge);
-		if (value !== undefined) data[edge.targetHandle] = value;
+		if (value === undefined) continue;
+		// 48 D2 (DEVX #22, the fan-in half): two EVENT wires into one input OR their pulses. The
+		// last edge used to win even while it read 0, so a press on the first of two HUD Buttons
+		// wired into a module's `press` never arrived — why Football and Dungeon Realms carried a
+		// duplicate Match / Menu Button node per HUD button. One wire reads exactly as before.
+		const handle = edge.targetHandle;
+		const prior = held?.get(handle);
+		const prev = data[handle];
+		data[handle] =
+			prior && typeof prev === 'number' && typeof value === 'number' && outputHandleType(prior[0], prior[1]) === 'event' && outputHandleType(source.type, edge.sourceHandle) === 'event'
+				? Math.max(prev, value)
+				: value;
+		held?.set(handle, [source.type, edge.sourceHandle]);
 	}
 	return data;
 }
 
-/** Scene/event context handed to evalNode each tick (134). @returns {any} */
-function runtimeCtx() {
+/** Scene/event context handed to evalNode each tick (134); 48 D1: over the paused view's log
+ * while the debugger holds a pause. @param {Record<string, any>} [triggers] @returns {any} */
+function runtimeCtx(triggers = get(flowTriggers)) {
 	return {
 		pos: (/** @type {string} */ uuid) => {
 			const object = sceneObjects?.getObjectByProperty('uuid', uuid);
 			return object ? object.getWorldPosition(new THREE.Vector3()) : null;
 		},
-		triggers: get(flowTriggers),
+		triggers,
 		speed: (/** @type {string} */ uuid) => speedOf(uuid),
 		// 36 (56.1): the per-tick value memo (see evalNode) + its counters
 		/** @type {Map<string, {time: number, nodes: any[], edges: any[], value: any}>} */
@@ -3186,6 +3266,14 @@ function syncedNow() {
 	return synced ? (sessionNow() % 86400000) / 1000 : performance.now() / 1000;
 }
 
+/** 48 D1: the clock the GRAPH reads inside a tick (a Delay's moment, a module node's age, a derived
+ * pulse's stamp) — the debugger's frozen clock during a debug tick, the synced one otherwise.
+ * Events still stamp with syncedNow(): an input pressed while paused is a real, replicated event. */
+let logicClock = /** @type {number|null} */ (null);
+function logicNow() {
+	return logicClock ?? syncedNow();
+}
+
 /**
  * Apply an event trigger (134): stamp the source node's pulse time and bump any
  * Counter wired from it, all keyed by the SHARED synced time so peers agree.
@@ -3198,7 +3286,7 @@ function syncedNow() {
  * @param {string|null} [sourceHandle]
  * @param {any} [at] 31: where it happened ([x, y, z], objects-group frame), for a received clap
  */
-export function applyNodeTrigger(nodeId, t, replicate = true, sourceHandle = null, at = null, other = undefined) {
+export function applyNodeTrigger(nodeId, t, replicate = true, sourceHandle = null, at = null, other = undefined, received = false) {
 	// 36 X6: a contact's other body, received with the stamp (see contactOthers)
 	if (typeof other === 'string') contactOthers.set(nodeId, other);
 	// 36 (U10): `<node>#<output>` is a named output's own log entry; the PUSH consumers (a Counter,
@@ -3212,86 +3300,100 @@ export function applyNodeTrigger(nodeId, t, replicate = true, sourceHandle = nul
 	// the point itself (fireClap), which is why only a received one lands here.
 	if (Array.isArray(at) && at.length === 3 && at.every((v) => Number.isFinite(v)))
 		triggerPoints.set(nodeId, { at: [at[0], at[1], at[2]], byMe: false });
-	flowTriggers.update((map) => {
-		const next = { ...map };
-		next[nodeId] = { count: next[nodeId]?.count ?? 0, lastT: t };
-		// 21-E4: the counting a stamp cannot express happens HERE, for every stateful
-		// node and not just Counter - which is the counter precedent stated properly:
-		// this function runs on every peer from the SAME replicated stamp, so the
-		// derived state agrees without being sent. What it costs is a late joiner,
-		// whose trigger log starts empty; each case below says what that means for it.
-		edges.forEach((edge) => {
-			if (edge.source !== walkId) return;
-			if (walkHandle !== null && (edge.sourceHandle ?? null) !== walkHandle) return;
-			const target = nodeById(nodes, edge.target);
-			if (!target) return;
-			const handle = edge.targetHandle ?? null;
-			if (target.type === 'counter') {
-				// a wired `reset` zeroes it. Handle-aware now, so the `op` param keeps
-				// meaning exactly what it did for every counter with only a pulse wired.
-				if (handle === 'reset') {
-					next[target.id] = { count: 0, lastT: t };
-					return;
-				}
-				const prev = next[target.id]?.count ?? 0;
-				const step = target.data?.step ?? 1;
-				const op = target.data?.op ?? 'up';
-				next[target.id] = {
-					count: op === 'reset' ? 0 : op === 'down' ? prev - step : prev + step,
-					lastT: t
-				};
-			} else if (target.type === 'latch') {
-				// ONLY the toggle parity lives here; set/reset are read straight off the
-				// stamps in evalNodeBody, which is why they CLEAR this rather than writing a
-				// state of their own - an accumulated odd count would otherwise invert a
-				// fresh `set`. A late joiner is exact for set/reset and can differ in toggle
-				// parity until the next set/reset re-bases it.
-				if (handle === 'toggle') {
-					// 21-F2: parity from a PREVIOUS round is not parity any more. The PUSH
-					// rule (finite cutoff only): in menu/over the parity stays put — the pull
-					// side already reads it as 0 there, and the next round retires it anyway.
-					const held = next[target.id];
-					const flips = roundRetired(target, held?.lastT) ? 0 : (held?.count ?? 0);
-					next[target.id] = { count: flips + 1, lastT: t };
-				} else if (handle === 'set' || handle === 'reset')
-					next[target.id] = { count: 0, lastT: t };
-			} else if (target.type === 'random') {
-				// B6 shipped `reroll` as a DEAD input, and this is where it died: the roll
-				// reads `ctx.triggers[<the random node>]`, and NOTHING ever wrote an entry
-				// for a random node - applyNodeTrigger stamps the SOURCE and, before this
-				// batch, only a Counter target. So `rerolls` was 0 for the node's whole
-				// life and the input was a silent no-op.
-				//
-				// The count is bumped because "how many times was this rerolled" is a real
-				// readout, but THE SEED READS `lastT`, NOT THE COUNT - see the random case
-				// in evalNodeBody for why: a count cannot converge for a late joiner, and a
-				// stamp can.
-				if (handle === 'reroll')
-					next[target.id] = { count: (next[target.id]?.count ?? 0) + 1, lastT: t };
-			} else if (target.type === 'once') {
-				// `rearm` DELETES the entry instead of restamping it: a live stamp on a
-				// disarmed Once reads as a fresh pulse to every stamp-edge consumer
-				// downstream, because triggerStampFor sees lastT and knows nothing of count.
-				if (handle === 'rearm') delete next[target.id];
-				else {
-					// 21-F2: a `perRound` Once frozen in a PREVIOUS round is spent, not armed
-					// — without this it never fires again after a round bump, and a respawned
-					// gem would stop counting the second time it is picked up. The PUSH rule
-					// (finite cutoff only): in menu/over a spent Once stays SPENT, or every
-					// menu click re-arms it and banks the variable again, unboundedly.
-					const held = next[target.id];
-					if ((held?.count ?? 0) === 0 || roundRetired(target, held?.lastT))
-						next[target.id] = { count: 1, lastT: t };
-				}
-			}
-		});
-		return next;
-	});
+	// 48 D1: the debugger sees every event first — ONE property test when it is idle
+	if (dbg.armed && debugIntercept(nodeId, t, replicate, received, walkId, walkHandle)) return;
+	flowTriggers.update((map) => nextTriggerLog(map, nodeId, t, walkId, walkHandle));
 	if (replicate) {
 		/** @type {any} */
 		const peer = get(peers);
 		if (peer) peer.send({ type: 'nodetrigger', id: nodeId, t });
 	}
+}
+
+/**
+ * The trigger log after one event: the source's stamp, plus the PUSH state of every stateful
+ * node wired from it. 48 D1: a pure function of the log it is handed (it used to live inside
+ * applyNodeTrigger's store update), so the debugger's paused view folds a queued event into ITS
+ * copy of the log through exactly the code the live log uses.
+ * @param {Record<string, {count: number, lastT: number}>} map @param {string} nodeId @param {number} t
+ * @param {string} walkId @param {string|null} walkHandle @param {string[]} [touched] collects the ids whose entry changed
+ */
+function nextTriggerLog(map, nodeId, t, walkId, walkHandle, touched) {
+	const next = { ...map };
+	next[nodeId] = { count: next[nodeId]?.count ?? 0, lastT: t };
+	// 21-E4: the counting a stamp cannot express happens HERE, for every stateful
+	// node and not just Counter - which is the counter precedent stated properly:
+	// this function runs on every peer from the SAME replicated stamp, so the
+	// derived state agrees without being sent. What it costs is a late joiner,
+	// whose trigger log starts empty; each case below says what that means for it.
+	edges.forEach((edge) => {
+		if (edge.source !== walkId) return;
+		if (walkHandle !== null && (edge.sourceHandle ?? null) !== walkHandle) return;
+		const target = nodeById(nodes, edge.target);
+		if (!target) return;
+		const handle = edge.targetHandle ?? null;
+		if (target.type === 'counter') {
+			// a wired `reset` zeroes it. Handle-aware now, so the `op` param keeps
+			// meaning exactly what it did for every counter with only a pulse wired.
+			if (handle === 'reset') {
+				next[target.id] = { count: 0, lastT: t };
+				return;
+			}
+			const prev = next[target.id]?.count ?? 0;
+			const step = target.data?.step ?? 1;
+			const op = target.data?.op ?? 'up';
+			next[target.id] = {
+				count: op === 'reset' ? 0 : op === 'down' ? prev - step : prev + step,
+				lastT: t
+			};
+		} else if (target.type === 'latch') {
+			// ONLY the toggle parity lives here; set/reset are read straight off the
+			// stamps in evalNodeBody, which is why they CLEAR this rather than writing a
+			// state of their own - an accumulated odd count would otherwise invert a
+			// fresh `set`. A late joiner is exact for set/reset and can differ in toggle
+			// parity until the next set/reset re-bases it.
+			if (handle === 'toggle') {
+				// 21-F2: parity from a PREVIOUS round is not parity any more. The PUSH
+				// rule (finite cutoff only): in menu/over the parity stays put — the pull
+				// side already reads it as 0 there, and the next round retires it anyway.
+				const held = next[target.id];
+				const flips = roundRetired(target, held?.lastT) ? 0 : (held?.count ?? 0);
+				next[target.id] = { count: flips + 1, lastT: t };
+			} else if (handle === 'set' || handle === 'reset')
+				next[target.id] = { count: 0, lastT: t };
+		} else if (target.type === 'random') {
+			// B6 shipped `reroll` as a DEAD input, and this is where it died: the roll
+			// reads `ctx.triggers[<the random node>]`, and NOTHING ever wrote an entry
+			// for a random node - applyNodeTrigger stamps the SOURCE and, before this
+			// batch, only a Counter target. So `rerolls` was 0 for the node's whole
+			// life and the input was a silent no-op.
+			//
+			// The count is bumped because "how many times was this rerolled" is a real
+			// readout, but THE SEED READS `lastT`, NOT THE COUNT - see the random case
+			// in evalNodeBody for why: a count cannot converge for a late joiner, and a
+			// stamp can.
+			if (handle === 'reroll')
+				next[target.id] = { count: (next[target.id]?.count ?? 0) + 1, lastT: t };
+		} else if (target.type === 'once') {
+			// `rearm` DELETES the entry instead of restamping it: a live stamp on a
+			// disarmed Once reads as a fresh pulse to every stamp-edge consumer
+			// downstream, because triggerStampFor sees lastT and knows nothing of count.
+			if (handle === 'rearm') delete next[target.id];
+			else {
+				// 21-F2: a `perRound` Once frozen in a PREVIOUS round is spent, not armed
+				// — without this it never fires again after a round bump, and a respawned
+				// gem would stop counting the second time it is picked up. The PUSH rule
+				// (finite cutoff only): in menu/over a spent Once stays SPENT, or every
+				// menu click re-arms it and banks the variable again, unboundedly.
+				const held = next[target.id];
+				if ((held?.count ?? 0) === 0 || roundRetired(target, held?.lastT))
+					next[target.id] = { count: 1, lastT: t };
+			}
+		}
+	});
+	if (touched) for (const id in next) if (next[id] !== map[id]) touched.push(id);
+	if (touched) for (const id in map) if (!(id in next)) touched.push(id);
+	return next;
 }
 
 /** Does a downstream Object Selector targeting `uuid` sit anywhere past `startId`?
@@ -3355,6 +3457,40 @@ export function fireAnimMarker(uuid, name) {
 		if (!reachesObjectSelector(node.id, uuid) && implicitOwnerOf(node) !== uuid) return;
 		applyNodeTrigger(node.id, syncedNow(), false);
 	});
+}
+
+/**
+ * 48 S2: a running sequence's playhead crossed an EVENT item called `name` (or reached its
+ * end: `end`) — pulse every On Sequence Event node listening for it. `sequence` empty =
+ * any sequence, `event` empty = any event. LOCAL on every peer, like animmarker: each
+ * peer runs the same sequence from the same replicated stamp and crosses the item itself.
+ * @param {string} seqId @param {string} seqName @param {string} name
+ */
+export function fireSequenceEvent(seqId, seqName, name) {
+	const want = String(name ?? '').trim().toLowerCase();
+	let fired = 0;
+	// 48-int (D1 x S2): a sequence plays on the LIVE clock (the player is a frame task, not the
+	// graph), so what it fires is a live event — even when a debugger Step started it from inside
+	// the paused view's tick (playSequence ticks its first frame synchronously). Inside that tick
+	// the debugger would read the pulse as one the view derived, keep it in the view's copy of the
+	// log alone, and Resume would drop it. Out of the view for the call, it queues for the next
+	// Step and the live log takes it, as an animation marker's does.
+	const fromView = inDebugTick;
+	if (fromView) toLive();
+	try {
+		nodes.forEach((node) => {
+			if (node.type !== 'onseqevent') return;
+			const seq = String(node.data?.sequence ?? '').trim();
+			if (seq && seq !== seqId && seq.toLowerCase() !== String(seqName).trim().toLowerCase()) return;
+			const ev = String(node.data?.event ?? '').trim().toLowerCase();
+			if (ev && ev !== want) return;
+			applyNodeTrigger(node.id, syncedNow(), false);
+			fired++;
+		});
+	} finally {
+		if (fromView) toView();
+	}
+	return fired;
 }
 
 /**
@@ -3909,6 +4045,361 @@ function applyPathPatrol(object, data, time) {
 // (the postTick) the moment a headset went on. Scene.svelte pumps this from
 // threlte's task loop (setAnimationLoop — XR-aware) while presenting; the
 // timestamp guard makes a double delivery (both loops in one frame) a no-op.
+// --- 48 D1: THE NODE GRAPH DEBUGGER ----------------------------------------------------------
+//
+// Values here are a pure function of (graph, time, trigger log) and an event is a stamp in the
+// log, so a pause is two frozen inputs: the clock (`viewTime`) and a COPY of the log
+// (`viewTriggers`). The live log keeps taking every event — yours and other players' — exactly as
+// before, and each one also QUEUES here; Step folds the next one into the copy through
+// `nextTriggerLog`, the function the live log uses, or moves the clock to the next Delay /
+// Sequence moment. Resume drops the copy: the live log already holds everything, so the local
+// view simply rejoins the game, which never stopped for anybody else.
+//
+// What runs where during a pause (QUESTIONS-48-debugger Q2): the GRAPH (effects, HUD, game nodes,
+// sounds) runs over the paused view; module frame tasks, the kit, behaviour timers and physics
+// stay on the live clock; and with other players connected, the work they depend on — physics
+// actions, spawns, behaviour inputs — stays live too, while the shared writes go to the overlay.
+//
+// Zero cost when idle: the tick and applyNodeTrigger test `dbg.armed` and nothing else.
+
+/** the paused view's copy of the log, null while running @type {null | Record<string, {count: number, lastT: number}>} */
+let viewTriggers = null;
+/** the debug clock (synced seconds-of-the-day, like every stamp) */
+let viewTime = 0;
+/** true while the tick evaluates the paused view (derived pulses then belong to the view) */
+let inDebugTick = false;
+/** events that arrived during the pause, in arrival order @type {{nodeId: string, t: number, walkId: string, walkHandle: string|null}[]} */
+let debugQueue = [];
+let debugDropped = 0;
+/** the paused view's own derived-moment dedupe @type {Map<string, number>} */
+let viewScheduled = new Map();
+/** what a sandboxed pause restores on Resume @type {null | {lastGameState: string, pauseFrozeAt: number|null, pauseOffset: number}} */
+let pauseSaved = null;
+/** where the view stands @type {null | {nodeId: string|null, why: 'breakpoint'|'step'|'moment'|'pause', bp: string|null}} */
+let debugAt = null;
+/** the last LIVE tick's time while armed (a scheduled moment between two ticks is a hit) @type {number|null} */
+let lastLiveTime = null;
+/** Step was pressed with nothing queued: the next event is stepped as it arrives */
+let stepWaiting = false;
+let debugSteps = 0;
+let debugPublishedAt = 0;
+let debugDirty = false;
+let debugStatusJson = '';
+/** @type {{version: number, edges: any[] | null, reach: Map<string, {handle: string|null, bp: string}[]>}} */
+let debugReach = { version: -1, edges: null, reach: new Map() };
+
+function reachNow() {
+	if (debugReach.version !== dbg.version || debugReach.edges !== edges)
+		debugReach = { version: dbg.version, edges, reach: breakpointReach(dbg.breakpoints, edges) };
+	return debugReach.reach;
+}
+
+/** step out of the paused view for work on the live clock, and back (only while paused) */
+function toLive() {
+	inDebugTick = false;
+	logicClock = null;
+}
+function toView() {
+	inDebugTick = true;
+	logicClock = viewTime;
+}
+
+/** the live clock if the last armed tick is recent, else now — the frame the user is looking at */
+function shownTime() {
+	const now = syncedNow();
+	return lastLiveTime !== null && Math.abs(now - lastLiveTime) < 0.5 ? lastLiveTime : now;
+}
+
+/**
+ * Does this event reach a breakpoint? Either directly (the node that fired, or an edge out of it on
+ * the firing handle) or through the PUSH state it moves: a Counter / Latch / Once the event bumps is
+ * an event for whatever reads it.
+ * @param {string} nodeId @param {number} t @param {string} walkId @param {string|null} walkHandle @returns {string|null}
+ */
+function eventHitsBreakpoint(nodeId, t, walkId, walkHandle) {
+	if (!dbg.breakpoints.size) return null;
+	const reach = reachNow();
+	const direct = breakpointHit(dbg.breakpoints, reach, walkId, walkHandle);
+	if (direct) return direct;
+	/** @type {string[]} */
+	const touched = [];
+	nextTriggerLog(get(flowTriggers), nodeId, t, walkId, walkHandle, touched);
+	for (const id of touched) {
+		if (id === nodeId) continue;
+		const hash = id.indexOf('#');
+		const bp = hash > 0 ? breakpointHit(dbg.breakpoints, reach, id.slice(0, hash), id.slice(hash + 1)) : breakpointHit(dbg.breakpoints, reach, id, null);
+		if (bp) return bp;
+	}
+	return null;
+}
+
+/**
+ * applyNodeTrigger's debugger half. True = the event belongs to the paused view alone (a pulse
+ * the view's own tick derived) and must not reach the live log.
+ * @param {string} nodeId @param {number} t @param {boolean} replicate @param {boolean} received
+ * @param {string} walkId @param {string|null} walkHandle
+ */
+function debugIntercept(nodeId, t, replicate, received, walkId, walkHandle) {
+	const localOnly = !replicate && !received;
+	if (viewTriggers) {
+		// a Delay moment, an On Game State, an All Players the VIEW's tick derived: the live log
+		// derives its own when it resumes (and the live dedupe map never saw this one)
+		if (inDebugTick && localOnly) {
+			viewTriggers = nextTriggerLog(viewTriggers, nodeId, t, walkId, walkHandle);
+			return true;
+		}
+		if (sharedOverlay && localOnly) sharedOverlay.localStamps.add(t);
+		debugDropped += enqueue(debugQueue, { nodeId, t, walkId, walkHandle });
+		debugDirty = true;
+		return false;
+	}
+	const bp = eventHitsBreakpoint(nodeId, t, walkId, walkHandle);
+	if (!bp) return false;
+	// the copy is taken BEFORE the live log takes this event, so the breakpoint node has not
+	// seen it yet: paused AT the node, and the first Step is this event
+	enterDebugPause('breakpoint', walkId, bp);
+	if (sharedOverlay && localOnly) sharedOverlay.localStamps.add(t);
+	debugQueue.push({ nodeId, t, walkId, walkHandle });
+	return false;
+}
+
+/** @param {'breakpoint'|'step'|'moment'|'pause'} why @param {string|null} nodeId @param {string|null} bp @param {number} [at] */
+function enterDebugPause(why, nodeId, bp, at = shownTime()) {
+	viewTriggers = get(flowTriggers);
+	viewTime = at;
+	viewScheduled = new Map(scheduledFired);
+	debugQueue = [];
+	debugDropped = 0;
+	stepWaiting = false;
+	debugSteps = 0;
+	/** @type {any} */
+	const peer = get(peers);
+	const others = (peer?.openedPeers?.size ?? 0) > 0;
+	sharedOverlay = others ? { game: { ...get(gameState), vars: { ...get(gameState).vars } }, localStamps: new Set() } : null;
+	pauseSaved = { lastGameState, pauseFrozeAt, pauseOffset };
+	debugAt = { nodeId, why, bp };
+	setDebugPaused(true);
+	debugDirty = true;
+}
+
+function resumeDebug() {
+	if (!viewTriggers) return;
+	if (sharedOverlay) {
+		// the other players' games made the shared write for every stamp they saw. Mark the stamp
+		// each of those nodes would act on as handled, or Resume replays it as a very late peer —
+		// the double count the overlay exists to prevent, one frame later.
+		const live = { triggers: get(flowTriggers) };
+		for (const node of nodes) {
+			if (node.type !== 'setgamestate' && !(node.type === 'setvariable' && node.data?.scope !== 'player')) continue;
+			const stamp = triggerStampFor(node.id, live);
+			if (stamp !== null && !sharedOverlay.localStamps.has(stamp)) gameActed.set(node.id, stamp);
+		}
+		if (pauseSaved) ({ lastGameState, pauseFrozeAt, pauseOffset } = pauseSaved);
+	}
+	viewTriggers = null;
+	viewScheduled = new Map();
+	sharedOverlay = null;
+	pauseSaved = null;
+	debugQueue = [];
+	debugAt = null;
+	stepWaiting = false;
+	lastLiveTime = null;
+	setDebugPaused(false);
+	debugDirty = true;
+	// said NOW, not on the next publish: with nothing left armed there is no next publish, and a
+	// stale 'paused' would free the pointer the next time Play starts (HudLayer reads it)
+	debugStatusJson = '';
+	debugStatus.update((st) => ({ ...st, mode: dbg.armed ? 'running' : 'off', at: null, queued: 0, dropped: 0, next: '', waiting: false, sandboxed: false }));
+}
+
+/** the earliest Delay / Sequence moment after the debug clock, in the paused view @returns {null | {at: number, nodeId: string}} */
+function nextViewMoment() {
+	const vctx = { triggers: viewTriggers };
+	const clock = logicClock;
+	logicClock = viewTime;
+	/** @type {null | {at: number, nodeId: string}} */
+	let best = null;
+	for (const node of nodes) {
+		if (!SCHEDULED_TYPES.includes(node.type)) continue;
+		for (const handle of node.type === 'sequence' ? SEQUENCE_STEPS : [null]) {
+			const at = scheduledMoment(node, handle, vctx, new Set([node.id]));
+			if (at !== null && at > viewTime + 1e-6 && (!best || at < best.at)) best = { at, nodeId: node.id };
+		}
+	}
+	logicClock = clock;
+	return best;
+}
+
+function debugStep() {
+	const moment = nextViewMoment();
+	const choice = chooseStep(debugQueue, moment ? moment.at : null);
+	if (choice.kind === 'wait') {
+		stepWaiting = true;
+		debugDirty = true;
+		return;
+	}
+	stepWaiting = false;
+	debugSteps++;
+	if (choice.kind === 'moment' && moment) {
+		viewTime = moment.at;
+		debugAt = { nodeId: moment.nodeId, why: 'moment', bp: dbg.breakpoints.has(moment.nodeId) ? moment.nodeId : null };
+	} else {
+		const ev = /** @type {{nodeId: string, t: number, walkId: string, walkHandle: string|null}} */ (debugQueue.shift());
+		viewTriggers = nextTriggerLog(/** @type {any} */ (viewTriggers), ev.nodeId, ev.t, ev.walkId, ev.walkHandle);
+		viewTime = Math.max(viewTime, ev.t);
+		debugAt = { nodeId: ev.walkId, why: 'step', bp: breakpointHit(dbg.breakpoints, reachNow(), ev.walkId, ev.walkHandle) };
+	}
+	debugDirty = true;
+}
+
+/**
+ * A Delay / Sequence moment that passed between two live ticks on an edge into a breakpoint (or on
+ * a breakpoint that IS a Delay). Pulled consumers see a moment the frame it passes, before its push
+ * reaches applyNodeTrigger, so this check runs ahead of the tick.
+ * @param {number} from @param {number} to @returns {null | {bp: string, source: string}}
+ */
+function scheduledBreakpointHit(from, to) {
+	const live = { triggers: get(flowTriggers) };
+	for (const bp of dbg.breakpoints) {
+		const node = nodeById(nodes, bp);
+		if (!node) continue;
+		/** @type {[any, string|null][]} */
+		const sources = [];
+		if (SCHEDULED_TYPES.includes(node.type)) for (const handle of node.type === 'sequence' ? SEQUENCE_STEPS : [null]) sources.push([node, handle]);
+		for (const edge of edgesInto(edges, bp)) {
+			const source = nodeById(nodes, edge.source);
+			if (source && SCHEDULED_TYPES.includes(source.type)) sources.push([source, edge.sourceHandle ?? null]);
+		}
+		for (const [source, handle] of sources) {
+			const at = scheduledMoment(source, handle, live, new Set([source.id]));
+			if (at !== null && at > from && at <= to) return { bp, source: source.id };
+		}
+	}
+	return null;
+}
+
+/** Consume the panel's request and run the step / pause / breakpoint checks for this tick. @param {number} liveTime */
+function debugTickBegin(liveTime) {
+	const req = dbg.request;
+	dbg.request = null;
+	if (viewTriggers) {
+		if (req === 'resume') resumeDebug();
+		else if (req === 'step' || (stepWaiting && debugQueue.length)) debugStep();
+	} else if (req === 'pause') enterDebugPause('pause', null, null);
+	else if (lastLiveTime !== null && liveTime - lastLiveTime > 0 && liveTime - lastLiveTime < 0.5) {
+		const hit = scheduledBreakpointHit(lastLiveTime, liveTime);
+		// the view stands on the last frame shown, so the moment has not passed in it yet
+		if (hit) enterDebugPause('breakpoint', hit.source, hit.bp, lastLiveTime);
+	}
+	if (!viewTriggers) lastLiveTime = liveTime;
+}
+
+/** a node's name as the panel shows it @param {any} node */
+function debugLabel(node) {
+	if (!node) return '?';
+	const label = typeof node.data?.label === 'string' && node.data.label.trim() ? node.data.label.trim() : '';
+	return label || findNodeSpec(node.type)?.label || node.type;
+}
+
+/** @param {string} v */
+function objectNameOf(v) {
+	if (!/^[0-9a-f-]{36}$/i.test(v)) return null;
+	return sceneObjects?.getObjectByProperty('uuid', v)?.name || null;
+}
+
+/** One wire's reading at the view's clock. @param {any} edge @param {any} source @param {number} time @param {any} ctx */
+function wireReading(edge, source, time, ctx) {
+	if (!source) return { kind: /** @type {'event'|'value'} */ ('value'), text: '—', high: false };
+	if (outputHandleType(source.type, edge.sourceHandle) === 'event') {
+		const pulse = formatPulse(stampOfSource(edge, ctx, new Set()), time, num(source.data?.pulse ?? 0.3));
+		return { kind: /** @type {'event'|'value'} */ ('event'), text: pulse.text, high: pulse.high };
+	}
+	const v = unwrapHandle(evalNode(source, nodes, edges, time, new Set(), ctx), edge);
+	return { kind: /** @type {'event'|'value'} */ ('value'), text: formatValue(v, objectNameOf), high: false };
+}
+
+/** What the panel shows: status always, values while it is open. @param {number} time @param {any} ctx @param {number} now */
+function publishDebug(time, ctx, now) {
+	const paused = !!viewTriggers;
+	if (!debugDirty && now - debugPublishedAt < (paused ? 500 : 150)) return;
+	debugPublishedAt = now;
+	debugDirty = false;
+	const head = debugQueue[0];
+	// the BREAKPOINT names the stop (the event's source is the node that fired into it)
+	const atId = debugAt?.bp ?? debugAt?.nodeId ?? null;
+	const atNode = atId ? nodeById(nodes, atId) : null;
+	const status = {
+		mode: /** @type {'off'|'running'|'paused'} */ (paused ? 'paused' : 'running'),
+		playing: dbg.playing,
+		xr: dbg.xr,
+		at: debugAt ? { nodeId: debugAt.nodeId, label: atNode ? debugLabel(atNode) : debugAt.why === 'pause' ? 'Paused' : '?', why: debugAt.why, bp: debugAt.bp } : null,
+		queued: debugQueue.length,
+		dropped: debugDropped,
+		next: head ? debugLabel(nodeById(nodes, head.walkId)) : '',
+		waiting: stepWaiting,
+		sandboxed: !!sharedOverlay,
+		steps: debugSteps
+	};
+	const json = JSON.stringify(status);
+	if (json !== debugStatusJson) {
+		debugStatusJson = json;
+		debugStatus.set(status);
+	}
+	// a hit opens the panel (a pause nobody can see is a frozen game)
+	if (paused && !dbg.open) debugOpen.set(true);
+	if (!dbg.open) return;
+	const focusId = dbg.focus ?? debugAt?.bp ?? debugAt?.nodeId ?? [...dbg.breakpoints][0] ?? null;
+	const focus = focusId ? nodeById(nodes, focusId) : null;
+	/** @type {any[]} */
+	const inputs = [];
+	/** @type {any[]} */
+	const outputs = [];
+	if (focus) {
+		for (const edge of edgesInto(edges, focus.id)) {
+			const source = nodeById(nodes, edge.source);
+			const r = wireReading(edge, source, time, ctx);
+			inputs.push({ edgeId: edge.id, nodeId: edge.source, label: debugLabel(source), handle: edge.targetHandle ?? '', ...r });
+		}
+		for (const edge of edges) {
+			if (edge.source !== focus.id) continue;
+			const r = wireReading(edge, focus, time, ctx);
+			outputs.push({ edgeId: edge.id, nodeId: edge.target, label: debugLabel(nodeById(nodes, edge.target)), handle: edge.targetHandle ?? '', ...r });
+		}
+	}
+	const watches = dbg.watches.map((w) => {
+		const key = watchKey(w);
+		if (w.kind === 'var') return { key, label: w.key, text: formatValue(viewGameVar(w.key, undefined)), missing: false };
+		if (w.kind === 'player') return { key, label: w.key + ' (mine)', text: formatValue(myPeerVar(w.key, undefined)), missing: false };
+		const node = nodeById(nodes, w.key);
+		if (!node) return { key, label: w.key.slice(0, 8), text: 'not in this scene', missing: true };
+		const label = debugLabel(node) + (w.handle ? '.' + w.handle : '');
+		if (outputHandleType(node.type, w.handle) === 'event') {
+			const entry = ctx.triggers?.[w.key];
+			const pulse = formatPulse(entry?.lastT ?? null, time, num(node.data?.pulse ?? 0.3));
+			return { key, label, text: pulse.text, missing: false };
+		}
+		const v = evalNode(node, nodes, edges, time, new Set(), ctx);
+		return { key, label, text: formatValue(w.handle ? unwrapHandle(v, { sourceHandle: w.handle }) : v, objectNameOf), missing: false };
+	});
+	const eventless = !!focus && outputType(focus.type) !== 'event' && !SCHEDULED_TYPES.includes(focus.type) && !inputs.some((r) => r.kind === 'event');
+	debugValues.set({ focus: focus ? { id: focus.id, label: debugLabel(focus), type: focus.type, eventless } : null, inputs, outputs, watches });
+}
+
+/** test/debug view of the runtime half */
+export function flowDebugRuntime() {
+	return {
+		paused: !!viewTriggers,
+		viewTime,
+		queued: debugQueue.map((e) => ({ ...e })),
+		at: debugAt,
+		sandboxed: !!sharedOverlay,
+		overlay: sharedOverlay ? { state: sharedOverlay.game.state, vars: { ...sharedOverlay.game.vars } } : null,
+		viewTriggers: viewTriggers ? { ...viewTriggers } : null,
+		steps: debugSteps,
+		waiting: stepWaiting
+	};
+}
+
 let lastRunAt = -1000;
 /** 27-C: per-frame failures are rate-limited per KIND — first three, then one per 300.
  * A throwing frame task is the loudest thing in the app otherwise, and the noise is what
@@ -3941,8 +4432,20 @@ function runTick(now) {
 	inputRuntimeRef?.pollGamepads();
 	phaseEnd(PHASE_INPUT);
 	phaseBegin(PHASE_FLOW);
-	const time = synced ? (sessionNow() % 86400000) / 1000 : now / 1000;
-	const ctx = runtimeCtx(); // 134: scene + trigger state for the evaluators
+	const liveTime = synced ? (sessionNow() % 86400000) / 1000 : now / 1000;
+	// 48 D1: the debugger. Idle = this one property test. Leaving Play (or entering a headset)
+	// while paused rejoins the live game.
+	if (dbg.armed) debugTickBegin(liveTime);
+	else if (viewTriggers) resumeDebug();
+	const paused = viewTriggers !== null;
+	// paused: the GRAPH evaluates over the frozen clock and the copy of the log
+	const time = paused ? viewTime : liveTime;
+	const ctx = runtimeCtx(viewTriggers ?? undefined); // 134: scene + trigger state for the evaluators
+	if (paused) toView();
+	// what other players depend on stays LIVE through a pause that holds a sandbox (they are connected)
+	const ownLive = paused && !!sharedOverlay;
+	const ownTime = ownLive ? liveTime : time;
+	const ownCtx = ownLive ? runtimeCtx() : ctx;
 
 	// collect active animations per scene object
 	// H5: inject the scene graph's wired values into each embedded object flow
@@ -4130,27 +4633,31 @@ function runTick(now) {
 	/** @type {{node: any, uuid: string}[]} */
 	const physicsPairs = [];
 	const PHYSICS_ACTIONS = ['impulse', 'setvelocity', 'joint'];
+	// 48 D1: physics actions + spawns belong to the physics INITIATOR, possibly this peer — with
+	// other players connected they keep running live through a debugger pause (ownTime/ownCtx)
+	if (ownLive) toLive();
 	edges.forEach((edge) => {
 		const source = nodeById(nodes, edge.source);
 		if (!source || !PHYSICS_ACTIONS.includes(source.type)) return;
 		const uuid = targetUuidOf(edge);
 		if (uuid)
-			physicsPairs.push({ node: { ...source, data: resolveInputs(source, nodes, edges, time, ctx) }, uuid });
+			physicsPairs.push({ node: { ...source, data: resolveInputs(source, nodes, edges, ownTime, ownCtx) }, uuid });
 	});
 	nodes.forEach((node) => {
 		if (!PHYSICS_ACTIONS.includes(node.type)) return;
 		const uuid = implicitOwnerOf(node);
-		const data = resolveInputs(node, nodes, edges, time, ctx);
+		const data = resolveInputs(node, nodes, edges, ownTime, ownCtx);
 		// an explicit `target` input is a valid owner too, so a scene-graph node
 		// needs no Object Selector edge at all
 		if (uuid || typeof data.target === 'string')
 			physicsPairs.push({ node: { ...node, data }, uuid: uuid ?? '' });
 	});
-	updatePhysicsActions(physicsPairs, ctx, time);
+	updatePhysicsActions(physicsPairs, ownCtx, ownTime);
 	// B7: the spawner, immediately after the physics actions and for the same reason —
 	// this runs before the physics post-tick hook, so a body created this frame is
 	// stepped this frame instead of hanging for one.
-	updateSpawnNodes(time, ctx);
+	updateSpawnNodes(ownTime, ownCtx);
+	if (ownLive) toView();
 	// 31: a scene's own settings rows (only when the graph changed) and the pointing switch
 	updateGameSettingNodes();
 	updatePointGrabNodes(time, ctx);
@@ -4162,13 +4669,19 @@ function runTick(now) {
 	// 21-D6: the game shell. Runs BEFORE the HUD pass would matter next frame, and reads
 	// the same replicated trigger stamps, so every peer takes the same decisions.
 	updateGameNodes(time, ctx);
+	// 48 D1: the kit and the behaviours keep their own (live) clocks through a debugger pause, and
+	// behaviour inputs run on the authority — live with other players connected (ownCtx)
+	if (paused) toLive();
 	// 34 R2: the kit's authority turns due moments into changes; everyone re-sends what was
 	// never acknowledged (after the game nodes, so a press this frame is already asked)
 	tickKit();
+	if (paused && !ownLive) toView();
 	// 36 (U10): triggers wired INTO a behaviour's declared inputs run its handlers (authority)
-	updateBehaviourInputs(time, ctx);
+	updateBehaviourInputs(ownTime, ownCtx);
+	if (paused) toLive();
 	// 34 R3 (D1): behaviours after the kit — the authority's due timers, every handler's state flush
 	behavioursRef?.tickBehaviours();
+	if (paused) toView();
 	// 21-E6: the character controller, beside the game shell and for the same reason —
 	// it reads the already-replicated graph and the same trigger stamps, so every peer
 	// declares the same controller and reacts to the same pulses with no message.
@@ -4182,7 +4695,7 @@ function runTick(now) {
 	// Latch toggle, another Once). `ctx.triggers` is this tick's snapshot, so those see
 	// the bump on the NEXT tick - one frame, the same latency every derived reaction
 	// in this file has.
-	updateDerivedPulses(ctx);
+	updateDerivedPulses(ctx, paused ? viewScheduled : scheduledFired);
 	// ONE prune for the shared stale-stamp cutoffs, after every family has had its turn
 	// to register this tick's nodes (physics runs first, then game, then character)
 	pruneActionSeenAt();
@@ -4219,6 +4732,8 @@ function runTick(now) {
 		// separate sets, so a Key Press node can never be kept high by a pad, nor the reverse.
 		const held = inputRuntimeRef ? inputRuntimeRef.getInput().codes : new Set();
 		const padHeld = inputRuntimeRef ? inputRuntimeRef.getGamepadButtons() : new Set();
+		// 48 D1: a held key is a REAL input — it re-stamps on the live clock, and its stamps queue
+		if (paused && (held.size || padHeld.size)) toLive();
 		if (held.size || padHeld.size) {
 			const trigs = get(flowTriggers);
 			nodes.forEach((node) => {
@@ -4230,9 +4745,10 @@ function runTick(now) {
 				if ((node.data?.edge ?? 'down') === 'up') return;
 				const pulse = node.data?.pulse ?? 0.3;
 				const last = trigs[node.id]?.lastT ?? -Infinity;
-				if (time - last > pulse * 0.66) applyNodeTrigger(node.id, syncedNow(), replicatesPulse(node));
+				if (liveTime - last > pulse * 0.66) applyNodeTrigger(node.id, syncedNow(), replicatesPulse(node));
 			});
 		}
+		if (paused) toView();
 	}
 
 	// H5: harvest every object flow's declared outputs for the NEXT tick's
@@ -4246,12 +4762,15 @@ function runTick(now) {
 	});
 	graphOutputs = nextOutputs;
 	valueStats = { evals: ctx.evals, nodes: nodes.length, cuts: ctx.cuts };
+	// 48 D1: what the Debugger panel shows (status, the focused node's wires, the watch list)
+	if (dbg.armed) publishDebug(time, ctx, now);
+	if (paused) toLive();
 	phaseEnd(PHASE_FLOW);
 
 	phaseBegin(PHASE_MODULES);
 	moduleFrameTasks.forEach((task) => {
 		try {
-			task(time);
+			task(liveTime); // 48 D1: modules are not graph logic — they keep the live clock through a pause
 		} catch (error) {
 			// 27-C: a module task that throws EVERY frame wrote 60 lines a second into the
 			// ring, which evicts the context around the first failure — the only line that
@@ -4320,6 +4839,8 @@ function safeRunTick(now) {
 		clearRestoreArmed();
 		return true;
 	} catch (error) {
+		// 48 D1: a throw mid-tick must not leave the next event thinking it is inside the paused view
+		toLive();
 		tickFails++;
 		// first three, then one per 300: a per-frame log is 60 lines a second, which
 		// buries the very first failure — the one that says what broke.
@@ -4386,6 +4907,7 @@ export function startFlowRuntime() {
 	// implicit-owner targeting. The mirror keeps the editor view in sync.
 	startGraphMirror();
 	startObjectFlowWatcher(); // H5: embed-socket pruning on interface changes
+	installFlowDebug(); // 48 D1: the debugger's stores -> its runtime view
 	// 21-E7.1: let a scene load clear the pushed rows. Registered HERE rather than at
 	// module scope, because a module-level call that a store subscriber could reach is the
 	// documented TDZ trap - and this is exactly where every other one-time wiring lives.
@@ -4424,6 +4946,7 @@ export function startFlowRuntime() {
 	});
 	// primed for the Play Animation node (see the TDZ note at the top)
 	import('./animationPreview').then((m) => (animRef = m));
+	import('./sequencePlayer').then((m) => (seqRef = m)); // 48 S2: Play Sequence
 	// B6: physics + joints are reached through PRIMED dynamic imports. A static
 	// edge from here closes history -> flowRuntime -> physics -> history, and
 	// joints.js calls registerHistoryKind in its module BODY, so it may never be

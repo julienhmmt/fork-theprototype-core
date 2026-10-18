@@ -5,6 +5,7 @@ import {
 	uvEditorClose,
 	shaderEditorClose,
 	hudEditorClose,
+	timelineClose,
 	explorerClose,
 	profilerClose,
 	codeWorkspaceClose,
@@ -59,6 +60,7 @@ export const DOCK_VIEWS = [
 	{ key: 'uv', tooltip: 'Edit the selected mesh’s UV map and textures' },
 	{ key: 'shader', tooltip: 'Drive this material from a node graph' },
 	{ key: 'hud', tooltip: 'Lay out the on-screen HUD its nodes drive' },
+	{ key: 'timeline', tooltip: 'Sequence cutscenes: camera shots, clips, audio and events' },
 	{ key: 'explorer', tooltip: 'Browse the asset library' },
 	{ key: 'profiler', tooltip: 'Record frame time and draw calls, and find what draws most' },
 	{ key: 'code', tooltip: 'Scripts, behaviours and graph JSON in tabs (Ctrl+S saves)' }
@@ -227,6 +229,7 @@ const FLOAT_DRAG_KEYS = /** @type {Record<string, string>} */ ({
 	uv: 'uv',
 	shader: 'shader',
 	hud: 'hud',
+	timeline: 'timeline',
 	explorer: 'explorerWin',
 	profiler: 'profilerWin',
 	code: 'codeWin'
@@ -590,6 +593,20 @@ export function dockTab(key) {
 }
 
 /**
+ * 48 F5 — a floating window dropped onto a PANE of the split on screen docks and shows IN that pane — the
+ * rule a tab dragged onto a pane already follows (setSplitPane: the view it replaces stays docked as a tab).
+ * @param {string} key @param {{pair: string, pane: 'a'|'b'}} pane
+ * @returns {boolean} whether it docked
+ */
+export function dockIntoPane(key, pane) {
+	if (!canDockHere(key)) return false;
+	dockView(key);
+	setSplitPane(pane.pair, pane.pane, key);
+	activateDock(key);
+	return true;
+}
+
+/**
  * 41 G7 — floating window(s) dropped on the docked tab strip: they dock at the caret
  * (before `before`, or at the end of the present tabs), the first one shown. Views with
  * no docked mode are skipped (they stay floating).
@@ -652,6 +669,7 @@ export const DOCK_CLOSERS = {
 	uv: uvEditorClose,
 	shader: shaderEditorClose,
 	hud: hudEditorClose,
+	timeline: timelineClose,
 	explorer: explorerClose,
 	profiler: profilerClose,
 	code: codeWorkspaceClose,

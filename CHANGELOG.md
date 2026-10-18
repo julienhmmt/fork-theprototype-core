@@ -5,6 +5,55 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.39.0 — Logic you can see: a node graph debugger, a Timeline for cutscenes, and fixes that stay fixed 🔎
+
+Pause your game logic and watch it run, put camera shots, clips, sounds and events on a timeline, and keep the
+measurements you take.
+
+### 🔎 Node graph debugger
+
+- 🐞 **Breakpoints** on nodes (**F9**, or the node menu): in Play, an event reaching one **pauses** your view of the
+  logic. **Step** (F10) runs one event at a time, **wires show their live values**, and a **watch list** follows
+  variables. It is **local to you** — other players keep playing.
+- 🔗 Several HUD Buttons can now drive **one** module node input (no more Delay bridges or duplicate buttons); the
+  Football and Dungeon Realms templates are simpler for it. Edit Mesh toolbox tooltips show **rebound** keys.
+
+### 🎬 Timeline
+
+- 🎞️ A new **Timeline** editor (**Alt+T**, the dock's "+", the phone More sheet): tracks for **camera shots** (with a
+  glide between two cameras), **animation clips**, **audio** and **events**. Drag and resize items with snapping, scrub
+  the ruler, one undo per gesture. A sequence is scene data — saved, shared live and undoable.
+- ▶️ Play it with the new **Play Sequence** node or **Autoplay** when Play starts — also in exported games. **On
+  Sequence Event** fires your graph from a sequence (and `end` when it finishes).
+
+### 🧱 Building
+
+- 🪨 **Scattered models can be solid**: each scatter model gets a **Collider** (Box, Sphere or Mesh hull) in
+  Properties ▸ Scatter, so a thrown ball stops on a rock for every player.
+- 📏 **Measurements are kept in the scene** like strokes: listed in the object list, shared with everyone, saved, and
+  editable — select one and press **Tab** to pick a point up and put it down (it snaps). Labels no longer pile up on
+  short segments. (This replaces 1.38's pinned measurements that only you could see.)
+
+### 🛠️ Fixes and polish
+
+- 💠 The **budget chip** can be moved in **Edit positions** (Reset position puts it back beside the toolbar) and hidden
+  (its "−" there, or Customize toolbar… ▸ Budget chip); opening its ▾ menu no longer makes it vanish.
+- 🎨 Large free (CC0) **materials reach every connected person** (they arrive in the background, once), and saving a
+  material preset is quicker when your library holds large ones.
+- 📜 **Settings ▸ About ▸ Third-party licences** lists every open-source library in the app with its licence.
+- ⚡ Small models (under the import thresholds) are placed **without loading the optimizer**.
+- 🪟 Statistics can be grouped with other windows; a floating window dropped onto a split dock pane shows in that pane;
+  the pinned Connect bar keeps a rounded corner over the logo row; a ✓ pressed right after an Edit-positions drag is
+  no longer ignored.
+
+### 🛡️ Reliability
+
+- 🩺 **Anonymous error and crash reports** help fix what breaks — on by default, **Settings ▸ Privacy** turns them off.
+  No account, no IP address, no scene content.
+- 📶 A public **status page** at [status.theprototype.app](https://status.theprototype.app).
+- 🥽 Under the hood: the VR checks now run on an emulated Quest 3 (Meta's IWER), and the test suites are green against
+  deployed builds.
+
 ## 1.38.0 — Build precisely: snapping measurements, align and distribute, free CC0 assets and terrain paint 📐
 
 Line things up exactly, bring in free assets without leaving the app, and paint and dress a terrain with a brush.

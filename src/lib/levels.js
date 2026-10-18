@@ -155,6 +155,9 @@ export function sceneSignature(payload) {
 		physics: stripStamps(payload.physics ?? null),
 		music: stripStamps(payload.music ?? null),
 		hud: stripStamps(payload.hud ?? null),
+		// 48 S2: a sequence is scene data like the HUD — keyed in only when present, so
+		// every scene without one keeps the signature an older build computed
+		...(payload.sequences ? { sequences: stripStamps(payload.sequences) } : {}),
 		// 23-A2/A4: the transport and the patch are scene data too — a tempo or a cable
 		// is a change worth a save, and they take stripStamps like every block above
 		// (the branch's own merge note asked for exactly this)

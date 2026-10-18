@@ -50,6 +50,7 @@
   import { startDetailedProbe } from './lib/perf/detailed'
   import { startPerfLive } from './lib/perf/live'
   import { startPerfBeacon } from './lib/perf/beacon'
+  import { startErrorReports } from './lib/errorReports'
   import { startStaleModuleWatch } from './lib/staleModules'
   import { startLod } from './lib/lod'
   import { startLodGroups } from './lib/lodGroup'
@@ -63,6 +64,8 @@
   import SplineToolbar from './components/menu/SplineToolbar.svelte'
   import MeasureToolbar from './components/menu/MeasureToolbar.svelte' // 47 M1
   import ModuleToolboxLayer from './components/ui/ModuleToolboxLayer.svelte'
+  // 48 D1: the node graph debugger's panel (loaded the first time it opens)
+  import { debugOpen } from '$lib/flowDebug.js'
   import { isLocked } from './stores/sceneStore'
   // 29-E: `?embed=1` — the editor windows and the dock inset stand down for the page's
   // life; a corner link and a ▶ button are the only chrome an embed draws
@@ -134,6 +137,8 @@ import { startMusicToolbox } from './lib/musicToolbox'
   import { startMaterialTiers } from '$lib/materialTiers.js'
   import { startShaderSync } from '$lib/shaderSync'
   import { startHudSync } from '$lib/hudSync'
+  import { startSequenceSync } from '$lib/sequenceSync' // 48 S2
+  import { startSequencePlayer } from '$lib/sequencePlayer'
   import { startHudImages } from '$lib/hudImages'
   import { startGameSync } from '$lib/gameSync'
   import { startGamePresence } from '$lib/gamePresence'
@@ -157,6 +162,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
   // 33 (L2-L4): keep/unload modules on a scene switch, and the scope a kept module lives in
   import { startSceneSwitch } from '$lib/sceneSwitch'
   import HudEditor from './components/editors/HudEditor.svelte'
+  import TimelineEditor from './components/editors/TimelineEditor.svelte' // 48 S1
   import { importFile, load } from '$lib/fileHandler.svelte'
   import { showToast, showInfoToast } from './stores/appStore'
   // 34 PF: the Profiler dock tab, loaded the first time it opens (it is closed by default)
@@ -183,6 +189,8 @@ import { startMusicToolbox } from './lib/musicToolbox'
     // 27-B: FIRST, so a failure during the rest of this boot is already recorded.
     startDiagnostics()
     startWireErrors()
+    // 48 O1: anonymous error + crash reports (default on, Settings ▸ Privacy; inert without VITE_ERROR_REPORTS_URL)
+    startErrorReports()
     // 26-A: one rAF loop, ~2 samples a second. Started here rather than inside Scene so
     // it keeps measuring while the canvas is remounting — which is exactly when a
     // report about the app freezing tends to be written.
@@ -312,6 +320,8 @@ import { startMusicToolbox } from './lib/musicToolbox'
     startMaterialTiers()
     startShaderSync()
     startHudSync()
+    startSequenceSync()
+    startSequencePlayer()
     startHudImages()
     startGameSync()
     // 21-F3: publish our play mode when it changes, and watch for an abandoned round
@@ -391,6 +401,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
 <UvEditor />
 <SvelteFlowProvider><ShaderEditor /></SvelteFlowProvider>
 <HudEditor />
+<TimelineEditor />
 <Explorer />
 {#if !$profilerClose}
 {#await import('./components/editors/Profiler.svelte') then m}<m.default />{/await}
@@ -434,6 +445,10 @@ import { startMusicToolbox } from './lib/musicToolbox'
 <!-- A5: module toolboxes. OUTSIDE the {#if !$isLocked} block — a toolbox that opted
      into playMode has to survive Play mode, and the layer decides per box. -->
 <ModuleToolboxLayer />
+<!-- 48 D1: the Debugger panel. OUTSIDE the {#if !$isLocked} block — Play is where it works -->
+{#if $debugOpen && !$embedMode}
+{#await import('./components/editors/FlowDebugger.svelte') then m}<m.default />{/await}
+{/if}
 <ModulesManager />
 <!-- 36-export: loaded and mounted only while open (the Profiler idiom) — a closed modal costs
      the boot nothing and the editor runs exactly as before until somebody asks to export -->

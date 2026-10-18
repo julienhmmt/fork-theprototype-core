@@ -352,10 +352,17 @@ export const shortcuts = [
 		keys: 'Tab',
 		group: 'Objects',
 		scope: 'viewport',
-		label: 'Enter mesh edit mode (inside it Tab cycles Vertices/Edges/Faces; Esc exits)',
+		label: 'Enter mesh edit mode (inside it Tab cycles Vertices/Edges/Faces; Esc exits) — on a measurement, edit its points',
 		action: () => {
+			const sel = get(selectedObject);
+			// 48 B2: a measurement has no mesh — Tab edits its points instead. DYNAMIC: measure.js
+			// reaches history (measureItems registers a kind), and shortcuts sits in its subtree
+			if (!get(editingObject) && sel?.userData?.measure?.points) {
+				void import('./measure').then((m) => m.toggleMeasureEdit(sel.uuid));
+				return;
+			}
 			if (get(editingObject)) exitEditMode();
-			else if (get(selectedObject)?.uuid) enterEditMode(get(selectedObject).uuid);
+			else if (sel?.uuid) enterEditMode(sel.uuid);
 		}
 	},
 	{
@@ -504,6 +511,14 @@ export const shortcuts = [
 		scope: 'global',
 		label: 'HUD editor: show / bring to front / hide',
 		action: () => togglePanel('hud')
+	},
+	{
+		id: 'panels.timeline',
+		keys: 'Alt+T',
+		group: 'Panels',
+		scope: 'global',
+		label: 'Timeline: show / bring to front / hide',
+		action: () => togglePanel('timeline')
 	},
 	{
 		id: 'panels.chat',
@@ -812,6 +827,8 @@ export const shortcuts = [
 		['nodes.cut', 'Ctrl+X', 'cut', 'Cut the selection'],
 		['nodes.paste', 'Ctrl+V', 'paste', 'Paste at the cursor'],
 		['nodes.mute', 'M', 'mute', 'Mute / unmute the selection (a muted node does nothing)'],
+		// 48 D1: F9 is the debugger convention (VS Code, Visual Studio, Unreal)
+		['nodes.breakpoint', 'F9', 'breakpoint', 'Toggle a debugger breakpoint on the selected nodes (Play pauses when an event reaches them)'],
 		['nodes.collapse', 'H', 'collapse', 'Collapse / expand the selected nodes'],
 		['nodes.group', 'Ctrl+G', 'group', 'Group the selection'],
 		['nodes.ungroup', 'Ctrl+Shift+G', 'ungroup', 'Ungroup (the selected group, or the one you are in)'],

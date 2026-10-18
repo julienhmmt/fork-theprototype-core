@@ -170,12 +170,18 @@ h.run(async () => {
 		if (!grip) return null;
 		// move it with the REAL header drag — writing style.left directly would
 		// desync dragWindow's own model and the check would prove nothing
+		// 41 G6/G7: a window is placed at POINTER - GRAB (clientX/clientY), no longer by summing
+		// movementX — a movementX-only drag (clientX 0) parked it on the LEFT edge (48 G1: the
+		// "parked right" premise red since 42-int was this, not the clamp)
 		const header = el.querySelector('.toolbox-header');
-		const drag = (type, dx) =>
-			header.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 2, movementX: dx, movementY: 0 }));
-		drag('pointerdown', 0);
-		for (let i = 0; i < 22; i++) drag('pointermove', 40);
-		drag('pointerup', 0);
+		const hr = header.getBoundingClientRect();
+		const x0 = hr.left + 24;
+		const y0 = hr.top + hr.height / 2;
+		const drag = (type, x) =>
+			header.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 2, button: 0, clientX: x, clientY: y0 }));
+		drag('pointerdown', x0);
+		for (let i = 1; i <= 22; i++) drag('pointermove', x0 + i * 40);
+		drag('pointerup', x0 + 22 * 40);
 		await new Promise((r) => setTimeout(r, 200));
 		const parkedAt = Math.round(el.getBoundingClientRect().left);
 		const send = (type, dx) =>

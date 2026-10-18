@@ -58,7 +58,7 @@ h.run(async () => {
 		(t) => t.some((x) => x.includes('asks to control')),
 		'holder gets the request toast'
 	);
-	await A.page.getByRole('button', { name: 'Approve', exact: true }).click();
+	await h.approveButton(A.page).click();
 	await h.eventually(
 		() => locks(A.page),
 		(l) => l.some((x) => x[0] === B.id && x[1] === uuid) && !l.some((x) => x[0] === A.id),

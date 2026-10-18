@@ -29,6 +29,7 @@ export const DEBUG_HOOKS = [
 	['perf', () => import('./perf/recorder')],
 	['perfDetailed', () => import('./perf/detailed')],
 	['perfBeacon', () => import('./perf/beacon')],
+	['errorReports', () => import('./errorReports')],
 	['staleModules', () => import('./staleModules')],
 	['perfMoment', () => import('./perf/moment')],
 	['problemReport', () => import('./problemReport')],
@@ -74,6 +75,8 @@ export const DEBUG_HOOKS = [
 	['annotationsHandler', () => import('./annotationsHandler')],
 	['noteHistory', () => import('./noteHistory')],
 	['flowRuntime', () => import('./flowRuntime')],
+	// 48 D1: the node graph debugger (stores + requests; the runtime half is flowRuntime.flowDebugRuntime)
+	['flowDebug', () => import('./flowDebug.js')],
 	['history', () => import('./history')],
 	['materialsHandler', () => import('./materialsHandler')],
 	// 37 R5: material presets (materialPresets, peerMaterialPresets, applyMaterialPreset, materialPresetsDebug…)
@@ -106,6 +109,7 @@ export const DEBUG_HOOKS = [
 	['terrainPaint', () => import('./terrainPaint')],
 	['terrainSurface', () => import('./terrainSurface')],
 	['terrainPaintCore', () => import('./terrainPaintCore')],
+	['scatterColliders', () => import('./scatterColliders')],
 	['terrainScatterCore', () => import('./terrainScatterCore')],
 	['userModules', () => import('./userModules')],
 	['environment', () => import('./environment')],
@@ -273,6 +277,7 @@ export const DEBUG_HOOKS = [
 	// 47 M1/M2: the measure tool (chains, pins, snap pref) and its pure arithmetic
 	['measure', () => import('./measure')],
 	['measureCore', () => import('./measureCore')],
+	['measureItems', () => import('./measureItems')],
 	['meshPivot', () => import('./meshPivot')],
 	['selectionPrefs', () => import('./selectionPrefs')],
 	['editOverlays', () => import('./editOverlays')],
@@ -302,6 +307,10 @@ export const DEBUG_HOOKS = [
 	['moduleRequirements', () => import('./moduleRequirements')],
 	['hudDocs', () => import('./hudDocs')],
 	['hudSync', () => import('./hudSync')],
+	// 48 S1/S2: the Timeline — data, sync, player
+	['sequences', () => import('./sequences')],
+	['sequenceSync', () => import('./sequenceSync')],
+	['sequencePlayer', () => import('./sequencePlayer')],
 	['idb', () => import('./idb')],
 	['hudKinds', () => import('./hudKinds')],
 	['hudImages', () => import('./hudImages')],

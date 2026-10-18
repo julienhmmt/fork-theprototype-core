@@ -66,6 +66,7 @@
 	import KeyPressNode from './nodes/KeyPressNode.svelte';
 	import GamepadNode from './nodes/GamepadNode.svelte';
 	import PlayAnimNode from './nodes/PlayAnimNode.svelte';
+	import TimelineSeqNode from './nodes/TimelineSeqNode.svelte';
 	import AnimStateNode from './nodes/AnimStateNode.svelte';
 	import OnHitNode from './nodes/OnHitNode.svelte';
 	import OnClapNode from './nodes/OnClapNode.svelte'; // 31 (Stars Room S3)
@@ -96,6 +97,8 @@
 	import { moduleNodeGroups, moduleNodeComponents } from '$lib/moduleSDK';
 	import { peers, username, modulesOpen, flowFocus, showToast } from '../../stores/appStore';
 	import { safeStorage } from '$lib/safeStorage';
+	// 48 D1: the node graph debugger — LOCAL breakpoints (a red dot on the card) + the panel
+	import { debugBreakpoints, toggleBreakpoint, setDebugOpen } from '$lib/flowDebug.js';
 	// 36 U11: groups/notes as graph data, the scoped keymap's node actions, undo for editor edits
 	import {
 		GROUP_TYPE,
@@ -262,6 +265,8 @@
 		animfinished: OnClickNode, // 17-E: a pulse when a clip ends
 		animmarker: OnClickNode, // 17-E F5: a pulse at a named point in a clip
 		animstate: AnimStateNode, // 17-E F3: the readable half of it
+		playseq: TimelineSeqNode, // 48 S2: Play Sequence
+		onseqevent: TimelineSeqNode, // 48 S2: On Sequence Event
 		// A3: ONE generic card for the whole HUD group (the ShaderNode precedent)
 		hudscreen: HudNode,
 		hudtext: HudNode,
@@ -1379,6 +1384,14 @@
 		commitData(targets.map((n) => ({ id: n.id, patch: { muted: mute } })));
 		showToast(mute ? `Muted ${targets.length} node${targets.length === 1 ? '' : 's'} (they do nothing until unmuted)` : 'Unmuted');
 	}
+	// 48 D1: F9 / the node menu — a breakpoint on every selected node (all on unless every one has one)
+	function toggleBreakpoints() {
+		const targets = toggleTargets(false).filter((n) => !isNote(n) && !isGroup(n));
+		if (!targets.length) return;
+		const on = targets.some((n) => !bpSet.has(n.id));
+		for (const n of targets) toggleBreakpoint(n.id, on);
+		showToast(on ? `Breakpoint on ${targets.length === 1 ? 'this node' : targets.length + ' nodes'} — Play pauses when an event reaches it` : 'Breakpoint removed');
+	}
 	function toggleCollapse() {
 		const targets = toggleTargets(false);
 		if (!targets.length) return;
@@ -1604,6 +1617,7 @@
 				cut: () => copySelection(true),
 				paste: () => pasteAt(),
 				mute: toggleMute,
+				breakpoint: toggleBreakpoints,
 				collapse: toggleCollapse,
 				group: groupSelection,
 				ungroup: () => ungroup(),
@@ -1717,6 +1731,7 @@
 
 	// muted / collapsed cards: one generated stylesheet keyed by node id, so no node
 	// component has to learn about either (CSS.escape keeps a hostile id inert)
+	const bpSet = $derived(new Set($debugBreakpoints));
 	const flagsCss = $derived.by(() => {
 		const rules: string[] = [];
 		const esc = (id: string) => (typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id.replace(/[^\w-]/g, ''));
@@ -1729,6 +1744,8 @@
 					`${sel} .node-card>:last-child{position:absolute;inset:0 0 auto 0;height:0;padding:0;overflow:visible;visibility:hidden}${sel} .node-card>:last-child *{position:static}${sel} .node-card>:last-child .svelte-flow__handle{position:absolute!important;visibility:visible;top:14px!important}${sel} .node-card>:first-child{border-bottom:0}`
 				);
 			if (n.data?.collapsed && isNote(n)) rules.push(`${sel} .tp-note{height:28px!important}${sel} .tp-note-body{display:none}`);
+			// 48 D1: a breakpoint is a red dot on the card's top-left corner (LOCAL, never node data)
+			if (bpSet.has(n.id)) rules.push(`${sel}::before{content:'';position:absolute;z-index:1;top:-5px;left:-5px;width:11px;height:11px;border-radius:9999px;background:var(--danger);box-shadow:0 0 0 2px var(--bg-app)}`);
 		}
 		return rules.join('\n');
 	});
@@ -1833,6 +1850,10 @@
 		if (clip?.nodes?.length) items.push({ label: 'Paste', icon: 'file-plus', hint: hint('nodes.paste'), action: () => pasteAt() });
 		items.push({ section: ' ' });
 		if (!list.every(isNote)) items.push({ label: muted ? 'Unmute' : 'Mute (bypass)', icon: muted ? 'eye' : 'eye-off', hint: hint('nodes.mute'), action: toggleMute });
+		if (!list.every((x) => isNote(x) || isGroup(x))) {
+			const hasBp = list.some((x) => bpSet.has(x.id));
+			items.push({ label: hasBp ? 'Remove breakpoint' : 'Breakpoint (pause Play here)', icon: 'circle', hint: hint('nodes.breakpoint'), action: toggleBreakpoints });
+		}
 		items.push({ label: collapsed ? 'Expand' : 'Collapse', icon: collapsed ? 'chevron-down' : 'chevron-up', hint: hint('nodes.collapse'), action: toggleCollapse });
 		items.push({ label: 'Frame', icon: 'focus', hint: hint('nodes.frame-selected'), action: frameSelected });
 		if (n > 1)
@@ -1970,6 +1991,8 @@
 						onclick={() => modulesOpen.set(true)}
 					>{unknownHere} node{unknownHere === 1 ? ' needs' : 's need'} modules</KitButton>
 				{/if}
+				<!-- 48 D1: the Debugger panel (breakpoints, watch list, Step / Resume in Play) -->
+				<KitButton id="flow-debugger-open" variant="icon" size="sm" icon="bug" label="Debugger" title="Debugger — breakpoints, watch list, step through Play" onclick={() => setDebugOpen(true)} />
 				{#if level}
 					<!-- 36 U11: one level out of a group (Esc / Tab do the same) -->
 					<KitButton id="flow-group-leave" variant="icon" size="sm" icon="corner-left-up" label="Leave the group (Esc)" title="Leave the group (Esc)" onclick={leaveGroup} />

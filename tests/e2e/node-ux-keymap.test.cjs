@@ -90,6 +90,9 @@ h.run(async () => {
 		(await p.evaluate(() => document.querySelector('#mesh-keys-popover')?.textContent ?? '')).includes('K / I / G'),
 		'the mesh key sheet is generated from the keymap (shows K)'
 	);
+	// 48 D2: ...and so are the tool buttons' tooltips (they kept the default letter: "Extrude (E)")
+	const tip = await p.evaluate(() => document.querySelector('#mesh-op-extrude')?.getAttribute('title') ?? '');
+	h.check(tip.startsWith('Extrude (K)'), `the Extrude button's tooltip names the rebound key (${tip.slice(0, 14)})`);
 	// the registry's stand-down follows the rebind: a viewport row on K would be shadowed
 	const stand = await p.evaluate(() => window.__stores.shortcutsRegistry.conflictOf('K', 'scene.physics').meshEdit);
 	h.check(stand === true, 'a viewport key moved onto K is warned that a mesh session owns K');

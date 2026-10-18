@@ -1110,6 +1110,24 @@ export const nodeCatalog = [
 					{ key: 'action', kind: 'select', options: ['toggle', 'play', 'stop', 'restart'] },
 					{ key: 'speed', kind: 'range', min: 0.1, max: 4, step: 0.1 }
 				]
+			},
+			{
+				// 48 S2: plays a Timeline SEQUENCE (camera shots, clips, audio, events) on the
+				// trigger's rising stamp — on EVERY peer from that shared stamp, so the cutscene
+				// lines up with no message of its own; a shot changes each player's own view.
+				type: 'playseq',
+				label: 'Play Sequence',
+				defaults: { sequence: '', action: 'play' },
+				inputs: ['trigger'],
+				params: [{ key: 'action', kind: 'select', options: ['play', 'stop', 'toggle', 'restart'] }]
+			},
+			{
+				// 48 S2: the event half of the Timeline — pulses as a running sequence crosses an
+				// EVENT item (`end` = it finished). Blank sequence / event = any. Fired LOCALLY on
+				// every peer, the animmarker reasoning: each runs the same sequence itself.
+				type: 'onseqevent',
+				label: 'On Sequence Event',
+				defaults: { sequence: '', event: '', pulse: 0.3 }
 			}
 		]
 	},

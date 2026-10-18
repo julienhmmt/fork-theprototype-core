@@ -61,7 +61,7 @@ import { applyJointCreate, applyJointDelete, applyJointsSnapshot, sendJoints } f
 import { applyAnimData, applyAnimPlay, applyAnimationsSnapshot, sendAnimations } from '$lib/animationPreview';
 import { applyHandModel, handModelState, dropPeerHandModel } from '$lib/handModels';
 import { applyRemoteEnvironment, environmentState, envPresetsState, applyRemoteEnvPresets, dropPeerEnvPresets } from '$lib/environment';
-import { materialPresetsState, applyRemoteMaterialPresets, dropPeerMaterialPresets } from '$lib/materialPresets'; // 37 R5
+import { materialPresetsState, applyRemoteMaterialPresets, dropPeerMaterialPresets, answerMaterialPresetRequest, applyMaterialPresetPart } from '$lib/materialPresets'; // 37 R5, 48 F2
 import { applyRemoteMusic, musicState } from '$lib/sceneMusic';
 import { applyRemoteScenePhysics, scenePhysicsState } from '$lib/scenePhysics';
 // CO1: where the physical room's origin sits in content coords. The scenephysics
@@ -93,6 +93,8 @@ import {
 	sendHudValues
 } from '$lib/hudSync';
 import { applyRemoteGameState, sendGameState, gameStatePayload } from '$lib/gameSync';
+// 48 S2: sequences (Timeline) — scene data, latest-wins per sequence (sequenceSync.js)
+import { applyRemoteSequence, applyRemoteSequenceDelete, applyRemoteSequences, sendSequences } from '$lib/sequenceSync';
 // 34 R2 (T3): the game kit's document + requests (kit/runtime.js; a leaf-side module)
 import { receiveKitMessage, kitPayload } from '$lib/kit/runtime.js';
 import { kitEntityPayloads } from '$lib/kit/entityApp.js'; // 34 R2 (kit-entities)
@@ -1021,6 +1023,16 @@ export class PeerConnection {
 					applyRemoteHuds(data);
 				} else if(data.type == 'gethuds') {
 					if (sameRoomOrUnknown(conn.peer)) sendHuds(data.sender);
+				} else if(data.type == 'seq') {
+					// 48 S2: one authored sequence, latest-wins on changedAt. Playback sends
+					// nothing: every peer plays from the replicated trigger stamp itself.
+					applyRemoteSequence(data);
+				} else if(data.type == 'seqdelete') {
+					applyRemoteSequenceDelete(data);
+				} else if(data.type == 'seqs') {
+					applyRemoteSequences(data);
+				} else if(data.type == 'getseqs') {
+					if (sameRoomOrUnknown(conn.peer)) sendSequences(data.sender);
 				} else if(data.type == 'hudvalue') {
 					// 21-D4: a SHARED input's value - the one runtime HUD message, because what a
 					// player dragged is the only HUD state a peer cannot derive for itself.
@@ -1052,6 +1064,10 @@ export class PeerConnection {
 					applyRemoteEnvPresets(data);
 				} else if(data.type == 'matpresets') {
 					applyRemoteMaterialPresets(data); // 37 R5: a person's material library
+				} else if(data.type == 'getmatpreset') {
+					answerMaterialPresetRequest(data, conn.peer); // 48 F2: a peer pulls one of my big presets
+				} else if(data.type == 'matpresetpart') {
+					applyMaterialPresetPart(data); // 48 F2: one part of a big preset
 				} else if(data.type == 'geometry') {
 					applyRemoteGeometry(data);
 				} else if(data.type == 'lighttarget') {
@@ -1217,7 +1233,7 @@ export class PeerConnection {
 				} else if(data.type == 'edgedelete') {
 					deleteFlowEdges(data.ids, data.graphId);
 				} else if(data.type == 'nodetrigger') {
-						applyNodeTrigger(data.id, data.t, false, null, data.at ?? null, data.other); // 134: shared-timestamp pulse (31: + where, for a clap; 36 X6: + the contact's other body)
+						applyNodeTrigger(data.id, data.t, false, null, data.at ?? null, data.other, true); // 134: shared-timestamp pulse (31: + where, for a clap; 36 X6: + the contact's other body)
 					} else if(data.type == 'gettriggers') {
 						// DEVX #18: the trigger LOG for a late joiner. Deliberately NOT behind
 						// share-or-stash like getobjects/getnodes: there is nothing here for a
@@ -1468,6 +1484,7 @@ export class PeerConnection {
 		conn.send({type: 'getshadergraphs', sender: this.peer.id})
 		conn.send({type: 'gethuds', sender: this.peer.id})
 		conn.send({type: 'gethudvalues', sender: this.peer.id})
+		conn.send({type: 'getseqs', sender: this.peer.id}) // 48 S2
 	}
 
 	// Send the initial handshake (locks, known hosts, whitelist, object/node sync requests).

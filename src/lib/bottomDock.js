@@ -16,7 +16,7 @@ import { phoneShell } from './ui/phoneShell.js';
 // so drawers/edge-docked windows sit above it.
 // This module imports NO app stores — it is dock bookkeeping and nothing else.
 
-export const FLOW_FAMILY = ['flow', 'flowcode', 'animation', 'uv', 'shader', 'hud'];
+export const FLOW_FAMILY = ['flow', 'flowcode', 'animation', 'uv', 'shader', 'hud', 'timeline'];
 /** every panel that can be a dock tab, in strip order (Node editor first) */
 export const DOCK_FAMILY = [...FLOW_FAMILY, 'explorer', 'profiler', 'code', 'imageEditor'];
 /**
@@ -56,10 +56,10 @@ export function canDockFloating(key) {
 	return FLOAT_DOCKABLE.includes(key);
 }
 /** @type {Record<string, string>} */
-export const DOCK_TITLES = { flow: 'Node editor', flowcode: 'Flow Code', animation: 'Animation', uv: 'UV editor', shader: 'Shader editor', hud: 'HUD editor', explorer: 'Explorer', profiler: 'Profiler', code: 'Code', imageEditor: 'Image editor', properties: 'Properties', objects: 'Objects', notes: 'Notes', layouts: 'Layouts', scene: 'Configure Scene', stats: 'Statistics', profilerLive: 'Live profiler', chat: 'Chat', aiAssistant: 'AI assistant', assets: 'Free assets' };
+export const DOCK_TITLES = { flow: 'Node editor', flowcode: 'Flow Code', animation: 'Animation', uv: 'UV editor', shader: 'Shader editor', hud: 'HUD editor', timeline: 'Timeline', explorer: 'Explorer', profiler: 'Profiler', code: 'Code', imageEditor: 'Image editor', properties: 'Properties', objects: 'Objects', notes: 'Notes', layouts: 'Layouts', scene: 'Configure Scene', stats: 'Statistics', profilerLive: 'Live profiler', chat: 'Chat', aiAssistant: 'AI assistant', assets: 'Free assets' };
 /** 38 NOTES-38 #23: the view icon each dock tab shows before its name (ui/Icon names) */
 /** @type {Record<string, string>} */
-export const DOCK_ICONS = { flow: 'workflow', flowcode: 'code', animation: 'clapperboard', uv: 'grid-3x3', shader: 'sparkles', hud: 'app-window', explorer: 'folder-open', profiler: 'activity', code: 'code', imageEditor: 'image', properties: 'sliders-horizontal', objects: 'list', notes: 'sticky-note', layouts: 'panels-top-left', scene: 'sun', stats: 'gauge', profilerLive: 'activity', chat: 'message-square', aiAssistant: 'sparkles', assets: 'package-open' };
+export const DOCK_ICONS = { flow: 'workflow', flowcode: 'code', animation: 'clapperboard', uv: 'grid-3x3', shader: 'sparkles', hud: 'app-window', timeline: 'video', explorer: 'folder-open', profiler: 'activity', code: 'code', imageEditor: 'image', properties: 'sliders-horizontal', objects: 'list', notes: 'sticky-note', layouts: 'panels-top-left', scene: 'sun', stats: 'gauge', profilerLive: 'activity', chat: 'message-square', aiAssistant: 'sparkles', assets: 'package-open' };
 
 const ls = typeof localStorage !== 'undefined' ? localStorage : null;
 

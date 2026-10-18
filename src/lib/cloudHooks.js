@@ -51,7 +51,12 @@ const ALWAYS_ALLOWED = new Set([
 	// one decides whether a joiner sees a collected world or a reset one. The `triggers`
 	// REPLY is deliberately NOT here: a reply is content, and every other domain leaves
 	// its content gateable (`getnodes` is on the floor, `nodes` is not).
-	'gettriggers'
+	'gettriggers',
+	// 48 S2: the Timeline's sequences REQUEST, the `getnodes` rule again (the `seqs` reply stays
+	// gateable). Off the floor, a cloud build's just-approved joiner reads as a viewer until its
+	// role grant lands, its handshake `getseqs` was dropped, and a late joiner never got the
+	// room's sequences (48-int, preview-1-39 proof: timeline "a late joiner gets the sequence")
+	'getseqs'
 ]);
 
 /** @type {((peerId: string, msgType: string) => boolean) | null} */
