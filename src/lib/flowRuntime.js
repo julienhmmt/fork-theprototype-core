@@ -3157,9 +3157,11 @@ function evalNodeBody(node, allNodes, allEdges, time, seen, ctx) {
  */
 export function resolveInputs(node, allNodes, allEdges, time, ctx = null) {
 	const data = { ...(node.data || {}) };
-	/** the handles whose current value came from an event source (48 D2) @type {Set<string>} */
-	const eventFed = new Set();
-	for (const edge of edgesInto(allEdges, node.id)) {
+	const into = edgesInto(allEdges, node.id);
+	/** 48 D2: handle -> the source type + handle its value came from; tracked only when 2+ wires come in
+	 * (the common single-wire node pays nothing) @type {Map<string, [string, string|null|undefined]> | null} */
+	const held = into.length > 1 ? new Map() : null;
+	for (const edge of into) {
 		if (!edge.targetHandle) continue;
 		const source = nodeById(allNodes, edge.source);
 		if (!source) continue;
@@ -3180,11 +3182,13 @@ export function resolveInputs(node, allNodes, allEdges, time, ctx = null) {
 		// wired into a module's `press` never arrived — why Football and Dungeon Realms carried a
 		// duplicate Match / Menu Button node per HUD button. One wire reads exactly as before.
 		const handle = edge.targetHandle;
-		const event = outputHandleType(source.type, edge.sourceHandle) === 'event';
+		const prior = held?.get(handle);
 		const prev = data[handle];
-		data[handle] = event && eventFed.has(handle) && typeof prev === 'number' && typeof value === 'number' ? Math.max(prev, value) : value;
-		if (event) eventFed.add(handle);
-		else eventFed.delete(handle);
+		data[handle] =
+			prior && typeof prev === 'number' && typeof value === 'number' && outputHandleType(prior[0], prior[1]) === 'event' && outputHandleType(source.type, edge.sourceHandle) === 'event'
+				? Math.max(prev, value)
+				: value;
+		held?.set(handle, [source.type, edge.sourceHandle]);
 	}
 	return data;
 }
