@@ -41,6 +41,9 @@ h.run(async () => {
 		localStorage.setItem('hasSeenWelcome', 'true');
 		localStorage.setItem('toursSeen', '{"editor":true,"editor-touch":true}');
 		// what the app hashes: every SHA digest's input size, from the first frame
+		window.__diag = [];
+		window.addEventListener('unhandledrejection', (e) => window.__diag.push('rejection: ' + (e.reason?.stack ?? e.reason)));
+		window.addEventListener('drop', (e) => window.__diag.push('drop seen, files ' + (e.dataTransfer?.files?.length ?? -1) + ', default prevented ' + e.defaultPrevented), true);
 		window.__digests = [];
 		const orig = crypto.subtle.digest.bind(crypto.subtle);
 		crypto.subtle.digest = (alg, data) => {
@@ -51,7 +54,19 @@ h.run(async () => {
 	const page = await ctx.newPage();
 	const requests = [];
 	page.on('request', (r) => requests.push(r.url()));
+	page.on('response', (r) => {
+		if (r.status() >= 400) console.log(`  [http ${r.status()}] ${r.url().slice(0, 200)}`);
+	});
 	page.on('pageerror', (e) => console.log('[pageerror] ' + e.message));
+	page.on('console', (m) => {
+		if (m.type() === 'error' || m.type() === 'warning') console.log(`[console ${m.type()}] ` + m.text().slice(0, 300));
+	});
+	// a dev server that just started re-optimizes a dependency on first use and RELOADS the page (vite) — that wipes
+	// the scene and the digest log, so an attempt only counts when no navigation happened during it
+	let navigations = 0;
+	page.on('framenavigated', (f) => {
+		if (f === page.mainFrame()) navigations++;
+	});
 	await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
 	await page.locator('#controls-pill').waitFor({ timeout: 90000 });
 	await page.waitForTimeout(5000);
@@ -76,24 +91,57 @@ h.run(async () => {
 		);
 	const listed = async (name) => {
 		if (!(await page.locator('#object-list').isVisible().catch(() => false))) {
-			await page.locator('canvas').first().click({ position: { x: 640, y: 300 } }).catch(() => {});
-			await page.keyboard.press('o');
-			await page.waitForTimeout(600);
+			await page.locator('#controls-pill [title="Object list (O)"]').first().click().catch(() => {});
+			await page.waitForTimeout(800);
 		}
 		return page.evaluate((n) => [...document.querySelectorAll('#object-list .obj-row')].some((r) => r.textContent.includes(n)), name);
 	};
 
 	// ---------- 2 + 3. a 1k-triangle model ----------
 	const small = gridObj(23, 'SmallGrid'); // 1058 triangles
-	const before = requests.length;
-	await page.evaluate(() => (window.__digests.length = 0));
-	const size = await drop('SmallGrid.obj', small);
-	await h.eventually(() => listed('SmallGrid'), (v) => v, 'F4: a 1k-triangle model dropped on the viewport is placed (the object list lists it)', 20000);
-	await page.waitForTimeout(1500);
-	const after = requests.slice(before).filter((u) => OPTIMIZER.test(u));
-	h.check(after.length === 0, `F4: …without fetching the optimizer (network log: ${after.join(', ') || 'no optimizer request'})`);
-	const digests = await page.evaluate(() => window.__digests.slice());
-	h.check(!digests.includes(size), `F4: …and without hashing the file (${size} bytes; digests seen: ${JSON.stringify(digests)})`);
+	let attempt = null;
+	for (let i = 0; i < 3 && !attempt; i++) {
+		const nav0 = navigations;
+		const before = requests.length;
+		await page.evaluate(() => (window.__digests.length = 0));
+		// diagnostic: open the list FIRST, then sample its rows every 200 ms through the import
+		await listed('nothing-yet');
+		await page.evaluate(() => {
+			window.__rows = [];
+			const t = performance.now();
+			const iv = setInterval(() => {
+				const n = document.querySelectorAll('#object-list .obj-row').length;
+				const last = window.__rows[window.__rows.length - 1];
+				if (!last || last[1] !== n) window.__rows.push([Math.round(performance.now() - t), n]);
+			}, 200);
+			setTimeout(() => clearInterval(iv), 20000);
+		});
+		const t0 = Date.now();
+		const size = await drop('SmallGrid.obj', small);
+		let placed = false;
+		for (let t = 0; t < 60 && !placed && navigations === nav0; t++) {
+			placed = await listed('SmallGrid');
+			if (!placed) await page.waitForTimeout(1000);
+		}
+		await page.waitForTimeout(1500);
+		if (navigations !== nav0) {
+			console.log('  the page reloaded during the attempt (a fresh dev server re-optimizing) — again on the settled page');
+			await page.locator('#controls-pill').waitFor({ timeout: 90000 });
+			await page.waitForTimeout(5000);
+			continue;
+		}
+		if (placed) console.log('  placed after ~' + (Date.now() - t0) + ' ms');
+		attempt = { placed, size, after: requests.slice(before).filter((u) => OPTIMIZER.test(u)), digests: await page.evaluate(() => window.__digests.slice()) };
+	}
+	console.log('  diag: ' + JSON.stringify(await page.evaluate(() => window.__diag)) + ' rows over time: ' + JSON.stringify(await page.evaluate(() => window.__rows)));
+	if (!attempt?.placed) {
+		await drop('SmallAgain.obj', gridObj(23, 'SmallAgain'));
+		await page.waitForTimeout(8000);
+		console.log('  diag: a second drop placed: ' + (await listed('SmallAgain')) + ' / the first now: ' + (await listed('SmallGrid')) + ' / ' + JSON.stringify(await page.evaluate(() => window.__diag)));
+	}
+	h.check(!!attempt?.placed, 'F4: a 1k-triangle model dropped on the viewport is placed (the object list lists it)');
+	h.check(!!attempt && attempt.after.length === 0, `F4: …without fetching the optimizer (network log: ${attempt?.after.join(', ') || 'no optimizer request'})`);
+	h.check(!!attempt && !attempt.digests.includes(attempt.size), `F4: …and without hashing the file (${attempt?.size} bytes; digests seen: ${JSON.stringify(attempt?.digests)})`);
 	if (EVIDENCE) await page.screenshot({ path: EVIDENCE + '/01-small-placed.png' }).catch(() => {});
 
 	// ---------- 4. control: over the threshold the optimizer is loaded ----------
