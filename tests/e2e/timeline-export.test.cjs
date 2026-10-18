@@ -1,7 +1,7 @@
 // 48 S2 — A SEQUENCE PLAYS IN AN EXPORTED GAME.
 //
 // Against a BUILT app (the exporter reads build/export-manifest.json; a dev server has none —
-// run under `LANE_DEV_CMD='npx vite preview --port $PORT --strictPort' e2e-slot --dev …`):
+// run against scripts/serve-build.cjs — `vite preview` does not serve build/export-manifest.json):
 //   1. the editor builds a small scene: a camera, a sequence flagged AUTOPLAY with a camera shot
 //      and an event item "go", and an On Sequence Event "go" node
 //   2. the static-host export carries the sequence inside scene.tpscene (formatMinor 2)
@@ -9,7 +9,7 @@
 //      AUTOPLAYS there: it looks through the shot and the event pulses the graph
 //
 // Counterfactual: on v1.38.0 there is no sequence to carry — step 1 cannot build one.
-// Run: LANE_DEV_CMD='npx vite preview --port $PORT --strictPort' e2e-slot --dev <lane> 5482 --
+// Run: LANE_DEV_CMD='node scripts/serve-build.cjs --port $PORT' e2e-slot --dev <lane> 5482 --
 //      env APP_URL=https://localhost:5482/ node tests/e2e/timeline-export.test.cjs
 const h = require('./helpers.cjs');
 const fs = require('fs');
