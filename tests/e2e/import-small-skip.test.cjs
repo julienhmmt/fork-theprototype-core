@@ -54,6 +54,15 @@ h.run(async () => {
 	const page = await ctx.newPage();
 	const requests = [];
 	page.on('request', (r) => requests.push(r.url()));
+	// a BUILT app hashes the module names (importOptimize lands in an anonymous chunk), so there a script is also the
+	// optimizer when its text carries importOptimize's own progress copy (48-int: the name match alone saw nothing on
+	// Pages; the copy's tail is shared with fileHandler's export toasts, so the head is the mark)
+	const marked = new Set();
+	page.on('response', async (r) => {
+		if (!/\.js(\?|$)/.test(r.url()) || OPTIMIZER.test(r.url()) || !r.ok()) return;
+		if ((await r.text().catch(() => '')).includes('Optimizing "')) marked.add(r.url());
+	});
+	const isOptimizer = (/** @type {string} */ u) => OPTIMIZER.test(u) || marked.has(u);
 	page.on('response', (r) => {
 		if (r.status() >= 400) console.log(`  [http ${r.status()}] ${r.url().slice(0, 200)}`);
 	});
@@ -72,7 +81,7 @@ h.run(async () => {
 	await page.waitForTimeout(5000);
 	await page.locator('#restore-session-dismiss').click({ timeout: 3000 }).catch(() => {});
 	h.check(!(await page.evaluate(() => !!window.__stores)), 'premise: this is a plain session (no debug hook)');
-	const boot = requests.filter((u) => OPTIMIZER.test(u));
+	const boot = requests.filter(isOptimizer);
 	h.check(boot.length === 0, `premise: the boot fetched no optimizer module (${boot.join(', ') || 'none'})`);
 
 	/** drop a model file on the viewport the way a person does (App.svelte's window drop) */
@@ -131,7 +140,7 @@ h.run(async () => {
 			continue;
 		}
 		if (placed) console.log('  placed after ~' + (Date.now() - t0) + ' ms');
-		attempt = { placed, size, after: requests.slice(before).filter((u) => OPTIMIZER.test(u)), digests: await page.evaluate(() => window.__digests.slice()) };
+		attempt = { placed, size, after: requests.slice(before).filter(isOptimizer), digests: await page.evaluate(() => window.__digests.slice()) };
 	}
 	console.log('  diag: ' + JSON.stringify(await page.evaluate(() => window.__diag)) + ' rows over time: ' + JSON.stringify(await page.evaluate(() => window.__rows)));
 	if (!attempt?.placed) {
@@ -148,7 +157,7 @@ h.run(async () => {
 	const big = gridObj(175, 'BigGrid'); // 61250 triangles
 	const before2 = requests.length;
 	await drop('BigGrid.obj', big);
-	await h.eventually(() => Promise.resolve(requests.slice(before2).filter((u) => OPTIMIZER.test(u))), (v) => v.length > 0, 'F4 control: a 61k-triangle model (over the 50k threshold) does load the optimizer', 30000);
+	await h.eventually(() => Promise.resolve(requests.slice(before2).filter(isOptimizer)), (v) => v.length > 0, 'F4 control: a 61k-triangle model (over the 50k threshold) does load the optimizer', 30000);
 
 	await browser.close();
 });
