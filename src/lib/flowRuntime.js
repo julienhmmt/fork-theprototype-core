@@ -3469,15 +3469,27 @@ export function fireAnimMarker(uuid, name) {
 export function fireSequenceEvent(seqId, seqName, name) {
 	const want = String(name ?? '').trim().toLowerCase();
 	let fired = 0;
-	nodes.forEach((node) => {
-		if (node.type !== 'onseqevent') return;
-		const seq = String(node.data?.sequence ?? '').trim();
-		if (seq && seq !== seqId && seq.toLowerCase() !== String(seqName).trim().toLowerCase()) return;
-		const ev = String(node.data?.event ?? '').trim().toLowerCase();
-		if (ev && ev !== want) return;
-		applyNodeTrigger(node.id, syncedNow(), false);
-		fired++;
-	});
+	// 48-int (D1 x S2): a sequence plays on the LIVE clock (the player is a frame task, not the
+	// graph), so what it fires is a live event — even when a debugger Step started it from inside
+	// the paused view's tick (playSequence ticks its first frame synchronously). Inside that tick
+	// the debugger would read the pulse as one the view derived, keep it in the view's copy of the
+	// log alone, and Resume would drop it. Out of the view for the call, it queues for the next
+	// Step and the live log takes it, as an animation marker's does.
+	const fromView = inDebugTick;
+	if (fromView) toLive();
+	try {
+		nodes.forEach((node) => {
+			if (node.type !== 'onseqevent') return;
+			const seq = String(node.data?.sequence ?? '').trim();
+			if (seq && seq !== seqId && seq.toLowerCase() !== String(seqName).trim().toLowerCase()) return;
+			const ev = String(node.data?.event ?? '').trim().toLowerCase();
+			if (ev && ev !== want) return;
+			applyNodeTrigger(node.id, syncedNow(), false);
+			fired++;
+		});
+	} finally {
+		if (fromView) toView();
+	}
 	return fired;
 }
 
