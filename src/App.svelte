@@ -64,6 +64,8 @@
   import SplineToolbar from './components/menu/SplineToolbar.svelte'
   import MeasureToolbar from './components/menu/MeasureToolbar.svelte' // 47 M1
   import ModuleToolboxLayer from './components/ui/ModuleToolboxLayer.svelte'
+  // 48 D1: the node graph debugger's panel (loaded the first time it opens)
+  import { debugOpen } from '$lib/flowDebug.js'
   import { isLocked } from './stores/sceneStore'
   // 29-E: `?embed=1` — the editor windows and the dock inset stand down for the page's
   // life; a corner link and a ▶ button are the only chrome an embed draws
@@ -443,6 +445,10 @@ import { startMusicToolbox } from './lib/musicToolbox'
 <!-- A5: module toolboxes. OUTSIDE the {#if !$isLocked} block — a toolbox that opted
      into playMode has to survive Play mode, and the layer decides per box. -->
 <ModuleToolboxLayer />
+<!-- 48 D1: the Debugger panel. OUTSIDE the {#if !$isLocked} block — Play is where it works -->
+{#if $debugOpen && !$embedMode}
+{#await import('./components/editors/FlowDebugger.svelte') then m}<m.default />{/await}
+{/if}
 <ModulesManager />
 <!-- 36-export: loaded and mounted only while open (the Profiler idiom) — a closed modal costs
      the boot nothing and the editor runs exactly as before until somebody asks to export -->

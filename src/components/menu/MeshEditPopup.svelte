@@ -221,21 +221,21 @@
 	// parameterized ones come first within each group so the two kinds are not
 	// interleaved either.
 	const TOOL_OPS = [
-		{ op: 'move', label: 'Move', hint: 'G', oneShot: false, param: false, icon: 'move', desc: 'seat the gizmo on the selection and drag it' },
-		{ op: 'extrude', label: 'Extrude', hint: 'E', oneShot: false, param: false, icon: 'extrude', desc: 'pull the face out along its normal' },
-		{ op: 'inset', label: 'Inset', hint: 'I', oneShot: false, param: false, icon: 'inset', desc: 'shrink a copy inside a stitched ring' },
+		{ op: 'move', label: 'Move', hint: 'G', key: 'mesh.move', oneShot: false, param: false, icon: 'move', desc: 'seat the gizmo on the selection and drag it' },
+		{ op: 'extrude', label: 'Extrude', hint: 'E', key: 'mesh.extrude', oneShot: false, param: false, icon: 'extrude', desc: 'pull the face out along its normal' },
+		{ op: 'inset', label: 'Inset', hint: 'I', key: 'mesh.inset', oneShot: false, param: false, icon: 'inset', desc: 'shrink a copy inside a stitched ring' },
 		{ op: 'knife', label: 'Knife', hint: 'K', oneShot: false, param: false, icon: 'knife', desc: 'cut across the mesh: click one end of the line, then the other (Shift+click adds corners)' }
 	];
 	const ACTION_OPS = [
 		{ op: 'bevel', label: 'Bevel', hint: '', oneShot: true, param: true, icon: 'bevel', desc: "chamfer the selected face's border" },
-		{ op: 'loopcut', label: 'Loop cut', hint: 'C', oneShot: true, param: true, icon: 'loop-cut', desc: 'insert edge loops across the ring this face lies on' },
-		{ op: 'bridge', label: 'Bridge', hint: 'B', oneShot: true, param: true, icon: 'bridge', desc: 'tunnel between two selected pieces' },
-		{ op: 'subdivide', label: 'Subdivide', hint: 'S', oneShot: true, param: true, icon: 'subdivide', desc: 'split each quad into four, once per level' },
+		{ op: 'loopcut', label: 'Loop cut', hint: 'C', key: 'mesh.loopcut', oneShot: true, param: true, icon: 'loop-cut', desc: 'insert edge loops across the ring this face lies on' },
+		{ op: 'bridge', label: 'Bridge', hint: 'B', key: 'mesh.bridge', oneShot: true, param: true, icon: 'bridge', desc: 'tunnel between two selected pieces' },
+		{ op: 'subdivide', label: 'Subdivide', hint: 'S', key: 'mesh.subdivide', oneShot: true, param: true, icon: 'subdivide', desc: 'split each quad into four, once per level' },
 		{ op: 'solidify', label: 'Solidify', hint: '', oneShot: true, param: true, icon: 'solidify', desc: 'give an open surface thickness: a back copy plus a rim joining it' },
 		{ op: 'duplicate', label: 'Duplicate', hint: '', oneShot: true, param: false, icon: 'duplicate-face', desc: 'copy the selected faces in place — coincident until you drag the gizmo' },
 		{ op: 'separate', label: 'Separate', hint: '', oneShot: true, param: false, icon: 'separate', desc: 'move the selected faces into a NEW object of their own (same place, own material)' },
-		{ op: 'flip', label: 'Flip normals', hint: 'F', oneShot: true, param: false, icon: 'flip-normals', desc: 'reverse the winding' },
-		{ op: 'delete', label: 'Delete', hint: 'X', oneShot: true, param: false, icon: 'delete-face', desc: 'remove the selection' }
+		{ op: 'flip', label: 'Flip normals', hint: 'F', key: 'mesh.flip', oneShot: true, param: false, icon: 'flip-normals', desc: 'reverse the winding' },
+		{ op: 'delete', label: 'Delete', hint: 'X', key: 'mesh.delete', oneShot: true, param: false, icon: 'delete-face', desc: 'remove the selection' }
 	];
 	// 19-A P5b: pane-only param ops — they live in a MODE's hand-written tool row
 	// (edges / vertices), never in the faces grids, but runOp still needs their spec
@@ -277,25 +277,25 @@
 	// for TOOLS you arm; commands read better as words. (Photoshop's toolbar is
 	// tools; its Select menu is words.)
 	const FACE_CMDS = [
-		{ id: 'loop', label: 'Loop', hint: 'L', run: selectFaceLoop, desc: 'the quad ring running through this face — press again for the perpendicular one' },
-		{ id: 'grow', label: 'Grow', hint: 'Ctrl +', run: growSelection, desc: 'add the neighbouring ring' },
-		{ id: 'shrink', label: 'Shrink', hint: 'Ctrl -', run: shrinkSelection, desc: 'drop the border ring' },
-		{ id: 'all', label: 'All', hint: 'Ctrl A', run: selectAllFaces, desc: 'every face of the mesh' },
-		{ id: 'invert', label: 'Invert', hint: 'Ctrl I', run: invertFaceSelection, desc: 'swap picked and unpicked' },
+		{ id: 'loop', label: 'Loop', hint: 'L', key: 'mesh.loop', run: selectFaceLoop, desc: 'the quad ring running through this face — press again for the perpendicular one' },
+		{ id: 'grow', label: 'Grow', hint: 'Ctrl +', key: 'mesh.grow', run: growSelection, desc: 'add the neighbouring ring' },
+		{ id: 'shrink', label: 'Shrink', hint: 'Ctrl -', key: 'mesh.shrink', run: shrinkSelection, desc: 'drop the border ring' },
+		{ id: 'all', label: 'All', hint: 'Ctrl A', key: 'mesh.select-all', run: selectAllFaces, desc: 'every face of the mesh' },
+		{ id: 'invert', label: 'Invert', hint: 'Ctrl I', key: 'mesh.select-invert', run: invertFaceSelection, desc: 'swap picked and unpicked' },
 		{ id: 'linked', label: 'Linked', hint: '', run: selectLinkedFaces, desc: 'the whole connected island this face belongs to' }
 	];
 	// Every mode gets the SAME command vocabulary — Ctrl+A / Ctrl+I were wired
 	// for faces only, so they silently did nothing in edges and vertices.
 	const EDGE_CMDS = [
-		{ id: 'eloop', label: 'Loop', hint: 'L', run: selectEdgeLoop, desc: 'the edge chain running end to end through this edge' },
+		{ id: 'eloop', label: 'Loop', hint: 'L', key: 'mesh.loop', run: selectEdgeLoop, desc: 'the edge chain running end to end through this edge' },
 		{ id: 'ering', label: 'Ring', hint: '', run: selectEdgeRing, desc: 'the parallel rungs a face loop crosses — the other half of the standard pair' },
-		{ id: 'eall', label: 'All', hint: 'Ctrl A', run: selectAllEdges, desc: 'every edge of the mesh' },
-		{ id: 'einvert', label: 'Invert', hint: 'Ctrl I', run: invertEdgeSelection, desc: 'swap picked and unpicked' },
+		{ id: 'eall', label: 'All', hint: 'Ctrl A', key: 'mesh.select-all', run: selectAllEdges, desc: 'every edge of the mesh' },
+		{ id: 'einvert', label: 'Invert', hint: 'Ctrl I', key: 'mesh.select-invert', run: invertEdgeSelection, desc: 'swap picked and unpicked' },
 		{ id: 'enone', label: 'None', hint: '', run: () => (clearEdgeSelection(), true), desc: 'deselect everything' }
 	];
 	const VERT_CMDS = [
-		{ id: 'vall', label: 'All', hint: 'Ctrl A', run: selectAllVerts, desc: 'every vertex of the mesh' },
-		{ id: 'vinvert', label: 'Invert', hint: 'Ctrl I', run: invertVertexSelection, desc: 'swap picked and unpicked' },
+		{ id: 'vall', label: 'All', hint: 'Ctrl A', key: 'mesh.select-all', run: selectAllVerts, desc: 'every vertex of the mesh' },
+		{ id: 'vinvert', label: 'Invert', hint: 'Ctrl I', key: 'mesh.select-invert', run: invertVertexSelection, desc: 'swap picked and unpicked' },
 		{ id: 'vnone', label: 'None', hint: '', run: () => (clearVertexSelection(), true), desc: 'deselect everything' }
 	];
 	const SELECT_CMDS = $derived(
@@ -762,6 +762,10 @@
 	// whenever the sheet opens — the registry is a plain array, not a store)
 	/** @param {string} id @param {string} fallback */
 	const k = (id, fallback) => (bindingOf(id) ?? fallback).replace(/\+/g, ' ');
+	// 48 D2: a button's tooltip names the key it answers to NOW — a rebind used to leave the
+	// default letter here while the sheet and Settings showed the new one
+	/** @param {{hint?: string, key?: string}} o */
+	const hintOf = (o) => (o.key ? k(o.key, o.hint ?? '') : (o.hint ?? ''));
 	const KEY_SECTIONS = $derived(
 		showKeys
 			? [
@@ -829,7 +833,7 @@
 			onanimationend={() => (flashOp = '')}
 			aria-label={o.label}
 			aria-pressed={o.param ? $optionsFocus === o.op : undefined}
-			title={`${o.hint ? `${o.label} (${o.hint})` : o.label} — ${o.desc}${o.param ? ' (sets options below)' : ''}`}
+			title={`${hintOf(o) ? `${o.label} (${hintOf(o)})` : o.label} — ${o.desc}${o.param ? ' (sets options below)' : ''}`}
 			onclick={() => runOp(o.op)}
 		>
 			<Icon name={'tool:' + o.icon} size={20} />
@@ -996,7 +1000,7 @@
 					class="tbx-cmd"
 					class:tbx-flash={flashOp === c.id}
 					onanimationend={() => (flashOp = '')}
-					title={c.hint ? `${c.label} (${c.hint}) — ${c.desc}` : `${c.label} — ${c.desc}`}
+					title={hintOf(c) ? `${c.label} (${hintOf(c)}) — ${c.desc}` : `${c.label} — ${c.desc}`}
 					onclick={() => runSelectCmd(c)}>{c.label}</button
 				>
 			{/each}
@@ -1111,7 +1115,7 @@
 				id="mesh-weld"
 				class="tbx-btn {$vertexSelectionSize >= 2 ? 'tbx-on bg-accent-fill text-on-accent' : 'tbx-disabled'}"
 				aria-label="Weld the selected vertices"
-				title="Weld (W) — merge the selected vertices into one (Ctrl+click adds)"
+				title="Weld ({k('mesh.weld', 'W')}) — merge the selected vertices into one (Ctrl+click adds)"
 				onclick={weld}><Icon name="tool:weld" size={20} /></button
 			>
 			<button
@@ -1149,7 +1153,7 @@
 				class:tbx-flash={flashOp === 'vconnect'}
 				onanimationend={() => (flashOp = '')}
 				aria-label="Connect the two selected vertices"
-				title="Connect (J) — cut the face two selected corners share along the line between them, making two faces (Ctrl+click adds the second vertex). They must be corners of ONE face and not already neighbours."
+				title="Connect ({k('mesh.connect', 'J')}) — cut the face two selected corners share along the line between them, making two faces (Ctrl+click adds the second vertex). They must be corners of ONE face and not already neighbours."
 				onclick={() => {
 					if (connectSelectedVerts()) flash('vconnect');
 				}}><Icon name="tool:connect" size={20} /></button

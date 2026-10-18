@@ -145,6 +145,14 @@ h.run(async () => {
 	await p.keyboard.press('Control+y');
 	await p.waitForTimeout(500);
 	h.check((await graph(p)).edges.some((e) => e.source === 'free' && e.target === 'm1'), 'redo puts it back');
+	// 48 D2 ("fan out a group output" — audited, nothing to build): a group OUTPUT already fans out
+	// from outside — a second wire from the card's output socket is a real wire from the inner source
+	await wire(p, handle(G.id, 'o|m2|'), handle('sink', 'b'));
+	g = await graph(p);
+	h.check(g.edges.some((e) => e.source === 'm2' && e.target === 'sink' && e.targetHandle === 'a') && g.edges.some((e) => e.source === 'm2' && e.target === 'sink' && e.targetHandle === 'b'), 'a group output fans out: a second wire from its socket lands on the inner source (m2 -> sink.a + sink.b)');
+	await p.keyboard.press('Control+z');
+	await p.waitForTimeout(500);
+	h.check(!(await graph(p)).edges.some((e) => e.source === 'm2' && e.targetHandle === 'b'), 'undo takes the fan-out wire back');
 
 	// --- 5. rename a socket in the properties panel ------------------------------------
 	await select(p, [G.id]);
