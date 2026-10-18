@@ -20,6 +20,13 @@ npm run e2e -- ping drawing   # subset by name
 - Never run suites in parallel (shared dev server + HMR) and never edit source files
   while a suite is running (HMR reloads the pages mid-test).
 - Suites must exit 0/1 via `helpers.finish()`; the runner just aggregates.
+- **VR on an emulated headset (48 G2):** `iwer.cjs` puts Meta's IWER (a Quest 3) over `navigator.xr`
+  before boot — `h.setupPage(browser, 'A', { init: iwer.initScript() })`, then `iwer.enter(page)` presses
+  Play and the app's own session path runs (see `vr-iwer`). `fakeXR.cjs` stays for the older suites; it
+  never presents. Feel and frame rate stay a Quest check.
+- **Deployed builds (Pages):** the cloud plugin turns the host's request card into View only / Editor
+  access / Reject — approve with `h.approveButton(page)`, never a literal "Approve" (48 G1).
+  `E2E_BLOCK_SW=1` against any Pages build.
 
 ## Suites
 

@@ -129,10 +129,19 @@ h.run(async () => {
 	await page.locator('#open-publish-export').click();
 	await page.locator('#publish-export-modal').waitFor({ state: 'visible', timeout: 10000 });
 	const tabs = await page.locator('#publish-export-modal [role=tab]').allTextContents();
-	h.check(JSON.stringify(tabs.map((t) => t.trim())) === JSON.stringify(['Publish', 'Export', 'Settings']), `the burger item opens one modal with Publish | Export | Settings (${tabs})`);
-	h.check((await page.locator('#publish-export-modal').getAttribute('data-tab')) === 'export', 'with no cloud plugin it opens on Export');
+	// 36-share added the Community gallery tab (PublishExportModal TABS) — 48 G1: this pinned the 3-tab list
+	h.check(JSON.stringify(tabs.map((t) => t.trim())) === JSON.stringify(['Publish', 'Export', 'Community gallery', 'Settings']), `the burger item opens one modal with Publish | Export | Community gallery | Settings (${tabs})`);
+	// a DEPLOYED build carries the cloud plugin, which mounts its Publish flow (publishSlot) and the
+	// modal opens there instead (exportStores.openPublishExport) — the OSS checks are for a plain build
+	const cloudPublish = await page.evaluate(() => {
+		let v;
+		window.__stores.exportStores.publishSlot.subscribe((x) => (v = x))();
+		return !!v;
+	});
+	h.check((await page.locator('#publish-export-modal').getAttribute('data-tab')) === (cloudPublish ? 'publish' : 'export'), `it opens on ${cloudPublish ? 'Publish (the cloud plugin mounts one)' : 'Export (no cloud plugin)'}`);
 	await page.locator('#publish-export-tab-publish').click();
-	h.check(await page.locator('#publish-oss').isVisible(), 'the OSS Publish tab says where publishing lives');
+	if (!cloudPublish) h.check(await page.locator('#publish-oss').isVisible(), 'the OSS Publish tab says where publishing lives');
+	else h.check(!(await page.locator('#publish-oss').isVisible()), "a cloud build's Publish tab is the plugin's, not the OSS note");
 	await page.locator('#publish-export-tab-settings').click();
 	const badgeRow = await page.evaluate(() => {
 		// 37-settings: a kit Toggle (a <button aria-pressed>), on and disabled
@@ -325,7 +334,11 @@ h.run(async () => {
 	h.check(!!bh, 'the Made with ThePrototype badge is drawn');
 	if (bh) {
 		const u = new URL(bh.href);
-		h.check(u.origin === 'https://theprototype.app' && u.searchParams.get('ref') === 'export' && u.searchParams.get('g') === golfCfg.id, `badge link carries ref=export&g=<export id> (${bh.href})`);
+		// community 36 (badge.badgeRefFor): g = the scene's permanent game id when the export carries one, the
+		// export id otherwise; b = the export id beside a game id — 48 G1: this pinned g = the export id
+		const wantG = golfCfg.gameId || golfCfg.id;
+		const wantB = golfCfg.gameId ? golfCfg.id : null;
+		h.check(u.origin === 'https://theprototype.app' && u.searchParams.get('ref') === 'export' && u.searchParams.get('g') === wantG && u.searchParams.get('b') === wantB && u.searchParams.get('src') === 'itch', `badge link carries ref=export&g=<game id>&b=<export id>&src=itch (${bh.href})`);
 		h.check(bh.target === '_blank' && /noopener/.test(bh.rel), 'the badge opens a new tab with rel=noopener');
 		h.check(bh.h <= 32 && bh.right >= 8 && bh.right <= 16 && bh.bottom >= 8 && bh.bottom <= 16, `bottom-right, ≤ 32 px tall (h ${bh.h}, right ${bh.right}, bottom ${bh.bottom})`);
 		h.check(Math.abs(Number(bh.opacity) - 0.4) < 0.05, `~40% opacity at rest (${bh.opacity})`);
@@ -355,7 +368,9 @@ h.run(async () => {
 	// play: Tee off + a real mouse putt
 	await G.frame.locator('#hud-layer button', { hasText: 'Tee off' }).click();
 	await h.eventually(
-		() => G.frame.evaluate(() => /** @type {any} */ (globalThis).__minigolf?.vars?.()?.mgHole ?? null),
+		// the rules' state is the behaviour document since 36 (game-mini-golf reads it the same way) — 48 G1:
+		// this read a `vars()` the module no longer has, so it waited on null on every build
+		() => G.frame.evaluate(() => /** @type {any} */ (() => { const id = globalThis.__minigolf?.rulesNode?.(); const st = id ? window.__stores.behaviours?.behaviourState?.(id) : null; return st ? st.hole ?? null : null; })()),
 		(v) => v === 1,
 		'Tee off starts hole 1 inside the exported game',
 		10000
@@ -379,7 +394,7 @@ h.run(async () => {
 	await G.p.mouse.move(ball.x, ball.y + 90, { steps: 4 });
 	await G.p.mouse.up();
 	await h.eventually(
-		() => G.frame.evaluate(() => /** @type {any} */ (globalThis).__minigolf?.vars?.()?.mgStrokes ?? null),
+		() => G.frame.evaluate(() => /** @type {any} */ (() => { const id = globalThis.__minigolf?.rulesNode?.(); const st = id ? window.__stores.behaviours?.behaviourState?.(id) : null; return st ? st.strokes ?? null : null; })()),
 		(n) => n === 1,
 		'a real-mouse putt in the exported game counts one stroke',
 		6000

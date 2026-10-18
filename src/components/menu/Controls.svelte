@@ -3415,14 +3415,22 @@
 	function swallowNextClick() {
 		if (typeof window === 'undefined') return;
 		let timer = 0;
+		const disarm = () => {
+			window.removeEventListener('click', eat, true);
+			window.removeEventListener('pointerdown', disarm, true);
+			clearTimeout(timer);
+		};
 		const eat = (e: MouseEvent) => {
 			e.stopPropagation();
 			e.preventDefault();
-			window.removeEventListener('click', eat, true);
-			clearTimeout(timer);
+			disarm();
 		};
 		window.addEventListener('click', eat, true);
-		timer = window.setTimeout(() => window.removeEventListener('click', eat, true), 700);
+		// 48 G1 (J12): the gesture's own click comes straight after its release, before any new press — so
+		// the next PRESS disarms. When no click follows (the pressed item was re-rendered by the drop) the
+		// eater otherwise lingered its full 700 ms and ate the next REAL click: the ✓ pressed right after a drag
+		window.addEventListener('pointerdown', disarm, true);
+		timer = window.setTimeout(disarm, 700);
 	}
 
 	function clampCentre(c: number, t: { min: number; max: number; mid: number }) {

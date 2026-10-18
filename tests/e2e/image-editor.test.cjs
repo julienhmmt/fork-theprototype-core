@@ -413,7 +413,14 @@ h.run(async () => {
 	const cdp = await P.ctx.newCDPSession(P.page);
 	const touch = (type, pt) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pt ? [{ x: pt.x, y: pt.y, id: 1 }] : [] });
 	await touch('touchStart', q0);
-	for (let i = 1; i <= 6; i++) await touch('touchMove', { x: q0.x + ((q1.x - q0.x) * i) / 6, y: q0.y + ((q1.y - q0.y) * i) / 6 });
+	// 48 G1: a finger's pace — a frame per move and a still moment before the lift. Six moves in one burst
+	// lift at full speed, and a lift at speed starts a fling the next tap only stops (the Apply tap below then
+	// made no click: pointerdown/up on the button, no click at all, 3 in 8 on production)
+	for (let i = 1; i <= 6; i++) {
+		await touch('touchMove', { x: q0.x + ((q1.x - q0.x) * i) / 6, y: q0.y + ((q1.y - q0.y) * i) / 6 });
+		await P.page.waitForTimeout(16);
+	}
+	await P.page.waitForTimeout(120);
 	await touch('touchEnd');
 	await P.page.waitForTimeout(200);
 	const dragged = await P.page.locator('#image-editor-crop-badge').textContent();
@@ -424,11 +431,19 @@ h.run(async () => {
 		return !!document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)?.closest('#image-editor-crop-apply');
 	});
 	h.check(apply, 'Apply crop is in view and under a tap (not under the bottom bar)');
-	await P.page.locator('#image-editor-crop-apply').tap();
+	// 48 G1: this Apply was the intermittent red (the image stayed 80 × 60 — never applied, not late);
+	// the press is watched so a lost tap names what took it
+	await h.watchPress(P.page, P.page.locator('#image-editor-crop-apply'), () => P.page.locator('#image-editor-crop-apply').tap());
 	// 40-int: the crop applies asynchronously (a canvas re-encode); read once it has landed, as the
 	// desktop sections do with until() — an immediate read raced it on a loaded box (r2/r4)
 	await until(async () => /\b(39|40|41) × (29|30|31)\b/.test((await sizeText(P)) ?? ''), 4000);
 	const phoneSize = (await sizeText(P)) ?? '';
+	if (!/\b(39|40|41) × (29|30|31)\b/.test(phoneSize)) {
+		// 48 G1: say whether the Apply ran at all — still cropping = the click never ran; not cropping = it ran
+		// and found nothing to apply (applyCrop returns on a whole-image box)
+		const badge = await P.page.locator('#image-editor-crop-badge').textContent().catch(() => null);
+		console.log(`  (crop apply) after the tap: crop mode ${badge ? 'STILL ON (' + badge + ')' : 'off'}, size ${phoneSize}`);
+	}
 	const [pw, ph] = (phoneSize.match(/(\d+) × (\d+)/) ?? []).slice(1).map(Number);
 	h.check(Math.abs(pw - 40) <= 1 && Math.abs(ph - 30) <= 1, `a touch drag cropped the image (${phoneSize})`);
 	// the sidebar's scroller is shared by Edit and Versions: scrolled down in Edit, Versions

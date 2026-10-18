@@ -23,9 +23,13 @@ const centre = async (loc) => {
 	const b = await loc.boundingBox();
 	return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
 };
+// 48 G1 (J12): the ✓ after an edit drag was LOST intermittently on deployed builds (still in Edit positions,
+// the ✓ drawn pressed) — a lost click now logs what was under it and which events arrived (h.watchPress)
 async function clickAt(page, loc, opts = {}) {
 	const p = await centre(loc);
-	await page.mouse.click(p.x, p.y, opts);
+	const press = () => page.mouse.click(p.x, p.y, opts);
+	if (opts.button === 'right') await press();
+	else await h.watchPress(page, loc, press);
 	await page.waitForTimeout(300);
 }
 const menuOpen = (page) => page.evaluate(() => !!document.querySelector('[role="menu"]'));
@@ -220,7 +224,9 @@ h.run(async () => {
 				for (let i = 1; i <= 16; i++) await P.mouse.move(from.x + ((to.x - from.x) * i) / 16, from.y + ((to.y - from.y) * i) / 16);
 				await P.waitForTimeout(150);
 				await P.mouse.up();
-				await P.waitForTimeout(350);
+				// 48 G1: 100 ms, a person's quick ✓ right after the drop — the J12 red was the edit drag's
+				// 700 ms click-eater (swallowNextClick) eating that ✓ when no click followed the drag
+				await P.waitForTimeout(100);
 			};
 			// Undo onto the bar (just after its first cell), Multi-select into the right corner's "+"
 			const cells = await P.evaluate(() => [...document.querySelectorAll('#controls-pill .hud-bar-row [data-edit-slot]')].slice(0, 2).map((el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }));

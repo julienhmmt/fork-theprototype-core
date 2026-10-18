@@ -56,17 +56,66 @@ h.run(async () => {
 	// THE REGRESSION (36-int-124's probe): on steady frames the level must STAY there — batch 6
 	// read 4 at load and 9 thirty seconds later (frames timed off the callback clock read a 60 fps
 	// panel as 72 Hz with a late p95), so a check at one instant cannot see it
+	// 48 G1: "on steady frames" was a PREMISE the shared e2e box does not always meet — with both slots busy
+	// the CPU x4 page really misses frames and the governor is RIGHT to step down (44-int's exclusive A/B:
+	// 4,4,4,4,4,3,3,3,2,2,2,1 alone, 4,4,4,5,6,6,6,5,… under load, same build). Each 3 s window now records
+	// the page's own frame intervals: a STEP above the phone start FAILS only when the ~9 s of frames it was
+	// decided on were steady (p95 within the governor's step-down line, budget x 1.3) and the governor does not
+	// name long tasks — the regression; a busy box is reported, not red. The regression's own mechanism (a 60 Hz
+	// panel judged as 72 Hz) is the hz check below.
+	await A.page.evaluate(() => {
+		const w = /** @type {any} */ (window);
+		w.__fbwFrames = [];
+		let last = performance.now();
+		const tick = (t) => {
+			w.__fbwFrames.push(t - last);
+			last = t;
+			w.__fbwRaf = requestAnimationFrame(tick);
+		};
+		w.__fbwRaf = requestAnimationFrame(tick);
+	});
+	const windowP95 = () =>
+		A.page.evaluate(() => {
+			const w = /** @type {any} */ (window);
+			const f = w.__fbwFrames.splice(0).sort((a, b) => a - b);
+			return f.length ? f[Math.min(f.length - 1, Math.floor(f.length * 0.95))] : Infinity;
+		});
 	/** @type {number[]} */
 	const held = [];
+	/** @type {number[]} */
+	const p95s = [];
+	/** @type {string[]} */
+	const reasons = [];
 	for (let i = 0; i < 12; i++) {
 		await A.page.waitForTimeout(3000);
 		const s = await state(A.page);
 		held.push(s.level);
+		reasons.push(s.reason);
+		p95s.push(Math.round(await windowP95()));
 		if (i % 4 === 3) console.log('aquarium hold', JSON.stringify(s));
 	}
+	await A.page.evaluate(() => cancelAnimationFrame(/** @type {any} */ (window).__fbwRaf));
 	const after = await state(A.page);
 	h.check(after.hz === 60, `the phone is judged against the 60 Hz the page really presents at (${after.hz})`);
-	h.check(Math.max(...held) <= 4 && after.water !== 'quest', `Aquarium holds the phone level for 36 s on steady frames (levels ${held.join(',')}, water ${after.water})`);
+	const stepDownMs = (1000 / 60) * 1.3; // qualityGovernorCore.phoneThresholds(60).overMs
+	const steady = p95s.map((p) => p <= stepDownMs);
+	// a STEP read at poll i was decided over the governor's 2 s trigger window after its 3 s step hold, so it
+	// is judged on the ~9 s of frames before it (this window and the two before); a step the governor itself
+	// puts down to LONG TASKS is the box blocking the main thread, not a frame-timing misjudgement
+	/** @param {number[]} lv @param {boolean[]} st @param {string[]} rs */
+	const climbed = (lv, st, rs) => lv.some((lvl, i) => lvl > 4 && lvl > (lv[i - 1] ?? 4) && rs[i] !== 'long tasks' && [i, i - 1, i - 2].every((k) => k < 0 || st[k]));
+	// counterfactual of the rule itself: 36-int-124's regression shape (all frames steady, 4 -> 9) is still red,
+	// the busy-box shape (a step right after slow windows, 48-tests r3 #10) and a long-tasks step are not
+	const all = Array(12).fill(true);
+	h.check(climbed([4, 4, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9], all, Array(12).fill('frames slow')), 'counterfactual: a climb on steady frames is judged a regression');
+	h.check(!climbed([4, 4, 4, 5, 5, 5, 4, 4, 4, 3, 3, 3], [false, false, true, ...Array(9).fill(true)], Array(12).fill('')), '…a step decided on slow frames is not');
+	h.check(!climbed([4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5], all, ['', '', '', '', 'long tasks', ...Array(7).fill('long tasks')]), '…nor a step the governor puts down to long tasks');
+	const climbedOnSteady = climbed(held, steady, reasons);
+	const nSteady = steady.filter(Boolean).length;
+	console.log(`aquarium hold: levels ${held.join(',')} · window p95 ms ${p95s.join(',')} (steady <= ${stepDownMs.toFixed(1)}: ${nSteady}/12) · reasons ${reasons.join(',')}`);
+	h.check(after.water !== 'quest', `Aquarium keeps the screen-space water tier through the hold (water ${after.water})`);
+	if (nSteady >= 6) h.check(!climbedOnSteady, `Aquarium holds the phone level on steady frames (levels ${held.join(',')}, p95 ${p95s.join(',')})`);
+	else console.log(`  NOTE premise not met: only ${nSteady}/12 windows had steady frames on this box — the hold is not judged (levels ${held.join(',')})`);
 	if (OUT) await A.page.screenshot({ path: path.join(OUT, '71-phone-aquarium-auto.png') });
 	void fluidUp;
 

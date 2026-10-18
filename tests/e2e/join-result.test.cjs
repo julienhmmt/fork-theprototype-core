@@ -182,7 +182,7 @@ h.run(async () => {
 	// ---- 10. host: approval says so -------------------------------------------------------
 	console.log('\n=== 10. host: an approval says it is one ===');
 	await inPage(H, EMIT, { peer: 'hhhh1', metadata: { jr: 1 } });
-	await click(H.page.locator('.tp-toast--req', { hasText: 'HHHH1' }).getByRole('button', { name: 'Approve' }));
+	await click(h.approveButton(H.page.locator('.tp-toast--req', { hasText: 'HHHH1' })));
 	await H.page.waitForTimeout(300);
 	const first = await inPage(H, `
 		const d = window.__dials.find((x) => x.id === 'hhhh1');

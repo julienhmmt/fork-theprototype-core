@@ -63,6 +63,55 @@ const GPU_ARGS = [
 // makes silently. (Same family as the GPU_ARGS rate-assertion rule in the e2e skill.)
 const AUDIO_ARGS = ['--autoplay-policy=no-user-gesture-required', ...GPU_ARGS];
 
+/**
+ * Run a press gesture (`act`) on one element and say whether it ARRIVED: which of pointerdown /
+ * pointerup / click reached the element, what sat under its centre first, and whether it was still
+ * in the document. 48 G1: the intermittent deployed-build reds (J12's ✓, the image editor's phone
+ * Apply crop) were presses that never became a click, and a check three lines later could only say
+ * "nothing happened". Logs one line when no click reached the element; returns the record.
+ * @param {any} page @param {any} loc a Playwright locator @param {() => Promise<any>} act @param {number} [settleMs]
+ */
+async function watchPress(page, loc, act, settleMs = Number(process.env.WATCH_SETTLE_MS ?? 600)) {
+	const el = await loc.elementHandle();
+	await page.evaluate((el) => {
+		const r = el.getBoundingClientRect();
+		const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+		const name = (n) => (!n ? 'nothing' : n === el || el.contains(n) ? 'target' : n.id || String(n.className || '').slice(0, 40) || n.tagName);
+		const log = [];
+		const t0 = performance.now();
+		// `!` = defaultPrevented by the time it got here (a capture-phase eater runs before this listener)
+		const on = (e) => log.push(`${e.type}:${name(e.target)}${e.defaultPrevented ? '!' : ''}${el.isConnected ? '' : ':detached'}@${Math.round(performance.now() - t0)}`);
+		const types = ['pointerdown', 'pointerup', 'click', 'touchstart', 'touchend', 'touchcancel'];
+		for (const t of types) window.addEventListener(t, on, true);
+		// touch defaultPrevented is only final after the target's own handlers: read it again on the way out
+		const late = (e) => e.defaultPrevented && log.push(`${e.type}-prevented-in-bubble`);
+		for (const t of ['touchstart', 'touchend']) window.addEventListener(t, late, false);
+		window.__watchPress = { hit: name(hit), log, off: () => { types.forEach((t) => window.removeEventListener(t, on, true)); ['touchstart', 'touchend'].forEach((t) => window.removeEventListener(t, late, false)); } };
+	}, el);
+	await act();
+	// a TOUCH tap's click comes after the tap gesture resolves (Chromium may hold it for a double-tap), so
+	// keep listening a moment before reading
+	await page.waitForTimeout(settleMs);
+	const rec = await page.evaluate(() => {
+		const w = window.__watchPress;
+		w?.off();
+		return w ? { hit: w.hit, log: w.log, reached: w.log.some((l) => /^click:target(@|:)/.test(l)), eaten: w.log.some((l) => l.startsWith('click:target!')) } : null;
+	});
+	if (rec && !rec.reached) console.log(`  (watchPress) no live click reached the element${rec.eaten ? ' (a click arrived already defaultPrevented — eaten in capture)' : ''}: under its centre ${rec.hit}; events ${rec.log.join(' ') || 'none'}`);
+	return rec;
+}
+
+// The host's Approve on a connection request. A CLOUD build (every Pages deploy: the cloud plugin
+// publishes `rolesInfo`) asks for a ROLE instead — "View only" / "Editor access" / "Reject" — and
+// draws NO button named "Approve"; "Editor access" is the plain build's Approve. 48 G1: invite-link-live
+// (L2) and net-peer-id (L2b) were red on every deployed build since 1.34 for exactly this — the request
+// reached the host, and the suite waited for a label the cloud card never renders.
+const APPROVE_LABEL = /^(Approve|Editor access)$/;
+/** @param {any} scope a page or a locator (one request card) */
+function approveButton(scope) {
+	return scope.getByRole('button', { name: APPROVE_LABEL }).first();
+}
+
 /** @param {any=} options e.g. {args: ['--use-fake-device-for-media-stream']} */
 function launch(options = {}) {
 	// background pages must keep full-rate rAF — synced-clock phase checks
@@ -124,7 +173,20 @@ async function setupPage(browser, name, options = {}) {
 	// lets a suite assert on them directly.
 	/** @type {string[]} */
 	page.__errors = [];
+	/** @type {string[]} */
+	page.__externalErrors = [];
 	page.on('pageerror', (err) => {
+		// 48 G1 (R40's phone "Failed to fetch"): troika-three-text resolves the glyphs of every label that
+		// names no font (none in the app does) by fetching font data from cdn.jsdelivr.net/gh/lojjic/
+		// unicode-font-resolver AT RUN TIME, and a failed fetch surfaces as an uncaught page error.
+		// Proven by aborting only that CDN (lanes-30/after-48/48-tests/font-cdn-probe.cjs). That is a third-
+		// party NETWORK fact, not an app crash: it is filed apart (h.externalErrors) and named, so "no page
+		// errors" stops being a coin flip on the CDN. The product follow-up (self-host the font data) is recorded.
+		if (/Failed to fetch/.test(err.message ?? '') && /getFontsForString/.test(err.stack ?? '')) {
+			page.__externalErrors.push('troika font CDN unreachable: ' + err.message);
+			console.log(`[${name} external] troika font CDN fetch failed (unicode-font-resolver): ${err.message}`);
+			return;
+		}
 		page.__errors.push(err.message ?? String(err));
 		console.log(`[${name} pageerror] ` + err.stack);
 	});
@@ -192,9 +254,7 @@ async function connect(from, to, settleMs = 9000) {
 	// `h.setupPage(browser, 'X', { storage: { 'connect:mergeOnConnect': 'true' } })`.
 	// a cloud build (Pages deploys) asks the host for a ROLE instead — "View only" / "Editor access" /
 	// "Reject" (cloudHooks roles); "Editor access" is the plain build's Approve
-	await step(to, 'approve the request', () =>
-		to.page.getByRole('button', { name: /^(Approve|Editor access)$/ }).first().click({ timeout: 30000 })
-	);
+	await step(to, 'approve the request', () => approveButton(to.page).click({ timeout: 30000 }));
 	await from.page.waitForTimeout(settleMs);
 }
 
@@ -369,6 +429,10 @@ async function answerRestore(peer, choice = 'dismiss', timeout = 10000) {
  * @param {any} peer @returns {string[]} */
 function pageErrors(peer) {
 	return peer?.page?.__errors ?? [];
+}
+/** third-party network failures the page reported (see the pageerror handler) @param {any} peer */
+function externalErrors(peer) {
+	return peer?.page?.__externalErrors ?? [];
 }
 
 // ---- reading real composited PIXELS ---------------------------------------
@@ -982,4 +1046,4 @@ function envelopeDelta(a, b) {
 	return { maxDelta, meanDelta: n ? sum / n : 0, worstSlice };
 }
 
-module.exports = { URL, GPU_ARGS, check, launch, setupPage, setupPageQuiet, connect, leavePlay, eventually, projectPoint, freshReload, answerRestore, closePeer, finish, run, installModule, moduleZipPath, makeCollectibleChains, pageErrors, grabFrame, centeredClip, frameDelta, framePixelsOffColor, AUDIO_ARGS, audioMetrics, renderOffline, envelopeDelta };
+module.exports = { URL, GPU_ARGS, APPROVE_LABEL, approveButton, watchPress, check, launch, setupPage, setupPageQuiet, connect, leavePlay, eventually, projectPoint, freshReload, answerRestore, closePeer, finish, run, installModule, moduleZipPath, makeCollectibleChains, pageErrors, externalErrors, grabFrame, centeredClip, frameDelta, framePixelsOffColor, AUDIO_ARGS, audioMetrics, renderOffline, envelopeDelta };
