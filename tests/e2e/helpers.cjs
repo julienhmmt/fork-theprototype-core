@@ -71,7 +71,7 @@ const AUDIO_ARGS = ['--autoplay-policy=no-user-gesture-required', ...GPU_ARGS];
  * "nothing happened". Logs one line when no click reached the element; returns the record.
  * @param {any} page @param {any} loc a Playwright locator @param {() => Promise<any>} act @param {number} [settleMs]
  */
-async function watchPress(page, loc, act, settleMs = 600) {
+async function watchPress(page, loc, act, settleMs = Number(process.env.WATCH_SETTLE_MS ?? 600)) {
 	const el = await loc.elementHandle();
 	await page.evaluate((el) => {
 		const r = el.getBoundingClientRect();
