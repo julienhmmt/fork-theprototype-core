@@ -94,7 +94,10 @@ const ROUNDS = Number(arg('--rounds', '7'));
 					const fr = s.flowRuntime;
 					// armed = a breakpoint on a node no event reaches (the cost of LOOKING, never pausing)
 					if (s.flowDebug) s.flowDebug.toggleBreakpoint('g0', scenario === 'armed');
-					let now = performance.now();
+					// the synthetic clock only ever moves FORWARD across rounds: runTick drops a tick whose
+					// `now` is not past the last one it ran (a round restarting at performance.now()
+					// after the previous round ran 10 s ahead measured nothing but that early return)
+					let now = Math.max(performance.now(), window.__benchNow ?? 0);
 					// warm up: let the arming reach the runtime and the memo/JIT settle
 					for (let i = 0; i < 60; i++) fr.pumpFlowTick((now += 16.7));
 					const t0 = performance.now();
@@ -104,6 +107,7 @@ const ROUNDS = Number(arg('--rounds', '7'));
 						fr.pumpFlowTick(now);
 					}
 					const per = (performance.now() - t0) / ticks;
+					window.__benchNow = now;
 					if (s.flowDebug) s.flowDebug.toggleBreakpoint('g0', false);
 					return per;
 				},
