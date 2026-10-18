@@ -26,6 +26,8 @@ const OUT = arg('--out', null);
 const CHAINS = Number(arg('--chains', '40'));
 const TICKS = Number(arg('--ticks', '600'));
 const ROUNDS = Number(arg('--rounds', '7'));
+// --profile <file.cpuprofile>: a V8 CPU profile of the idle rounds (open it in DevTools, or diff two)
+const PROFILE = arg('--profile', null);
 
 (async () => {
 	const browser = await chromium.launch({ args: ['--ignore-gpu-blocklist', '--enable-gpu', '--use-angle=default'] });
@@ -84,10 +86,18 @@ const ROUNDS = Number(arg('--rounds', '7'));
 	console.log(`${LABEL}: graph ${info.nodes} nodes / ${info.edges} edges on ${info.boxes} boxes; debugger ${info.debugger ? 'present' : 'absent'}`);
 
 	const scenarios = info.debugger ? ['idle', 'armed'] : ['idle'];
+	const cdp = PROFILE ? await ctx.newCDPSession(page) : null;
+	if (cdp) {
+		await cdp.send('Profiler.enable');
+		await cdp.send('Profiler.setSamplingInterval', { interval: 50 });
+	}
 	/** @type {Record<string, number[]>} */
 	const samples = Object.fromEntries(scenarios.map((s) => [s, []]));
+	/** @type {any[]} */
+	const profiles = [];
 	for (let round = 0; round < ROUNDS; round++) {
 		for (const scenario of scenarios) {
+			if (cdp && scenario === 'idle') await cdp.send('Profiler.start');
 			const ms = await page.evaluate(
 				({ scenario, ticks, chains }) => {
 					const s = window.__stores;
@@ -113,6 +123,10 @@ const ROUNDS = Number(arg('--rounds', '7'));
 				},
 				{ scenario, ticks: TICKS, chains: CHAINS }
 			);
+			if (cdp && scenario === 'idle') {
+				const { profile } = await cdp.send('Profiler.stop');
+				profiles.push(profile);
+			}
 			samples[scenario].push(ms);
 			await page.waitForTimeout(300);
 		}
@@ -126,6 +140,25 @@ const ROUNDS = Number(arg('--rounds', '7'));
 	const paused = await page.evaluate(() => window.__stores.flowRuntime.flowDebugRuntime?.().paused ?? false);
 	result.neverPaused = !paused;
 	if (OUT) fs.writeFileSync(OUT, JSON.stringify(result, null, 2));
+	if (PROFILE && profiles.length) {
+		// self time per function (url:line), summed over every idle round — the diffable summary
+		/** @type {Record<string, number>} */
+		const self = {};
+		for (const prof of profiles) {
+			const dt = prof.timeDeltas ?? [];
+			const byId = new Map(prof.nodes.map((n) => [n.id, n]));
+			prof.samples.forEach((id, i) => {
+				const n = byId.get(id);
+				const f = n.callFrame;
+				const key = (f.functionName || '(anon)') + ' ' + String(f.url).replace(/^.*\/src\//, 'src/').replace(/\?.*$/, '') + ':' + (f.lineNumber + 1);
+				self[key] = (self[key] ?? 0) + (dt[i] ?? 0) / 1000;
+			});
+		}
+		const top = Object.entries(self).sort((a, b) => b[1] - a[1]).slice(0, 40);
+		fs.writeFileSync(PROFILE, JSON.stringify(profiles[profiles.length - 1]));
+		fs.writeFileSync(PROFILE + '.top.txt', top.map(([k, v]) => v.toFixed(1).padStart(9) + ' ms  ' + k).join('\n') + '\n');
+		console.log(`${LABEL}: profile -> ${PROFILE} (+ .top.txt)`);
+	}
 	await browser.close();
 })().catch((error) => {
 	console.error(error);

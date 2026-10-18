@@ -1990,11 +1990,10 @@ function pulseAt(at, time, pulse) {
 	return dt >= 0 && dt < pulse ? 1 : 0;
 }
 
-/** derived moments already pushed, keyed `nodeId|handle` — 48 D1: swapped for the paused view's
- * own copy during a debug tick, so a moment the view steps through is never deduped live @type {Map<string, number>} */
-let scheduledFired = new Map();
-/** the live dedupe map while a debug tick borrows `scheduledFired` @type {Map<string, number>} */
-let liveScheduledFired = scheduledFired;
+/** derived moments already pushed, keyed `nodeId|handle` (48 D1: the paused view dedupes in its
+ * own copy, handed to updateDerivedPulses, so a moment the view steps through is never deduped live)
+ * @type {Map<string, number>} */
+const scheduledFired = new Map();
 
 /** A Once's moment is the stamp applyNodeTrigger FROZE on it - null while it is
  * still armed, or after a rearm deleted the entry. @param {any} node @param {any} ctx */
@@ -2033,9 +2032,9 @@ function onceMoment(node, ctx) {
  * count the pulse once per peer (the animfinished / ongamestate precedent). The
  * map is local, holds one number per handle and is rebuilt from the graph, so a
  * late joiner needs nothing out of it.
- * @param {any} ctx
+ * @param {any} ctx @param {Map<string, number>} [fired] the dedupe map (the paused view passes its own)
  */
-function updateDerivedPulses(ctx) {
+function updateDerivedPulses(ctx, fired = scheduledFired) {
 	for (const node of nodes) {
 		const scheduled = SCHEDULED_TYPES.includes(node.type);
 		if (!scheduled && node.type !== 'once') continue;
@@ -2046,11 +2045,11 @@ function updateDerivedPulses(ctx) {
 			// a cancel, a rearm, or a trigger that has not come round again retires the
 			// moment - so firing later happens afresh instead of being deduped forever
 			if (at === null) {
-				scheduledFired.delete(key);
+				fired.delete(key);
 				continue;
 			}
-			if (scheduledFired.get(key) === at) continue;
-			scheduledFired.set(key, at);
+			if (fired.get(key) === at) continue;
+			fired.set(key, at);
 			// DEVX #18: THE ONE PLACE A RESTORED LOG COULD DESYNC THE NUMBERS. This map is
 			// LOCAL and starts empty, so a joiner holding restored history derives every
 			// past moment as brand new and PUSHES it — bumping a downstream Counter that
@@ -2065,9 +2064,9 @@ function updateDerivedPulses(ctx) {
 			applyNodeTrigger(node.id, at, false, handle);
 		}
 	}
-	for (const key of [...scheduledFired.keys()])
+	for (const key of [...fired.keys()])
 		if (!nodes.some((/** @type {any} */ n) => n.id === key.slice(0, key.lastIndexOf('|'))))
-			scheduledFired.delete(key);
+			fired.delete(key);
 }
 
 /** The shared timestamp of whatever event is wired into this node's `trigger`
@@ -4055,12 +4054,10 @@ function reachNow() {
 function toLive() {
 	inDebugTick = false;
 	logicClock = null;
-	scheduledFired = liveScheduledFired;
 }
 function toView() {
 	inDebugTick = true;
 	logicClock = viewTime;
-	scheduledFired = viewScheduled;
 }
 
 /** the live clock if the last armed tick is recent, else now — the frame the user is looking at */
@@ -4126,7 +4123,7 @@ function debugIntercept(nodeId, t, replicate, received, walkId, walkHandle) {
 function enterDebugPause(why, nodeId, bp, at = shownTime()) {
 	viewTriggers = get(flowTriggers);
 	viewTime = at;
-	viewScheduled = new Map(liveScheduledFired);
+	viewScheduled = new Map(scheduledFired);
 	debugQueue = [];
 	debugDropped = 0;
 	stepWaiting = false;
@@ -4654,7 +4651,7 @@ function runTick(now) {
 	// Latch toggle, another Once). `ctx.triggers` is this tick's snapshot, so those see
 	// the bump on the NEXT tick - one frame, the same latency every derived reaction
 	// in this file has.
-	updateDerivedPulses(ctx);
+	updateDerivedPulses(ctx, paused ? viewScheduled : scheduledFired);
 	// ONE prune for the shared stale-stamp cutoffs, after every family has had its turn
 	// to register this tick's nodes (physics runs first, then game, then character)
 	pruneActionSeenAt();
