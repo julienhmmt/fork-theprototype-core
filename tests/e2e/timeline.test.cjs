@@ -331,8 +331,8 @@ h.run(async () => {
 	);
 	dbg = await player(pa);
 	h.check(
-		dbg.runs.some((r) => r.id === id && r.voices >= 0),
-		'as a run on A'
+		dbg.runs.some((r) => r.id === id && r.voices >= 1),
+		`as a run on A, with the audio item (live at the playhead) scheduled from its offset (${dbg.runs.find((r) => r.id === id)?.voices ?? 0} voice)`
 	);
 	h.check(!(await player(B.page)).runs.length, 'and nowhere else');
 	h.check(
