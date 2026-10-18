@@ -236,7 +236,8 @@ h.run(async () => {
 		const out = await s.exportSessionZip(payload);
 		return Array.from(new Uint8Array(out instanceof Blob ? await out.arrayBuffer() : out));
 	});
-	h.check((await A.page.evaluate(() => window.__savedMinor)) === 1, 'the saved scene says formatMinor 1');
+	// (48 S2 bumped the minor to 2 for sequences: a terrain save says AT LEAST 1, the revision that carries splats)
+	h.check((await A.page.evaluate(() => window.__savedMinor)) >= 1, 'the saved scene says formatMinor >= 1');
 	await A.page.evaluate(() => window.__stores.commandsHandler.sceneCommand('/clear all'));
 	await A.page.waitForTimeout(800);
 	await A.page.evaluate(async (arr) => {
