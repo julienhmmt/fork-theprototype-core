@@ -75,7 +75,7 @@ h.run(async () => {
 	bridge.connectToHost(hostId);
 
 	// approve the join in the app
-	await A.page.getByRole('button', { name: 'Approve' }).click({ timeout: 60000 });
+	await h.approveButton(A.page).click({ timeout: 60000 });
 
 	await bridge.waitUntilConnected(90000);
 	h.check(true, 'agent bridge reached connected');

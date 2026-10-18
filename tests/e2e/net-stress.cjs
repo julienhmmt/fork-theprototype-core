@@ -404,7 +404,7 @@ async function runSize(N) {
 			const t0 = Date.now();
 			await J.page.locator('input[placeholder="Enter peer ID to connect"]').fill(A.id);
 			await J.page.getByRole('button', { name: 'Connect', exact: true }).click();
-			await A.page.getByRole('button', { name: 'Approve' }).click({ timeout: 45000 });
+			await h.approveButton(A.page).click({ timeout: 45000 });
 			const meshed = await waitFor(() => openCount(J), (c) => c >= k, 60000);
 			const joinMs = meshed < 0 ? -1 : Date.now() - t0;
 			const synced = await waitFor(() => sceneCount(J), (c) => c >= hostObjects, 60000);

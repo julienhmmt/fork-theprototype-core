@@ -26,7 +26,7 @@ const paste = (peer, hash) =>
 		location.hash = hash;
 	}, hash);
 const approveOn = async (peer) => {
-	await peer.page.getByRole('button', { name: 'Approve' }).click({ timeout: 30000 });
+	await h.approveButton(peer.page).click({ timeout: 30000 });
 };
 /** press a toast action button. The button is asserted RENDERED and laid out, then
  * clicked through the DOM: Playwright's actionability probe on the animated toast
