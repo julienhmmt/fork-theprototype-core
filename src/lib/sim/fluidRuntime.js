@@ -14,7 +14,8 @@ export function simHeld() {
 }
 import { inferredColliderKind } from '../colliderSpec';
 import { normalizeFloats } from './buoyancy.js';
-import { setTankVolumes } from './waterQuery.js';
+import { setTankVolumes, currentWaterVolumes, disturbWater } from './waterQuery.js';
+import { surfacesFor } from './tankSurfaces.js';
 import { noteSimplified } from '../water/simplifiedNotice.js';
 /** 36-fb-water F27: a tank this frame draws drops instead of its smooth surface BECAUSE OF QUALITY */
 let qualityLowered = false;
@@ -43,7 +44,7 @@ export const QUEST_CAP = 1500;
  *   pending: boolean, sentAt: number, steps: number, ms: number, count: number, visible: boolean,
  *   min: number[], max: number[], frame: THREE.Matrix4, frameQuat: THREE.Quaternion, prevPos: THREE.Vector3 | null,
  *   prevVel: THREE.Vector3, accel: THREE.Vector3, lastAt: number, lastDt: number, surfaceLocal?: number | null, gen?: number, local?: {solver: FluidSolver, acc: {carry: number, drainCarry: number}},
- *   spare: ArrayBuffer | null, spilled?: number}} Tank */
+ *   spare: ArrayBuffer | null, spilled?: number, surfaces?: any[], landed?: number, ripples?: number, lastRipple?: number}} Tank */
 
 /** @type {Map<string, Tank>} */
 const tanks = new Map();
@@ -86,11 +87,51 @@ function onFrame(data) {
 	tank.spare = /** @type {ArrayBuffer} */ (positions.buffer);
 	tank.surfaceLocal = surfaceOf(positions, data.count, tank);
 	applyPush(tank, data.impulses);
+	// 49-water W1: what landed on a W1 surface inside the tank left the solver: ripple there
+	if (data.splashes?.length) landOnWater(tank, data.splashes);
 	// 36-fb-water F16: what left over the rim falls on as drops (splash, settle, dry up)
 	if (data.escaped?.length) {
 		tank.spilled = (tank.spilled ?? 0) + data.escaped.length / 6;
 		spillDrops(tank.object, data.escaped, tank.frame, tank.frameQuat, { ...tank.spec.spill, color: tank.spec.color, size: (tank.visual?.radius ?? 0.02) * 2 });
 	}
+}
+
+/** 49-water W1: a pour landing on a pool ripples it this often at most, per tank (a steady patter) */
+export const TANK_RIPPLE_MS = 70;
+const hitW = new THREE.Vector3();
+
+/**
+ * 49-water W1: particles that landed on a W1 surface inside the tank (tankSurfaces.js) left
+ * the solver; the fastest of them ripples the pool where it landed and throws a couple of
+ * droplets back up (the splash), each peer from its own tank — the tank's settings and pose
+ * replicate, so every peer's pour lands in the same place and nothing is sent.
+ * @param {Tank} tank @param {Float32Array} hits [x,y,z,speed,surfaceIndex]* (tank frame)
+ */
+function landOnWater(tank, hits) {
+	const n = Math.floor(hits.length / 5);
+	tank.landed = (tank.landed ?? 0) + n;
+	const now = performance.now();
+	if (!n || now - (tank.lastRipple ?? -1e9) < TANK_RIPPLE_MS) return;
+	let best = 0;
+	for (let i = 1; i < n; i++) if (hits[i * 5 + 3] > hits[best * 5 + 3]) best = i;
+	const o = best * 5;
+	const surface = tank.surfaces?.[hits[o + 4]];
+	if (!surface?.uuid) return;
+	hitW.set(hits[o], hits[o + 1], hits[o + 2]).applyMatrix4(tank.frame);
+	const speed = hits[o + 3];
+	const r = tank.visual?.radius ?? 0.02;
+	if (!disturbWater(surface.uuid, [hitW.x, hitW.y, hitW.z], 0.12 + r * 2, Math.min(0.6, 0.1 + speed * 0.12))) return;
+	tank.lastRipple = now;
+	tank.ripples = (tank.ripples ?? 0) + 1;
+	// the splash: two droplets kicked back up off the surface (they fall back in and are absorbed)
+	const up = surface.n;
+	const k = Math.min(1.6, speed * 0.3);
+	const spray = new Float32Array(12);
+	for (let j = 0; j < 2; j++) {
+		const side = j ? 1 : -1;
+		spray.set([hits[o] + up[0] * 0.01, hits[o + 1] + up[1] * 0.01, hits[o + 2] + up[2] * 0.01, up[0] * k + surface.ax[0] * side * k * 0.35, up[1] * k + surface.ax[1] * side * k * 0.35, up[2] * k + surface.ax[2] * side * k * 0.35], j * 6);
+	}
+	spillDrops(tank.object, spray, tank.frame, tank.frameQuat, { ...tank.spec.spill, color: tank.spec.color, size: r * 2 });
 }
 
 /**
@@ -384,14 +425,17 @@ function tickTank(root, object, camera, renderer, now) {
 		spec: { ...spec, count },
 		// 36-fb-water F16: the top is open when the tank may spill (it only matters once tipped:
 		// upright, nothing climbs a smoothing length above the rim)
-		walls: spec.spill.on ? OPEN_TOP : ALL_WALLS
+		walls: spec.spill.on ? OPEN_TOP : ALL_WALLS,
+		// 49-water W1: the W1 surfaces reaching the tank, in its frame (a pour landing on one leaves)
+		surfaces: (tank.surfaces = surfacesFor(currentWaterVolumes(), invFrame.elements, tank.min, tank.max))
 	};
 	if (tank.local) {
 		const t0 = performance.now();
 		pourAndDrain(tank.local.solver, msg.spec, dt, tank.local.acc);
 		tank.local.solver.step(dt, msg);
 		const escaped = tank.local.solver.escapedCount ? tank.local.solver.takeEscaped() : null;
-		onFrame({ op: 'frame', id: object.uuid, gen: tank.gen, count: tank.local.solver.count, positions: tank.local.solver.x, impulses: tank.local.solver.impulses, ms: performance.now() - t0, ...(escaped ? { escaped } : {}) });
+		const splashes = tank.local.solver.splashCount ? tank.local.solver.takeSplashes() : null;
+		onFrame({ op: 'frame', id: object.uuid, gen: tank.gen, count: tank.local.solver.count, positions: tank.local.solver.x, impulses: tank.local.solver.impulses, ms: performance.now() - t0, ...(escaped ? { escaped } : {}), ...(splashes ? { splashes } : {}) });
 		return;
 	}
 	const w = ensureWorker();
@@ -415,6 +459,10 @@ export function fluidDebug() {
 		mode: t.visual?.mode,
 		ssfRuns: t.visual?.passStats?.runs ?? 0,
 		spilled: Math.round(t.spilled ?? 0),
+		// 49-water W1: particles that landed on a W1 surface (and left), ripples made, surfaces sent
+		landed: t.landed ?? 0,
+		ripples: t.ripples ?? 0,
+		surfaces: t.surfaces?.length ?? 0,
 		worker: worker ? 'worker' : worker === false ? 'main' : 'none'
 	}));
 }

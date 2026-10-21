@@ -1,8 +1,9 @@
 // 36-sim U2b: the FLUID TANK solver — Position Based Fluids (Macklin & Müller 2013).
 //
-// A leaf that imports nothing: the Web Worker runs it (fluid.worker.js), the main thread
-// runs it when workers are unavailable, and vitest runs it headless. Everything lives in
-// the TANK's local frame (metres): the box [min, max] is the inside of the glass.
+// A leaf (its one import, tankSurfaces, is a leaf too — 49-water): the Web Worker runs it
+// (fluid.worker.js), the main thread runs it when workers are unavailable, and vitest runs
+// it headless. Everything lives in the TANK's local frame (metres): the box [min, max] is
+// the inside of the glass.
 //
 // WHY PBF and not plain SPH: SPH needs tiny timesteps to stay incompressible and blows up
 // when a frame is late; PBF solves density as a position constraint, so it is stable at
@@ -13,6 +14,7 @@
 // LOCAL PER PEER (documented in MODULES/the docs fragment): the particles are never sent.
 // What replicates is the tank's `userData.fluid` (count, viscosity, emitter…), so every
 // peer pours the same fluid with the same settings and sees its own splash.
+import { crossSurfaces, SPLASH_CAP } from './tankSurfaces.js';
 
 export const FLUID_VERSION = 1;
 export const FLUID_MAX_PARTICLES = 8000;
@@ -174,6 +176,12 @@ export class FluidSolver {
 		this.escapedDropped = 0;
 		/** particles removed by the lifetime cap since construction */
 		this.expired = 0;
+		// 49-water W1: particles that landed on a W1 surface this step (tankSurfaces.js), the
+		// hits [x,y,z,speed,surfaceIndex]* handed back by takeSplashes(), the overflow counted
+		this.crossed = new Uint8Array(n);
+		this.splashes = new Float32Array(SPLASH_CAP * 5);
+		this.splashCount = 0;
+		this.landed = 0;
 		/** friction on resting collider contacts this step (step's floorFriction / ITERATIONS) */
 		this.contactFriction = 0;
 	}
@@ -192,6 +200,49 @@ export class FluidSolver {
 		const out = this.escaped.slice(0, this.escapedCount * 6);
 		this.escapedCount = 0;
 		return out;
+	}
+
+	/**
+	 * 49-water W1: the crossings of the surfaces since the last call, [x,y,z,speed,surfaceIndex]*
+	 * (solver-local), a COPY (transferable). @returns {Float32Array}
+	 */
+	takeSplashes() {
+		const out = this.splashes.slice(0, this.splashCount * 5);
+		this.splashCount = 0;
+		return out;
+	}
+
+	/**
+	 * 49-water W1: a step that lands a particle on a W1 surface (its old position `x` above the
+	 * plane, the new one `p` on or below it, tankSurfaces.js) takes it out — it joined the pool.
+	 * Runs between the solve and the commit (`x.set(p)`); the GPU solver's CPU mirror calls it at
+	 * the same point (49-fluid's `beforeCommit` hook). @param {number} dt @param {{surfaces?: any[]}} o
+	 * @returns {number} particles that landed this step
+	 */
+	landOnSurfaces(dt, o) {
+		if (!o?.surfaces?.length || !this.count) return 0;
+		const { x, v, p } = this;
+		const n = this.count;
+		const hits = this.splashes.subarray(this.splashCount * 5);
+		const r = crossSurfaces(o.surfaces, x, p, n, Math.min(dt, 1 / 30), this.crossed, hits, SPLASH_CAP - this.splashCount);
+		this.splashCount += r.written;
+		if (!r.marked) return 0;
+		// swap-remove, descending: the particle moved into i is one already looked at (and kept)
+		for (let i = n - 1; i >= 0; i--) {
+			if (!this.crossed[i]) continue;
+			this.crossed[i] = 0;
+			const last = --this.count;
+			if (i === last) continue;
+			for (let a = 0; a < 3; a++) {
+				x[i * 3 + a] = x[last * 3 + a];
+				v[i * 3 + a] = v[last * 3 + a];
+				p[i * 3 + a] = p[last * 3 + a];
+			}
+			this.age[i] = this.age[last];
+			this.flowing[i] = this.flowing[last];
+		}
+		this.landed += r.marked;
+		return r.marked;
 	}
 
 	/** @param {number} r2 */
@@ -523,8 +574,10 @@ export class FluidSolver {
 	 * One frame. `gravity` is tank-local (the tank may be tilted). Returns the active count.
 	 * @param {number} dt
 	 * @param {{gravity: number[], viscosity: number, surfaceTension: number, colliders?: FluidCollider[],
-	 *   walls?: boolean[], lifetime?: number, cohesion?: number, floorFriction?: number}} o  36-fb: `walls` = the wall mask
-	 *   (setWalls), `lifetime` (s, 0 = forever), `cohesion` 0..1 (open fluids gather into drops/puddles), `floorFriction` 0..1
+	 *   walls?: boolean[], lifetime?: number, cohesion?: number, floorFriction?: number,
+	 *   surfaces?: import('./tankSurfaces.js').TankSurface[]}} o  36-fb: `walls` = the wall mask
+	 *   (setWalls), `lifetime` (s, 0 = forever), `cohesion` 0..1 (open fluids gather into drops/puddles), `floorFriction` 0..1,
+	 *   `surfaces` (49-water W1: W1 water surfaces in this frame — a particle landing on one leaves, takeSplashes())
 	 */
 	step(dt, o) {
 		const { x, v, p, lambda, dp, nbr, nbrCount } = this;
@@ -706,7 +759,8 @@ export class FluidSolver {
 			const c = Math.min(visc, 0.5) / Math.max(1, MAX_NEIGHBORS / 8);
 			for (let i = 0; i < n * 3; i++) v[i] += c * dp[i];
 		}
-		x.set(p.subarray(0, n * 3));
+		this.landOnSurfaces(dt, o);
+		x.set(p.subarray(0, this.count * 3));
 		this.cull(dt, o.lifetime ?? 0);
 		return this.count;
 	}
