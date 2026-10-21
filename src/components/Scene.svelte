@@ -116,6 +116,7 @@
 	import RecordingDriver from './RecordingDriver.svelte'
 	import Player from './play/Player.svelte'
 	import { tickStartView } from '$lib/startView'
+	import { highContrast, applyGizmoContrast } from '$lib/viewportContrast'
 	import { Mesh, Vector3 } from 'three'
 
 
@@ -519,6 +520,8 @@
 
 	// 132: never show the transform gizmo without a real selection — a fresh
 	// reload used to leave it attached/visible at the origin with nothing to edit
+	// 53 A2: the High contrast theme's gizmo — bigger, axis hues from the theme's tokens
+	$: applyGizmoContrast($TControls, $highContrast);
 	$: if ($TControls && !$editingObject && !$faceEditObject && !$splineEditObject && !$selectedObject?.uuid) {
 		$TControls.visible = false;
 		if ($TControls.object && !$TControls.object.userData?.isMultiPivot) $TControls.detach();
