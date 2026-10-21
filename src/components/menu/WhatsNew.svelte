@@ -51,7 +51,7 @@
 		<div class="ui-panel-header move-handle shrink-0 cursor-move select-none py-1.5">
 			<span>✨ What's new</span>
 			<span class="flex-1"></span>
-			<button id="whats-new-close" class="ui-button-quiet" title="Close" onclick={closeWhatsNew}>✕</button>
+			<button id="whats-new-close" class="ui-button-quiet" title="Close" aria-label="Close" onclick={closeWhatsNew}>✕</button>
 		</div>
 		<div class="wn-body min-h-0 flex-1 overflow-y-auto px-4 py-3" use:minimalScroll>
 			{#snippet body(list: Block[])}

@@ -135,7 +135,7 @@
 		bind:canvas
 	>
 		{#snippet buttons()}
-			<button class="pip-btn" title="Look through this camera (full screen)" onclick={() => startCameraPreview(object.uuid)}>⤢</button>
+			<button class="pip-btn" title="Look through this camera (full screen)" aria-label="Look through this camera (full screen)" onclick={() => startCameraPreview(object.uuid)}>⤢</button>
 		{/snippet}
 	</PipFrame>
 {/if}

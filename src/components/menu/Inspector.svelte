@@ -1798,7 +1798,7 @@
 					<div class="ui-row">
 						<span class="w-16 text-text-muted">Hash</span>
 						<span class="truncate font-mono text-[length:var(--fs-badge)]" title={inspectedItem.hash}>{inspectedItem.hash.slice(0, 16)}…</span>
-						<button class="ui-button-quiet" title="Copy the full hash" onclick={() => navigator.clipboard?.writeText(inspectedItem.hash)}>⧉</button>
+						<button class="ui-button-quiet" title="Copy the full hash" aria-label="Copy the full hash" onclick={() => navigator.clipboard?.writeText(inspectedItem.hash)}>⧉</button>
 					</div>
 					{#if fileDetails}
 						<div class="ui-row"><span class="w-16 text-text-muted">Details</span><span>{fileDetails}</span></div>
@@ -2258,10 +2258,10 @@
 								<button class={bmBtn} title="Overwrite with the current view" onclick={() => overwriteBookmark(bookmark.id)}>
 									<Icon name="camera" size={16} />
 								</button>
-								<button class={bmBtn} title="Move up" disabled={index === 0} onclick={() => moveBookmark(bookmark.id, -1)}>↑</button>
+								<button class={bmBtn} title="Move up" aria-label="Move up" disabled={index === 0} onclick={() => moveBookmark(bookmark.id, -1)}>↑</button>
 								<button
 									class={bmBtn}
-									title="Move down"
+									title="Move down" aria-label="Move down"
 									disabled={index === $bookmarks.length - 1}
 									onclick={() => moveBookmark(bookmark.id, 1)}>↓</button
 								>
@@ -3144,6 +3144,7 @@
 				<input
 					id="name"
 					title="Name"
+					aria-label="Name"
 					type="text"
 					class="ui-input w-full"
 					value={$selectedObject.name}

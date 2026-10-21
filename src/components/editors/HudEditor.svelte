@@ -1116,11 +1116,11 @@
 							data-hud-star={s.id}
 							title={doc?.active === s.id
 								? 'The default screen everyone starts on — click to un-star it, and then nothing shows until a node, a game state or a peer asks for a screen'
-								: 'Make this the default screen everyone starts on'}
+								: 'Make this the default screen everyone starts on'} aria-label="Default screen"
 							aria-pressed={doc?.active === s.id}
 							onclick={() => setActiveHudScreen(docKey, doc?.active === s.id ? '' : s.id)}>★</button
 						>
-						<button class="hud-mini hud-danger" title="Delete screen" onclick={() => dropScreen(s.id)}>✕</button>
+						<button class="hud-mini hud-danger" title="Delete screen" aria-label="Delete screen" onclick={() => dropScreen(s.id)}>✕</button>
 					</div>
 					{#if s.id === screenId}
 						<!-- 21-D6: bind the screen to a GAME STATE and it follows the game with no
