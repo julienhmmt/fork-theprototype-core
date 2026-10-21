@@ -20,6 +20,38 @@ const iwer = require('./iwer.cjs');
 
 const g = (page, fn, arg) => page.evaluate(fn, arg);
 
+// IWER's offset reference spaces do not reach the XR camera it reports (measured: a 0.45 m seated
+// lift and 40 frames of walking left the camera where IWER's head is), so the locomotion rows read
+// WHAT THE APP APPLIED: every XRRigidTransform the rig moves by is recorded (the rig is the only
+// thing building them while these rows run) — translation summed, yaw of each rotation.
+const SPY = () => {
+	if (window.__rigSpy) return;
+	const Orig = window.XRRigidTransform;
+	window.__rigSpy = [];
+	window.XRRigidTransform = class extends Orig {
+		constructor(p, o) {
+			super(p, o);
+			window.__rigSpy.push({ p: p ? [p.x || 0, p.y || 0, p.z || 0] : [0, 0, 0], yaw: o ? 2 * Math.atan2(o.y || 0, o.w ?? 1) : 0 });
+		}
+	};
+};
+/** the offsets applied since the last call: {move (m, horizontal), lift (m), turns: [yaw…]} */
+const applied = (page) =>
+	page.evaluate(() => {
+		const list = window.__rigSpy.splice(0);
+		let x = 0, y = 0, z = 0;
+		const turns = [];
+		for (const r of list) {
+			if (Math.abs(r.yaw) > 1e-4) turns.push(+r.yaw.toFixed(3));
+			else {
+				x += r.p[0];
+				y += r.p[1];
+				z += r.p[2];
+			}
+		}
+		return { move: Math.hypot(x, z), lift: -y, turns };
+	});
+
 
 h.run(async () => {
 	const browser = await h.launch();
