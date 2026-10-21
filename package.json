@@ -28,6 +28,7 @@
 		"check:zindex": "node scripts/check-zindex.cjs"
 	},
 	"devDependencies": {
+		"@axe-core/playwright": "4.13.0",
 		"@iwer/devui": "2.6.0",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@sveltejs/kit": "^2.70.3",

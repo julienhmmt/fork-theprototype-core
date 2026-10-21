@@ -1,0 +1,161 @@
+// 53-reader (A4) — THE AXE GATE. axe-core (via @axe-core/playwright) over the main surfaces: the
+// editor shell, the object list, the Inspector, Settings, the Asset Browser and the phone shell.
+//
+// It FAILS only on `serious` and `critical` violations. `moderate` and `minor` are LISTED in the
+// report (stdout + `axe-<phase>.md` / `.json` in AXE_REPORT_DIR) and not fixed — the user took the
+// "trim" recommendation (2026-10-21): the value is a correct baseline, not depth.
+//
+// Every surface has a PREMISE check (its root is on screen) so one that failed to open cannot pass
+// vacuously. The Asset Browser runs on the recorded CC0 fixtures (page.route, no network), so CI
+// can run this suite too.
+//
+// Run: APP_URL=https://theprototype.app:5474/ AXE_REPORT_DIR=<dir> npm run e2e -- a11y-axe
+const h = require('./helpers.cjs');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { AxeBuilder } = require('@axe-core/playwright');
+const { makeCc0Network } = require('./cc0Fixtures.cjs');
+
+const OUT = process.env.AXE_REPORT_DIR || path.join(os.tmpdir(), 'tp-axe');
+const PHASE = process.env.AXE_PHASE || 'after';
+const GATED = new Set(['serious', 'critical']);
+// WCAG 2.x A + AA plus axe's best-practice rules: what the report lists. The gate is the impact,
+// not the tag — a best-practice rule that axe rates serious still fails.
+const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
+
+/** @param {any} page @param {string} expr */
+const run = (page, expr) => page.evaluate((src) => (0, eval)(src)(window.__stores), expr);
+
+/**
+ * @param {any} page
+ * @param {string|null} include a root selector, or null for the whole document
+ */
+async function scan(page, include) {
+	let b = new AxeBuilder({ page }).withTags(TAGS);
+	if (include) b = b.include(include);
+	const res = await b.analyze();
+	return res.violations.map((/** @type {any} */ v) => ({
+		id: v.id,
+		impact: v.impact ?? 'minor',
+		help: v.help,
+		helpUrl: v.helpUrl,
+		nodes: v.nodes.map((/** @type {any} */ n) => ({ target: n.target.join(' '), summary: String(n.failureSummary ?? '').split('\n').slice(1).join(' ').trim() }))
+	}));
+}
+
+/** @type {{surface: string, violations: any[]}[]} */
+const report = [];
+
+/**
+ * @param {any} page @param {string} surface @param {string|null} include
+ * @param {string} premiseSel a selector that must be VISIBLE, or `js:<expr>` that must be true
+ */
+async function gate(page, surface, include, premiseSel) {
+	const shown = premiseSel.startsWith('js:')
+		? await page.evaluate((expr) => !!(0, eval)(expr), premiseSel.slice(3)).catch(() => false)
+		: await page
+				.locator(premiseSel)
+				.first()
+				.isVisible()
+				.catch(() => false);
+	h.check(shown, `${surface}: premise — ${premiseSel} is on screen`);
+	if (!shown) return;
+	const violations = await scan(page, include);
+	report.push({ surface, violations });
+	const gated = violations.filter((v) => GATED.has(v.impact));
+	for (const v of violations) {
+		console.log(`  [${surface}] ${v.impact.padEnd(8)} ${v.id} (${v.nodes.length}) — ${v.help}`);
+		if (GATED.has(v.impact)) for (const n of v.nodes.slice(0, 6)) console.log(`      ${n.target}  ${n.summary}`);
+	}
+	const nodes = gated.reduce((a, v) => a + v.nodes.length, 0);
+	h.check(gated.length === 0, `${surface}: no serious/critical axe violations (${gated.map((v) => `${v.id}×${v.nodes.length}`).join(', ') || 'none'}; ${nodes} nodes)`);
+}
+
+function writeReport() {
+	fs.mkdirSync(OUT, { recursive: true });
+	fs.writeFileSync(path.join(OUT, `axe-${PHASE}.json`), JSON.stringify(report, null, 2));
+	const lines = [`# axe report — ${PHASE} (${new Date().toISOString()})`, '', `Gate: serious + critical. Listed, not gated: moderate + minor.`, ''];
+	lines.push('| surface | critical | serious | moderate | minor |', '|---|---|---|---|---|');
+	for (const r of report) {
+		const n = (/** @type {string} */ imp) => r.violations.filter((v) => v.impact === imp).reduce((a, v) => a + v.nodes.length, 0);
+		lines.push(`| ${r.surface} | ${n('critical')} | ${n('serious')} | ${n('moderate')} | ${n('minor')} |`);
+	}
+	for (const r of report) {
+		lines.push('', `## ${r.surface}`, '');
+		if (!r.violations.length) lines.push('No violations.');
+		for (const v of r.violations) {
+			lines.push(`- **${v.impact}** \`${v.id}\` — ${v.help} (${v.nodes.length})`);
+			for (const n of v.nodes.slice(0, 12)) lines.push(`  - \`${n.target}\``);
+			if (v.nodes.length > 12) lines.push(`  - … ${v.nodes.length - 12} more`);
+		}
+	}
+	fs.writeFileSync(path.join(OUT, `axe-${PHASE}.md`), lines.join('\n') + '\n');
+	console.log(`report: ${path.join(OUT, `axe-${PHASE}.md`)}`);
+}
+
+h.run(async () => {
+	const browser = await h.launch();
+	const net = makeCc0Network();
+
+	// ---- desktop ------------------------------------------------------------------------------
+	const A = await h.setupPage(browser, 'A', { context: { viewport: { width: 1440, height: 900 } } });
+	const page = A.page;
+	await net.routes(page);
+	await page.evaluate(() => {
+		const s = window.__stores;
+		s.commandsHandler.sceneCommand('/create box');
+		s.commandsHandler.sceneCommand('/create sphere');
+	});
+	await page.waitForTimeout(1200);
+	await page.evaluate(() => window.__stores.objectActions.applySelectionSet([], false));
+	await page.waitForTimeout(400);
+
+	// 1. the editor shell at rest
+	await gate(page, 'editor shell', null, 'js:!!document.querySelector("#editor-chrome") && !!document.querySelector("canvas") && !document.documentElement.classList.contains("phone-shell")');
+
+	// 2. the object list
+	await run(page, String((s) => s.objectListClose.set(false)));
+	await page.waitForTimeout(700);
+	await gate(page, 'object list', '#object-list', '#object-tree');
+	await run(page, String((s) => s.objectListClose.set(true)));
+
+	// 3. the Inspector (an object's properties)
+	await page.evaluate(() => {
+		const s = window.__stores;
+		let g;
+		s.objectsGroup.subscribe((x) => (g = x))();
+		const box = g.children.find((c) => c.isMesh);
+		s.objectActions.selectObject(box.uuid, true);
+	});
+	await page.waitForTimeout(1200);
+	await gate(page, 'Inspector', '#inspector', '#inspector');
+	await page.evaluate(() => {
+		window.__stores.inspectorClose?.set(true);
+		window.__stores.objectActions.applySelectionSet([], false);
+	});
+	await page.waitForTimeout(400);
+
+	// 4. Settings
+	await run(page, String((s) => s.settingsOpen.set(true)));
+	await page.waitForTimeout(900);
+	await gate(page, 'Settings', 'dialog.settings-dialog', 'dialog.settings-dialog');
+	await run(page, String((s) => s.settingsOpen.set(false)));
+	await page.waitForTimeout(400);
+
+	// 5. the Asset Browser (recorded CC0 fixtures)
+	await page.evaluate(() => window.__stores.cc0State.openAssetBrowser());
+	await page.waitForFunction(() => Number(document.querySelector('#asset-browser-grid')?.dataset.count) > 0, null, { timeout: 30000 }).catch(() => {});
+	await page.waitForTimeout(500);
+	await gate(page, 'Asset Browser', '#asset-browser-window', '#asset-browser-window');
+	await page.locator('#asset-browser-close').click().catch(() => {});
+	await h.closePeer(A);
+
+	// ---- 6. the phone shell (Find N6 folded) ---------------------------------------------------
+	const P = await h.setupPage(browser, 'phone', { context: { viewport: { width: 390, height: 896 }, deviceScaleFactor: 2.9, isMobile: true, hasTouch: true } });
+	await P.page.waitForTimeout(1000);
+	await gate(P.page, 'phone shell', null, 'js:document.documentElement.classList.contains("phone-shell") && !!document.querySelector("#editor-chrome")');
+
+	writeReport();
+	await h.finish(browser);
+});
