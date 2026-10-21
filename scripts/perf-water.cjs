@@ -15,7 +15,9 @@
 //             Quest tier: no pre-pass, points-tier fluid). The Quest budget applies to it:
 //             <= 150 draw calls, <= 300k triangles.
 // Extra scenes: `pour` (a Water tank with a pour emitter + a spout, both at their defaults) and
-// `spill` (the Fluid tank toy with the Honey tank tipped over) — the F16/F17 costs.
+// `spill` (the Fluid tank toy with the Honey tank tipped over) — the F16/F17 costs — and
+// `tankpool` (49-water W1: the Fluid tank toy standing in a pool whose surface crosses both
+// tanks, the Honey tank's emitter + drain on, so a pour lands on the pool every frame).
 const path = require('path');
 const fs = require('fs');
 const h = require('../tests/e2e/helpers.cjs');
@@ -32,7 +34,7 @@ const SECONDS = Number(arg('seconds', '6'));
 const SETTLE = Number(arg('settle', '10'));
 const OUT = arg('out', '/home/deck/.code/lanes-30/after-36/36-fb-water/perf');
 const LABEL = arg('label', 'run');
-const SCENES = ['pool-party', 'aquarium', 'island-ocean', 'jelly-room', 'fluid-tank-toy', 'pour', 'spill'];
+const SCENES = ['pool-party', 'aquarium', 'island-ocean', 'jelly-room', 'fluid-tank-toy', 'pour', 'spill', 'tankpool'];
 const BUDGET = { calls: 150, triangles: 300000 };
 
 h.run(async () => {
@@ -48,7 +50,7 @@ h.run(async () => {
 			});
 			const page = P.page;
 			await page.evaluate(() => window.__stores.physics.warmup().catch(() => {}));
-			const file = path.join(DIR, slug === 'pour' ? 'pool-party' : slug === 'spill' ? 'fluid-tank-toy' : slug, 'scene.tpscene');
+			const file = path.join(DIR, slug === 'pour' ? 'pool-party' : slug === 'spill' || slug === 'tankpool' ? 'fluid-tank-toy' : slug, 'scene.tpscene');
 			const bytes = Array.from(fs.readFileSync(file));
 			await page.evaluate(async (arr) => {
 				const s = window.__stores;
@@ -68,6 +70,29 @@ h.run(async () => {
 					tank.position.set(0, 0.6, 6);
 					st.waterActions.setObjectPour(tank.uuid, {});
 					st.addObjects.buildAddChildren(() => [-3, 0, 6]).find((x) => x.label === 'Water').children.find((c) => c.label === 'Pour').action();
+					st.objectActions.deselectObject?.();
+				});
+			if (slug === 'tankpool')
+				await page.evaluate(() => {
+					const st = window.__stores;
+					let g;
+					st.objectsGroup.subscribe((v) => (g = v))();
+					const tanks = g.children.filter((o) => o.userData?.fluid);
+					const box = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity, mid: 0 };
+					for (const t of tanks) {
+						t.geometry.computeBoundingBox();
+						const b = t.geometry.boundingBox.clone().applyMatrix4(t.matrixWorld);
+						box.minX = Math.min(box.minX, b.min.x);
+						box.maxX = Math.max(box.maxX, b.max.x);
+						box.minZ = Math.min(box.minZ, b.min.z);
+						box.maxZ = Math.max(box.maxZ, b.max.z);
+						box.mid += (b.min.y + b.max.y) / 2 / tanks.length;
+					}
+					const w = box.maxX - box.minX + 1, d = box.maxZ - box.minZ + 1;
+					const pool = st.addObjects.spawnAtPoint(`/create Box ${w.toFixed(2)} ${box.mid.toFixed(2)} ${d.toFixed(2)}`, [(box.minX + box.maxX) / 2, box.mid / 2, (box.minZ + box.maxZ) / 2]);
+					st.waterActions.makeWater(pool, 'pool');
+					const honey = g.getObjectByName('Honey tank') ?? tanks[0];
+					st.sim.setFluidFor(honey.uuid, { emitter: { on: true, rate: 700, speed: 2 }, drain: { on: true, rate: 900, radius: 0.2 } });
 					st.objectActions.deselectObject?.();
 				});
 			if (tier === 'quest')
@@ -96,6 +121,9 @@ h.run(async () => {
 			const extra = await page.evaluate(() => ({
 				drops: window.__stores.sim.totalDropCount?.() ?? null,
 				fluid: window.__stores.sim.fluidDebug().map((t) => t.count),
+				// 49-water W1: the solver's own ms per step (worker), and what landed on a pool
+				fluidMs: window.__stores.sim.fluidDebug().map((t) => t.ms),
+				landed: window.__stores.sim.fluidDebug().reduce((a, t) => a + (t.landed ?? 0), 0),
 				water: window.__stores.waterRuntime.waterDebug?.().drawCalls ?? null
 			}));
 			await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
@@ -109,11 +137,11 @@ h.run(async () => {
 		'',
 		`CPU x4, 1280x720, ${SETTLE} s settle + ${SECONDS} s recorded, simulation running. calls / triangles = median per display frame (every render pass summed). Quest budget ${BUDGET.calls} calls / ${BUDGET.triangles / 1000}k triangles applies to the quest rows.`,
 		'',
-		'| scene | tier | calls (max) | triangles | p50 / p95 ms | geometries | textures (MB) | lights / shadow | drops | fluid particles | budget |',
-		'|---|---|---|---|---|---|---|---|---|---|---|',
+		'| scene | tier | calls (max) | triangles | p50 / p95 ms | geometries | textures (MB) | lights / shadow | drops | fluid particles | solver ms/step | landed on a pool | budget |',
+		'|---|---|---|---|---|---|---|---|---|---|---|---|---|',
 		...rows.map(
 			(r) =>
-				`| ${r.slug} | ${r.tier} | ${r.medianCalls} (${r.maxCalls}) | ${r.medianTriangles} | ${r.p50?.toFixed(1)} / ${r.p95?.toFixed(1)} | ${r.geometries} | ${r.textures} (${r.textureMB}) | ${r.lights} / ${r.castLights} | ${r.drops ?? ''} | ${r.fluid.join(' + ') || ''} | ${r.tier === 'quest' ? (r.medianCalls <= BUDGET.calls && r.medianTriangles <= BUDGET.triangles ? 'OK' : '**OVER**') : ''} |`
+				`| ${r.slug} | ${r.tier} | ${r.medianCalls} (${r.maxCalls}) | ${r.medianTriangles} | ${r.p50?.toFixed(1)} / ${r.p95?.toFixed(1)} | ${r.geometries} | ${r.textures} (${r.textureMB}) | ${r.lights} / ${r.castLights} | ${r.drops ?? ''} | ${r.fluid.join(' + ') || ''} | ${(r.fluidMs ?? []).join(' + ')} | ${r.landed ?? ''} | ${r.tier === 'quest' ? (r.medianCalls <= BUDGET.calls && r.medianTriangles <= BUDGET.triangles ? 'OK' : '**OVER**') : ''} |`
 		),
 		''
 	].join('\n');
