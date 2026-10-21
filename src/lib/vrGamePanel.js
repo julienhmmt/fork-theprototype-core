@@ -912,7 +912,8 @@ export function vrGamePanelDebug() {
 /** the surfaces' meshes (suites read visibility, poses and canvases) @param {string} name */
 export function vrGameSurface(name) {
 	const s = surfaces[name];
-	return s ? { mesh: s.mesh, canvas: s.canvas } : null;
+	// 53: + the pressable rects (the suites press them through pressPanelTarget)
+	return s ? { mesh: s.mesh, canvas: s.canvas, hits: s.hits } : null;
 }
 
 /** Hide everything (the session ended, the player left the game). */

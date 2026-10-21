@@ -20,22 +20,6 @@ const iwer = require('./iwer.cjs');
 
 const g = (page, fn, arg) => page.evaluate(fn, arg);
 
-/** the XR camera's world position + yaw (0 = facing −Z, positive = turned left) */
-const head = (page) =>
-	page.evaluate(() => {
-		let r;
-		window.__stores.globalRenderer.subscribe((v) => (r = v))();
-		const T = window.__stores.THREE;
-		const cam = r.xr.getCamera();
-		cam.updateMatrixWorld(true);
-		const p = new T.Vector3();
-		const q = new T.Quaternion();
-		cam.matrixWorld.decompose(p, q, new T.Vector3());
-		const f = new T.Vector3(0, 0, -1).applyQuaternion(q);
-		return { pos: [p.x, p.y, p.z], yaw: Math.atan2(-f.x, -f.z) };
-	});
-const dist2 = (a, b) => Math.hypot(a[0] - b[0], a[2] - b[2]);
-const angle = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 
 h.run(async () => {
 	const browser = await h.launch();
@@ -52,6 +36,7 @@ h.run(async () => {
 	h.check(row.value === 'high', '1.2 an older stored "true" reads High (' + row.value + ')');
 
 	await iwer.enter(page);
+	await g(page, SPY);
 	await g(page, () => window.__stores.vrSettingsSchema.vrSettingRow('turning').set('snap'));
 
 	console.log('\n=== 2. the vignette rings while the stick moves you ===');
@@ -77,11 +62,14 @@ h.run(async () => {
 	console.log('\n=== 3. recenter + seated ===');
 	await iwer.pose(page, 'head', [0, 1.6, 0], { yaw: 1.1 });
 	await iwer.frames(page, 4);
-	const turned = await head(page);
+	await applied(page);
+	const r0 = (await g(page, () => window.__stores.vrLocomotion.heightLiftDebug())).recenters.menu;
 	await g(page, () => window.__stores.vrSettingsSchema.activateVRSetting('recenter'));
 	await iwer.frames(page, 4);
-	const centred = await head(page);
-	h.check(angle(turned.yaw, 0) > 0.9 && angle(centred.yaw, 0) < 0.05, '3.1 Recenter faces forward again (yaw ' + turned.yaw.toFixed(2) + ' → ' + centred.yaw.toFixed(2) + ')');
+	const rc = await applied(page);
+	const r1 = (await g(page, () => window.__stores.vrLocomotion.heightLiftDebug())).recenters.menu;
+	h.check(r1 === r0 + 1, '3.1 Recenter pressed outside a frame runs on the next XR frame (' + r0 + ' → ' + r1 + ')');
+	h.check(rc.turns.length === 1 && Math.abs(rc.turns[0] - 1.1) < 0.05, '3.2 …and turns the rig by the head yaw, so you face forward (' + rc.turns + ')');
 	await iwer.pose(page, 'head', [0, 1.15, 0]);
 	await g(page, () => window.__stores.vrSettingsSchema.vrSettingRow('stance').set('seated'));
 	await iwer.frames(page, 6);
@@ -90,9 +78,8 @@ h.run(async () => {
 	await g(page, () => window.__stores.vrSettingsSchema.activateVRSetting('recenter'));
 	await iwer.frames(page, 6);
 	const seat2 = await g(page, () => window.__stores.vrLocomotion.heightLiftDebug());
-	const eye = await head(page);
-	h.check(Math.abs(seat1.applied - 0.45) < 0.03, '3.2 seated lifts a 1.15 m head to a standing eye height (lift ' + seat1.applied + ')');
-	h.check(Math.abs(seat2.applied - 0.65) < 0.03 && Math.abs(eye.pos[1] - 1.6) < 0.05, '3.3 recenter re-measures where you sit now (lift ' + seat2.applied + ', eye ' + eye.pos[1].toFixed(2) + ' m)');
+	h.check(Math.abs(seat1.applied - 0.45) < 0.03, '3.3 seated lifts a 1.15 m head to a standing eye height (lift ' + seat1.applied + ')');
+	h.check(Math.abs(seat2.seatedHead - 0.95) < 0.03 && Math.abs(seat2.applied - 0.65) < 0.03, '3.4 recenter re-measures where you sit now (head ' + seat2.seatedHead + ' m, lift ' + seat2.applied + ')');
 	await g(page, () => window.__stores.vrSettingsSchema.vrSettingRow('stance').set('standing'));
 	await iwer.pose(page, 'head', [0, 1.6, 0]);
 	await iwer.frames(page, 4);
@@ -108,25 +95,25 @@ h.run(async () => {
 	});
 	h.check(one.menuHand === 'right' && one.menu.hand === 'right' && one.menu.control === 'secondary', '4.1 the radial moves to the right hand (B)');
 	h.check(one.move.hand === 'right' && one.turn.hand === 'right' && one.ptt.hand === 'right' && one.pointer === 'right', '4.2 move, turn, talk and the laser are all on the right controller');
-	let a0 = await head(page);
+	await applied(page);
 	await iwer.stick(page, 'right', 0.15, -1); // forward with a little drift
 	await iwer.frames(page, 40);
 	await iwer.stick(page, 'right', 0, 0);
 	await iwer.frames(page, 4);
-	let a1 = await head(page);
-	h.check(dist2(a0.pos, a1.pos) > 0.3 && angle(a0.yaw, a1.yaw) < 0.02, '4.3 forward on the right stick walks, no turn (' + dist2(a0.pos, a1.pos).toFixed(2) + ' m, ' + angle(a0.yaw, a1.yaw).toFixed(3) + ' rad)');
+	const a1 = await applied(page);
+	h.check(a1.move > 0.3 && a1.turns.length === 0, '4.3 forward on the right stick walks, no turn (' + a1.move.toFixed(2) + ' m, turns ' + a1.turns + ')');
 	await iwer.stick(page, 'right', 1, 0);
 	await iwer.frames(page, 8);
 	await iwer.stick(page, 'right', 0, 0);
 	await iwer.frames(page, 4);
-	const a2 = await head(page);
-	h.check(angle(a1.yaw, a2.yaw) > 0.6 && dist2(a1.pos, a2.pos) < 0.05, '4.4 sideways on the right stick snap-turns, no walk (' + angle(a1.yaw, a2.yaw).toFixed(2) + ' rad)');
+	const a2 = await applied(page);
+	h.check(a2.turns.length === 1 && Math.abs(Math.abs(a2.turns[0]) - Math.PI / 4) < 0.02 && a2.move < 0.01, '4.4 sideways on the right stick snap-turns 45°, no walk (' + a2.turns + ', ' + a2.move.toFixed(3) + ' m)');
 	await iwer.stick(page, 'left', 0, -1);
 	await iwer.frames(page, 30);
 	await iwer.stick(page, 'left', 0, 0);
 	await iwer.frames(page, 4);
-	const a3 = await head(page);
-	h.check(dist2(a2.pos, a3.pos) < 0.02, '4.5 the left stick no longer moves you (' + dist2(a2.pos, a3.pos).toFixed(3) + ' m)');
+	const a3 = await applied(page);
+	h.check(a3.move < 0.01 && a3.turns.length === 0, '4.5 the left stick no longer moves you (' + a3.move.toFixed(3) + ' m)');
 
 	console.log('\n=== 5. one-handed teleport: hold the stick press ===');
 	await iwer.pose(page, 'right', [0.2, 1.2, -0.3], { pitch: -0.6 });
@@ -161,7 +148,7 @@ h.run(async () => {
 	});
 	await iwer.stick(page, 'right', dir[0], dir[1]);
 	await iwer.frames(page, 6);
-	const hovered = await g(page, () => { let v; window.__stores.vrHovered.subscribe((x) => (v = x))(); return v; });
+	const hovered = await g(page, () => { let v; window.__stores.vrControls.vrHovered.subscribe((x) => (v = x))(); return v; });
 	await iwer.tap(page, 'right', 'thumbstick');
 	await iwer.stick(page, 'right', 0, 0);
 	await iwer.frames(page, 6);

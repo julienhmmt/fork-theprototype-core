@@ -560,15 +560,31 @@ export function noteXRBaseSpace() {
 /** 53 (A7): how often a recenter happened (the suites' view) */
 const recenters = { menu: 0, headset: 0 };
 
+/** 53 (A7): a recenter asked for outside an XR frame waits for the next one */
+let recenterPending = false;
+
 /**
  * 53 (A7) — RECENTER (Settings ▸ VR ▸ Body, and the game menu's Accessibility page in a headset):
  * a seated player's head height is measured again from where they sit NOW, and the view turns to
  * face forward — onto the game's spawn when there is one, else the scene's forward (−Z) where they
- * stand. Returns what it did ('spawn' | 'forward'), or null with no headset pose.
- * @returns {'spawn' | 'forward' | null}
+ * stand. A viewer pose exists only inside the session's frame callback, so the work happens on the
+ * NEXT XR frame (updateHeightLift runs it) — a press from any surface, at any time, lands there.
  */
 export function recenterView() {
-	const viewer = viewerNow();
+	if (!renderer?.xr?.getSession?.()) return false;
+	recenterPending = true;
+	return true;
+}
+
+/** the recenter itself, inside a frame @returns {'spawn' | 'forward' | null} */
+function runRecenter() {
+	/** @type {any} */
+	let viewer = null;
+	try {
+		viewer = viewerNow();
+	} catch {
+		viewer = null;
+	}
 	if (!viewer) return null;
 	recenters.menu++;
 	seatedLift = null; // updateHeightLift re-measures on the next frame
@@ -603,6 +619,11 @@ export function updateHeightLift() {
 	const frame = renderer?.xr?.getFrame?.();
 	const space = renderer?.xr?.getReferenceSpace?.();
 	if (!frame || !space) return;
+	// 53 (A7): a Recenter pressed since the last frame
+	if (recenterPending) {
+		recenterPending = false;
+		runRecenter();
+	}
 	const stance = get(vrStance);
 	if (stance === 'seated' && seatedLift === null) {
 		const base = xrBaseSpace ? frame.getViewerPose?.(xrBaseSpace) : null;
