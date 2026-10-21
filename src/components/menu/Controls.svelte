@@ -56,6 +56,8 @@
 	import { phoneShell } from '$lib/ui/phoneShell.js';
 	import SimControls from './SimControls.svelte';
 	import { focusStack } from '$lib/windowFocus';
+	// 53 A3: one tab stop per toolbar (arrows between its buttons) + Enter/Space on the <p> cells
+	import { roving, pressOnKey } from '$lib/keyboardNav';
 	import { tabbable, groupRectOf, moveGroupOf, resizeGroup } from '$lib/windowTabs';
 	import { clampWinSize, clampResize, anchorOf, registerSizeReset } from '$lib/windowSize';
 	import { dockable } from '$lib/docking';
@@ -3692,6 +3694,7 @@
 	style={pillStyle}
 	use:toolbarDrag
 	use:cellMenu={BAR}
+	use:roving={{ item: editing ? ':not(*)' : '.hud-cell, .hud-play', axis: 'x' }}
 >
 	<div class="hud-bar-row">
 		{#if editing}
@@ -3733,6 +3736,9 @@
 				<div class="hud-play-well">
 					<p
 						id="play-button"
+						role="button"
+						tabindex="-1"
+						use:pressOnKey
 						title={$willEnterAR
 							? 'Enter AR — the scene composites over your room'
 							: $willEnterXR
@@ -3789,6 +3795,9 @@
 						class="hud-cell relative"
 						class:on={tint === ICON_ON}
 						title={btn.title}
+						role="button"
+						tabindex="-1"
+						use:pressOnKey
 						on:click={() => runCell(cell.id)}
 						use:cellMenu={cell.id}
 					>
@@ -3852,7 +3861,7 @@
      entries now, stacked bottom → top, at most three a side. Under the bottom dock's z-tier as
      before, so an open flow editor / Explorer covers them. -->
 {#snippet stack(side: 'left' | 'right', list: string[])}
-	<div id="hud-stack-{side}" class="tp-ui hud-stack hud-stack-{side}" class:hud-editing={editing !== null} role="group" aria-label="{side === 'left' ? 'Left' : 'Right'} corner buttons" use:cellMenu={BAR}>
+	<div id="hud-stack-{side}" class="tp-ui hud-stack hud-stack-{side}" class:hud-editing={editing !== null} role="group" aria-label="{side === 'left' ? 'Left' : 'Right'} corner buttons" use:cellMenu={BAR} use:roving={{ item: editing ? ':not(*)' : '.hud-fab', axis: 'both' }}>
 		{#if editing}
 			{#each stackSlots(list) as id (id)}
 				{#if id.startsWith('__empty:')}
