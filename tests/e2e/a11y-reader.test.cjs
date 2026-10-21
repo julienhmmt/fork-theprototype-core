@@ -109,12 +109,14 @@ h.run(async () => {
 	});
 	h.check(tree?.role === 'tree' && tree?.label === 'Objects', `4.1 the list is role=tree named "Objects" (${JSON.stringify(tree)})`);
 	h.check(tree?.multi === 'true', `4.2 it says it is multi-selectable (${tree?.multi})`);
-	// a group with the box inside it: levels 1 and 2
+	// a group holding the box and the sphere: the group at level 1, its members at level 2
+	// (groupSelection needs two or more selected)
 	const groupUuid = await page.evaluate((u) => {
 		const s = window.__stores;
-		s.objectActions.applySelectionSet([u], false);
+		s.objectActions.applySelectionSet(u, false);
 		return s.objectActions.groupSelection();
-	}, box.uuid);
+	}, [box.uuid, ball.uuid]);
+	h.check(typeof groupUuid === 'string', `4.2b premise: the two meshes were grouped (${groupUuid})`);
 	await page.waitForTimeout(600);
 	await page.evaluate((g) => {
 		const s = window.__stores;
@@ -134,8 +136,8 @@ h.run(async () => {
 	);
 	console.log('  rows', JSON.stringify(rows));
 	h.check(rows.group?.role === 'treeitem' && rows.box?.role === 'treeitem', '4.3 every row is a treeitem');
-	h.check(rows.group?.level === '1' && rows.ball?.level === '1', `4.4 top-level rows are aria-level 1 (${rows.group?.level}, ${rows.ball?.level})`);
-	h.check(rows.box?.level === '2', `4.5 the box inside the group is aria-level 2 (${rows.box?.level})`);
+	h.check(rows.group?.level === '1', `4.4 the top-level group row is aria-level 1 (${rows.group?.level})`);
+	h.check(rows.box?.level === '2' && rows.ball?.level === '2', `4.5 the objects inside the group are aria-level 2 (${rows.box?.level}, ${rows.ball?.level})`);
 	h.check(rows.group?.expanded === 'true' && rows.ball?.expanded == null, `4.6 the open group says expanded, a leaf says nothing (${rows.group?.expanded}, ${rows.ball?.expanded})`);
 	h.check(rows.group?.selected === 'true' && rows.ball?.selected === 'false', `4.7 aria-selected follows the selection (${rows.group?.selected}, ${rows.ball?.selected})`);
 	h.check(/, group$/.test(rows.group?.label ?? '') && rows.ball?.label === `${ball.name}, ${String(ball.gtype ?? 'sphere').toLowerCase()}`, `4.8 a row is NAMED "<name>, <type>", not by its buttons (${rows.group?.label} / ${rows.ball?.label})`);

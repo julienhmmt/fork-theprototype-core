@@ -1018,6 +1018,7 @@
 				bind:this={triggerEl}
 				role="button"
 				tabindex="0"
+				aria-label="Profile and account"
 				aria-haspopup="true"
 				aria-expanded={openDropdown}
 				style="position: absolute; top: 8px; right: 20px; cursor: pointer; z-index: 4; line-height: 0;"
