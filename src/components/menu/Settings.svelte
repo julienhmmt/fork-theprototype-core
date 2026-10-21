@@ -23,6 +23,7 @@
 	import '$lib/uiDensity'; // NOTES-38 #19: applies the stored density at boot
 	import '$lib/uiScale'; // 53 A1: applies the stored UI scale at boot
 	import '$lib/motion'; // 53 A5: keeps <html data-motion> current (the OS setting can change)
+	import '$lib/captionsPref'; // 53 A5: the editor's captions switch applies at boot
 	import { setContext, tick } from 'svelte';
 	import { get } from 'svelte/store';
 	import { createSettingsNav, NAV_CONTEXT, sectionKeyOf } from '$lib/settingsNav';

@@ -189,6 +189,30 @@ h.run(async () => {
 	await closeAll(page);
 	const dFull = await fly(120);
 	h.check(dFull > 0.5, `Follow system (full motion): flyTo is still a tween (${dFull.toFixed(3)} m to go after 120 ms)`);
+	// ---- A5 captions: the editor's switch draws the caption bus in Edit too ------------------------------------
+	/** push a line the way a Timeline audio clip does, then read the overlay */
+	const caption = (text) =>
+		page.evaluate(async (t) => {
+			const c = /** @type {any} */ (window).__stores.gameKit.captions;
+			c.showCaption({ text: t, source: 'timeline', seconds: 4 });
+			await new Promise((r) => setTimeout(r, 300));
+			const el = document.getElementById('game-captions');
+			return { shown: !!el && !!el.offsetParent, text: el?.textContent?.trim() ?? '', src: el?.querySelector('[data-caption-source]')?.getAttribute('data-caption-source') ?? '' };
+		}, text);
+	const c0 = await caption('[door creaks]');
+	h.check(!c0.shown, `captions off: a Timeline line is not drawn in the editor (${JSON.stringify(c0)})`);
+	await openSettings(page, 'accessibility');
+	await page.locator('#editor-captions').click();
+	await closeAll(page);
+	const c1 = await caption('[footsteps upstairs]');
+	h.check(c1.shown && c1.text.includes('[footsteps upstairs]') && c1.src === 'timeline', `Show captions on: the line is drawn in Edit (${JSON.stringify(c1)})`);
+	h.check((await page.evaluate(() => localStorage.getItem('ui:captions'))) === 'true', 'the captions switch is saved on this device');
+	await openSettings(page, 'accessibility');
+	await page.locator('#editor-captions').click();
+	await closeAll(page);
+	const c2 = await caption('[wind]');
+	h.check(!c2.shown, `switched off again: nothing drawn (${JSON.stringify(c2)})`);
+
 	h.check(h.pageErrors(P).length === 0, `desktop: no page errors (${JSON.stringify(h.pageErrors(P)).slice(0, 200)})`);
 	await browser.close().catch(() => {});
 

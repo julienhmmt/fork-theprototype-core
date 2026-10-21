@@ -60,6 +60,7 @@ import { theme } from '../themes';
 import { gameSoundVolume } from '../gameSfx';
 import { uiScale, DEFAULT_UI_SCALE } from '../uiScale';
 import { motionPref, DEFAULT_MOTION } from '../motion';
+import { editorCaptions } from '../captionsPref';
 import { gameMusicVolume } from '../gameMusic';
 import { showWelcomeOnStart, showWhatsNewNotice } from '../whatsNew';
 import { tours } from '../tours/index.js';
@@ -130,6 +131,7 @@ const RESETS = {
 	accessibility() {
 		uiScale.set(DEFAULT_UI_SCALE);
 		motionPref.set(DEFAULT_MOTION);
+		editorCaptions.set(false);
 	},
 	interface() {
 		allowTextSelection.set(false);

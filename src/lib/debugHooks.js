@@ -153,6 +153,7 @@ export const DEBUG_HOOKS = [
 	// 53 A1 / A5: the UI scale + reduced-motion settings
 	['uiScale', () => import('./uiScale')],
 	['motion', () => import('./motion')],
+	['captionsPref', () => import('./captionsPref')],
 	['phoneShell', () => import('./ui/phoneShell.js')],
 	// 42 I5: the phone bar list (phoneBar / setBar) and More's three chrome switches
 	['phoneBar', () => import('./ui/phoneBar.js')],
