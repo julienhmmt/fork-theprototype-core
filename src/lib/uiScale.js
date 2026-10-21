@@ -25,6 +25,8 @@ export const UI_SCALE_MIN = 90;
 export const UI_SCALE_MAX = 150;
 export const UI_SCALE_STEP = 10;
 export const DEFAULT_UI_SCALE = 100;
+/** from here up <html data-ui-large> is set (applyUiScale) */
+export const LARGE_UI_SCALE = 120;
 
 /** 90, 100, … 150 */
 export const UI_SCALES = Array.from({ length: (UI_SCALE_MAX - UI_SCALE_MIN) / UI_SCALE_STEP + 1 }, (_, i) => UI_SCALE_MIN + i * UI_SCALE_STEP);
@@ -49,6 +51,10 @@ export function applyUiScale(percent, root = document.documentElement) {
 	const p = normalizeUiScale(percent);
 	if (p === DEFAULT_UI_SCALE) root.style.removeProperty('--ui-scale');
 	else root.style.setProperty('--ui-scale', String(p / 100));
+	// 120 % and up: the few layouts that need a different SHAPE (not just size) at a large scale on a
+	// phone — a PropRow's segmented control goes under its label — key off this attribute
+	if (p >= LARGE_UI_SCALE) root.dataset.uiLarge = '';
+	else delete root.dataset.uiLarge;
 }
 
 /** the percentage, 90…150 */

@@ -228,6 +228,15 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+	/* 53 A1: at a large UI scale a command's name WRAPS rather than ellipsising (no text clipped) */
+	:global(:root[data-ui-large]) .cp-label,
+	:global(:root[data-ui-large]) .cp-detail {
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+	:global(:root[data-ui-large]) .cp-kind {
+		flex-basis: auto;
+	}
 	.cp-empty {
 		padding: 18px 12px;
 		text-align: center;

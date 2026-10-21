@@ -20,6 +20,8 @@
 // A stacked segmented control too wide even for the whole row wraps its options into two columns
 // (`sr-seg-wrap`) instead of letting "Properties" spill out of its slot.
 
+import { scaledPx } from '../uiScale'; // 53 A1: both floors are design px — the text they protect scales
+
 /** the text column a control may leave beside it (px); ≥ the G19 suites' "no one-word column" floor */
 export const TEXT_MIN = 150;
 /** a slider has no intrinsic width — it counts as this wide */
@@ -77,9 +79,10 @@ export function measureRows(rows) {
 	const results = jobs.map((j) => {
 		const W = j.body.clientWidth;
 		let C = j.probe.getBoundingClientRect().width;
-		if (j.probe.querySelector('.sl')) C = Math.max(C, FLUID_MIN);
+		if (j.probe.querySelector('.sl')) C = Math.max(C, scaledPx(FLUID_MIN));
 		const gap = parseFloat(getComputedStyle(j.body).columnGap) || 0;
-		const need = j.hasDesc || !j.head ? TEXT_MIN : Math.min(TEXT_MIN, Math.ceil(j.head.getBoundingClientRect().width) + 1);
+		const textMin = scaledPx(TEXT_MIN);
+		const need = j.hasDesc || !j.head ? textMin : Math.min(textMin, Math.ceil(j.head.getBoundingClientRect().width) + 1);
 		const onRow = W - gap - C >= need;
 		const segWrap = !onRow && C > W + 0.5 && !!j.probe.querySelector('.seg');
 		return { onRow, segWrap, W: Math.round(W), C: Math.round(C), need };

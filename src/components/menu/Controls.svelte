@@ -99,7 +99,7 @@
 	import { geometry as sidebarGeometry } from '$lib/sidebars';
 	import type { ToolbarLayout, LayoutConfig, Placements, Region } from '$lib/toolbarLayout';
 	import { pivotMode, pivotParentAvailable } from '$lib/multiTransform'; // 37 R1: the toolbar Pivot cell
-	import { cssPx } from '$lib/uiScale'; // 53 A1: hud.css px tokens read back as calc(...)
+	import { cssPx, scaledPx } from '$lib/uiScale'; // 53 A1: hud.css px tokens read back as calc(...)
 	import { VRButton, XRButton } from '@threlte/xr'
 
 	// A panel is "shown" when it is open AND either the visible dock tab OR floating
@@ -805,8 +805,8 @@
 		let moving = false;
 		let left = saved?.left ?? 350;
 		let top = saved?.top ?? 100;
-		let width = saved?.width ?? 300;
-		let height = saved?.height ?? 250;
+		let width = saved?.width ?? scaledPx(300); // 53 A1: the default size follows the UI scale
+		let height = saved?.height ?? scaledPx(250);
 
 		let startX = 0;
 		let startY = 0;
@@ -983,8 +983,8 @@
 			} catch {}
 			left = stored?.left ?? 350;
 			top = stored?.top ?? 100;
-			width = stored?.width ?? 300;
-			height = stored?.height ?? 250;
+			width = stored?.width ?? scaledPx(300);
+			height = stored?.height ?? scaledPx(250);
 			clampRect();
 		});
 	}

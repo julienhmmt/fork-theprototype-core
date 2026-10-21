@@ -150,6 +150,9 @@ export const DEBUG_HOOKS = [
 	['nodeGroups', () => import('./nodeGroups')],
 	['nodeEditorActions', () => import('./nodeEditorActions')],
 	['themes', () => import('./themes')],
+	// 53 A1 / A5: the UI scale + reduced-motion settings
+	['uiScale', () => import('./uiScale')],
+	['motion', () => import('./motion')],
 	['phoneShell', () => import('./ui/phoneShell.js')],
 	// 42 I5: the phone bar list (phoneBar / setBar) and More's three chrome switches
 	['phoneBar', () => import('./ui/phoneBar.js')],

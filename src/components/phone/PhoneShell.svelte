@@ -93,17 +93,21 @@
 	import { statsOpen } from '$lib/sceneBudget';
 	// 46 B1: the budget chip's phone form (an item of the bar catalog — in More ▸ Tools & View by default)
 	import { budgetTarget, sceneCost, TARGETS, verdictFor, openBudget } from '$lib/budgetMeter';
+	import { uiScale } from '$lib/uiScale'; // 53 A1: the shell's script geometry follows the UI scale
 	const moreTipShown = tipShown(TIP_PHONE_MORE);
 
 	// ---- the <html> class + the sheet geometry --------------------------------------
 	let viewportH = $state(typeof window === 'undefined' ? 844 : window.innerHeight);
 	// NOTES-38 #32 (a): a sheet sits ABOVE the bottom bar (Play stays visible and tappable), so
 	// its detents are fractions of the room above the bar, not of the window
-	const BAR_H = 76; // .ps-bar (+ the safe-area inset, which CSS adds)
+	// 53 A1: every px here is a DESIGN px that phone.css also draws at the UI scale — `k` keeps the
+	// script's geometry in step with the stylesheet's (the bar is 76 × k tall on screen)
+	const k = $derived($uiScale / 100);
+	const BAR_H = $derived(Math.round(76 * k)); // .ps-bar (+ the safe-area inset, which CSS adds)
 	// 40 F1: no sheet rises into the top bar, and none pushes the selection strip under it — the
 	// strip (52 + an 8 gap) rides ON TOP of the sheet while something is selected (#32 b)
-	const TOP_ROOM = 64; // the logo / chip / avatar row (12 + 44) and its gap
-	const STRIP_ROOM = 60;
+	const TOP_ROOM = $derived(Math.round(64 * k)); // the logo / chip / avatar row (12 + 44) and its gap
+	const STRIP_ROOM = $derived(Math.round(60 * k));
 	const hasSel = $derived(($selectedObjects ?? []).length > 0);
 	// 41 G13: Interact empties the selection, and the strip STAYS so Interact can be turned off
 	const interactOn = $derived($editorMode === 'interact');
@@ -196,8 +200,8 @@
 	const titled = $derived(top ? HOSTS[top][1] !== null : false);
 	// 42 I5: More ▸ "Grab handle" off = no grabber pill and no tap-to-resize; a thin invisible edge
 	// still drags (the handle strip shrinks to it)
-	const STRIP_H = $derived($phoneGrabHandle ? 22 : 10); // the handle strip
-	const HEAD_H = 44; // the frame's own title row (Connection, More)
+	const STRIP_H = $derived(Math.round(($phoneGrabHandle ? 22 : 10) * k)); // the handle strip
+	const HEAD_H = $derived(Math.round(44 * k)); // the frame's own title row (Connection, More)
 
 	// publish the frame rect for phone.css (the reused element is placed into it)
 	$effect(() => {
@@ -296,7 +300,7 @@
 	// appears, the chip widens when the mic does). The label's natural width comes from a hidden copy
 	// that is always laid out — a hidden label measures 0, and zero is not a width.
 	const chipLabel = $derived(connectionLabel($connectionStatus.tone));
-	const CHIP_LABEL_GAP = 8; // .ps-chip-main's gap
+	const CHIP_LABEL_GAP = $derived(8 * k); // .ps-chip-main's gap
 	let chipCompact = $state(false);
 	/** @type {HTMLElement | undefined} */
 	let chipWrapEl = $state();
@@ -378,7 +382,7 @@
 	// `dockHeight`, swipe down to the end MINIMIZES the dock (every tab stays open; the bar's
 	// buttons bring it back — panelToggles' minimized rule).
 	// 42 I5: More ▸ "Dock tab row" off hides DockTabs' strip (phone.css), so the room goes too
-	const DOCK_TABS_ROOM = $derived($phoneDockTabs ? 28 : 0); // DockTabs' strip rides just above the panel
+	const DOCK_TABS_ROOM = $derived($phoneDockTabs ? Math.round(28 * k) : 0); // DockTabs' strip rides just above the panel
 	// the root classes phone.css reads for the two chrome switches
 	$effect(() => {
 		const root = document.documentElement.classList;

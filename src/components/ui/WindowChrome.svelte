@@ -189,6 +189,18 @@
 		font-weight: 600;
 		color: var(--text);
 	}
+	/* 53 A1: at a large UI scale a narrow panel (a phone sheet, a slim column) cannot hold the title
+	   AND every header button at full size: the title keeps a readable width and the buttons wrap to
+	   a second row instead of squeezing it to one letter — the close button stays on screen either way */
+	:global(:root[data-ui-large]) .wc-head {
+		flex-wrap: wrap;
+		height: auto;
+		min-height: 48px;
+		row-gap: 2px;
+	}
+	:global(:root[data-ui-large]) .wc-title {
+		min-width: min(6.5em, 100%);
+	}
 	.wc-modal .wc-title {
 		font-size: var(--fs-modal-title);
 		letter-spacing: -0.01em;

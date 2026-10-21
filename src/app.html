@@ -39,6 +39,7 @@
 			try {
 				var savedScale = parseFloat(localStorage.getItem('ui:scale') || '');
 				if (savedScale >= 90 && savedScale <= 150 && savedScale !== 100) document.documentElement.style.setProperty('--ui-scale', String(Math.round(savedScale / 10) / 10));
+				if (savedScale >= 120 && savedScale <= 150) document.documentElement.dataset.uiLarge = '';
 			} catch (e) {}
 		</script>
 		%sveltekit.head%
