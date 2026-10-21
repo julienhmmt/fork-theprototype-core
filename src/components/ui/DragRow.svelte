@@ -159,6 +159,17 @@
 		onInput(event);
 	}
 
+	/** 53 A3: Enter / Escape leave the field (the locked behaviour), but a keyboard user keeps
+	 *  their PLACE — the row takes focus on loan, so the next Tab goes on to the next field
+	 *  instead of starting over from the top of the page */
+	function keepPlace() {
+		const el = wrapEl;
+		if (!el || document.activeElement !== document.body) return;
+		el.setAttribute('tabindex', '-1');
+		el.addEventListener('blur', () => el.removeAttribute('tabindex'), { once: true });
+		el.focus({ preventScroll: true });
+	}
+
 	/**
 	 * Keydown AND the pointer trio as DIRECT listeners rather than Svelte's
 	 * delegated `onkeydown`/`onpointerdown` attributes. Delegated handlers only run
@@ -218,10 +229,12 @@
 			} finally {
 				reverting = false;
 			}
+			keepPlace();
 			event.preventDefault();
 			event.stopPropagation();
 		} else if (event.key === 'Enter') {
 			inputEl?.blur();
+			keepPlace();
 		}
 	}
 

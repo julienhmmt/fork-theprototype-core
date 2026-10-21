@@ -45,6 +45,46 @@ export function isViewportTarget(el) {
 	return el.tagName === 'CANVAS' && !!el.closest?.('#viewport');
 }
 
+/** <body> holds focus both after a press on the canvas and after Tab wrapped past the last
+ *  control — only the first means "the user is in the 3D view". */
+let viewClaimed = false;
+let claimTracking = false;
+/** Start telling the two apart (shortcuts.startShortcuts). */
+export function trackViewClaim() {
+	if (claimTracking || typeof window === 'undefined') return;
+	claimTracking = true;
+	window.addEventListener(
+		'pointerdown',
+		(e) => {
+			const t = /** @type {any} */ (e.target);
+			viewClaimed = !!t && typeof t.closest === 'function' && !!t.closest('#viewport');
+		},
+		true
+	);
+	window.addEventListener(
+		'focusin',
+		(e) => {
+			const t = /** @type {any} */ (e.target);
+			if (t && t !== document.body && t.id !== 'viewport') viewClaimed = false;
+		},
+		true
+	);
+}
+
+/**
+ * Is a Tab on `el` the Edit Mesh shortcut? Only on the 3D view — the focused viewport or its
+ * canvas, or <body> after a press on the canvas. A Tab that wrapped focus to <body> past the
+ * last control is navigation, or a keyboard user with something selected would be stuck there
+ * entering and leaving Edit Mesh.
+ * @param {any} el
+ */
+export function tabEditsMesh(el) {
+	if (!isViewportTarget(el)) return false;
+	if (!el || typeof el.closest !== 'function') return true; // a synthetic window dispatch
+	if (el === document.body || el === document.documentElement) return viewClaimed;
+	return true;
+}
+
 /** Give the keyboard to the 3D view (the skip link's target). @returns {boolean} */
 export function focusViewport() {
 	if (typeof document === 'undefined') return false;
@@ -59,22 +99,57 @@ export function focusViewport() {
 	return document.activeElement === el;
 }
 
+/** the last few elements that held focus, newest last, with WHEN — so a surface opened from a
+ *  menu row that is gone by the time it closes can hand focus back to the menu's own button
+ *  @type {{el: HTMLElement, at: number}[]} */
+const trail = [];
+let tracking = false;
+export function trackFocus() {
+	if (tracking || typeof document === 'undefined') return;
+	tracking = true;
+	document.addEventListener(
+		'focusin',
+		(e) => {
+			const t = e.target;
+			if (!(t instanceof HTMLElement) || t === document.body) return;
+			const i = trail.findIndex((r) => r.el === t);
+			if (i >= 0) trail.splice(i, 1);
+			trail.push({ el: t, at: Date.now() });
+			// distinct elements: long enough to outlast a walk down the whole main menu
+			if (trail.length > 64) trail.shift();
+		},
+		true
+	);
+}
+
 /**
  * Where focus was; the returned function restores it, but only when focus is still inside
  * `within` (the surface that is closing) or fell to <body> — a user who already moved on keeps
- * their place.
+ * their place. When the element that had focus is gone (a menu row that opened a dialog and
+ * closed its menu with it), the newest earlier one still on screen takes it.
  * @param {() => (Element | null | undefined)} [within]
  */
 export function rememberFocus(within) {
-	const prev = typeof document === 'undefined' ? null : /** @type {HTMLElement | null} */ (document.activeElement);
+	trackFocus();
+	let prev = typeof document === 'undefined' ? null : /** @type {HTMLElement | null} */ (document.activeElement);
+	// focus on <body> because the opener just VANISHED (the row unmounted with its menu in the
+	// same click) is not the user being on the viewport — take the opener from the trail
+	const newest = trail[trail.length - 1];
+	if ((!prev || prev === document.body) && newest && !newest.el.isConnected && Date.now() - newest.at < 3000) prev = newest.el;
+	const earlier = trail.map((r) => r.el).reverse();
 	return () => {
-		if (!prev || prev === document.body || !prev.isConnected) return;
 		const now = document.activeElement;
 		const box = within?.();
 		const lost = !now || now === document.body || !now.isConnected || (box && box.contains(now)) || (box && !box.isConnected);
 		if (!lost) return;
+		// nothing to go back to when focus was on <body> (a right-click on the canvas): stay there
+		if (!prev || prev === document.body) return;
+		const usable = (/** @type {HTMLElement | null} */ el) => !!el && el !== document.body && el.isConnected && !(box && box.contains(el)) && isShown(el);
+		const target = usable(prev) ? prev : earlier.find(usable);
 		try {
-			prev.focus({ preventScroll: true });
+			// the viewport takes focus only on loan (focusViewport) — lend it again
+			if (target?.id === 'viewport') focusViewport();
+			else target?.focus({ preventScroll: true });
 		} catch {
 			/* a node that cannot take focus any more keeps nothing */
 		}

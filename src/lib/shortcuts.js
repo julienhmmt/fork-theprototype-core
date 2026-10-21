@@ -50,7 +50,7 @@ import { requestPlay } from './playMode';
 import { selectedObject, selectedObjects } from '../stores/sceneStore';
 import { safeStorage } from './safeStorage';
 // 53 A3: does a key press belong to the 3D view (a zero-import leaf)
-import { isViewportTarget } from './keyboardNav';
+import { tabEditsMesh, trackViewClaim } from './keyboardNav';
 
 // Single source of truth for keyboard shortcuts: the same registry binds the keys
 // and renders the list in Settings -> Shortcuts. Other modules push entries via
@@ -1280,11 +1280,11 @@ function handleKeydown(event) {
 	// is the browser's focus navigation — the global Tab (enter Edit Mesh) left every
 	// menu row unreachable by keyboard
 	const target = /** @type {any} */ (event.target);
-	// 53 A3: …and on ANY focused control. Tab is Edit Mesh only on the 3D view itself (body,
-	// the canvas, the viewport the skip link focuses); everywhere else it is how a keyboard
-	// user moves through the app — the global Tab used to swallow every press, so from a
-	// fresh load focus never left <body>
-	if ((combo === 'Tab' || combo === 'Shift+Tab') && (!isViewportTarget(target) || target?.closest?.('[popover], [role="menu"], dialog'))) return;
+	// 53 A3: …and on ANY focused control. Tab is Edit Mesh only on the 3D view itself (the
+	// viewport the skip link focuses, its canvas, or <body> after a press on the canvas);
+	// everywhere else it is how a keyboard user moves through the app — the global Tab used
+	// to swallow every press, so from a fresh load focus never left <body>
+	if ((combo === 'Tab' || combo === 'Shift+Tab') && (!tabEditsMesh(target) || target?.closest?.('[popover], [role="menu"], dialog'))) return;
 	// D3: while a mesh-edit session owns its hotkeys, bare mesh-edit keys never
 	// match the registry — F would ALSO focus the object mid-edit. Delete
 	// self-guards; 1/2/3 intentionally stay (gizmo mode on the proxy).
@@ -1334,6 +1334,7 @@ export function startShortcuts() {
 	overrides = loadOverrides();
 	applyOverrides();
 	startKeyScope();
+	trackViewClaim(); // 53 A3
 	setVrScopeProbe(() => !!get(isVRMode));
 	window.addEventListener('keydown', handleKeydown);
 }

@@ -9,10 +9,25 @@
 	// The region list lives in `REGIONS` (keyboardNav.js would have to import the stores this file
 	// reads, and shortcuts.js reads keyboardNav — it stays a leaf).
 	import { onMount } from 'svelte';
-	import { focusViewport, focusablesIn, isShown } from '$lib/keyboardNav';
+	import { get } from 'svelte/store';
+	import { focusViewport, focusablesIn, isShown, isViewportTarget, trackFocus } from '$lib/keyboardNav';
 	import { keySessionOpen } from '$lib/shortcuts';
 	import { isIsolated } from '$lib/objectActions';
 	import { focusActive } from '$lib/focusMode';
+	import { canvasCenter } from '$lib/canvasRect';
+	import { closeMenu, notificationCenterOpen, connectDrawerOpen, notesDrawerOpen, peersPanelOpen, objectContextMenu, viewportMenuOpener } from '../stores/appStore.js';
+	import { selectedObjects, lockedObjects } from '../stores/sceneStore.js';
+
+	/** POPOVERS THAT ESCAPE CLOSES while they hold the focus (none of them had a key of their own),
+	 *  and the trigger the focus goes back to. A surface whose own handler takes Escape (a menu, a
+	 *  dialog, a field) prevents it first, so this never doubles up. */
+	const DISMISS = [
+		{ within: '#sidebar70, #logo-menu', open: () => !get(closeMenu), close: () => closeMenu.set(true), back: '#logo-menu' },
+		{ within: '#notif-panel, #notif-bell', open: () => get(notificationCenterOpen), close: () => notificationCenterOpen.set(false), back: '#notif-bell' },
+		{ within: '[data-testid="connect-info-drawer"], #connect-info-button', open: () => get(connectDrawerOpen), close: () => connectDrawerOpen.set(false), back: '#connect-info-button' },
+		{ within: '#notes-drawer, #notes-toggle', open: () => get(notesDrawerOpen), close: () => notesDrawerOpen.set(false), back: '#notes-toggle' },
+		{ within: '#peers-popover, #peers-trigger', open: () => get(peersPanelOpen), close: () => peersPanelOpen.set(false), back: '#peers-trigger' }
+	];
 
 	/** Regions in reading order: top-left to bottom-right, the viewport last. Each entry is a
 	 *  selector list; the first match on screen is the region. */
@@ -88,7 +103,36 @@
 		focusRegion(list[next]);
 	}
 
+	/** Shift+F10 / the Menu key on the 3D view or the object tree: the selection's object menu
+	 *  (at its row, or the canvas centre), else the viewport's own menu — a right-click without a
+	 *  mouse. Elsewhere the browser's `contextmenu` reaches the focused control's own handler.
+	 *  @param {HTMLElement | null} target */
+	function keyboardContextMenu(target) {
+		const tree = target?.closest?.('#object-tree');
+		if (!tree && !isViewportTarget(target)) return false;
+		const centre = canvasCenter();
+		const sel = get(selectedObjects);
+		const uuid = sel.length ? sel[sel.length - 1] : null;
+		if (uuid) {
+			const row = tree ? /** @type {HTMLElement | null} */ (tree.querySelector('.selected, [aria-selected="true"]')) : null;
+			const r = (row ?? tree)?.getBoundingClientRect();
+			objectContextMenu.set({
+				x: r ? r.left + Math.min(r.width, 160) : centre.x,
+				y: r ? r.top + r.height : centre.y,
+				uuid,
+				point: null,
+				locked: !!get(lockedObjects).find((/** @type {any} */ lock) => lock[1] === uuid)
+			});
+			return true;
+		}
+		const open = /** @type {any} */ (get(viewportMenuOpener));
+		if (!open) return false;
+		open(centre.x, centre.y, true);
+		return true;
+	}
+
 	onMount(() => {
+		trackFocus();
 		/** the viewport's Escape: decided BEFORE the app's own Escape handlers run (capture), acted
 		 *  on after them (a task later) — a session that Escape ends must not also lose the view */
 		let busy = false;
@@ -109,8 +153,31 @@
 				leaveViewport();
 			}, 0);
 		};
+		/** after every handler in the app: an Escape nobody took closes the popover holding focus,
+		 *  and the Menu key / Shift+F10 opens a context menu where no control would get one
+		 *  @param {KeyboardEvent} e */
+		const bubble = (e) => {
+			if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+			const target = /** @type {HTMLElement | null} */ (e.target instanceof HTMLElement ? e.target : null);
+			if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+				if (keyboardContextMenu(target)) e.preventDefault();
+				return;
+			}
+			if (e.key !== 'Escape' || !target) return;
+			for (const d of DISMISS) {
+				if (!target.closest(d.within) || !d.open()) continue;
+				e.preventDefault();
+				d.close();
+				/** @type {HTMLElement | null} */ (document.querySelector(d.back))?.focus();
+				return;
+			}
+		};
 		window.addEventListener('keydown', capture, true);
-		return () => window.removeEventListener('keydown', capture, true);
+		window.addEventListener('keydown', bubble);
+		return () => {
+			window.removeEventListener('keydown', capture, true);
+			window.removeEventListener('keydown', bubble);
+		};
 	});
 </script>
 

@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
+	import { createEventDispatcher, onDestroy } from 'svelte';
+	import { rememberFocus } from '$lib/keyboardNav';
 	import ContextMenuItems from './ContextMenuItems.svelte';
 	import Icon from './ui/Icon.svelte';
 	import { collectLeaves, rankMatches } from '$lib/menuFilter';
@@ -9,6 +10,12 @@
 	import SheetGrip from './ui/SheetGrip.svelte';
 	import { readSheetH, saveSheetH } from '$lib/ui/sheetDrag.js';
 	import { phoneShellActive, phoneSheetMaxH } from '$lib/ui/phoneShell.js';
+
+	// 53 A3: closing the menu (a pick, Escape, an outside press) hands the keyboard back to what
+	// had it before the menu took it for its filter field — a toolbar cell, a tree, the viewport
+	let menuEl: HTMLElement | null = null;
+	const restoreFocus = rememberFocus(() => menuEl);
+	onDestroy(() => queueMicrotask(restoreFocus));
 
 	// Generic context menu. items: [{ label, action?, disabled?, tooltip?, danger?,
 	// icon?, hint?, checked?, keepOpen?, rowActions?, children?: items[] } |
@@ -452,6 +459,7 @@
      it, in either phase. Submenus are DOM children here, so they bubble to this. -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_interactive_supports_focus, a11y_click_events_have_key_events -->
 <div
+	bind:this={menuEl}
 	use:portal
 	use:place
 	use:minimalScroll
