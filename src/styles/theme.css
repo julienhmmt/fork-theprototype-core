@@ -222,7 +222,38 @@
 	--socket-shape-object: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
 	--socket-shape-event: polygon(8% 0%, 100% 50%, 8% 100%);
 	--socket-shape-effect: polygon(50% 0%, 63% 37%, 100% 50%, 63% 63%, 50% 100%, 37% 63%, 0% 50%, 37% 37%);
-	--socket-shape-any: circle(50% at 50% 50%);
+	--socket-shape-any: inset(22% 0% round 999px);
+	/* and each type's hue (was a hex table in flowSockets.typeColor — the same in every theme, so
+	   light's pale yellows sat at 1.5:1 on a white card). 3:1 on the card in every theme;
+	   `event` moved off the `color` amber it was indistinguishable from. */
+	--socket-number: #38bdf8;
+	--socket-vector3: #a78bfa;
+	--socket-boolean: #f472b6;
+	--socket-color: #fbbf24;
+	--socket-object: #4ade80;
+	--socket-event: #e2e8f0;
+	--socket-effect: #fb923c;
+	--socket-any: #94a3b8;
+}
+:root[data-theme='light'] {
+	--socket-number: #0369a1;
+	--socket-vector3: #6d28d9;
+	--socket-boolean: #be185d;
+	--socket-color: #a16207;
+	--socket-object: #15803d;
+	--socket-event: #334155;
+	--socket-effect: #c2410c;
+	--socket-any: #64748b;
+}
+:root[data-theme='contrast'] {
+	--socket-number: #33ddff;
+	--socket-vector3: #c9a6ff;
+	--socket-boolean: #ff7fd0;
+	--socket-color: #ffd400;
+	--socket-object: #66ff99;
+	--socket-event: #ffffff;
+	--socket-effect: #ffa64d;
+	--socket-any: #b0b8c4;
 }
 
 /* ---- 38 R11: the code editor's DARK values (CodeEditor.svelte used to carry them as per-site

@@ -102,7 +102,7 @@
 	import { gameState } from '$lib/gameState';
 	import { sessionHost } from '$lib/connectionState';
 	import { mutedPeers, toggleMutePeer } from '$lib/voiceChat';
-	import { peerQuality } from '$lib/networkQuality';
+	import { peerQuality, qGlyph } from '$lib/networkQuality';
 	import ContextMenu from '../ContextMenu.svelte';
 	import NotificationCenter from './NotificationCenter.svelte';
 	// 42 I9: which of the group's own buttons are placed here, in what order (Controls' layout)
@@ -117,6 +117,7 @@
 	// N3: latency-band dot color for a peer's network-quality indicator
 	const qColor = (level: string) =>
 		level === 'good' ? 'var(--ink-good)' : level === 'ok' ? 'var(--ink-warn)' : level === 'bad' ? 'var(--ink-bad)' : 'var(--text-faint)';
+	// 53 A2: and its SHAPE, so the band never rides on colour alone ($lib/networkQuality)
 
     let openDropdown = $state(false);
 	let muteMenu = $state(null);
@@ -674,7 +675,7 @@
 					{@const q = $peerQuality[user[0]]}
 					<span
 						title={q.rtt != null ? `${Math.round(q.rtt)} ms round-trip` : 'measuring…'}
-						style="color: {qColor(q.level)}">●{q.rtt != null ? ` ${Math.round(q.rtt)}ms` : ''}</span
+						style="color: {qColor(q.level)}">{qGlyph(q.level)}{q.rtt != null ? ` ${Math.round(q.rtt)}ms` : ''}</span
 					>
 					{#if q.relayed}<span class="text-ink-warn" title="Relayed through a TURN server">relayed</span>{/if}
 				{/if}

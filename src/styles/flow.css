@@ -24,9 +24,23 @@
 }
 
 /* B4.2: typed sockets — the color says WHAT connects (flowSockets.typeColor);
-   unmigrated handles above keep the node-accent fallback */
+   unmigrated handles above keep the node-accent fallback.
+   53 A2: and so does the SHAPE (flowSockets.socketShape -> --socket-shape): the handle box goes
+   clear and its ::before draws the type's shape, because a clip-path on the handle itself would
+   clip the ::after hit zone too. */
 .svelte-flow .svelte-flow__handle.socket-typed {
+	width: 12px;
+	height: 12px;
+	background: transparent;
+	border-width: 0;
+}
+.svelte-flow .svelte-flow__handle.socket-typed::before {
+	content: '';
+	position: absolute;
+	inset: 0;
 	background: var(--socket-color, var(--node-accent, var(--text-muted)));
+	clip-path: var(--socket-shape, circle(50% at 50% 50%));
+	pointer-events: none;
 }
 .svelte-flow .svelte-flow__handle.socket-typed:hover,
 .svelte-flow .svelte-flow__handle.socket-typed.connectingfrom,
@@ -34,10 +48,16 @@
 	box-shadow: 0 0 0 4px color-mix(in srgb, var(--socket-color, var(--text-muted)) 45%, transparent);
 }
 /* an incompatible drag target reads RED (xyflow stamps valid only when
-   isValidFlowConnection passes) */
+   isValidFlowConnection passes) — 53 A2: and turns into a CROSS, so "you cannot drop here" is
+   not colour alone */
 .svelte-flow .svelte-flow__handle.connectingto:not(.valid) {
 	border-color: var(--ink-bad);
 	box-shadow: 0 0 0 4px color-mix(in srgb, var(--ink-bad) 45%, transparent);
+	cursor: not-allowed;
+}
+.svelte-flow .svelte-flow__handle.socket-typed.connectingto:not(.valid)::before {
+	background: var(--status-bad);
+	clip-path: var(--shape-bad);
 }
 
 /* node-internal form controls (91): native selects/inputs render WHITE on the

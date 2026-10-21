@@ -323,19 +323,22 @@ export function canConnect(from, to) {
 	return (COERCE[from] || []).includes(to);
 }
 
-/** UI tint per socket type (165) @param {string} type */
+/** the socket types that have a hue and a shape of their own (the rest draw as `any`) */
+export const SOCKET_TYPES = ['number', 'vector3', 'boolean', 'color', 'object', 'event', 'effect'];
+
+/** UI tint per socket type (165). 53 A2: a theme TOKEN (theme.css --socket-<type>), so light and
+ * High contrast state their own hues — a CSS value, painted through `style`.
+ * @param {string} type */
 export function typeColor(type) {
-	return (
-		{
-			number: '#38bdf8', // blue
-			vector3: '#a78bfa', // violet
-			boolean: '#f472b6', // pink
-			color: '#fbbf24', // amber
-			object: '#4ade80', // green
-			event: '#facc15', // yellow
-			effect: '#fb923c' // orange
-		}[type] || '#94a3b8'
-	);
+	return `var(--socket-${SOCKET_TYPES.includes(type) ? type : 'any'})`;
+}
+
+/** 53 A2: the type's SHAPE (theme.css --socket-shape-<type>), so a socket never says its type by
+ * colour alone: number disc, vector3 diamond, boolean square, color hexagon, object pentagon,
+ * event arrow, effect star, anything else a capsule. A `clip-path` value.
+ * @param {string} type */
+export function socketShape(type) {
+	return `var(--socket-shape-${SOCKET_TYPES.includes(type) ? type : 'any'})`;
 }
 
 /**

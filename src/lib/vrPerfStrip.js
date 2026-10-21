@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import { get } from 'svelte/store';
 import { globalScene, globalRenderer } from '../stores/sceneStore';
-import { fpsReading, perfParts, perfStatsShown, TIER_COLORS } from './fpsMeter';
+import { fpsReading, perfParts, perfStatsShown, TIER_COLORS, TIER_MARKS } from './fpsMeter';
 import { PANEL_ORDER } from './vrPanelOverlay';
 import { perfContext } from './perf/perfMarks.js'; // 34 R1: the reporting dot (an import-free leaf)
 
@@ -73,9 +73,13 @@ export function perfSegments(r) {
 	// 34 R1: performance reports are on — the same dot as the desktop counter (beacon.js
 	// registers `reporting`: null when off, else 'idle' | 'sent' | 'failed')
 	const reporting = perfContext('reporting');
-	if (reporting) out.unshift({ text: '●', color: reporting === 'sent' ? '#34d399' : reporting === 'failed' ? '#fbbf24' : '#9ca3af' });
+	// 53 A2: sent / failed / idle as disc / triangle / ring, in the dark theme's colour-blind safe hues
+	if (reporting)
+		out.unshift(
+			reporting === 'sent' ? { text: '●', color: '#33c3c8' } : reporting === 'failed' ? { text: '▲', color: TIER_COLORS.warn } : { text: '○', color: '#9ca3af' }
+		);
 	if (p.ms) out.push({ text: p.ms, color: TIER_COLORS.ok });
-	if (p.calls) out.push({ text: p.calls, color: TIER_COLORS[p.tier ?? 'ok'] });
+	if (p.calls) out.push({ text: (TIER_MARKS[p.tier ?? 'ok'] ?? '') + p.calls, color: TIER_COLORS[p.tier ?? 'ok'] });
 	if (p.tris) out.push({ text: p.tris, color: TIER_COLORS.ok });
 	return out;
 }

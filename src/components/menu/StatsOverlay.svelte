@@ -277,22 +277,34 @@
 	   data-tier). `unknown` is deliberately grey and not a warning — "not measured" is
 	   not "bad", and a panel that cries wolf before the first sample is one nobody
 	   reads. */
+	/* 53 A2: and never by colour alone — fine is a disc, careful a triangle, over a cross, "not
+	   measured" a hollow ring (the theme's --shape-* tokens; 10 px so a triangle still reads) */
 	:global(.budget-dot) {
 		display: inline-block;
-		width: 8px;
-		height: 8px;
+		flex: 0 0 auto;
+		width: 10px;
+		height: 10px;
 		border-radius: 9999px;
-		background: var(--text-faint);
+		background: transparent;
+		box-shadow: inset 0 0 0 2px var(--text-faint);
 		vertical-align: middle;
 	}
 	:global(.budget-dot[data-tier='green']) {
-		background: var(--ink-good);
+		background: var(--status-good);
+		box-shadow: none;
+		clip-path: var(--shape-ok);
 	}
 	:global(.budget-dot[data-tier='amber']) {
-		background: var(--ink-warn);
+		background: var(--status-warn);
+		box-shadow: none;
+		border-radius: 0;
+		clip-path: var(--shape-warn);
 	}
 	:global(.budget-dot[data-tier='red']) {
-		background: var(--ink-bad);
+		background: var(--status-bad);
+		box-shadow: none;
+		border-radius: 0;
+		clip-path: var(--shape-bad);
 	}
 	/* 46 B2: the Budget section */
 	.sb {

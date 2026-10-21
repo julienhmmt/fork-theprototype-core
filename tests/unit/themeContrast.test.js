@@ -137,6 +137,25 @@ describe('colour-blind safe status colours, every theme (53 A2)', () => {
 	});
 });
 
+describe('node-editor sockets (53 A2)', () => {
+	const TYPES = ['number', 'vector3', 'boolean', 'color', 'object', 'event', 'effect', 'any'];
+	for (const theme of THEMES) {
+		const T = resolveTheme(theme);
+		it(`${theme}: every socket hue is a 3:1 mark on the node card and the pane`, () => {
+			for (const t of TYPES) {
+				const w = worst(T, '--socket-' + t, ['--surface-2', '--bg-app']);
+				expect(w.min, `--socket-${t} on ${w.at}: ${w.min.toFixed(2)}:1`).toBeGreaterThanOrEqual(3);
+			}
+		});
+	}
+	it('every socket type has its own shape', () => {
+		const raw = resolveTheme('dark').raw;
+		const shapes = TYPES.map((t) => raw.get('--socket-shape-' + t));
+		expect(shapes.every(Boolean)).toBe(true);
+		expect(new Set(shapes).size).toBe(TYPES.length);
+	});
+});
+
 describe('the colour maths', () => {
 	it('contrast matches WCAG reference values', () => {
 		expect(contrast([0, 0, 0], [255, 255, 255])).toBeCloseTo(21, 5);

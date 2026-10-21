@@ -2,16 +2,17 @@
 	// 38 R3 — one toast's LOOK (SPEC §5: toasts stack max 3, the rest go to the notification
 	// centre as "+N more"). Which toasts show, for how long and in what order stay with
 	// Toasts.svelte (behaviour lock); its lane renders each one through this.
-	//   message, icon (default info), tone (info / ok / warn / bad → the icon's ink)
+	//   message, icon, tone (info / ok / warn / bad → the icon's ink). 53 A2: with no icon the TONE
+	//            picks the glyph too (check / triangle / cross), so the tone never rides on colour alone
 	//   repeat     ×N for a message that came again (the "Retrying…" ×11 case)
 	//   actionLabel + onaction   one inline action;  ondismiss   the × button
 	//   more       a number: render the "+N more in notifications" pill instead (onmore)
 	import Icon from './Icon.svelte';
 
-	/** @type {{message?: string, icon?: string, tone?: 'info'|'ok'|'warn'|'bad', repeat?: number, actionLabel?: string, onaction?: () => void, ondismiss?: () => void, more?: number, onmore?: () => void} & Record<string, any>} */
+	/** @type {{message?: string, icon?: string | undefined, tone?: 'info'|'ok'|'warn'|'bad', repeat?: number, actionLabel?: string, onaction?: () => void, ondismiss?: () => void, more?: number, onmore?: () => void} & Record<string, any>} */
 	let {
 		message = '',
-		icon = 'info',
+		icon = undefined,
 		tone = 'info',
 		repeat = 0,
 		actionLabel = '',
@@ -21,13 +22,16 @@
 		onmore = undefined,
 		...rest
 	} = $props();
+	/** @type {Record<string, string>} */
+	const TONE_ICON = { ok: 'circle-check', warn: 'triangle-alert', bad: 'circle-x' };
+	const glyph = $derived(icon ?? TONE_ICON[tone] ?? 'info');
 </script>
 
 {#if more > 0}
 	<button type="button" class="tp-ui toast-more" onclick={onmore} {...rest}>+{more} more in notifications</button>
 {:else}
 	<div class="tp-ui toast toast-{tone}" {...rest}>
-		<span class="toast-icon" aria-hidden="true"><Icon name={icon} size={16} /></span>
+		<span class="toast-icon" aria-hidden="true"><Icon name={glyph} size={16} /></span>
 		<span class="toast-msg">{message}</span>
 		{#if repeat > 1}<span class="toast-repeat" title={`Shown ${repeat} times`}>×{repeat}</span>{/if}
 		{#if actionLabel && onaction}
