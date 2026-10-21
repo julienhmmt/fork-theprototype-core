@@ -205,7 +205,7 @@ export function envOf(hostname) {
  * whose package.json still says the LAST release (the version bumps only when the release is
  * tagged), so filing its reports under `APP_VERSION` mixed a candidate's errors into the
  * previous release's row. A preview says what it is: an explicit build label when the deploy
- * set one, else the `preview-<major>-<minor>` alias it is served on (`1.40-preview`), else the
+ * set one, else the `preview-<major>-<minor>` alias it is served on (`1.40.0-preview`), else the
  * version it was built from plus `-preview`. Production and dev keep the plain version. Pure.
  * @param {string} version @param {string} hostname @param {string} [explicit]
  */
@@ -215,7 +215,9 @@ export function releaseLabel(version, hostname, explicit) {
 	const v = String(version || '');
 	if (envOf(hostname) !== 'preview') return v;
 	const m = String(hostname || '').toLowerCase().match(/^preview-(\d+)-(\d+)(?:-(\d+))?\./);
-	if (m) return m[1] + '.' + m[2] + (m[3] ? '.' + m[3] : '') + '-preview';
+	// always three numbers: the community Worker files only `X.Y.Z[-tag]` and DROPS anything else (a
+	// `1.40-preview` was answered 204 and never stored), and a pre-release sorts just below its release
+	if (m) return m[1] + '.' + m[2] + '.' + (m[3] || '0') + '-preview';
 	return (v + '-preview').slice(0, 24);
 }
 

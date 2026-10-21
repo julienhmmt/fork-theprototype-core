@@ -153,9 +153,17 @@ describe('49 J3 — bare hostnames and the preview release label', () => {
 		expect(releaseLabel('1.39.0', 'theprototype.app')).toBe('1.39.0');
 		expect(releaseLabel('1.39.0', 'theprototype.pages.dev')).toBe('1.39.0');
 		expect(releaseLabel('1.39.0', 'localhost')).toBe('1.39.0');
-		expect(releaseLabel('1.39.0', 'preview-1-40.theprototype.pages.dev')).toBe('1.40-preview');
+		expect(releaseLabel('1.39.0', 'preview-1-40.theprototype.pages.dev')).toBe('1.40.0-preview');
 		expect(releaseLabel('1.39.0', 'preview-1-40-1.theprototype.pages.dev')).toBe('1.40.1-preview');
 		expect(releaseLabel('1.39.0', 'a1b2c3d4.theprototype.pages.dev')).toBe('1.39.0-preview');
 		expect(releaseLabel('1.39.0', 'preview-1-40.theprototype.pages.dev', '1.40.0-rc2')).toBe('1.40.0-rc2');
+	});
+	it('every derived label is one the community Worker stores (its RELEASE rule, cloud worker-community/src/errors.js)', () => {
+		// the Worker answers 204 and DROPS a report whose release fails this rule — the preview's own reports vanished
+		const WORKER_RELEASE = /^\d{1,3}\.\d{1,3}\.\d{1,4}(?:-[0-9A-Za-z.-]{1,24})?$/;
+		for (const host of ['theprototype.app', 'preview-1-40.theprototype.pages.dev', 'preview-1-40-1.theprototype.pages.dev', 'a1b2c3d4.theprototype.pages.dev', 'localhost']) {
+			const label = releaseLabel('1.39.0', host);
+			expect(WORKER_RELEASE.test(label), `${host} -> ${label}`).toBe(true);
+		}
 	});
 });
