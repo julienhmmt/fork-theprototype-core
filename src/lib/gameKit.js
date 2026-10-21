@@ -25,3 +25,8 @@ export * as comfortVignette from './comfortVignette';
 export * as clap from './clap'; // 31 (Stars Room S3): the clap runtime + its test hook
 export * as clapGesture from './clapGesture'; // 31: the pure detector
 export * as pointGrab from './pointGrab'; // 31 (Stars Room S2): the pointing switch
+// 53 (A6): the player's Accessibility settings, the caption bus, the remappable bindings
+export * as playerAccess from './playerAccess';
+export * as playerAccessCore from './playerAccessCore';
+export * as captions from './captions';
+export * as playerBindings from './playerBindings';

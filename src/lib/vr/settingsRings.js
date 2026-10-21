@@ -5,6 +5,17 @@
 // ring STAYS OPEN so you watch the value change. A range (Height) is two sectors, − and +.
 import { registerVRMenuEntry } from '../vrRadialMenu';
 import { VR_SETTING_PAGES, vrSettingsOf, vrSettingRow, settingValueText, activateVRSetting } from './settingsSchema.js';
+// 53 (A7): one-handed — the buttons that stay on the OTHER controller get root sectors
+import { get } from 'svelte/store';
+import { editorMode } from '../../stores/sceneStore';
+import { oneHandedHand } from './bindings.js';
+import { toggleVRMode } from './modes.js';
+import { gameFeelActive } from '../gameFeel';
+import { shellMenuAvailable, toggleShellMenu } from '../gameShell';
+import { setShellVrRows } from '../shellVrRows';
+
+/** 53 (A7): the comfort rows a headset's game menu repeats on its Accessibility page */
+const SHELL_VR_ROWS = ['vignette', 'stance', 'oneHanded', 'recenter'];
 
 /** sector order inside the Settings ring: the pages first, then Microphone, All settings, Exit VR */
 const PAGE_ORDER = ['comfort', 'body', 'controls', 'display', 'editing'];
@@ -44,6 +55,46 @@ export function registerSettingsRings() {
 				action: () => activateVRSetting(row.id, 1)
 			});
 		}
+	});
+	// 53 (A7): the game menu's Accessibility page in a headset repeats the comfort rows (one write path:
+	// the settings table's own activate)
+	setShellVrRows({
+		rows: () =>
+			SHELL_VR_ROWS.flatMap((id) => {
+				const row = vrSettingRow(id);
+				return row ? [row] : [];
+			}).map((row) => ({
+					id: 'vr:' + row.id,
+					label: row.label,
+					type: row.kind === 'action' ? 'action' : row.kind === 'toggle' ? 'toggle' : 'choice',
+					value: row.get?.(),
+					display: row.kind === 'action' ? row.label : settingValueText(row)
+				})),
+		press: (id, dir) => {
+			if (!SHELL_VR_ROWS.includes(id)) return false;
+			activateVRSetting(id, dir);
+			return true;
+		}
+	});
+	// 53 (A7): ONE-HANDED, the mode and game-menu buttons live on the other controller — so the root
+	// ring offers them (Ping is in Tools ▸ already); hidden when both hands are in play
+	registerVRMenuEntry({
+		id: 'onehand:mode',
+		label: () => (get(editorMode) === 'interact' ? 'Edit mode' : 'Interact'),
+		icon: () => (get(editorMode) === 'interact' ? 'pencil' : 'hand'),
+		order: 7.5,
+		visible: () => !!oneHandedHand(),
+		closes: true,
+		action: () => toggleVRMode()
+	});
+	registerVRMenuEntry({
+		id: 'onehand:pause',
+		label: 'Game menu',
+		icon: 'gamepad-2',
+		order: 7.6,
+		visible: () => !!oneHandedHand() && gameFeelActive() && shellMenuAvailable(),
+		closes: true,
+		action: () => toggleShellMenu()
 	});
 	// the one Voice setting is a single cycling sector on the Settings ring itself (a ring of one
 	// sector would be a dead end)

@@ -18,6 +18,8 @@
 import { writable, get } from 'svelte/store';
 import { vrMenuHand } from '../../stores/sceneStore';
 import { safeStorage } from '../safeStorage';
+// 53 (A7): one-handed play (a leaf)
+import { vrOneHanded } from './prefs.js';
 
 /** @typedef {'left' | 'right'} Hand */
 /** @typedef {'stick' | 'trigger' | 'grip' | 'stickClick' | 'primary' | 'secondary'} Control */
@@ -226,9 +228,39 @@ export function isLeftHanded() {
 	});
 }
 
+// 53 (A7): ONE-HANDED. With `vrOneHanded` on a hand, every action a player needs moves onto that one
+// controller — the stored map is left alone (turning it off gives the old layout back), and the
+// layout is applied HERE, the one place every reader asks:
+//   move · turn · teleport  that stick (forward/back moves, sideways turns, the PRESS held aims a
+//                           teleport — locomotion.js reads `oneHandedHand()` for the split)
+//   menu                    its upper face button (B / Y) — the radial then offers Edit / Interact and
+//                           the game menu (vr/modes.js), and Tools ▸ Ping
+//   ptt                     its lower face button (A / X): talk, or jump in a game
+//   worldPan                its grip (on empty air; a grip on something still grabs)
+//   mode · pause · ping     stay on the OTHER controller (if one is there) and live in the radial
+let oneHand = /** @type {'off' | 'left' | 'right'} */ ('off');
+vrOneHanded.subscribe((v) => (oneHand = v));
+/** the one controller in use, or null @returns {Hand | null} */
+export function oneHandedHand() {
+	return oneHand === 'left' || oneHand === 'right' ? oneHand : null;
+}
+const ONE_HANDED = /** @type {Record<string, Control>} */ ({ move: 'stick', turn: 'stick', teleport: 'stick', menu: 'secondary', ptt: 'primary', worldPan: 'grip' });
+
 /** @param {string} id @returns {Binding} */
 export function bindingOf(id) {
+	const hand = oneHandedHand();
+	if (hand && BY_ID.get(id)?.kind !== 'locked') {
+		const control = ONE_HANDED[id];
+		if (control) return { hand, control };
+		const b = current[id] ?? BY_ID.get(id)?.default;
+		return { hand: hand === 'left' ? 'right' : 'left', control: b?.control ?? 'primary' };
+	}
 	return current[id] ?? BY_ID.get(id)?.default ?? { hand: 'right', control: 'trigger' };
+}
+/** 53 (A7): the hand whose laser points at panels — the one controller when one-handed, else the hand
+ * opposite the radial menu (the rule every panel always used) @returns {Hand} */
+export function pointerHand() {
+	return oneHandedHand() ?? (get(vrMenuHand) === 'right' ? 'left' : 'right');
 }
 /** the hand an action lives on ('right' for a both-hands row) @param {string} id @returns {Hand} */
 export function handOf(id) {

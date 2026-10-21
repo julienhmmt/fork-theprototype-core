@@ -81,7 +81,7 @@ h.run(async () => {
 	h.check((await store(page, 'isLocked')) === true, '1.3 still in Play — Escape paused, it did not exit');
 	h.check((await store(page, 'playPointerFree')) === true, '1.4 the pointer is free over the menu');
 	const items = await page.locator('#game-shell-menu [data-shell-item]').evaluateAll((els) => els.map((e) => e.getAttribute('data-shell-item')));
-	h.check(JSON.stringify(items) === JSON.stringify(['resume', 'restart', 'settings', 'help', 'mainmenu', 'editor']), '1.5 Resume · Restart · Settings · How to play · Main menu (+ Back to editor) (' + items + ')');
+	h.check(JSON.stringify(items) === JSON.stringify(['resume', 'restart', 'settings', 'access', 'help', 'mainmenu', 'editor']), '1.5 Resume · Restart · Settings · Accessibility · How to play · Main menu (+ Back to editor) (' + items + ')');
 
 	console.log('\n=== 2. Resume, and Escape toggles ===');
 	await page.locator('[data-shell-item="resume"]').click();

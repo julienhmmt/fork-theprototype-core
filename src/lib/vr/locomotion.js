@@ -27,7 +27,7 @@ import { hapticPulse } from './haptics.js';
 import { controllerIndexFor } from './input.js';
 import { withRayCamera, safeIntersect } from './pointer.js';
 import { perfMark } from '../perf/perfMarks.js'; // 34 PF: a profiler marker, a leaf
-import { stickOf, handOf } from './bindings.js';
+import { stickOf, handOf, oneHandedHand, sourceOf, CONTROL_INDEX } from './bindings.js';
 import { setLocalFeet } from '../avatars/avatarState.js'; // 37 R23: the walker's feet on the camera stream
 import { vrSmoothTurn, vrSmoothTurnSpeed, vrStance, vrHeightOffset } from './prefs.js';
 
@@ -347,6 +347,9 @@ export function teleportState() {
 export function updateTeleport(session) {
 	// 36 (plan 55): the TELEPORT stick (the right one by default)
 	const { x, y } = stickOf('teleport', session);
+	// 53 (A7): one-handed, the stick moves and turns — HOLDING its press aims, letting go jumps
+	const one = !!oneHandedHand();
+	const held = one && !!sourceOf('teleport', session)?.gamepad?.buttons?.[CONTROL_INDEX.stickClick]?.pressed;
 
 	// 157: teleport can be disabled — reset any arm + hide the arc
 	// 30b P3: ...and Interact allows it only when the scene's play block says so
@@ -357,15 +360,15 @@ export function updateTeleport(session) {
 	}
 
 	if (!S.teleportEngaged) {
-		// stick pushed clearly UP and more up than sideways -> arm
-		if (teleportArms(x, y)) {
+		// stick pushed clearly UP and more up than sideways -> arm (one-handed: the press held)
+		if (one ? held : teleportArms(x, y)) {
 			S.teleportEngaged = true;
 			contentBoundsCache = null; // re-measured once per aim
 		} else {
 			hideArc();
 			return;
 		}
-	} else if (y > -0.4) {
+	} else if (one ? !held : y > -0.4) {
 		// released -> blink if we had a VALID landing (31 K1: an invalid, red one does nothing)
 		S.teleportEngaged = false;
 		if (lastArc?.target && lastArc.valid) {
@@ -469,7 +472,10 @@ export let lastSmoothTurn = 0;
 export function updateSnapTurn(session) {
 	lastSmoothTurn = 0;
 	if (S.teleportEngaged) return; // the stick is busy aiming a teleport
-	const x = stickOf('turn', session).x; // 36 (plan 55): the TURN stick (right by default)
+	const st = stickOf('turn', session); // 36 (plan 55): the TURN stick (right by default)
+	// 53 (A7): one-handed, the same stick also MOVES — it turns only while pushed more sideways than
+	// forward/back (a forward push with a little drift must not spin the player)
+	const x = oneHandedHand() && Math.abs(st.x) <= Math.abs(st.y) ? 0 : st.x;
 	const turning = turningInForce();
 	if (turning.mode === 'smooth') {
 		// 31 K3: SMOOTH turning — a continuous yaw proportional to the stick past a deadzone
@@ -539,6 +545,52 @@ export function noteXRBaseSpace() {
 	// 36: a fresh session starts on the real floor; the frame loop re-applies stance + height
 	appliedLift = 0;
 	seatedLift = null;
+	// 53 (A7): the headset's OWN recenter (holding the Meta button) resets the base space — a seated
+	// player's head height is measured again on the next frame
+	try {
+		xrBaseSpace?.addEventListener?.('reset', () => {
+			seatedLift = null;
+			recenters.headset++;
+		});
+	} catch {
+		/* a space without events (a suite's fake) */
+	}
+}
+
+/** 53 (A7): how often a recenter happened (the suites' view) */
+const recenters = { menu: 0, headset: 0 };
+
+/** 53 (A7): a recenter asked for outside an XR frame waits for the next one */
+let recenterPending = false;
+
+/**
+ * 53 (A7) — RECENTER (Settings ▸ VR ▸ Body, and the game menu's Accessibility page in a headset):
+ * a seated player's head height is measured again from where they sit NOW, and the view turns to
+ * face forward — onto the game's spawn when there is one, else the scene's forward (−Z) where they
+ * stand. A viewer pose exists only inside the session's frame callback, so the work happens on the
+ * NEXT XR frame (updateHeightLift runs it) — a press from any surface, at any time, lands there.
+ */
+export function recenterView() {
+	if (!renderer?.xr?.getSession?.()) return false;
+	recenterPending = true;
+	return true;
+}
+
+/** the recenter itself, inside a frame @returns {'spawn' | 'forward' | null} */
+function runRecenter() {
+	/** @type {any} */
+	let viewer = null;
+	try {
+		viewer = viewerNow();
+	} catch {
+		viewer = null;
+	}
+	if (!viewer) return null;
+	recenters.menu++;
+	seatedLift = null; // updateHeightLift re-measures on the next frame
+	if (spawnPlayer()) return 'spawn';
+	turnRigBy(viewer.yaw); // an offset rotating by `a` turns the viewer by −a: yaw → 0
+	return 'forward';
 }
 
 // ---- 36: SEATED / STANDING + HEIGHT (Settings ▸ VR ▸ Body) --------------------------------------
@@ -567,6 +619,11 @@ export function updateHeightLift() {
 	const frame = renderer?.xr?.getFrame?.();
 	const space = renderer?.xr?.getReferenceSpace?.();
 	if (!frame || !space) return;
+	// 53 (A7): a Recenter pressed since the last frame
+	if (recenterPending) {
+		recenterPending = false;
+		runRecenter();
+	}
 	const stance = get(vrStance);
 	if (stance === 'seated' && seatedLift === null) {
 		const base = xrBaseSpace ? frame.getViewerPose?.(xrBaseSpace) : null;
@@ -582,7 +639,7 @@ export function updateHeightLift() {
 
 /** the suites' view of the lift */
 export function heightLiftDebug() {
-	return { applied: appliedLift, seatedHead: seatedLift, stance: get(vrStance), offset: get(vrHeightOffset) };
+	return { applied: appliedLift, seatedHead: seatedLift, stance: get(vrStance), offset: get(vrHeightOffset), recenters: { ...recenters } };
 }
 
 /** 30b P3: the locomotion rules in force right now (mode + the resolved play block). */
@@ -670,8 +727,11 @@ export function tickVRInteractLocomotion(dt, session) {
 	if (!viewer) return true;
 	// 36 (plan 55): the MOVE stick (the left one by default)
 	const move = stickOf('move', session);
-	const stickX = move.x;
-	const stickY = move.y;
+	// 53 (A7): one-handed, sideways is TURNING (updateSnapTurn) — the stick walks only forward/back,
+	// and only while pushed more that way than sideways
+	const one = !!oneHandedHand();
+	const stickX = one ? 0 : move.x;
+	const stickY = one && Math.abs(move.y) <= Math.abs(move.x) ? 0 : move.y;
 	/** @type {any} */
 	let aim = null;
 	if (policy.fly) {

@@ -36,7 +36,8 @@ import { pivotMode } from '../multiTransform'; // 37 R1: the selection's pivot p
 import { openVRKeyboard } from '../vrKeyboard';
 import { renderer } from './core.js';
 import { applyVRFrameRate } from './input.js';
-import { vrSmoothTurn, vrSmoothTurnSpeed, vrComfortVignette, vrStance, vrHeightOffset, vrSnapAngleLast, vrWorldSnap, clampHeight, SMOOTH_SPEEDS, SNAP_ANGLES, HEIGHT_LIMIT } from './prefs.js';
+import { vrSmoothTurn, vrSmoothTurnSpeed, vrComfortVignette, vrStance, vrHeightOffset, vrSnapAngleLast, vrWorldSnap, vrOneHanded, clampHeight, SMOOTH_SPEEDS, SNAP_ANGLES, HEIGHT_LIMIT } from './prefs.js';
+import { recenterView } from './locomotion.js'; // 53 (A7)
 import { vrHudPlacement, vrHudSize, vrHudHints, setVrHudPlacement, setVrHudSize, setVrHudHints } from '../vrHudPrefs';
 import { vrBindings, resetBindings, mirrorBindings, isLeftHanded, VR_ACTIONS, CONTROLS_FOR, bindingOf, setBinding, actionInfo, controlName } from './bindings.js';
 
@@ -47,6 +48,29 @@ import { vrBindings, resetBindings, mirrorBindings, isLeftHanded, VR_ACTIONS, CO
  *   step?: number, format?: (v: number) => string, keywords?: string[], note?: string, desktop?: boolean,
  *   vr?: boolean, tour?: string}} SettingRow
  */
+
+/**
+ * 53 (A7): one-handed on/off. Going one-handed moves the radial (vrMenuHand) onto that controller and
+ * remembers where it was; Off puts it back. @param {any} v
+ */
+export function setOneHanded(v) {
+	const next = v === 'left' || v === 'right' ? v : 'off';
+	const was = get(vrOneHanded);
+	if (next === was) return;
+	if (was === 'off') {
+		try {
+			safeStorage.setItem('vrOneHandedMenuPrev', get(vrMenuHand));
+		} catch {}
+	}
+	vrOneHanded.set(next);
+	const hand = next === 'off' ? (safeStorage.getItem('vrOneHandedMenuPrev') === 'left' ? 'left' : 'right') : next;
+	if (get(vrMenuHand) !== hand) {
+		vrMenuHand.set(hand);
+		try {
+			safeStorage.setItem('vrMenuHand', hand);
+		} catch {}
+	}
+}
 
 /** the pages (= the radial's Settings sub-rings and the panel's tabs), in order */
 export const VR_SETTING_PAGES = [
@@ -118,7 +142,23 @@ export const VR_SETTINGS = [
 		keywords: ['smooth turn', 'rotation speed']
 	},
 	{ id: 'mirror', page: 'comfort', label: 'Mirror turn', icon: 'arrow-left-right', kind: 'toggle', get: () => get(vrMirrorSnapTurn), set: (v) => put(vrMirrorSnapTurn, 'vrMirrorSnapTurn', !!v), keywords: ['invert', 'flip', 'snap turn'] },
-	{ id: 'vignette', page: 'comfort', label: 'Comfort vignette', icon: 'scan-eye', kind: 'toggle', get: () => get(vrComfortVignette), set: (v) => vrComfortVignette.set(!!v), keywords: ['tunnel', 'motion sickness', 'blinders'], note: 'Darkens the edges while the stick moves or turns you' },
+	// 53 (A7): how strongly — Off / Low / High (a stored "on" is High, the ring it always was)
+	{
+		id: 'vignette',
+		page: 'comfort',
+		label: 'Comfort vignette',
+		icon: 'scan-eye',
+		kind: 'choice',
+		options: [
+			{ value: 'off', label: 'Off' },
+			{ value: 'low', label: 'Low' },
+			{ value: 'high', label: 'High' }
+		],
+		get: () => get(vrComfortVignette),
+		set: (v) => vrComfortVignette.set(v),
+		keywords: ['tunnel', 'motion sickness', 'blinders', 'comfort', 'accessibility'],
+		note: 'Darkens the edges while the stick moves or turns you smoothly'
+	},
 	{ id: 'teleport', page: 'comfort', label: 'Teleport', icon: 'footprints', kind: 'toggle', get: () => get(vrTeleportEnabled), set: (v) => put(vrTeleportEnabled, 'vrTeleportEnabled', !!v), keywords: ['arc', 'jump'], note: 'Push the teleport stick up to aim, let go to land' },
 	{ id: 'flying', page: 'comfort', label: 'Flying', icon: 'move', kind: 'toggle', get: () => get(vrFlying), set: (v) => put(vrFlying, 'vrFlying', !!v), keywords: ['fly', 'free movement'], note: 'In Edit the move stick follows where that controller points' },
 	// ---- Body
@@ -153,6 +193,8 @@ export const VR_SETTINGS = [
 		keywords: ['eye height', 'offset', 'tall', 'short', 'floor']
 	},
 	{ id: 'heightReset', page: 'body', label: 'Reset height', icon: 'rotate-ccw', kind: 'action', run: () => vrHeightOffset.set(0), desktop: false },
+	// 53 (A7): seated players re-measure where they sit and face forward (the game's spawn, if any)
+	{ id: 'recenter', page: 'body', label: 'Recenter', icon: 'compass', kind: 'action', run: () => recenterView(), desktop: false, keywords: ['recentre', 'reset view', 'seated', 'forward'] },
 	// ---- Controls
 	{
 		id: 'menuHand',
@@ -174,6 +216,24 @@ export const VR_SETTINGS = [
 		},
 		keywords: ['radial', 'quick menu', 'handedness'],
 		note: 'Which controller opens the radial menu; the other one points'
+	},
+	// 53 (A7): play with ONE controller — the layout lives in bindings.js (bindingOf); the radial moves
+	// to that hand (and back to where it was when this goes Off)
+	{
+		id: 'oneHanded',
+		page: 'controls',
+		label: 'One-handed',
+		icon: 'hand',
+		kind: 'choice',
+		options: [
+			{ value: 'off', label: 'Off' },
+			{ value: 'left', label: 'Left only' },
+			{ value: 'right', label: 'Right only' }
+		],
+		get: () => get(vrOneHanded),
+		set: (v) => setOneHanded(v),
+		keywords: ['one hand', 'single controller', 'accessibility', 'disability', 'motor'],
+		note: 'Everything on one controller: its stick moves and turns, hold the stick press to teleport, B/Y opens the menu'
 	},
 	{ id: 'menuHold', page: 'controls', label: 'Hold to open menu', icon: 'circle-dot', kind: 'toggle', get: () => get(vrMenuHold), set: (v) => put(vrMenuHold, 'vrMenuHold', !!v), keywords: ['radial', 'press and hold'], note: 'Hold the menu button, release over a sector to pick it' },
 	{ id: 'leftHanded', page: 'controls', label: 'Left-handed', icon: 'arrow-left-right', kind: 'toggle', get: () => isLeftHanded(), set: (v) => v !== isLeftHanded() && mirrorBindings(), keywords: ['handedness', 'mirror', 'swap hands'], note: 'Mirrors every button to the other hand' },
@@ -411,7 +471,7 @@ export function activateVRSetting(id, dir = 1) {
 export const vrSettingsTick = writable(0);
 /** 36-vr-ai (B9): what the in-headset Search page filters by (typed on the VR keyboard) */
 export const vrSettingsQuery = writable('');
-const watched = [vrSnapAngle, vrMirrorSnapTurn, vrTeleportEnabled, vrFlying, vrMenuHand, vrMenuHold, vrGrabStyle, vrTargetHz, vrStatsOpen, peerHandStyle, vrPassthrough, vrWireframeSelection, vrVertexHold, vrSleeveEnabled, perfStatsShown, vrMicMode, vrFaceCap, vrVertexCap, vrSmoothTurn, vrSmoothTurnSpeed, vrComfortVignette, vrStance, vrHeightOffset, vrWorldSnap, vrBindings, vrSettingsQuery];
+const watched = [vrSnapAngle, vrMirrorSnapTurn, vrTeleportEnabled, vrFlying, vrMenuHand, vrMenuHold, vrGrabStyle, vrTargetHz, vrStatsOpen, peerHandStyle, vrPassthrough, vrWireframeSelection, vrVertexHold, vrSleeveEnabled, perfStatsShown, vrMicMode, vrFaceCap, vrVertexCap, vrSmoothTurn, vrSmoothTurnSpeed, vrComfortVignette, vrStance, vrHeightOffset, vrWorldSnap, vrOneHanded, vrBindings, vrSettingsQuery];
 /** one derived over every watched store: any change re-renders whatever shows a setting */
 let version = 0;
 export const vrSettingsVersion = derived([vrSettingsTick, ...watched], () => ++version);

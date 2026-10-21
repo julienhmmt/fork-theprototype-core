@@ -52,6 +52,7 @@ import {
 	shellMenuItems,
 	gameLevels,
 	shellSettingViews,
+	shellAccessViews,
 	shellLevelTabs,
 	shellPageTitle,
 	shellGameName,
@@ -60,7 +61,11 @@ import {
 	toggleShellMenu
 } from './gameShell';
 import { gameSettingValues } from './gameSettings';
-import { drawShellPage, SHELL_STAGE, fitLabel, collectOverflow } from './shellPanelDraw';
+import { accessValues } from './playerAccess'; // 53 (A6): the Accessibility page redraws on a change
+import { shellVrRows } from './shellVrRows'; // 53 (A7): the VR comfort rows on that page
+import { drawShellPage, SHELL_STAGE, fitLabel, collectOverflow, drawCaptionStrip, captionStripHeight, CAPTION_STRIP_W } from './shellPanelDraw';
+// 53 (A6): the caption lines, head-locked under the view
+import { activeCaptions, captionsShown } from './captions';
 // 31 K3 G3: Show FPS in the headset (the HUD band + the wrist)
 import { fpsReading, fpsText, noteXrFrame, perfStatsShown } from './fpsMeter';
 import { vignetteFrame } from './comfortVignette';
@@ -356,6 +361,8 @@ function shellModel() {
 		tabs: shellLevelTabs(), // 33 (G3)
 		levelPage: menu.levelPage ?? null,
 		settings: shellSettingViews({ vr: true }),
+		// 53 (A6): the player's rows; 53 (A7): + the headset's comfort rows (device settings)
+		access: [...shellAccessViews({ vr: true }), ...(shellVrRows()?.rows() ?? [])],
 		help: shellHelpLines({ vr: true })
 	};
 }
@@ -619,8 +626,8 @@ export function vrGamePanelFrame(opts = {}) {
 	board.mesh.visible = !!entry;
 	if (entry && head) {
 		const sig = shellOpen
-			? JSON.stringify(['shell', get(shellMenu), get(gameLevels)?.list, get(gameLevels)?.current, get(gameSettingValues), hover, hudAt])
-			: JSON.stringify([entry.key, entry.screen, runtime, hover, hudAt, imageTick(), valuesSig(entry.screen), menuOffer]);
+			? JSON.stringify(['shell', get(shellMenu), get(gameLevels)?.list, get(gameLevels)?.current, get(gameSettingValues), get(accessValues), shellVrRows()?.rows().map((r) => r.display), hover, hudAt])
+			: JSON.stringify([entry.key, entry.screen, runtime, hover, hudAt, imageTick(), valuesSig(entry.screen), menuOffer, get(accessValues).hudText]);
 		if (sig !== board.sig) {
 			board.sig = sig;
 			resizeSurface(board, Math.round(crop.w * SCALE), Math.round((crop.h + FOOTER_H) * SCALE), crop.w * METRES_PER_PX);
@@ -698,12 +705,29 @@ export function vrGamePanelFrame(opts = {}) {
 		const left = note.at + note.ms - Date.now();
 		/** @type {any} */ (banner.mesh.material).opacity = Math.max(0, Math.min(1, left / 300));
 	}
+	// ---- 53 (A6): captions — head-locked low in the view, the player's caption size
+	const caps = head && get(captionsShown) ? get(activeCaptions).map((c) => c.text) : [];
+	const size = String(get(accessValues).captionSize ?? 'medium');
+	const captionPx = [CAPTION_STRIP_W, captionStripHeight(caps.length, size)];
+	const strip = surface('vr-game-captions', captionPx[0], captionPx[1], 1.1);
+	strip.mesh.visible = caps.length > 0;
+	if (strip.mesh.visible && head) {
+		const sig = JSON.stringify([caps, size]);
+		if (sig !== strip.sig) {
+			strip.sig = sig;
+			resizeSurface(strip, captionPx[0], captionPx[1], 1.1);
+			drawCaptionStrip(strip.g, caps, size);
+			strip.texture.needsUpdate = true;
+		}
+		headLocked(strip.mesh, head, 1.5, -0.36);
+	}
 	return {
 		panel: board.mesh.visible ? entry?.screen?.id ?? null : null,
 		lines,
 		wrist: wrist.mesh.visible,
 		hud: band.visible,
-		banner: banner.mesh.visible
+		banner: banner.mesh.visible,
+		captions: strip.mesh.visible ? caps : []
 	};
 }
 
@@ -773,6 +797,11 @@ export function pressPanelTarget(target, opts = {}) {
 	debug.presses++;
 	debug.lastPress = hit.id;
 	playGameSound('click', target.point ? target.point.toArray() : null);
+	// 53 (A7): a VR comfort row on the Accessibility page (shell:vrset:<id>:<prev|next>)
+	if (hit.kind === 'shell' && hit.id.startsWith('shell:vrset:')) {
+		const parts = hit.id.split(':');
+		return shellVrRows()?.press(parts[2], parts[3] === 'prev' ? -1 : 1) ?? false;
+	}
 	if (hit.kind === 'shell') return pressShellHit(hit.id);
 	if (hit.kind === 'footer') {
 		if (hit.footer === 'menu') {
@@ -883,7 +912,8 @@ export function vrGamePanelDebug() {
 /** the surfaces' meshes (suites read visibility, poses and canvases) @param {string} name */
 export function vrGameSurface(name) {
 	const s = surfaces[name];
-	return s ? { mesh: s.mesh, canvas: s.canvas } : null;
+	// 53: + the pressable rects (the suites press them through pressPanelTarget)
+	return s ? { mesh: s.mesh, canvas: s.canvas, hits: s.hits } : null;
 }
 
 /** Hide everything (the session ended, the player left the game). */
