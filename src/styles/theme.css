@@ -226,34 +226,34 @@
 	/* and each type's hue (was a hex table in flowSockets.typeColor — the same in every theme, so
 	   light's pale yellows sat at 1.5:1 on a white card). 3:1 on the card in every theme;
 	   `event` moved off the `color` amber it was indistinguishable from. */
-	--socket-number: #38bdf8;
-	--socket-vector3: #a78bfa;
-	--socket-boolean: #f472b6;
-	--socket-color: #fbbf24;
-	--socket-object: #4ade80;
-	--socket-event: #e2e8f0;
-	--socket-effect: #fb923c;
-	--socket-any: #94a3b8;
+	--socket-tint-number: #38bdf8;
+	--socket-tint-vector3: #a78bfa;
+	--socket-tint-boolean: #f472b6;
+	--socket-tint-color: #fbbf24;
+	--socket-tint-object: #4ade80;
+	--socket-tint-event: #e2e8f0;
+	--socket-tint-effect: #fb923c;
+	--socket-tint-any: #94a3b8;
 }
 :root[data-theme='light'] {
-	--socket-number: #0369a1;
-	--socket-vector3: #6d28d9;
-	--socket-boolean: #be185d;
-	--socket-color: #a16207;
-	--socket-object: #15803d;
-	--socket-event: #334155;
-	--socket-effect: #c2410c;
-	--socket-any: #64748b;
+	--socket-tint-number: #0369a1;
+	--socket-tint-vector3: #6d28d9;
+	--socket-tint-boolean: #be185d;
+	--socket-tint-color: #a16207;
+	--socket-tint-object: #15803d;
+	--socket-tint-event: #334155;
+	--socket-tint-effect: #c2410c;
+	--socket-tint-any: #64748b;
 }
 :root[data-theme='contrast'] {
-	--socket-number: #33ddff;
-	--socket-vector3: #c9a6ff;
-	--socket-boolean: #ff7fd0;
-	--socket-color: #ffd400;
-	--socket-object: #66ff99;
-	--socket-event: #ffffff;
-	--socket-effect: #ffa64d;
-	--socket-any: #b0b8c4;
+	--socket-tint-number: #33ddff;
+	--socket-tint-vector3: #c9a6ff;
+	--socket-tint-boolean: #ff7fd0;
+	--socket-tint-color: #ffd400;
+	--socket-tint-object: #66ff99;
+	--socket-tint-event: #ffffff;
+	--socket-tint-effect: #ffa64d;
+	--socket-tint-any: #b0b8c4;
 }
 
 /* ---- 38 R11: the code editor's DARK values (CodeEditor.svelte used to carry them as per-site

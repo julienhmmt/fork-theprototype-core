@@ -143,8 +143,8 @@ describe('node-editor sockets (53 A2)', () => {
 		const T = resolveTheme(theme);
 		it(`${theme}: every socket hue is a 3:1 mark on the node card and the pane`, () => {
 			for (const t of TYPES) {
-				const w = worst(T, '--socket-' + t, ['--surface-2', '--bg-app']);
-				expect(w.min, `--socket-${t} on ${w.at}: ${w.min.toFixed(2)}:1`).toBeGreaterThanOrEqual(3);
+				const w = worst(T, '--socket-tint-' + t, ['--surface-2', '--bg-app']);
+				expect(w.min, `--socket-tint-${t} on ${w.at}: ${w.min.toFixed(2)}:1`).toBeGreaterThanOrEqual(3);
 			}
 		});
 	}
@@ -153,6 +153,9 @@ describe('node-editor sockets (53 A2)', () => {
 		const shapes = TYPES.map((t) => raw.get('--socket-shape-' + t));
 		expect(shapes.every(Boolean)).toBe(true);
 		expect(new Set(shapes).size).toBe(TYPES.length);
+		// Socket.svelte sets a LOCAL --socket-color / --socket-shape on each handle: a theme token of
+		// that name makes `--socket-color: var(--socket-color)` a cycle and the socket loses its hue
+		for (const local of ['--socket-color', '--socket-shape']) expect(raw.has(local), local + ' is the handle-local name').toBe(false);
 	});
 });
 

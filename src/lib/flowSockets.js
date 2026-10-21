@@ -326,11 +326,12 @@ export function canConnect(from, to) {
 /** the socket types that have a hue and a shape of their own (the rest draw as `any`) */
 export const SOCKET_TYPES = ['number', 'vector3', 'boolean', 'color', 'object', 'event', 'effect'];
 
-/** UI tint per socket type (165). 53 A2: a theme TOKEN (theme.css --socket-<type>), so light and
+/** UI tint per socket type (165). 53 A2: a theme TOKEN (theme.css --socket-tint-<type> — not --socket-<type>: Socket.svelte sets a
+ * local --socket-color, and `--socket-color: var(--socket-color)` would be a cycle), so light and
  * High contrast state their own hues — a CSS value, painted through `style`.
  * @param {string} type */
 export function typeColor(type) {
-	return `var(--socket-${SOCKET_TYPES.includes(type) ? type : 'any'})`;
+	return `var(--socket-tint-${SOCKET_TYPES.includes(type) ? type : 'any'})`;
 }
 
 /** 53 A2: the type's SHAPE (theme.css --socket-shape-<type>), so a socket never says its type by
