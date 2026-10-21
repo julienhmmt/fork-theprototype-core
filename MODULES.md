@@ -766,6 +766,14 @@ register(api) {
   `step` `ring` `sparkle` `hurt` `portal`, plus the ping chimes `ding` (the default),
   `chime`, `pluck`, `bell`. An unknown name is a quiet no-op (it used to play the
   ding). `position` spatialises it. Played at the player's "Game sounds" volume.
+  (1.41) A game-set sound shows a CAPTION to a player who switched Captions on in the game
+  menu's Accessibility page (`[coin]`; step / click / pop stay quiet); a third argument
+  `{caption: 'The gate opens'}` says it your way, `{caption: '-'}` says nothing.
+- **`api.captions.show(text, {seconds?})`** (1.41) — a caption line for something the player
+  hears that is not a game-set sound (a voice, your own audio): shown only to players with
+  Captions on, at their caption size, on a flat screen and in a headset. LOCAL; `seconds`
+  0.5..15 (default 3). `api.captions.shown()` = are captions on for this player. Input you read
+  through `api.onInput` / `api.input` already follows the player's remapped keys and buttons.
 - **`api.music.play(preset, {volume?})` / `api.music.stop()`** — a looping
   procedural track under the effects, at the player's "Music" volume: `arcade`
   `ambient` `dungeon` `stadium` `space` `puzzle` `studio`. It is TEMPO-SYNCED to the

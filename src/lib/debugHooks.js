@@ -165,6 +165,7 @@ export const DEBUG_HOOKS = [
 	['vrSculpt', () => import('./vr/sculpt.js')],
 	['vrTourTargets', () => import('./vr/tourTargets.js')],
 	['vrPrefs', () => import('./vr/prefs.js')],
+	['vrLocomotion', () => import('./vr/locomotion.js')], // 53 (A7): recenter + the lift / recenter counts
 	['vrPalette', () => import('./vrPalette')],
 	['vrWindowPoses', () => import('./vrWindowPoses')],
 	['vrKeyboard', () => import('./vrKeyboard')],
