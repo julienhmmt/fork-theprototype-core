@@ -55,6 +55,8 @@ self.onmessage = (/** @type {MessageEvent} */ e) => {
 async function handle(m) {
 	if (m.op === 'bench') return post(await bench(m));
 	if (failed) return;
+	// the device-lost fallback, exercised for real (fluid-gpu suite): destroy() resolves device.lost
+	if (m.op === 'testLoseDevice') return (await device()).device.destroy();
 	if (m.op === 'init') {
 		const { device: dev } = await device();
 		const old = tanks.get(m.id);

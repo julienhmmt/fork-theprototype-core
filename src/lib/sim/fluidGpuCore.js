@@ -543,6 +543,8 @@ export class GpuFluidStepper {
 		this.colliderOverflow = 0;
 		/** colliders packed for this step */
 		this.nCol = 0;
+		/** @type {((solver: any, dt: number, o: any) => void) | null} a pass over old x / new p before x = p */
+		this.beforeCommit = null;
 		this.destroyed = false;
 	}
 
@@ -671,7 +673,10 @@ export class GpuFluidStepper {
 		await this.readBuf.mapAsync(1, 0, readBytes); // GPUMapMode.READ
 		if (this.destroyed) return s.count;
 		const out = this.readBuf.getMappedRange(0, readBytes);
-		s.x.set(new Float32Array(out, 0, n * 3));
+		// the new positions land in the mirror's p and are committed below, exactly where
+		// FluidSolver.step does x.set(p): a pass that compares old (x) and new (p) positions —
+		// 49-water's crossSurfaces — runs at that same point through `beforeCommit`
+		s.p.set(new Float32Array(out, 0, n * 3));
 		s.v.set(new Float32Array(out, bytes, n * 3));
 		if (ids.length) {
 			const imp = new Int32Array(out, bytes * 2, ids.length * 4);
@@ -681,6 +686,10 @@ export class GpuFluidStepper {
 			});
 		}
 		this.readBuf.unmap();
+		// (a pass may REMOVE particles — swap-removed from x, v and p — so commit the count it
+		// leaves; the next step re-uploads x/v/count from the mirror, so the GPU keeps nothing stale)
+		this.beforeCommit?.(s, dt, o);
+		s.x.set(s.p.subarray(0, s.count * 3));
 		s.cull(dt, o.lifetime ?? 0);
 		return s.count;
 	}
