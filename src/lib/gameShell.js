@@ -417,11 +417,18 @@ export function shellSettingViews(opts = {}) {
 /**
  * 53 (A6): the Accessibility page's rows, each with its value and display text (the same view
  * shape as the settings page, so both renderers draw them with the settings row). `access: true`
- * routes a press to playerAccess. @returns {ShellSettingView[]}
+ * routes a press to playerAccess. @param {{vr?: boolean}} [opts] @returns {ShellSettingView[]}
  */
-export function shellAccessViews() {
+export function shellAccessViews(opts = {}) {
 	const values = get(accessValues);
-	return ACCESS_ROWS.map((row) => ({ ...row, access: true, value: values[row.id], display: accessDisplay(row, values[row.id]) }));
+	return ACCESS_ROWS.map((row) => ({
+		...row,
+		// a headset has no compositor step for the colour filter (PlayerColorFilter): say so there
+		label: opts.vr && row.flat ? row.label + ' (2D only)' : row.label,
+		access: true,
+		value: values[row.id],
+		display: accessDisplay(row, values[row.id])
+	}));
 }
 
 /**

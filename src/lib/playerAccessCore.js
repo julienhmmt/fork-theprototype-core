@@ -29,7 +29,8 @@ export const ACCESS_ROWS = [
 		options: ['none', 'protan', 'deutan', 'tritan'],
 		optionLabels: ['None', 'Protanopia (red)', 'Deuteranopia (green)', 'Tritanopia (blue)'],
 		default: 'none',
-		help: 'Shifts colours so the ones you find hard to tell apart stand out'
+		help: 'Shifts colours so the ones you find hard to tell apart stand out',
+		flat: true
 	},
 	{
 		id: 'hudText',

@@ -364,7 +364,8 @@
 			style.border ? `border: 1px solid ${paint(style.border, 'rgb(75 85 99 / 0.7)')}` : 'border: 0', // tokens-ok: game HUD default border (game content, theme-independent)
 			`border-radius: ${Number(style.radius ?? 0)}px`,
 			`padding: ${Number(style.pad ?? 0)}px`,
-			`font-size: ${Number(style.size ?? 14)}px`,
+			// 53 (A6): the player's HUD text size rides a CSS var the runtime layer sets (1 in the editor)
+			`font-size: calc(${Number(style.size ?? 14)}px * var(--hud-text-scale, 1))`,
 			`font-weight: ${Number(style.weight ?? 400)}`,
 			style.font ? `font-family: ${style.font}` : '',
 			`text-align: ${style.align ?? 'left'}`,

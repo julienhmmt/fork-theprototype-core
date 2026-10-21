@@ -360,7 +360,7 @@ function shellModel() {
 		tabs: shellLevelTabs(), // 33 (G3)
 		levelPage: menu.levelPage ?? null,
 		settings: shellSettingViews({ vr: true }),
-		access: shellAccessViews(), // 53 (A6)
+		access: shellAccessViews({ vr: true }), // 53 (A6)
 		help: shellHelpLines({ vr: true })
 	};
 }
@@ -625,7 +625,7 @@ export function vrGamePanelFrame(opts = {}) {
 	if (entry && head) {
 		const sig = shellOpen
 			? JSON.stringify(['shell', get(shellMenu), get(gameLevels)?.list, get(gameLevels)?.current, get(gameSettingValues), get(accessValues), hover, hudAt])
-			: JSON.stringify([entry.key, entry.screen, runtime, hover, hudAt, imageTick(), valuesSig(entry.screen), menuOffer]);
+			: JSON.stringify([entry.key, entry.screen, runtime, hover, hudAt, imageTick(), valuesSig(entry.screen), menuOffer, get(accessValues).hudText]);
 		if (sig !== board.sig) {
 			board.sig = sig;
 			resizeSurface(board, Math.round(crop.w * SCALE), Math.round((crop.h + FOOTER_H) * SCALE), crop.w * METRES_PER_PX);

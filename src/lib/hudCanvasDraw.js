@@ -7,6 +7,11 @@ import { hudOptionsOf } from './flowRuntime';
 import { hudImageFor, resolveHudImage } from './hudImages';
 import { fitLabel } from './shellPanelDraw';
 import { moduleHudKindDef } from './moduleHudKinds';
+// 53 (A6): the player's HUD text size reaches the headset's HUD too (type only — the band and the
+// board size their boxes for reading already, and a button label still fits its button)
+import { get } from 'svelte/store';
+import { accessValues } from './playerAccess';
+import { hudTextScale } from './playerAccessCore';
 
 /** a style value, token names resolved to literals (a canvas cannot take var())
  * @param {any} value @param {string} fallback */
@@ -104,7 +109,7 @@ export function elementShows(el, rt) {
 export function drawHudElement(g, el, x, y, w, h, k, rt) {
 	const style = el.style ?? {};
 	const text = elementText(el, rt);
-	const size = Math.max(10, Number(style.size ?? 14)) * k;
+	const size = Math.max(10, Number(style.size ?? 14)) * k * hudTextScale(get(accessValues).hudText);
 	const weight = String(style.weight ?? (el.kind === 'button' ? 600 : 400));
 	const colour = paint(style.color, '#f3f4f6');
 	const disabled = el.enabled === false;
