@@ -279,3 +279,37 @@ function wrap(g, text, max) {
 	if (line) out.push(line);
 	return out;
 }
+
+/** 53 (A6): the VR caption strip's canvas width and its line heights per caption size, canvas px */
+export const CAPTION_STRIP_W = 1400;
+const CAPTION_FONT = /** @type {Record<string, number>} */ ({ medium: 48, large: 64, huge: 84 });
+
+/** the strip's canvas height for `count` lines at `size` @param {number} count @param {string} size */
+export function captionStripHeight(count, size) {
+	const px = CAPTION_FONT[size] ?? CAPTION_FONT.medium;
+	return Math.round(Math.max(1, count) * px * 1.35 + 24);
+}
+
+/**
+ * 53 (A6): paint the caption lines, one solid backing per line (the flat-screen look), centred.
+ * The canvas is already sized by captionStripHeight. Pure over its arguments.
+ * @param {CanvasRenderingContext2D} g @param {string[]} lines @param {string} size
+ */
+export function drawCaptionStrip(g, lines, size) {
+	const W = g.canvas.width;
+	const px = CAPTION_FONT[size] ?? CAPTION_FONT.medium;
+	const lineH = px * 1.35;
+	g.clearRect(0, 0, W, g.canvas.height);
+	g.textAlign = 'center';
+	g.textBaseline = 'middle';
+	lines.forEach((line, i) => {
+		const shown = fitLabel(g, line, W - 80, 600, px);
+		const w = Math.min(W - 8, g.measureText(shown).width + px * 1.1);
+		const y = 12 + i * lineH;
+		roundRect(g, (W - w) / 2, y, w, lineH - 6, 10);
+		g.fillStyle = 'rgba(10, 12, 18, 0.88)';
+		g.fill();
+		g.fillStyle = '#f9fafb';
+		g.fillText(shown, W / 2, y + (lineH - 6) / 2);
+	});
+}

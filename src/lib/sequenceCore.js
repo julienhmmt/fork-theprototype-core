@@ -14,7 +14,9 @@
 //             through `camera`; with `to`, glide from its pose to that camera's over
 //             the shot (a dolly / pan between two marks — the camera-rig shot)
 //     anim:   { target: uuid, clip: name ('' = the object's default clip), speed }
-//     audio:  { sound: content hash ('' = none yet), name, gain }
+//     audio:  { sound: content hash ('' = none yet), name, gain, caption? }
+//             53 (A6/A5): `caption` = one line shown while the clip plays to players with Captions
+//             on (captions.js); ABSENT when unset, so a captionless document is byte-identical
 //     event:  { name } — fires the graph event `name` (On Sequence Event) as the
 //             playhead crosses `t`; `dur` is ignored
 // Unknown fields RIDE THROUGH every normalize (the hudSync rule): a newer peer's field

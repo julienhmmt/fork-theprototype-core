@@ -92,5 +92,16 @@
 				loop
 			</label>
 		</div>
+		<!-- 53 (A6): the line a player with Captions on reads when this sound starts -->
+		<label class="flex flex-col">
+			<span>caption</span>
+			<input
+				class="nodrag nopan rounded-sm border border-border-input bg-transparent px-1 py-0.5 text-xs"
+				maxlength="120"
+				placeholder="e.g. [rain on the roof]"
+				value={data.caption ?? ''}
+				on:change={(e) => setNodeData(id, { caption: e.currentTarget.value })}
+			/>
+		</label>
 	</div>
 </NodeWrapper>

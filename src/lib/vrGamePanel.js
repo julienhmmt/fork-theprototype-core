@@ -62,7 +62,9 @@ import {
 } from './gameShell';
 import { gameSettingValues } from './gameSettings';
 import { accessValues } from './playerAccess'; // 53 (A6): the Accessibility page redraws on a change
-import { drawShellPage, SHELL_STAGE, fitLabel, collectOverflow } from './shellPanelDraw';
+import { drawShellPage, SHELL_STAGE, fitLabel, collectOverflow, drawCaptionStrip, captionStripHeight, CAPTION_STRIP_W } from './shellPanelDraw';
+// 53 (A6): the caption lines, head-locked under the view
+import { activeCaptions, captionsShown } from './captions';
 // 31 K3 G3: Show FPS in the headset (the HUD band + the wrist)
 import { fpsReading, fpsText, noteXrFrame, perfStatsShown } from './fpsMeter';
 import { vignetteFrame } from './comfortVignette';
@@ -701,12 +703,29 @@ export function vrGamePanelFrame(opts = {}) {
 		const left = note.at + note.ms - Date.now();
 		/** @type {any} */ (banner.mesh.material).opacity = Math.max(0, Math.min(1, left / 300));
 	}
+	// ---- 53 (A6): captions — head-locked low in the view, the player's caption size
+	const caps = head && get(captionsShown) ? get(activeCaptions).map((c) => c.text) : [];
+	const size = String(get(accessValues).captionSize ?? 'medium');
+	const captionPx = [CAPTION_STRIP_W, captionStripHeight(caps.length, size)];
+	const strip = surface('vr-game-captions', captionPx[0], captionPx[1], 1.1);
+	strip.mesh.visible = caps.length > 0;
+	if (strip.mesh.visible && head) {
+		const sig = JSON.stringify([caps, size]);
+		if (sig !== strip.sig) {
+			strip.sig = sig;
+			resizeSurface(strip, captionPx[0], captionPx[1], 1.1);
+			drawCaptionStrip(strip.g, caps, size);
+			strip.texture.needsUpdate = true;
+		}
+		headLocked(strip.mesh, head, 1.5, -0.36);
+	}
 	return {
 		panel: board.mesh.visible ? entry?.screen?.id ?? null : null,
 		lines,
 		wrist: wrist.mesh.visible,
 		hud: band.visible,
-		banner: banner.mesh.visible
+		banner: banner.mesh.visible,
+		captions: strip.mesh.visible ? caps : []
 	};
 }
 

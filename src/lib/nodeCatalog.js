@@ -307,7 +307,11 @@ export const nodeCatalog = [
 				defaults: { sound: 'coin' },
 				inputs: ['trigger', 'at'],
 				inputLabels: { at: 'at - an object (unwired = not placed)' },
-				params: [{ key: 'sound', kind: 'select', options: [...GAME_SOUND_NAMES] }],
+				params: [
+					{ key: 'sound', kind: 'select', options: [...GAME_SOUND_NAMES] },
+					// 53 (A6): blank = "[sound name]" for players with Captions on; '-' = no caption
+					{ key: 'caption', kind: 'text', placeholder: 'caption (blank = [name], - = none)', maxLength: 120 }
+				],
 				note: 'Built-in sounds, no files — played on each device, at the wired object when there is one.'
 			},
 			{

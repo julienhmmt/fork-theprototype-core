@@ -157,6 +157,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
   import PickCycleHint from './components/menu/PickCycleHint.svelte' // 36 F22 / S6 / S12
   // 31 K3: the game shell — the pause menu + its wiring
   import GameShellMenu from './components/hud/GameShellMenu.svelte'
+  import CaptionOverlay from './components/play/CaptionOverlay.svelte' // 53 (A6): captions over a game
   import FpsCounter from './components/hud/FpsCounter.svelte'
   import { startGameShell } from '$lib/gameShellWire'
   // 33 (L2-L4): keep/unload modules on a scene switch, and the scope a kept module lives in
@@ -492,6 +493,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
 <CommandPalette />
 <!-- 31 K3: the pause menu every game shares (Esc / the corner Menu button) -->
 <GameShellMenu />
+<CaptionOverlay />
 <FpsCounter />
 
 <!-- W9: THE VIEWPORT IS A LAYOUT REGION.
