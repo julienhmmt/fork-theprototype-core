@@ -132,16 +132,20 @@ h.run(async () => {
 		const s = window.__stores;
 		s.gameKit.playerAccess.remapControl('keys', 'KeyW', 'KeyI', ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'Space', 'KeyR']);
 		const cam = eval(rdSrc)(s.playerCam);
-		return cam ? cam.position.toArray() : null;
+		return cam ? cam.getWorldPosition(new s.THREE.Vector3()).toArray() : null;
 	}, rd);
 	await page.keyboard.down('KeyW');
 	await page.waitForTimeout(500);
 	await page.keyboard.up('KeyW');
-	const afterW = await page.evaluate((rdSrc) => eval(rdSrc)(window.__stores.playerCam)?.position.toArray(), rd);
+	const camAt = (rdSrc) => {
+		const cam = eval(rdSrc)(window.__stores.playerCam);
+		return cam ? cam.getWorldPosition(new window.__stores.THREE.Vector3()).toArray() : null;
+	};
+	const afterW = await page.evaluate(camAt, rd);
 	await page.keyboard.down('KeyI');
 	await page.waitForTimeout(500);
 	await page.keyboard.up('KeyI');
-	const afterI = await page.evaluate((rdSrc) => eval(rdSrc)(window.__stores.playerCam)?.position.toArray(), rd);
+	const afterI = await page.evaluate(camAt, rd);
 	const dist = (a, b) => (a && b ? Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) : -1);
 	h.check(walk && dist(walk, afterW) < 0.02, '3.5 the walker: W (moved to I) does not move the player (' + dist(walk, afterW).toFixed(3) + ' m)');
 	h.check(dist(afterW, afterI) > 0.1, '3.6 the walker: I moves the player forward (' + dist(afterW, afterI).toFixed(3) + ' m)');
