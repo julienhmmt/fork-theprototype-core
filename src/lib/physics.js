@@ -1954,6 +1954,12 @@ function stepInner(now) {
  * DYNAMIC body (pre-step downward velocity above the threshold, not held, off
  * cooldown) registers an impact — dynamic-vs-ground, dynamic-vs-scenery and
  * dynamic-vs-dynamic all count.
+ *
+ * 49 P2: the body it landed ON hears it too when that body cannot register for itself — a
+ * fixed or kinematic object (a pressure plate, a target, a moving platform) gets the same
+ * impact with `other` = the mover. A DYNAMIC partner is left to its own test above, so two
+ * dynamic bodies never fire twice for one contact; a sensor partner has On Enter instead.
+ * The passive event rides the mover's cooldown, so it cannot machine-gun either.
  * @param {number} h1 @param {number} h2 @param {number} now step clock (ms)
  */
 function queueContact(h1, h2, now) {
@@ -1968,7 +1974,10 @@ function queueContact(h1, h2, now) {
 		lastImpactAt.set(uuid, now);
 		// 36 X6: and what it hit — the other collider's owner, '' for the ground
 		const other = handle === h1 ? h2 : h1;
-		pendingImpacts.push({ uuid, strength: down, other: groundHandles.has(other) ? '' : colliderOwner.get(other)?.uuid ?? '' });
+		const hit = groundHandles.has(other) ? null : colliderOwner.get(other);
+		pendingImpacts.push({ uuid, strength: down, other: hit?.uuid ?? '' });
+		if (hit && !hit.sensor && hit.uuid !== uuid && hit.entry?.mode !== 'dynamic')
+			pendingImpacts.push({ uuid: hit.uuid, strength: down, other: uuid });
 	}
 }
 
