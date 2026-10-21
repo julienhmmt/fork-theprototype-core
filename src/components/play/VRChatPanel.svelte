@@ -119,7 +119,7 @@
 			<T.MeshBasicMaterial color={$vrHovered === 'chat:input' ? '#2f5fa0' : '#2a2f38'} side={THREE.DoubleSide} />
 		</T.Mesh>
 		<Text
-			text="＋ Type a message…"
+			text="+ Type a message…"
 			color="#c8d0da"
 			fontSize={0.0085}
 			anchorX="center"

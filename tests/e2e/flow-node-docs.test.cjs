@@ -19,29 +19,9 @@ const ROOT = path.join(__dirname, '..', '..');
 // the docs live in a SIBLING checkout (DOCS_REPO overrides); skip rather than fail when absent
 const DOCS = process.env.DOCS_REPO ? path.resolve(process.env.DOCS_REPO) : path.join(ROOT, '..', 'theprototype-docs');
 
-/** the catalog's items from the source, whichever order type/label appear in */
-function catalogItems() {
-	const src = fs.readFileSync(path.join(ROOT, 'src', 'lib', 'nodeCatalog.js'), 'utf8');
-	const groups = [];
-	const groupRe = /group: '([^']+)',\s*items: \[/g;
-	let g;
-	while ((g = groupRe.exec(src))) {
-		let depth = 1, i = groupRe.lastIndex;
-		while (i < src.length && depth > 0) { if (src[i] === '[') depth++; else if (src[i] === ']') depth--; i++; }
-		const body = src.slice(groupRe.lastIndex, i - 1);
-		// three levels: an item, its defaults, and braces inside a default STRING (Script's code)
-		const objRe = /\{[^{}]*(?:\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}[^{}]*)*\}/g;
-		let m;
-		const items = [];
-		while ((m = objRe.exec(body))) {
-			const t = /\btype: '([a-z0-9]+)'/.exec(m[0]);
-			const l = /\blabel: '([^']+)'/.exec(m[0]);
-			if (t && l && !items.some((it) => it.type === t[1])) items.push({ type: t[1], label: l[1], group: g[1] });
-		}
-		groups.push({ group: g[1], items });
-	}
-	return groups;
-}
+/** the catalog's items from the source (one scan, shared with scripts/sync-node-docs.cjs) */
+const { catalogGroups } = require('../../scripts/node-catalog-scan.cjs');
+const catalogItems = () => catalogGroups(ROOT);
 
 (async () => {
 	const { NODE_DOCS, nodeDoc } = await import(pathToFileURL(path.join(ROOT, 'src', 'lib', 'nodeDocs.js')).href);

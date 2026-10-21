@@ -6,6 +6,7 @@ import {
 	browserOf,
 	deviceClassOf,
 	envOf,
+	releaseLabel,
 	buildReport,
 	ignoredMessage,
 	looksLikeOom,
@@ -128,5 +129,33 @@ describe('buildReport', () => {
 		const r = buildReport({ kind: 'error', message: 'big', stack }, CTX);
 		expect(JSON.stringify(r).length).toBeLessThanOrEqual(MAX_REPORT_BYTES);
 		expect(r?.frames.length).toBeGreaterThan(0);
+	});
+});
+
+describe('49 J3 — bare hostnames and the preview release label', () => {
+	it('strips a bare hostname, with or without a port or a path', () => {
+		expect(scrubMessage('Failed to connect to pb.theprototype.app')).toBe('Failed to connect to <host>');
+		expect(scrubMessage('WebSocket to peerjs.theprototype.app:443 closed')).toBe('WebSocket to <host> closed');
+		expect(scrubMessage('GET my-server.example.com/api/rooms failed')).toBe('GET <host><path> failed');
+		expect(scrubMessage('Lost Peer.example.CO.UK')).toBe('Lost <host>');
+	});
+	it('strips localhost and IPv4 addresses', () => {
+		expect(scrubMessage('cannot reach localhost:5173')).toBe('cannot reach <host>');
+		expect(scrubMessage('TURN 192.168.1.20:3478 refused')).toBe('TURN <host> refused');
+	});
+	it('leaves dotted identifiers alone', () => {
+		expect(scrubMessage("can't access property \"x\", e.target is undefined")).toBe("can't access property \"x\", e.target is undefined");
+		expect(scrubMessage('THREE.Mesh: geometry.attributes.position is missing')).toBe('THREE.Mesh: geometry.attributes.position is missing');
+		expect(scrubMessage('x.at is not a function')).toBe('x.at is not a function');
+		expect(scrubMessage('re.test is not a function')).toBe('re.test is not a function');
+	});
+	it('a preview files under its own release, production and dev under the version', () => {
+		expect(releaseLabel('1.39.0', 'theprototype.app')).toBe('1.39.0');
+		expect(releaseLabel('1.39.0', 'theprototype.pages.dev')).toBe('1.39.0');
+		expect(releaseLabel('1.39.0', 'localhost')).toBe('1.39.0');
+		expect(releaseLabel('1.39.0', 'preview-1-40.theprototype.pages.dev')).toBe('1.40-preview');
+		expect(releaseLabel('1.39.0', 'preview-1-40-1.theprototype.pages.dev')).toBe('1.40.1-preview');
+		expect(releaseLabel('1.39.0', 'a1b2c3d4.theprototype.pages.dev')).toBe('1.39.0-preview');
+		expect(releaseLabel('1.39.0', 'preview-1-40.theprototype.pages.dev', '1.40.0-rc2')).toBe('1.40.0-rc2');
 	});
 });

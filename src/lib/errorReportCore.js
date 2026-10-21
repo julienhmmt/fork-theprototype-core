@@ -44,6 +44,13 @@ export function looksLikeOom(message) {
 	return /out of memory|allocation failed|Array buffer allocation|Cannot allocate|insufficient memory|GL_OUT_OF_MEMORY|OOM\b/i.test(String(message ?? ''));
 }
 
+/** top-level domains a bare hostname in a message ends in. Words a JS property is often
+ * named (`at`, `in`, `is`, `id`, `test`, `info`, `page`…) are left out on purpose: `x.at is not
+ * a function` is a bug report, not a host. */
+const TLDS = 'com|net|org|edu|gov|io|app|dev|co|ai|gg|tv|xyz|cloud|online|uk|de|fr|ru|jp|cn|br|au|ca|nl|eu|es|pl|ch|se|fi|dk|cz|pt|us|local|localhost|internal|lan|example|invalid|onion';
+/** `label.label…tld[:port]`, case-insensitive */
+const HOST_RE = new RegExp('\\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+(?:' + TLDS + ')(?::\\d{1,5})?\\b', 'gi');
+
 /**
  * Scrub a message down to its SHAPE. Pure.
  * @param {string} message @returns {string}
@@ -54,6 +61,13 @@ export function scrubMessage(message) {
 	m = m.replace(/\b(?:[a-z][a-z0-9+.-]*:)\/\/[^\s'"`)<>]+/gi, '<url>');
 	m = m.replace(/\b(?:blob|data):[^\s'"`)<>]+/gi, '<url>');
 	m = m.replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, '<email>');
+	// 49 J3: BARE hostnames (no scheme) — `pb.theprototype.app`, `localhost:5173`, an IPv4 — say
+	// where somebody was connecting to. Before paths and numbers, so `host/path` and `1.2.3.4`
+	// become one token each. A dotted identifier (`e.target`, `THREE.Mesh`) is not a host:
+	// the last label has to be a top-level domain.
+	m = m.replace(HOST_RE, '<host>');
+	m = m.replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?\b/g, '<host>');
+	m = m.replace(/\blocalhost(?::\d{1,5})?\b/gi, '<host>');
 	// file paths: /a/b, C:\a\b, ~/a
 	m = m.replace(/(?:[A-Za-z]:\\|~\/|\/)(?:[^\s'"`/\\]+[/\\])+[^\s'"`/\\)]*/g, '<path>');
 	// uuids and long hex/base36 ids (peer ids, hashes, record ids)
@@ -184,6 +198,25 @@ export function envOf(hostname) {
 	if (h === 'theprototype.app' || h === 'www.theprototype.app' || h === 'theprototype.pages.dev') return 'prod';
 	if (h === 'localhost' || h === '127.0.0.1' || h.endsWith('.local') || /^\d+\.\d+\.\d+\.\d+$/.test(h)) return 'dev';
 	return 'preview';
+}
+
+/**
+ * 49 J3 — the release a report is filed under. A preview is built from a release candidate
+ * whose package.json still says the LAST release (the version bumps only when the release is
+ * tagged), so filing its reports under `APP_VERSION` mixed a candidate's errors into the
+ * previous release's row. A preview says what it is: an explicit build label when the deploy
+ * set one, else the `preview-<major>-<minor>` alias it is served on (`1.40-preview`), else the
+ * version it was built from plus `-preview`. Production and dev keep the plain version. Pure.
+ * @param {string} version @param {string} hostname @param {string} [explicit]
+ */
+export function releaseLabel(version, hostname, explicit) {
+	const label = String(explicit ?? '').trim();
+	if (label) return label.slice(0, 24);
+	const v = String(version || '');
+	if (envOf(hostname) !== 'preview') return v;
+	const m = String(hostname || '').toLowerCase().match(/^preview-(\d+)-(\d+)(?:-(\d+))?\./);
+	if (m) return m[1] + '.' + m[2] + (m[3] ? '.' + m[3] : '') + '-preview';
+	return (v + '-preview').slice(0, 24);
 }
 
 /**

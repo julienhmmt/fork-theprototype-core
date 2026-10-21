@@ -479,20 +479,33 @@ function commitManifest(next, opts = {}) {
  * event and the pointer must move to it.
  *
  * FORK 3: a viewer publishes nothing — the write is refused, not queued.
- * @param {string} name @param {string} hash
+ *
+ * 49 J2 — `own: true` is the ONE exception, and it is not publishing: the connect decision's
+ * "Save scene & connect" writes the joiner's work into ITS OWN project before it joins. On a
+ * cloud build the joiner already reads as a viewer of the session it is about to enter (the
+ * roles plugin makes every non-host a viewer until a grant arrives, and "View only" never
+ * sends one), so the refusal above left the scene file in the library with no version in the
+ * project — the plain build's behaviour is the right one. For a viewer the version is recorded
+ * LOCALLY and nothing is sent; an editor's commit is unchanged (that save carries no consent,
+ * so its name is out of every outbound manifest anyway).
+ * @param {string} name @param {string} hash @param {{own?: boolean}} [opts]
  */
-export function publishSceneVersion(name, hash) {
+export function publishSceneVersion(name, hash, opts = {}) {
 	const scene = String(name ?? '').trim();
 	const h = String(hash ?? '').trim();
 	if (!scene || !h) return false;
-	if (isViewer()) return false;
+	const viewer = isViewer();
+	if (viewer && !opts.own) return false;
 	const m = get(projectManifest);
 	const entry = m.scenes[scene] ?? { history: [], pinned: [] };
 	if (entry.history[entry.history.length - 1] === h) return false;
-	commitManifest({
-		...m,
-		scenes: { ...m.scenes, [scene]: { ...entry, history: [...entry.history, h] } }
-	});
+	commitManifest(
+		{
+			...m,
+			scenes: { ...m.scenes, [scene]: { ...entry, history: [...entry.history, h] } }
+		},
+		viewer ? { replicate: false } : {}
+	);
 	return true;
 }
 

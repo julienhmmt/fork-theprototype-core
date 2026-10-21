@@ -56,7 +56,18 @@ const ALWAYS_ALLOWED = new Set([
 	// gateable). Off the floor, a cloud build's just-approved joiner reads as a viewer until its
 	// role grant lands, its handshake `getseqs` was dropped, and a late joiner never got the
 	// room's sequences (48-int, preview-1-39 proof: timeline "a late joiner gets the sequence")
-	'getseqs'
+	'getseqs',
+	// 49 J1: the rest of `requestFullState`'s burst, the same rule for the older domains. Off
+	// the floor since 1.38, a just-approved cloud joiner (a viewer until its grant) got no HUD,
+	// HUD values, shader graphs, authored animation, scene look or room anchor from the host.
+	// Their REPLIES (`huds`, `hudvalues`, `shadergraphs`, `animations`, `scenepost`,
+	// `roomanchor`) stay gateable.
+	'gethuds',
+	'gethudvalues',
+	'getshadergraphs',
+	'getanim',
+	'getscenepost',
+	'getroomanchor'
 ]);
 
 /** @type {((peerId: string, msgType: string) => boolean) | null} */
