@@ -5,6 +5,44 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.40.0 — Physics and water: bodies that never miss a wall, tanks that pour into pools, fluid on the graphics card 🌊
+
+Fast things hit what they should, the body that is hit hears about it, and a fluid tank's water finally reaches the pool
+it pours into.
+
+### 🧲 Physics
+
+- 🎯 **Continuous collision, per object**: select a dynamic body ▸ Properties ▸ Physics ▸ **Continuous collision** —
+  *Scene default*, *On* or *Off*. Turn it on for a bullet or a thrown ball so it never passes through a thin wall;
+  the scene-wide switch stays the default. Saved, shared, and it applies to a running simulation at once.
+- 💥 **On Impact fires on the object that was hit**: a falling body landing on a **static** or **kinematic** object (a
+  pressure plate, a target, a moving platform) fires that object's On Impact too, with **other** = the body that
+  landed. Two dynamic bodies still fire once.
+- 🦆 **Pool party** toys float like foam — the beach ball, swim rings, lilo and duck ride high on the water.
+
+### 🌊 Water and fluid
+
+- 💧 **Fluid tanks pour into pools**: a pour that lands on a water surface crossing the tank joins the pool, ripples
+  it where it lands and splashes a couple of droplets back up — the same for every player, nothing extra on the
+  network. A tank standing in a pool keeps the water it holds.
+- ⚡ **GPU fluid**: Settings ▸ Scene ▸ Performance ▸ **GPU fluid** (*Auto* / *Off*). Auto measures this device once
+  and runs fluid tanks on the graphics card (WebGPU) only where that is clearly faster — here an 8000-particle tank
+  steps in ~3 ms instead of ~36 ms. The processor stays the fallback (no WebGPU, a slower GPU, a lost device).
+  Pours onto pools work on either.
+
+### 🛠️ Fixes and polish
+
+- 👀 A person who joins **View only** now sees the room's HUD, HUD values, shader graphs, animation and room anchor
+  straight away.
+- ✏️ Joining with **Editor access** makes you an editor on your own screen too (you were treated as view-only until you
+  reloaded).
+- 💾 **Save scene & connect** keeps your scene as a real version in your own project on every build.
+- 🔤 3D labels and VR panel text no longer fetch fonts from a third-party CDN — they work offline, behind a blocker and
+  in exported games.
+- 🧹 Error reports also remove server names and IP addresses; preview builds file reports under their own label.
+- 🪟 A window closed and reopened in quick succession (Modules, Settings…) no longer closes itself.
+- 🔒 The build tool is updated for a security advisory.
+
 ## 1.39.0 — Logic you can see: a node graph debugger, a Timeline for cutscenes, and fixes that stay fixed 🔎
 
 Pause your game logic and watch it run, put camera shots, clips, sounds and events on a timeline, and keep the
