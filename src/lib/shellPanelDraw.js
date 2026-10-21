@@ -226,10 +226,14 @@ export function drawShellPage(g, model, opts) {
 			g.font = `500 ${Math.round(21 * k)}px system-ui, sans-serif`;
 			g.fillText(row.label, x * k, (y + rowH / 2) * k);
 			const cx = x + colW - 220;
-			if (row.type === 'toggle') {
-				button(prefix + row.id + ':next', row.display, cx + 60, y + 2, 160, rowH - 4, { accent: !!row.value });
+			// 53 (A7): a VR comfort row (a device setting) presses through its own seam
+			const pre = row.id.startsWith('vr:') ? 'shell:vrset:' + row.id.slice(3) : prefix + row.id;
+			if (row.type === 'action') {
+				button(pre + ':next', row.display, cx, y + 2, 220, rowH - 4);
+			} else if (row.type === 'toggle') {
+				button(pre + ':next', row.display, cx + 60, y + 2, 160, rowH - 4, { accent: !!row.value });
 			} else {
-				button(prefix + row.id + ':prev', '‹', cx, y + 2, 50, rowH - 4);
+				button(pre + ':prev', '‹', cx, y + 2, 50, rowH - 4);
 				g.textAlign = 'center';
 				g.fillStyle = '#f3f4f6';
 				// the value fits BETWEEN the arrows (a game row's option label can be long)
@@ -240,7 +244,7 @@ export function drawShellPage(g, model, opts) {
 					g.font = `600 ${Math.round(size * k)}px system-ui, sans-serif`;
 				}
 				g.fillText(row.display, (cx + 110) * k, (y + rowH / 2) * k);
-				button(prefix + row.id + ':next', '›', cx + 170, y + 2, 50, rowH - 4);
+				button(pre + ':next', '›', cx + 170, y + 2, 50, rowH - 4);
 			}
 		});
 		return hits;

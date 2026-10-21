@@ -3,7 +3,9 @@
 // comfort aid, because vection with a still body is what makes people sick. Physical head
 // motion and teleports never trigger it (the first is real, the second is instant).
 //
-// Per game, off by default (`vignette` in gameSettings). vrControls notes the two motion
+// Per game, off by default (`vignette` in gameSettings). 53 (A7): a LEVEL — Off / Low / High on the
+// device (Settings ▸ VR ▸ Comfort), Default / Off / Low / High per game (Default = the device's);
+// Low closes to about half of High's ring. vrControls notes the two motion
 // sources every XR frame (`noteArtificialMotion`); the VR game panel's per-frame call poses
 // the ring head-locked (`vignetteFrame`). LOCAL, scene-root, default layer (both eyes),
 // never in objectsGroup. One mesh and one canvas texture, built once: nothing allocates per
@@ -15,7 +17,7 @@ import { get } from 'svelte/store';
 import { globalScene } from '../stores/sceneStore';
 import { gameSettingValues } from './gameSettings';
 import { gameFeelActive } from './gameFeel';
-import { vrComfortVignette } from './vr/prefs.js';
+import { vrComfortVignette, vignetteLevel } from './vr/prefs.js';
 
 let stick = 0;
 let turn = 0;
@@ -81,9 +83,11 @@ const _fwd = new THREE.Vector3();
  */
 export function vignetteFrame(head, dt = 1 / 72) {
 	// 36: the DEVICE setting (Settings ▸ VR ▸ Comfort) rings it everywhere — Edit, Interact, any scene;
-	// a game can still turn it on for itself through its own setting
-	const on = !!head && (get(vrComfortVignette) || (gameFeelActive() && get(gameSettingValues).vignette === true));
-	const target = on ? vignetteTarget(stick, turn, dt) : 0;
+	// a game can still turn it on (53: or off, or Low) for itself through its own setting
+	level = vignetteLevelNow();
+	const cap = LEVEL_CAP[level] ?? 0;
+	const on = !!head && cap > 0;
+	const target = on ? vignetteTarget(stick, turn, dt) * cap : 0;
 	strength = on ? easeVignette(strength, target, dt) : 0;
 	if (!on && !mesh) return 0;
 	if (!mesh) mesh = build();
@@ -102,7 +106,26 @@ export function vignetteFrame(head, dt = 1 / 72) {
 	return strength;
 }
 
+/** 53 (A7): how far each level closes the ring (High = the ring as it always was) */
+export const LEVEL_CAP = /** @type {Record<string, number>} */ ({ off: 0, low: 0.55, high: 1 });
+/** @type {string} */
+let level = 'off';
+
+/**
+ * The level in force: this game's own row (while playing it) unless it says Default, else the
+ * device's. Pure over its arguments; exported for the suites.
+ * @param {any} device @param {any} gameRow @param {boolean} inGame
+ */
+export function resolveVignetteLevel(device, gameRow, inGame) {
+	const own = String(gameRow ?? 'default');
+	if (inGame && (own === 'off' || own === 'low' || own === 'high')) return own;
+	return vignetteLevel(device);
+}
+function vignetteLevelNow() {
+	return resolveVignetteLevel(get(vrComfortVignette), get(gameSettingValues).vignette, gameFeelActive());
+}
+
 /** the suites' view */
 export function vignetteDebug() {
-	return { strength, visible: !!mesh?.visible, stick, turn };
+	return { strength, visible: !!mesh?.visible, stick, turn, level };
 }

@@ -7,7 +7,6 @@ import {
 	lockedObjects,
 	globalCamera,
 	globalScene,
-	vrMenuHand,
 	vrVertexHold,
 	selectedObjects,
 	worldRig,
@@ -74,7 +73,7 @@ import {
 import { controllerRay } from './pointer.js';
 import { stretch } from './tools.js';
 import { perfMark } from '../perf/perfMarks.js';
-import { handOf } from './bindings.js';
+import { handOf, pointerHand } from './bindings.js';
 import { applyWorldSnap, endWorldSnap, yawOf } from './worldSnap.js';
 
 /** @type {any[]} per-hand grabs, indexed by controller SLOT: each is { object, index, prevPos,
@@ -360,7 +359,7 @@ export function vrFaceTrigger() {
 			// 184/185: capture the pointer hand so controller motion along the face
 			// normal drives depth (extrude) / size (inset) until the next trigger
 			const info = highlightedFaceInfo();
-			const pIdx = controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+			const pIdx = controllerIndexFor(pointerHand());
 			const pos = pIdx >= 0 ? renderer.xr.getController(pIdx).getWorldPosition(new THREE.Vector3()) : null;
 			faceAdjustHand = info && pos ? { index: pIdx, lastPos: pos, normal: info.normal.clone() } : null;
 		}

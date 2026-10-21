@@ -62,6 +62,7 @@ import {
 } from './gameShell';
 import { gameSettingValues } from './gameSettings';
 import { accessValues } from './playerAccess'; // 53 (A6): the Accessibility page redraws on a change
+import { shellVrRows } from './shellVrRows'; // 53 (A7): the VR comfort rows on that page
 import { drawShellPage, SHELL_STAGE, fitLabel, collectOverflow, drawCaptionStrip, captionStripHeight, CAPTION_STRIP_W } from './shellPanelDraw';
 // 53 (A6): the caption lines, head-locked under the view
 import { activeCaptions, captionsShown } from './captions';
@@ -360,7 +361,8 @@ function shellModel() {
 		tabs: shellLevelTabs(), // 33 (G3)
 		levelPage: menu.levelPage ?? null,
 		settings: shellSettingViews({ vr: true }),
-		access: shellAccessViews({ vr: true }), // 53 (A6)
+		// 53 (A6): the player's rows; 53 (A7): + the headset's comfort rows (device settings)
+		access: [...shellAccessViews({ vr: true }), ...(shellVrRows()?.rows() ?? [])],
 		help: shellHelpLines({ vr: true })
 	};
 }
@@ -624,7 +626,7 @@ export function vrGamePanelFrame(opts = {}) {
 	board.mesh.visible = !!entry;
 	if (entry && head) {
 		const sig = shellOpen
-			? JSON.stringify(['shell', get(shellMenu), get(gameLevels)?.list, get(gameLevels)?.current, get(gameSettingValues), get(accessValues), hover, hudAt])
+			? JSON.stringify(['shell', get(shellMenu), get(gameLevels)?.list, get(gameLevels)?.current, get(gameSettingValues), get(accessValues), shellVrRows()?.rows().map((r) => r.display), hover, hudAt])
 			: JSON.stringify([entry.key, entry.screen, runtime, hover, hudAt, imageTick(), valuesSig(entry.screen), menuOffer, get(accessValues).hudText]);
 		if (sig !== board.sig) {
 			board.sig = sig;
@@ -795,6 +797,11 @@ export function pressPanelTarget(target, opts = {}) {
 	debug.presses++;
 	debug.lastPress = hit.id;
 	playGameSound('click', target.point ? target.point.toArray() : null);
+	// 53 (A7): a VR comfort row on the Accessibility page (shell:vrset:<id>:<prev|next>)
+	if (hit.kind === 'shell' && hit.id.startsWith('shell:vrset:')) {
+		const parts = hit.id.split(':');
+		return shellVrRows()?.press(parts[2], parts[3] === 'prev' ? -1 : 1) ?? false;
+	}
 	if (hit.kind === 'shell') return pressShellHit(hit.id);
 	if (hit.kind === 'footer') {
 		if (hit.footer === 'menu') {
