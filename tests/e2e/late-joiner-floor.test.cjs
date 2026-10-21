@@ -8,21 +8,19 @@
 //
 // On a dev server (no cloud plugin) the host installs a provider that refuses EVERYTHING from
 // every peer — a viewer whose grant never lands, the strict form of the cloud race. On a deployed
-// (cloud) build the plugin's own provider is used as is. LJF_CLOUD_PLUGIN=<url> loads a cloud
-// plugin into a dev server (e.g. https://theprototype.pages.dev/cloud-plugin.js, CORS-open), so
-// the real roles race runs against the lane's code.
+// (cloud) build the plugin's own provider is used as is (E2E_CLOUD_PLUGIN=<url> loads one into a
+// dev server - see helpers). On a cloud build the host approves the joiner "View only".
 //
 // Counterfactual: v1.39.0 (dev server, or its Pages build) — the six domain checks are red.
 // Run: e2e-slot --dev <lane> 5484 -- env APP_URL=https://localhost:5484/ npm run e2e -- late-joiner-floor
+//      (+ E2E_CLOUD_PLUGIN=https://theprototype.pages.dev/cloud-plugin.js for the cloud roles)
 const h = require('./helpers.cjs');
 
 h.run(async () => {
 	const browser = await h.launch();
-	const plugin = process.env.LJF_CLOUD_PLUGIN || '';
-	const opts = plugin ? { storage: { cloudPluginUrl: plugin } } : {};
-	const A = await h.setupPage(browser, 'A', opts);
-	// a cloud build registers its plugin after boot — give it the time to install its gate
-	if (plugin || /pages\.dev/.test(h.URL))
+	const A = await h.setupPage(browser, 'A');
+	// a deployed cloud build registers its plugin after boot — give it the time to install its gate
+	if (/pages\.dev/.test(h.URL))
 		await A.page
 			.waitForFunction(() => window.__stores.cloudHooks.hasCapabilityProvider(), null, { timeout: 20000 })
 			.catch(() => console.log('  (no capability provider registered within 20 s)'));
@@ -61,7 +59,7 @@ h.run(async () => {
 
 	if (!authored.cloud)
 		await A.page.evaluate(() => window.__stores.cloudHooks.setCapabilityProvider(() => false));
-	const C = await h.setupPage(browser, 'C', opts);
+	const C = await h.setupPage(browser, 'C');
 	// premise: the host's gate refuses this joiner's CONTENT (it is a viewer to the host)
 	const gate = await A.page.evaluate((cid) => {
 		const k = window.__stores.cloudHooks;
@@ -69,7 +67,21 @@ h.run(async () => {
 	}, C.id);
 	if (!authored.cloud) h.check(gate.huds === false && gate.hud === false, `premise: the host gates the joiner's content (${JSON.stringify(gate)})`);
 
-	await h.connect(C, A);
+	if (authored.cloud) {
+		// a cloud build: the host approves the joiner VIEW ONLY, so it stays a viewer for the whole
+		// session ("Editor access" is granted on the host before the requests arrive, which hides
+		// the gap — measured green on 1.39.0 that way)
+		await C.page.locator('input[placeholder="Enter peer ID to connect"]').fill(A.id);
+		await C.page.getByRole('button', { name: 'Connect', exact: true }).click();
+		await A.page.getByRole('button', { name: 'View only' }).first().click({ timeout: 30000 });
+		await C.page.waitForTimeout(9000);
+		const role = await A.page.evaluate((cid) => {
+			let ri;
+			window.__stores.cloudHooks.rolesInfo.subscribe((v) => (ri = v))();
+			return ri?.roleOf?.(cid) ?? null;
+		}, C.id);
+		h.check(role === 'viewer', `premise: the host reads the joiner as a viewer (${role})`);
+	} else await h.connect(C, A);
 
 	const read = (uuid) =>
 		C.page.evaluate((u) => {
