@@ -20,6 +20,7 @@ import { noteSimplified } from '../water/simplifiedNotice.js';
 /** 36-fb-water F27: a tank this frame draws drops instead of its smooth surface BECAUSE OF QUALITY */
 let qualityLowered = false;
 import { spillDrops } from '../water/pourDrops.js';
+import { solverChoice, gpuWorker, connectGpuFluid } from './fluidGpuHost.js';
 
 // 36-fb-water F16: a tank's walls with the TOP open (fluidCore wall mask [xlo,xhi,ylo,yhi,zlo,zhi])
 const OPEN_TOP = [true, true, true, false, true, true];
@@ -44,7 +45,8 @@ export const QUEST_CAP = 1500;
  *   pending: boolean, sentAt: number, steps: number, ms: number, count: number, visible: boolean,
  *   min: number[], max: number[], frame: THREE.Matrix4, frameQuat: THREE.Quaternion, prevPos: THREE.Vector3 | null,
  *   prevVel: THREE.Vector3, accel: THREE.Vector3, lastAt: number, lastDt: number, surfaceLocal?: number | null, gen?: number, local?: {solver: FluidSolver, acc: {carry: number, drainCarry: number}},
- *   spare: ArrayBuffer | null, spilled?: number, surfaces?: any[], landed?: number, ripples?: number, lastRipple?: number}} Tank */
+ *   spare: ArrayBuffer | null, spilled?: number, surfaces?: any[], landed?: number, ripples?: number, lastRipple?: number,
+ *   solver?: 'gpu' | 'cpu', on?: Worker | null}} Tank */
 
 /** @type {Map<string, Tank>} */
 const tanks = new Map();
@@ -69,6 +71,17 @@ function ensureWorker() {
 	}
 	return worker;
 }
+
+// 49-fluid W2: a tank may run on the WebGPU worker instead (Settings ▸ Performance ▸ GPU fluid,
+// fluidGpuHost decides); its frames come here too, and a GPU failure re-inits those tanks on the CPU
+connectGpuFluid(onFrame, () => {
+	for (const t of tanks.values())
+		if (t.solver === 'gpu') {
+			t.key = '';
+			t.pending = false;
+			t.on = null;
+		}
+});
 
 /** @param {any} data */
 function onFrame(data) {
@@ -258,7 +271,12 @@ function initTank(tank, count) {
 	tank.pending = false;
 	tank.count = 0;
 	tank.spare = null;
-	const w = ensureWorker();
+	// 49-fluid W2: on the solver tickTank picked (a re-init on the other one drops the old copy)
+	const gw = tank.solver === 'gpu' ? gpuWorker() : null;
+	const w = gw ?? ensureWorker();
+	if (!gw) tank.solver = 'cpu';
+	if (tank.on && tank.on !== w) tank.on.postMessage({ op: 'drop', id: tank.object.uuid });
+	tank.on = w || null;
 	const init = { op: 'init', id: tank.object.uuid, gen: tank.gen, min: tank.min, max: tank.max, capacity: count, spacing, fill: tank.spec.fill, count };
 	if (w) {
 		w.postMessage(init);
@@ -273,7 +291,7 @@ function initTank(tank, count) {
 /** @param {Tank} tank */
 function dropTank(tank) {
 	tank.visual?.dispose();
-	const w = worker;
+	const w = tank.on ?? worker;
 	if (w) w.postMessage({ op: 'drop', id: tank.object.uuid });
 }
 
@@ -345,9 +363,15 @@ function tickTank(root, object, camera, renderer, now) {
 	const low = xr || q.postOff || q.particlesCapped || spec.quality === 'points';
 	if (!xr && spec.quality === 'auto' && (q.postOff || q.particlesCapped)) qualityLowered = true;
 	const count = Math.min(spec.count, low ? QUEST_CAP : FLUID_MAX_PARTICLES);
+	// 49-fluid W2: which solver (Auto may still be measuring this device: a new tank waits, a
+	// running one carries on where it is)
+	const choice = solverChoice();
+	const prior = tanks.get(object.uuid);
+	if (choice === 'pending' && !prior?.key) return;
+	const solver = choice === 'pending' ? prior?.solver : choice;
 	object.updateWorldMatrix(true, false);
 	const inside = interiorOf(object);
-	const key = [count, spec.fill, spec.generation, ...inside.min.map((v) => v.toFixed(3)), ...inside.max.map((v) => v.toFixed(3))].join(',');
+	const key = [count, spec.fill, spec.generation, ...inside.min.map((v) => v.toFixed(3)), ...inside.max.map((v) => v.toFixed(3)), solver].join(',');
 	let tank = tanks.get(object.uuid);
 	if (!tank) {
 		tank = /** @type {Tank} */ ({
@@ -366,6 +390,7 @@ function tickTank(root, object, camera, renderer, now) {
 		// and rebuilds the visual — its hitch is not the scene's cost
 		if (tank.key) settleQuality();
 		tank.key = key;
+		tank.solver = solver;
 		initTank(tank, count);
 	}
 	tank.visual.setLook(spec.color, spec.clarity);
@@ -438,7 +463,7 @@ function tickTank(root, object, camera, renderer, now) {
 		onFrame({ op: 'frame', id: object.uuid, gen: tank.gen, count: tank.local.solver.count, positions: tank.local.solver.x, impulses: tank.local.solver.impulses, ms: performance.now() - t0, ...(escaped ? { escaped } : {}), ...(splashes ? { splashes } : {}) });
 		return;
 	}
-	const w = ensureWorker();
+	const w = tank.on || ensureWorker();
 	if (!w) return; // switched to local: next frame re-inits
 	tank.pending = true;
 	const buffer = tank.spare;
@@ -463,7 +488,8 @@ export function fluidDebug() {
 		landed: t.landed ?? 0,
 		ripples: t.ripples ?? 0,
 		surfaces: t.surfaces?.length ?? 0,
-		worker: worker ? 'worker' : worker === false ? 'main' : 'none'
+		worker: worker ? 'worker' : worker === false ? 'main' : 'none',
+		solver: t.local ? 'cpu' : t.solver ?? 'cpu'
 	}));
 }
 
