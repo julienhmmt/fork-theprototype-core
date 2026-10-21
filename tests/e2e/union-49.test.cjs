@@ -73,7 +73,7 @@ h.run(async () => {
 
 	// U3: Off -> the CPU worker re-inits the tanks and lands the same pour
 	await A.page.evaluate(() => window.__stores.fluidGpu.gpuFluidPref.set('off'));
-	await h.eventually(() => tankOf(A.page, ids.pour), (t) => !!t && t.solver === 'cpu' && t.landed > 100, 'U3 the CPU tank lands the pour after Off', 30000);
+	await h.eventually(() => tankOf(A.page, ids.pour), (t) => !!t && t.solver === 'cpu' && t.landed > 100 && t.ripples >= 10, 'U3 the CPU tank lands the pour after Off', 30000);
 	const p3 = await tankOf(A.page, ids.pour);
 	h.check(p3.solver === 'cpu' && p3.landed > 100 && p3.ripples >= 10, `U3 GPU fluid Off: the CPU worker lands the pour too (${p3.solver}, ${p3.landed} landed, ${p3.ripples} ripples)`);
 
