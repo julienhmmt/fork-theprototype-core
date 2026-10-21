@@ -212,6 +212,39 @@ export class FluidSolver {
 		return out;
 	}
 
+	/**
+	 * 49-water W1: a step that lands a particle on a W1 surface (its old position `x` above the
+	 * plane, the new one `p` on or below it, tankSurfaces.js) takes it out — it joined the pool.
+	 * Runs between the solve and the commit (`x.set(p)`); the GPU solver's CPU mirror calls it at
+	 * the same point (49-fluid's `beforeCommit` hook). @param {number} dt @param {{surfaces?: any[]}} o
+	 * @returns {number} particles that landed this step
+	 */
+	landOnSurfaces(dt, o) {
+		if (!o?.surfaces?.length || !this.count) return 0;
+		const { x, v, p } = this;
+		const n = this.count;
+		const hits = this.splashes.subarray(this.splashCount * 5);
+		const r = crossSurfaces(o.surfaces, x, p, n, Math.min(dt, 1 / 30), this.crossed, hits, SPLASH_CAP - this.splashCount);
+		this.splashCount += r.written;
+		if (!r.marked) return 0;
+		// swap-remove, descending: the particle moved into i is one already looked at (and kept)
+		for (let i = n - 1; i >= 0; i--) {
+			if (!this.crossed[i]) continue;
+			this.crossed[i] = 0;
+			const last = --this.count;
+			if (i === last) continue;
+			for (let a = 0; a < 3; a++) {
+				x[i * 3 + a] = x[last * 3 + a];
+				v[i * 3 + a] = v[last * 3 + a];
+				p[i * 3 + a] = p[last * 3 + a];
+			}
+			this.age[i] = this.age[last];
+			this.flowing[i] = this.flowing[last];
+		}
+		this.landed += r.marked;
+		return r.marked;
+	}
+
 	/** @param {number} r2 */
 	poly6(r2) {
 		if (r2 >= this.h2) return 0;
@@ -726,26 +759,8 @@ export class FluidSolver {
 			const c = Math.min(visc, 0.5) / Math.max(1, MAX_NEIGHBORS / 8);
 			for (let i = 0; i < n * 3; i++) v[i] += c * dp[i];
 		}
-		// 49-water W1: a step that lands a particle on a W1 surface (old position x above the
-		// plane, the new one p on or below it) takes it out — it joined the pool
-		let landed = 0;
-		if (o.surfaces?.length) {
-			const free = SPLASH_CAP - this.splashCount;
-			const hits = this.splashes.subarray(this.splashCount * 5);
-			const r = crossSurfaces(o.surfaces, x, p, n, dt, this.crossed, hits, free);
-			this.splashCount += r.written;
-			landed = r.marked;
-		}
-		x.set(p.subarray(0, n * 3));
-		if (landed) {
-			// descending: the particle swapped into i is one already looked at (and kept)
-			for (let i = n - 1; i >= 0; i--)
-				if (this.crossed[i]) {
-					this.crossed[i] = 0;
-					this.remove(i);
-				}
-			this.landed += landed;
-		}
+		this.landOnSurfaces(dt, o);
+		x.set(p.subarray(0, this.count * 3));
 		this.cull(dt, o.lifetime ?? 0);
 		return this.count;
 	}
