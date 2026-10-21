@@ -76,6 +76,7 @@ function roundRect(g, x, y, w, h, r) {
  *   levels: {list: {id: string, label: string, locked?: boolean, stars?: number}[], current: string | null} | null,
  *   settings: {id: string, label: string, type: string, value: any, display: string, min?: number, max?: number, game?: boolean}[],
  *   help: string[], fps?: string | null,
+ *   access?: {id: string, label: string, type: string, value: any, display: string, game?: boolean}[],
  *   tabs?: {id: string, label: string, options: {value: string, label: string}[], value: string}[],
  *   levelPage?: number | null}} ShellModel
  */
@@ -206,13 +207,16 @@ export function drawShellPage(g, model, opts) {
 		return hits;
 	}
 
-	if (model.page === 'settings') {
+	// 53 (A6): the Accessibility page = the settings rows of playerAccess (presses: shell:acc:…)
+	if (model.page === 'settings' || model.page === 'access') {
+		const rows = model.page === 'access' ? (model.access ?? []) : model.settings;
+		const prefix = model.page === 'access' ? 'shell:acc:' : 'shell:set:';
 		const colW = 510;
 		const rowH = 44;
 		const gap = 6;
 		const perCol = Math.floor((backY - top - 10) / (rowH + gap));
 		const x0 = (SHELL_STAGE.w - colW * 2 - 30) / 2;
-		model.settings.slice(0, perCol * 2).forEach((row, i) => {
+		rows.slice(0, perCol * 2).forEach((row, i) => {
 			const col = Math.floor(i / perCol);
 			const x = x0 + col * (colW + 30);
 			const y = top + (i % perCol) * (rowH + gap);
@@ -223,9 +227,9 @@ export function drawShellPage(g, model, opts) {
 			g.fillText(row.label, x * k, (y + rowH / 2) * k);
 			const cx = x + colW - 220;
 			if (row.type === 'toggle') {
-				button('shell:set:' + row.id + ':next', row.display, cx + 60, y + 2, 160, rowH - 4, { accent: !!row.value });
+				button(prefix + row.id + ':next', row.display, cx + 60, y + 2, 160, rowH - 4, { accent: !!row.value });
 			} else {
-				button('shell:set:' + row.id + ':prev', '‹', cx, y + 2, 50, rowH - 4);
+				button(prefix + row.id + ':prev', '‹', cx, y + 2, 50, rowH - 4);
 				g.textAlign = 'center';
 				g.fillStyle = '#f3f4f6';
 				// the value fits BETWEEN the arrows (a game row's option label can be long)
@@ -236,7 +240,7 @@ export function drawShellPage(g, model, opts) {
 					g.font = `600 ${Math.round(size * k)}px system-ui, sans-serif`;
 				}
 				g.fillText(row.display, (cx + 110) * k, (y + rowH / 2) * k);
-				button('shell:set:' + row.id + ':next', '›', cx + 170, y + 2, 50, rowH - 4);
+				button(prefix + row.id + ':next', '›', cx + 170, y + 2, 50, rowH - 4);
 			}
 		});
 		return hits;

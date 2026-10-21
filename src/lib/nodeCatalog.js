@@ -835,7 +835,11 @@ export const nodeCatalog = [
 				type: 'keypress',
 				label: 'Key Press',
 				defaults: { code: 'KeyR', pulse: 0.3, edge: 'down' },
-				params: [{ key: 'edge', kind: 'select', options: ['down', 'up', 'held'] }]
+				// 53 (A6): `action` names the binding in the player's Accessibility ▸ Controls list
+				params: [
+					{ key: 'edge', kind: 'select', options: ['down', 'up', 'held'] },
+					{ key: 'action', kind: 'text', placeholder: 'action name for players (e.g. Jump)', maxLength: 40 }
+				]
 			},
 			// 24-A A2: a hand (VR controller) or a walking player KNOCKED this body (A1's
 			// probe). Fired on EVERY peer as the `hit` message is applied, stamped from the
@@ -875,7 +879,8 @@ export const nodeCatalog = [
 				defaults: { button: 'GamepadA', pulse: 0.3, edge: 'down' },
 				params: [
 					{ key: 'button', kind: 'select', options: GAMEPAD_BUTTONS },
-					{ key: 'edge', kind: 'select', options: ['down', 'up', 'held'] }
+					{ key: 'edge', kind: 'select', options: ['down', 'up', 'held'] },
+					{ key: 'action', kind: 'text', placeholder: 'action name for players (e.g. Jump)', maxLength: 40 }
 				]
 			},
 			// a stick is LOCAL: every peer reads its OWN pad, so this node evaluates to a

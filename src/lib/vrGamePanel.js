@@ -52,6 +52,7 @@ import {
 	shellMenuItems,
 	gameLevels,
 	shellSettingViews,
+	shellAccessViews,
 	shellLevelTabs,
 	shellPageTitle,
 	shellGameName,
@@ -60,6 +61,7 @@ import {
 	toggleShellMenu
 } from './gameShell';
 import { gameSettingValues } from './gameSettings';
+import { accessValues } from './playerAccess'; // 53 (A6): the Accessibility page redraws on a change
 import { drawShellPage, SHELL_STAGE, fitLabel, collectOverflow } from './shellPanelDraw';
 // 31 K3 G3: Show FPS in the headset (the HUD band + the wrist)
 import { fpsReading, fpsText, noteXrFrame, perfStatsShown } from './fpsMeter';
@@ -356,6 +358,7 @@ function shellModel() {
 		tabs: shellLevelTabs(), // 33 (G3)
 		levelPage: menu.levelPage ?? null,
 		settings: shellSettingViews({ vr: true }),
+		access: shellAccessViews(), // 53 (A6)
 		help: shellHelpLines({ vr: true })
 	};
 }
@@ -619,7 +622,7 @@ export function vrGamePanelFrame(opts = {}) {
 	board.mesh.visible = !!entry;
 	if (entry && head) {
 		const sig = shellOpen
-			? JSON.stringify(['shell', get(shellMenu), get(gameLevels)?.list, get(gameLevels)?.current, get(gameSettingValues), hover, hudAt])
+			? JSON.stringify(['shell', get(shellMenu), get(gameLevels)?.list, get(gameLevels)?.current, get(gameSettingValues), get(accessValues), hover, hudAt])
 			: JSON.stringify([entry.key, entry.screen, runtime, hover, hudAt, imageTick(), valuesSig(entry.screen), menuOffer]);
 		if (sig !== board.sig) {
 			board.sig = sig;

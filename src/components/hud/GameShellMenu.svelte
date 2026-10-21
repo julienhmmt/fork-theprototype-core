@@ -30,8 +30,15 @@
 		closeShellMenu,
 		runShellItem,
 		pickGameLevel,
-		stepGameSetting
+		stepGameSetting,
+		shellAccessViews
 	} from '$lib/gameShell';
+	// 53 (A6): the player's Accessibility page — per-game LOCAL prefs + the game's remappable controls
+	import { accessValues, accessRemap, setAccess, stepAccessSetting, remapControl, resetRemap, resetAccess } from '$lib/playerAccess';
+	import { codeLabel, playerCodeFor, RESERVED_KEYS } from '$lib/playerAccessCore';
+	import { gameKeyBindings, gamePadBindings } from '$lib/playerBindings';
+	import { GAMEPAD_BUTTONS } from '$lib/gamepadPrefs';
+	import { flowGraphs } from '../../stores/flowStore';
 	import { touchControlsVisible } from '$lib/touchActions'; // 36 U8: the Touch controls row
 	import { gameSettingValues, gameSettingRows, setGameSetting } from '$lib/gameSettings';
 	// 36-community (C6): a PUBLISHED game's heart (null without a cloud plugin / for a local scene)
@@ -43,7 +50,8 @@
 	// through get(), which a $derived cannot see
 	const offeredNow = (/** @type {any[]} */ ..._deps) => shellMenuAvailable();
 	const offered = $derived(!$isVRMode && offeredNow($isLocked, $editorMode, $hudDocs, $gameLevels));
-	const open = $derived($shellMenu.open && offered);
+	// 53 (A6): the start card's standalone Accessibility page opens with no game menu around it
+	const open = $derived($shellMenu.open && (offered || (!!$shellMenu.standalone && !$isVRMode)));
 	const page = $derived($shellMenu.page);
 	const itemsFor = (/** @type {any[]} */ ..._deps) => shellMenuItems({ vr: false });
 	const items = $derived(itemsFor($gameLevels, $touchControlsVisible));
@@ -56,6 +64,55 @@
 	const vrSettings = $derived(vrViewsFor($gameSettingValues));
 	const helpFor = (/** @type {any[]} */ ..._deps) => shellHelpLines({ vr: false });
 	const help = $derived(helpFor($gameHelp, $gameDescription));
+	const accessFor = (/** @type {any[]} */ ..._deps) => shellAccessViews();
+	const accessRows = $derived(accessFor($accessValues));
+	const keysFor = (/** @type {any[]} */ ..._deps) => gameKeyBindings();
+	const keyRows = $derived(page === 'access' ? keysFor($flowGraphs) : []);
+	const padsFor = (/** @type {any[]} */ ..._deps) => gamePadBindings();
+	const padRows = $derived(page === 'access' ? padsFor($flowGraphs) : []);
+	const coarse = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
+	/** the binding waiting for the player's key / button @type {{kind: 'keys' | 'pad', code: string} | null} */
+	let capturing = $state(null);
+	let captureNote = $state('');
+	$effect(() => {
+		if (!open || page !== 'access') capturing = null;
+	});
+	/** @param {'keys' | 'pad'} kind @param {string} code */
+	function startCapture(kind, code) {
+		capturing = { kind, code };
+		captureNote = '';
+		if (kind === 'pad') pollPad();
+	}
+	/** a pad has no key event: poll until a button goes down (or the capture ends) */
+	function pollPad() {
+		const want = capturing;
+		if (!want || want.kind !== 'pad') return;
+		const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? [...navigator.getGamepads()] : [];
+		const pad = pads.find((p) => p && p.connected !== false);
+		const i = pad ? pad.buttons.findIndex((b) => b.pressed) : -1;
+		if (i >= 0 && GAMEPAD_BUTTONS[i]) {
+			remapControl('pad', want.code, GAMEPAD_BUTTONS[i], padRows.map((r) => r.code));
+			capturing = null;
+			return;
+		}
+		requestAnimationFrame(pollPad);
+	}
+	/** capture phase: the pressed key belongs to the remap, not to the game or the menu @param {KeyboardEvent} event */
+	function onCaptureKey(event) {
+		if (!capturing || capturing.kind !== 'keys' || !open) return;
+		event.preventDefault();
+		event.stopPropagation();
+		if (event.code === 'Escape') {
+			capturing = null;
+			return;
+		}
+		if (RESERVED_KEYS.has(event.code)) {
+			captureNote = codeLabel(event.code) + ' is kept for the menu and the browser — pick another key';
+			return;
+		}
+		remapControl('keys', capturing.code, event.code, keyRows.map((r) => r.code));
+		capturing = null;
+	}
 	const nameFor = (/** @type {any[]} */ ..._deps) => shellGameName();
 	const gameName = $derived(nameFor($gameDescription, $gameSettingValues));
 
@@ -111,7 +168,7 @@
 	}
 </script>
 
-<svelte:window onkeydown={onKeyDown} />
+<svelte:window onkeydown={onKeyDown} onkeydowncapture={onCaptureKey} />
 
 {#if offered && !open}
 	<button
@@ -140,7 +197,7 @@
 				{/if}
 				<div class="gs-titles">
 					<h2 class="gs-title">{shellPageTitle(page)}</h2>
-					<p class="gs-sub">{gameName}</p>
+					<p class="gs-sub">{page === 'access' ? gameName + ' · saved on this device for this game' : gameName}</p>
 				</div>
 				{#if page === 'main' && $sceneHeart}
 					<span class="gs-heart">
@@ -216,6 +273,32 @@
 						{/each}
 					{/if}
 				</div>
+			{:else if page === 'access'}
+				<div class="gs-settings" id="game-access-page">
+					{#each accessRows as row (row.id)}
+						{@render settingRow(row)}
+					{/each}
+					<div class="gs-row gs-row-actions">
+						<button type="button" class="gs-small" data-access-reset onclick={() => resetAccess()}>Reset these</button>
+					</div>
+					{#if !coarse || padRows.length}
+						<h3 class="gs-group">Controls</h3>
+						<p class="gs-note">{capturing ? captureNote || (capturing.kind === 'pad' ? 'Press a gamepad button… (Esc cancels)' : 'Press a key… (Esc cancels)') : 'Pick a control, then press the key or button you want for it.'}</p>
+					{/if}
+					{#if !coarse}
+						{#each keyRows as row (row.code)}
+							{@render remapRow('keys', row, $accessRemap.keys)}
+						{/each}
+					{/if}
+					{#each padRows as row (row.code)}
+						{@render remapRow('pad', row, $accessRemap.pad)}
+					{/each}
+					{#if (!coarse || padRows.length) && (Object.keys($accessRemap.keys).length || Object.keys($accessRemap.pad).length)}
+						<div class="gs-row gs-row-actions">
+							<button type="button" class="gs-small" data-remap-reset onclick={() => resetRemap()}>Reset controls</button>
+						</div>
+					{/if}
+				</div>
 			{:else}
 				<div class="gs-help">
 					{#each help as line, i (i)}
@@ -227,8 +310,25 @@
 	</div>
 {/if}
 
+{#snippet remapRow(/** @type {'keys' | 'pad'} */ kind, /** @type {{code: string, label: string}} */ row, /** @type {Record<string, string>} */ table)}
+	{@const now = playerCodeFor(table, row.code)}
+	{@const waiting = capturing?.kind === kind && capturing.code === row.code}
+	<div class="gs-row" data-remap={kind + ':' + row.code}>
+		<span class="gs-row-label">{row.label}</span>
+		<button
+			type="button"
+			class="gs-key"
+			class:gs-key-moved={now !== row.code}
+			class:gs-key-wait={waiting}
+			aria-label={row.label + ': ' + codeLabel(now) + (waiting ? ', waiting for a press' : '. Press to change')}
+			aria-pressed={waiting}
+			onclick={() => (waiting ? (capturing = null) : startCapture(kind, row.code))}>{waiting ? '…' : codeLabel(now)}</button
+		>
+	</div>
+{/snippet}
+
 {#snippet settingRow(/** @type {any} */ row)}
-	<div class="gs-row" class:gs-row-game={row.game} data-shell-setting={row.id}>
+	<div class="gs-row" class:gs-row-game={row.game} data-shell-setting={row.access ? undefined : row.id} data-access-setting={row.access ? row.id : undefined}>
 		<span class="gs-row-label">{row.label}</span>
 		{#if row.type === 'toggle'}
 			<input
@@ -236,7 +336,7 @@
 				class="tp-check"
 				aria-label={row.label}
 				checked={!!row.value}
-				onchange={(e) => setGameSetting(row.id, /** @type {HTMLInputElement} */ (e.currentTarget).checked)}
+				onchange={(e) => (row.access ? setAccess : setGameSetting)(row.id, /** @type {HTMLInputElement} */ (e.currentTarget).checked)}
 			/>
 		{:else if row.type === 'range'}
 			<span class="gs-range">
@@ -253,11 +353,11 @@
 			</span>
 		{:else}
 			<span class="gs-choice">
-				<button type="button" aria-label={'Previous ' + row.label} onclick={() => stepGameSetting(row.id, -1)}>
+				<button type="button" aria-label={'Previous ' + row.label} onclick={() => (row.access ? stepAccessSetting : stepGameSetting)(row.id, -1)}>
 					<Icon name="chevron-left" size={16} aria-hidden="true" />
 				</button>
 				<span class="gs-choice-value">{row.display}</span>
-				<button type="button" aria-label={'Next ' + row.label} onclick={() => stepGameSetting(row.id, 1)}>
+				<button type="button" aria-label={'Next ' + row.label} onclick={() => (row.access ? stepAccessSetting : stepGameSetting)(row.id, 1)}>
 					<Icon name="chevron-right" size={16} aria-hidden="true" />
 				</button>
 			</span>
@@ -523,6 +623,44 @@
 	.gs-choice-value {
 		min-width: 8.5em;
 		text-align: center;
+	}
+	/* 53 (A6): the remap rows' key caps + the page's small actions */
+	.gs-note {
+		margin: 2px 8px 6px;
+		font-size: var(--fs-desc);
+		color: var(--text-muted);
+	}
+	.gs-row-actions {
+		justify-content: flex-end;
+	}
+	.gs-small {
+		padding: 4px 12px;
+		border-radius: 8px;
+		background: var(--surface-2);
+		font-size: 13px;
+		border: 1px solid transparent;
+	}
+	.gs-key {
+		min-width: 7em;
+		padding: 4px 12px;
+		border-radius: 8px;
+		background: var(--surface-inset);
+		border: 1px solid var(--border-strong);
+		font: 600 13px var(--font-ui-mono);
+	}
+	.gs-key-moved {
+		border-color: var(--accent);
+	}
+	.gs-key-wait {
+		background: var(--accent-soft);
+		border-color: var(--accent);
+	}
+	.gs-small:hover,
+	.gs-small:focus-visible,
+	.gs-key:hover,
+	.gs-key:focus-visible {
+		border-color: var(--accent);
+		outline: none;
 	}
 	.gs-help p {
 		margin: 6px 0;
