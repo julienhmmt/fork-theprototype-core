@@ -73,7 +73,11 @@ export const DERIVED_TOKENS = [
 	'--badge-text',
 	'--control-off',
 	'--surface-hover',
-	'--surface-active'
+	'--surface-active',
+	// 53 A2: the status fills follow the theme's inks
+	'--status-good',
+	'--status-warn',
+	'--status-bad'
 ];
 
 // the full token set a theme file carries (semantic + 146 dropdown + 148 scrollbar + 38)
@@ -122,6 +126,10 @@ export const THEME_TOKENS = [
 	'--ink-good',
 	'--accent-fill',
 	'--on-accent',
+	// 53 A2: the status FILLS (dots, marks). Derived from the inks above unless a theme sets them.
+	'--status-good',
+	'--status-warn',
+	'--status-bad',
 	// 38 R2: the redesign tokens (styles/tokens.css, SPEC §1). A custom theme may set any of
 	// them; one that does not DERIVES them from the legacy keys above (tokens.css "EXOTIC +
 	// CUSTOM"), so every .theme.json written before 38 keeps restyling the redesigned UI.

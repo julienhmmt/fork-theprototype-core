@@ -174,7 +174,8 @@
 	--live: #e4501d;
 	--speaking: #1f8a55;
 	--warn-text: #a5441a;
-	--status-warn: #e5a50a; /* light: --ink-warn is a dark text ink (brown), a dot needs amber */
+	--status-warn: #c06d00; /* light: --ink-warn is a dark text ink (brown), a dot needs amber — 53 A2: one dark
+	   enough for 3:1 on the light surfaces and apart from --status-bad under every colour vision */
 	--danger: #c93232;
 	--badge-bg: #e3ebf8;
 	--badge-text: #284a84;
@@ -228,6 +229,35 @@
 	--border: #262d3b;
 	--surface-2: #1b212d;
 	--accent: #3b7cf0;
+}
+
+/* ---- 53 A2: HIGH CONTRAST, measured. The derived block above gets most of this theme right
+   (white on black is 21:1), but four pairs it cannot know about failed WCAG: white on the Play /
+   record orange (3.4:1), the toggle's white knob on its yellow ON track (1.4:1), the OFF track
+   on black (1.2:1 — the switch vanished), and the pressed-row grey (5.7:1, AA but not AAA).
+   tests/unit/themeContrast.test.js holds this theme to AAA (7:1) for text and 3:1 for every UI
+   part. The selector repeats the derived block's two :not()s on purpose: it must outrank that
+   block's (0,4,0) for the derived names (--control-off, --surface-active), and source order
+   breaks the tie. ---- */
+:root[data-theme='contrast']:not([data-theme='dark']):not([data-theme='light']) {
+	--live: #ff9a1f;
+	--on-live: #000000;
+	--knob: #000000;
+	--control-off: #8a8a8a;
+	--surface-active: #3a3a3a;
+	--danger: #b3001b;
+	--on-danger: #ffffff;
+	--speaking: #33ddff;
+	--status-warn: var(--ink-warn);
+	--code-comment: #b0b8c4;
+	/* the 3D view's editor marks (Outline.svelte, Scene's transform gizmo — $lib/viewportContrast):
+	   a thick yellow selection edge, a peer's lock in the "over" colour, and axis hues bright
+	   enough to read on a black sky (three's pure blue is 2.4:1 on black) */
+	--viewport-outline: #ffd400;
+	--viewport-outline-locked: #ff7f96;
+	--axis-x: #ff6b5b;
+	--axis-y: #8cff4d;
+	--axis-z: #4daaff;
 }
 
 /* personalities that are TYPE, not colour: the redesign scope keeps them */

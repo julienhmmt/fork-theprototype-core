@@ -157,38 +157,72 @@
         white on #3b82f6) measured 1.6:1 to 3.7:1 against the light theme's white and the
         green theme's accent, so every theme states its own: each pair reaches WCAG AA 4.5:1
         on that theme's surfaces. Dark keeps the old hues (it had no token block) — they were
-        always fine on gray-800. ---- */
+        always fine on gray-800.
+        53 A2: COLOUR-BLIND SAFE in every theme. The old trios (emerald / amber / red) collapsed
+        under deuteranopia — 0.03 to 0.09 apart in OKLab, i.e. one colour. Each theme's trio
+        now separates by LIGHTNESS as well as hue (a teal "fine", a light amber "careful", a
+        darker crimson "over"), so every pair stays >= 0.12 apart under protanopia,
+        deuteranopia and tritanopia (Machado 2009), as text inks on every surface at AA (AAA
+        in High contrast). tests/unit/themeContrast.test.js holds both numbers. Colour is never
+        the only signal either: see the --shape-* tokens below. ---- */
 :root {
-	--ink-bad: #f87171;
-	--ink-warn: #fbbf24;
-	--ink-good: #34d399;
+	--ink-bad: #f05068;
+	--ink-warn: #f7c948;
+	--ink-good: #33c3c8;
 	--accent-fill: #2563eb;
 	--on-accent: #ffffff;
+	/* the FILLS (status dots, indicator shapes): a 3:1 UI part, not text. Every theme but light
+	   reuses its inks; light's inks must be dark enough for text, which pushes warn and bad
+	   together, so its fills are lighter and further apart (tokens.css light block). */
+	--status-good: var(--ink-good);
+	--status-bad: var(--ink-bad);
 }
 :root[data-theme='light'] {
-	--ink-bad: #b91c1c;
-	--ink-warn: #92400e;
-	--ink-good: #047857;
+	--ink-bad: #8e1b2e;
+	--ink-warn: #8f5a00;
+	--ink-good: #0a6e8c;
 	--accent-fill: #2563eb;
+	--status-good: #0b87a1;
+	--status-bad: #8b1a2e;
 }
 :root[data-theme='green'] {
-	--ink-bad: #fca5a5;
+	--ink-bad: #ff6b7f;
 	--ink-warn: #fde047;
-	--ink-good: #86efac;
+	--ink-good: #5ee0e6;
 	--accent-fill: #15803d;
 }
 :root[data-theme='bit8'] {
-	--ink-bad: #fda4af;
-	--ink-warn: #fde68a;
-	--ink-good: #6ee7b7;
+	--ink-bad: #ff6b80;
+	--ink-warn: #ffd447;
+	--ink-good: #4fd8e8;
 	--accent-fill: #be185f;
 }
 :root[data-theme='contrast'] {
-	--ink-bad: #ff8080;
-	--ink-warn: #ffd400;
-	--ink-good: #00ff88;
+	--ink-bad: #ff7f96;
+	--ink-warn: #ffe600;
+	--ink-good: #33ddff;
 	--accent-fill: #ffd400;
 	--on-accent: #000000;
+}
+
+/* ---- 53 A2: STATUS IS NEVER COLOUR ALONE. A status mark is a SHAPE as well as a colour, the
+        same in every theme: fine = a disc, careful = a triangle, over / error = a cross, not
+        measured / off = a hollow ring (drawn by its component — a ring is not a clip path).
+        Components clip their 10 px mark with these (`clip-path: var(--shape-warn)`), so a
+        theme could restyle them like any other token. ---- */
+:root {
+	--shape-ok: circle(50% at 50% 50%);
+	--shape-warn: polygon(50% 2%, 100% 96%, 0% 96%);
+	--shape-bad: polygon(20% 0%, 50% 30%, 80% 0%, 100% 20%, 70% 50%, 100% 80%, 80% 100%, 50% 70%, 20% 100%, 0% 80%, 30% 50%, 0% 20%);
+	/* the node editor's socket TYPES, one shape each (flowSockets.socketShape names them) */
+	--socket-shape-number: circle(50% at 50% 50%);
+	--socket-shape-vector3: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+	--socket-shape-boolean: inset(8% round 2px);
+	--socket-shape-color: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0% 50%);
+	--socket-shape-object: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+	--socket-shape-event: polygon(8% 0%, 100% 50%, 8% 100%);
+	--socket-shape-effect: polygon(50% 0%, 63% 37%, 100% 50%, 63% 63%, 50% 100%, 37% 63%, 0% 50%, 37% 37%);
+	--socket-shape-any: circle(50% at 50% 50%);
 }
 
 /* ---- 38 R11: the code editor's DARK values (CodeEditor.svelte used to carry them as per-site
