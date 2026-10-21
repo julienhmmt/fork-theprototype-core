@@ -64,7 +64,10 @@ async function handle(m) {
 		const solver = new FluidSolver({ min: m.min, max: m.max, capacity: m.capacity, spacing: m.spacing });
 		solver.fillBlock(m.fill, m.count);
 		if (m.walls) solver.setWalls(m.walls);
-		tanks.set(m.id, { solver, gpu: new GpuFluidStepper(dev, solver), gen: m.gen, acc: { carry: 0, drainCarry: 0 } });
+		const gpu = new GpuFluidStepper(dev, solver);
+		// 49-water W1: a pour landing on a W1 surface leaves the tank — the same mirror method the CPU solver runs before x = p
+		gpu.beforeCommit = (s, dt, o) => s.landOnSurfaces(dt, o);
+		tanks.set(m.id, { solver, gpu, gen: m.gen, acc: { carry: 0, drainCarry: 0 } });
 		return;
 	}
 	if (m.op === 'drop') {
@@ -89,9 +92,13 @@ async function handle(m) {
 	const out = m.buffer && m.buffer.byteLength >= n * 12 ? new Float32Array(m.buffer, 0, s.capacity * 3) : new Float32Array(s.capacity * 3);
 	out.set(s.x.subarray(0, n * 3));
 	const escaped = s.escapedCount ? s.takeEscaped() : null;
+	const splashes = s.splashCount ? s.takeSplashes() : null; // 49-water W1, on the same frame
+	const transfer = [out.buffer];
+	if (escaped) transfer.push(escaped.buffer);
+	if (splashes) transfer.push(splashes.buffer);
 	post(
-		{ op: 'frame', id: m.id, gen: tank.gen, count: n, positions: out, impulses: s.impulses, ms: performance.now() - t0, solver: 'gpu', ...(escaped ? { escaped } : {}), ...(sunk?.length ? { sunk } : {}) },
-		escaped ? [out.buffer, escaped.buffer] : [out.buffer]
+		{ op: 'frame', id: m.id, gen: tank.gen, count: n, positions: out, impulses: s.impulses, ms: performance.now() - t0, solver: 'gpu', ...(escaped ? { escaped } : {}), ...(sunk?.length ? { sunk } : {}), ...(splashes ? { splashes } : {}) },
+		transfer
 	);
 }
 
