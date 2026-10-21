@@ -177,18 +177,19 @@ h.run(async () => {
 			const cam = s.globalCamera && (s.globalCamera.subscribe ? await new Promise((r) => s.globalCamera.subscribe(r)()) : s.globalCamera);
 			const start = cam.position.toArray();
 			const goal = [start[0] + 6, start[1] + 2, start[2] + 6];
-			s.objectActions.flyTo(goal, [0, 0, 0], 600);
+			s.objectActions.flyTo(goal, [0, 0, 0], 3000);
 			await new Promise((r) => setTimeout(r, ms));
 			const now = cam.position.toArray();
-			return Math.hypot(now[0] - goal[0], now[1] - goal[1], now[2] - goal[2]);
+			// the share of the way still to go (1 = has not moved, 0 = arrived)
+			return Math.hypot(now[0] - goal[0], now[1] - goal[1], now[2] - goal[2]) / Math.hypot(6, 2, 6);
 		}, waitMs);
-	const dReduce = await fly(120);
-	h.check(dReduce < 0.01, `Reduce: flyTo lands in a frame (${dReduce.toFixed(3)} m from the goal after 120 ms)`);
+	const dReduce = await fly(300);
+	h.check(dReduce < 0.002, `Reduce: a 3 s flyTo lands at once (${(dReduce * 100).toFixed(1)} % of the way left after 300 ms)`);
 	await openSettings(page, 'accessibility');
 	await page.locator('#motion').getByRole('radio', { name: 'Follow system' }).click().catch(async () => page.locator('#motion').getByText('Follow system', { exact: true }).click());
 	await closeAll(page);
-	const dFull = await fly(120);
-	h.check(dFull > 0.5, `Follow system (full motion): flyTo is still a tween (${dFull.toFixed(3)} m to go after 120 ms)`);
+	const dFull = await fly(300);
+	h.check(dFull > 0.2, `Follow system (full motion): a 3 s flyTo is still on its way (${(dFull * 100).toFixed(1)} % left after 300 ms)`);
 	// ---- A5 captions: the editor's switch draws the caption bus in Edit too ------------------------------------
 	/** push a line the way a Timeline audio clip does, then read the overlay */
 	const caption = (text) =>
@@ -197,7 +198,9 @@ h.run(async () => {
 			c.showCaption({ text: t, source: 'timeline', seconds: 4 });
 			await new Promise((r) => setTimeout(r, 300));
 			const el = document.getElementById('game-captions');
-			return { shown: !!el && !!el.offsetParent, text: el?.textContent?.trim() ?? '', src: el?.querySelector('[data-caption-source]')?.getAttribute('data-caption-source') ?? '' };
+			// the overlay is position:fixed — offsetParent is null for it whatever it shows; measure the box
+			const r = el?.getBoundingClientRect();
+			return { shown: !!r && r.width > 0 && r.height > 0 && getComputedStyle(/** @type {Element} */ (el)).visibility !== 'hidden', text: el?.textContent?.trim() ?? '', src: el?.querySelector('[data-caption-source]')?.getAttribute('data-caption-source') ?? '' };
 		}, text);
 	const c0 = await caption('[door creaks]');
 	h.check(!c0.shown, `captions off: a Timeline line is not drawn in the editor (${JSON.stringify(c0)})`);
