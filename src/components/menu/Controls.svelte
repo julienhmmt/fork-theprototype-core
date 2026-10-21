@@ -779,7 +779,10 @@
 	// probe above (as an attachment) and the drop-to-root target
 	const objHeaderAttrs = {
 		[createAttachmentKey()]: fromAction(objHeaderWidth),
-		role: 'list',
+		// 53-reader: a GROUP (it is a drop target, so it needs a role) — `list` demanded listitem
+		// children the header's search box and buttons can never be (axe aria-required-children)
+		role: 'group',
+		'aria-label': 'Object list tools',
 		ondragover: (e: DragEvent) => {
 			if (e.dataTransfer?.types.includes('application/x-object-uuid')) {
 				e.preventDefault();
@@ -4204,6 +4207,7 @@
 			role="tree"
 			tabindex="0"
 			aria-label="Objects"
+			aria-multiselectable="true"
 			bind:this={treeEl}
 			use:treeKeys>
 			{#if viewMode === 'system'}
@@ -4215,6 +4219,8 @@
 						</span>
 						<button
 							class="rounded-sm bg-surface-active px-1 text-text hover:bg-border-strong"
+							title="Dismiss"
+							aria-label="Dismiss this notice"
 							on:click={() => {
 								systemNoticeDismissed = true;
 								safeStorage.setItem('systemNoticeDismissed', 'true');
@@ -4268,6 +4274,8 @@
 						</span>
 						<button
 							class="rounded-sm bg-surface-active px-1 text-text hover:bg-border-strong"
+							title="Dismiss"
+							aria-label="Dismiss this notice"
 							on:click={() => {
 								envNoticeDismissed = true;
 								safeStorage.setItem('envNoticeDismissed', 'true');
