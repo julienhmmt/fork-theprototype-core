@@ -7,6 +7,7 @@ import { safeStorage } from './safeStorage';
 import { isHeaderDrag, startWindowDragGuard } from './windowGrip';
 import { bodyDrag } from './windowBodyDrag';
 import { onLayoutRestore } from './uiLayoutsCore';
+import { scaledPx } from './uiScale'; // 53 A1: a window's minimum size follows the UI scale
 
 // 169: live reset registry — every draggable window (this action + the object
 // list's own dragMe) registers a reset fn so Settings can rescue windows stuck
@@ -175,7 +176,7 @@ export function dragWindow(node, { key, defaultRect = {}, resizable = false, axi
 	 * put the minimum last, so on a viewport narrower than the minimum the window
 	 * came out wider than the screen, which is the state that strands the grip. */
 	function clampSize() {
-		const fit = clampWinSize(rect.w ?? 0, rect.h ?? 0, { minW, minH, margin: 16 });
+		const fit = clampWinSize(rect.w ?? 0, rect.h ?? 0, { minW: scaledPx(minW), minH: scaledPx(minH), margin: 16 });
 		if (typeof rect.w === 'number') rect.w = fit.w;
 		if (typeof rect.h === 'number') rect.h = fit.h;
 	}
@@ -448,8 +449,8 @@ export function dragWindow(node, { key, defaultRect = {}, resizable = false, axi
 				h: (rect.h ?? node.offsetHeight) + e.movementY
 			};
 			const fit = clampResize(wanted.w, wanted.h, rect.left ?? node.offsetLeft, rect.top ?? node.offsetTop, {
-				minW,
-				minH,
+				minW: scaledPx(minW),
+				minH: scaledPx(minH),
 				margin: 16
 			});
 			rect.w = fit.w;

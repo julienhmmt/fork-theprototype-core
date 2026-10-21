@@ -21,6 +21,8 @@
 	import Section from '../ui/Section.svelte';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
 	import '$lib/uiDensity'; // NOTES-38 #19: applies the stored density at boot
+	import '$lib/uiScale'; // 53 A1: applies the stored UI scale at boot
+	import '$lib/motion'; // 53 A5: keeps <html data-motion> current (the OS setting can change)
 	import { setContext, tick } from 'svelte';
 	import { get } from 'svelte/store';
 	import { createSettingsNav, NAV_CONTEXT, sectionKeyOf } from '$lib/settingsNav';
@@ -38,6 +40,7 @@
 	// 37-settings: one file per category page (the redesign kit); the sections another lane adds
 	// still drop in here with one import + one line (a legacy `<SettingRow>` draws the new row too)
 	import InterfaceSettings from './settings/InterfaceSettings.svelte'; // absorbs text selection, avatars, tours
+	import AccessibilitySettings from './settings/AccessibilitySettings.svelte'; // 53: UI scale, reduced motion, captions + the other 53 lanes' rows
 	import ControlsSettings from './settings/ControlsSettings.svelte';
 	import InputSettings from './settings/InputSettings.svelte'; // absorbs NodeEditorViewSettings
 	import TouchControlsSettings from './TouchControlsSettings.svelte'; // 36 U8 (its own section)
@@ -76,6 +79,8 @@
 	// 48 O1: Settings ▸ Privacy — the error-report switch (opened by a search or a deep link)
 	let privacyExpanded = false;
 	$: if ((settingsQuery || '').trim() || ($settingsOpen && $settingsSection === 'privacy')) privacyExpanded = true;
+	let accessibilityExpanded = false; // 53: Settings ▸ Accessibility (AccessibilitySettings.svelte)
+	$: if ((settingsQuery || '').trim() || ($settingsOpen && $settingsSection === 'accessibility')) accessibilityExpanded = true;
 	let sceneExpanded = false;
 	let explorerExpanded = false;
 	let connectionExpanded = false;
@@ -534,6 +539,10 @@
 				<AccordionItem bind:open={interfaceExpanded}>
 					{#snippet header()}Interface{/snippet}
 					<InterfaceSettings />
+				</AccordionItem>
+				<AccordionItem bind:open={accessibilityExpanded}>
+					{#snippet header()}Accessibility{/snippet}
+					<AccessibilitySettings />
 				</AccordionItem>
 				<AccordionItem bind:open={controlsExpanded}>
 					{#snippet header()}Controls{/snippet}

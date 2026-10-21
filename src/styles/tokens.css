@@ -108,6 +108,14 @@
 	--nav-row-pad-y: var(--space-3);
 }
 
+/* 53 (A1) — UI SCALE: the root font size follows Settings ▸ Accessibility ▸ UI scale, so every rem
+   (all of Tailwind's spacing and type, the --fs-* tokens) scales with it; scripts/a11y-css.cjs
+   does the same for every px length. `--ui-scale` is unset at 100 %, which computes to exactly the
+   old 16 px root. (The 8-bit theme's own 11px root is rewritten by that transform, so it scales too.) */
+:root {
+	font-size: calc(100% * var(--ui-scale, 1));
+}
+
 /* SPEC §6 mobile (< 640px): body/labels 16, descriptions 14, inputs 16 (no iOS zoom),
    touch targets >= 44, toggles 51x31 */
 @media (max-width: 639.98px) {

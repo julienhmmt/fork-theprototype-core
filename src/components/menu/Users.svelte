@@ -4,6 +4,7 @@
 	import * as THREE from 'three';
 	import { onMount, untrack } from 'svelte';
 	import { fade } from 'svelte/transition';
+	import { motionMs } from '$lib/motion'; // 53 A5: instant under reduced motion
 	import { sineIn } from 'svelte/easing';
 	import ModalDialog from '../ui/ModalDialog.svelte';
 	import NavRow from '../ui/NavRow.svelte';
@@ -1042,7 +1043,7 @@
 			popover={$phoneShellActive ? undefined : 'manual'}
 			role="tooltip"
 			{@attach dropdownAttach}
-			in:fade|global={{ duration: 100, easing: sineIn }}
+			in:fade|global={{ duration: motionMs(100), easing: sineIn }}
 			onfocusout={dropdownFocusOut}
 			class="tp-ui w-72 overflow-visible rounded-lg border border-border bg-surface-2 text-text shadow-sm"
 			style="position: fixed; bottom: auto; left: auto; border-top-right-radius: 1.5rem; padding-right: 0px; z-index: 1; margin-top: -50px;{$phoneShellActive && profileH ? ` --profile-sheet-h: ${profileH}px;` : ''}"

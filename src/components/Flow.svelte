@@ -24,6 +24,7 @@
 	import { bottomDockable } from '$lib/bottomDockDrop';
 	import { dockAddItems, rebuildAfterPick } from '$lib/dockMenu';
 	import { fly } from 'svelte/transition';
+	import { motionMs } from '$lib/motion'; // 53 A5: instant under reduced motion
 	import { safeStorage } from '$lib/safeStorage';
 	import { readPanelOpen } from '$lib/ui/handheldPanels.js';
 
@@ -186,7 +187,7 @@
 	{#if docked}
 		<div
 			id="flow-list"
-			transition:fly={{ y: 320, duration: 200 }}
+			transition:fly={{ y: 320, duration: motionMs(200) }}
 			class="tp-ui tp-dock-panel fixed inset-x-0 bottom-0 p-2 {dockVisible ? '' : 'hidden'}"
 			data-dock-pane={$dockPaneOf['flow']}
 			style="z-index: var(--z-dock); height: {$dockHeight}px"

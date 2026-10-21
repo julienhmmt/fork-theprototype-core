@@ -43,6 +43,7 @@
 	import SceneLoadBar from './SceneLoadBar.svelte';
 	import StartViewHint from './StartViewHint.svelte';
     import { fly } from 'svelte/transition';
+    import { motionMs } from '$lib/motion'; // 53 A5: instant under reduced motion
     import { untrack } from 'svelte';
     // P2b: watching follows a peer's camera IN THIS WORLD, so it cannot survive them
     // opening another scene. Users.svelte gates STARTING one; this is the other half.
@@ -452,7 +453,7 @@ $effect(() => {
      it never queues behind toasts, never shifts when one arrives, and never
      auto-expires. Keeps its red framing + prominent Exit. -->
 {#if $specatorMode}
-<div class="spectator-banner" transition:fly={{ y: -8, duration: 180 }}>
+<div class="spectator-banner" transition:fly={{ y: -8, duration: motionMs(180) }}>
     <div class="spectator-inner">
         <span class="spectator-dot" aria-hidden="true"></span>
         <div class="inline-flex items-center">
@@ -475,7 +476,7 @@ $effect(() => {
      auto-expires). Control hands the camera to the normal viewport navigation
      (WASD + mouse) and writes the pose back onto the marker. -->
 {#if $cameraPreview}
-<div class="spectator-banner preview-banner" transition:fly={{ y: -8, duration: 180 }}>
+<div class="spectator-banner preview-banner" transition:fly={{ y: -8, duration: motionMs(180) }}>
     <div class="spectator-inner">
         <span class="spectator-dot" aria-hidden="true"></span>
         <div class="inline-flex items-center">
@@ -508,7 +509,7 @@ class:cxd-hidden={hideCritical}
 style="z-index: var(--z-toast); pointer-events: none;"
 >
 {#each $pendingApprovals.slice(0, MAX_REQUESTS) as approval}
-<div class="my-1 tp-toast tp-toast--req" transition:fly={{ y: -8, duration: 180 }}>
+<div class="my-1 tp-toast tp-toast--req" transition:fly={{ y: -8, duration: motionMs(180) }}>
     <div class="tp-toast-body">
         <Icon name="user-plus" size={16} class="tp-toast-icon" aria-hidden="true" />
         <div class="tp-toast-main">
@@ -581,7 +582,7 @@ style="z-index: var(--z-toast-low); pointer-events: none;"
 {#if progressVisible && $loadingcount > 0}
 <!-- 15-P: transfer progress wears the shared card too (it is a notification);
      15-P2: progressVisible hides it 2.5s after the transfer completes -->
-<div class="my-1 tp-toast tp-toast--progress" transition:fly={{ y: -8, duration: 180 }}>
+<div class="my-1 tp-toast tp-toast--progress" transition:fly={{ y: -8, duration: motionMs(180) }}>
 	<div class="tp-toast-body">
 		<Icon name="download" size={16} class="tp-toast-icon" aria-hidden="true" />
 		<div class="tp-toast-main">
@@ -603,7 +604,7 @@ style="z-index: var(--z-toast-low); pointer-events: none;"
 {#if $fixLight && !fixLightClosed}
 <!-- 38 R8: the "no light" prompt on the shared card (was a red-bordered flowbite Toast). ✕
      behaves as before: it records the disclaimer as seen and hides THIS appearance only. -->
-<div class="my-1 tp-toast" id="fix-light-toast" transition:fly={{ y: -8, duration: 180 }}>
+<div class="my-1 tp-toast" id="fix-light-toast" transition:fly={{ y: -8, duration: motionMs(180) }}>
     <button class="tp-toast-x" title="Dismiss" aria-label="Dismiss" onclick={() => { safeStorage.setItem('hasSeenDisclaimer', 'true'); fixLightClosed = true; }}>✕</button>
     <div class="tp-toast-body">
         <Icon name="info" size={16} class="tp-toast-icon" aria-hidden="true" />
@@ -649,7 +650,7 @@ style="z-index: var(--z-toast-low); pointer-events: none;"
 </div><!-- /toasts-stack -->
 
 {#snippet toastCard(toast: any)}
-<div class="my-1 tp-toast" class:tp-toast--info={toast?.kind === 'info'} class:tp-toast--undo={toast?.kind === 'undo'} transition:fly={{ y: -8, duration: 180 }} use:autoDismiss={toast}>
+<div class="my-1 tp-toast" class:tp-toast--info={toast?.kind === 'info'} class:tp-toast--undo={toast?.kind === 'undo'} transition:fly={{ y: -8, duration: motionMs(180) }} use:autoDismiss={toast}>
     {#if toast?.kind === 'undo'}
         <!-- 37 R25: how long the Undo stays on offer, draining (CSS only; the timer lives in undoToast.js) -->
         <span class="tp-toast-ttl" style:animation-duration={`${toast.ttl}ms`} aria-hidden="true"></span>

@@ -30,6 +30,7 @@
 	// !important outranks the frame's layered phone rule, and the full-screen sheet stopped at
 	// that width on a folded phone (the H14 Save options gap on the right).
 	import { fade } from 'svelte/transition';
+	import { motionMs } from '$lib/motion'; // 53 A5: instant under reduced motion
 	import { sineIn } from 'svelte/easing';
 	import WindowChrome from './WindowChrome.svelte';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
@@ -141,7 +142,7 @@
 		oncancel={onCancel}
 		onclick={onClick}
 		ontoggle={onToggle}
-		in:fade|global={{ duration: 100, easing: sineIn }}
+		in:fade|global={{ duration: motionMs(100), easing: sineIn }}
 		{...rest}
 	>
 		{#if title || dismissable}

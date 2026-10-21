@@ -58,6 +58,8 @@ import { peersAsClassic, knockedAfterSeconds, KNOCKED_AFTER_DEFAULT } from '../a
 import { offerUndo } from '../undoToast';
 import { theme } from '../themes';
 import { gameSoundVolume } from '../gameSfx';
+import { uiScale, DEFAULT_UI_SCALE } from '../uiScale';
+import { motionPref, DEFAULT_MOTION } from '../motion';
 import { gameMusicVolume } from '../gameMusic';
 import { showWelcomeOnStart, showWhatsNewNotice } from '../whatsNew';
 import { tours } from '../tours/index.js';
@@ -124,6 +126,11 @@ function touchToolsDefault() {
 
 /** @type {Record<string, () => void>} section key → reset */
 const RESETS = {
+	// 53: Settings ▸ Accessibility (the other 53 lanes add their rows' defaults here)
+	accessibility() {
+		uiScale.set(DEFAULT_UI_SCALE);
+		motionPref.set(DEFAULT_MOTION);
+	},
 	interface() {
 		allowTextSelection.set(false);
 		peersAsClassic.set(false);

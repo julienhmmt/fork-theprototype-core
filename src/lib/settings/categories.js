@@ -20,6 +20,7 @@ export const SETTINGS_GROUPS = [
 /** @type {Record<string, CategoryMeta>} */
 const META = {
 	interface: { group: 'general', order: 1, description: 'How the app looks, sounds and greets you.' },
+	accessibility: { group: 'general', order: 1.5, description: 'Make the app easier to see and use on this device: size, motion and captions.' },
 	controls: { group: 'general', order: 2, description: 'Keyboard, mouse and trackpad.' },
 	input: { group: 'general', order: 3, description: 'Gamepad and the node editor’s mouse.' },
 	touchcontrols: { group: 'general', order: 4, description: 'The on-screen stick and action buttons for phones and tablets.' },

@@ -3,6 +3,7 @@
 	// header, kit Tabs with counts + a filter in the strip under it, modules as LIST ROWS (name,
 	// mono version, description, actions, the enable Toggle) instead of large cards. Tokens only.
 	import Icon from '../ui/Icon.svelte';
+	import { motionMs } from '$lib/motion'; // 53 A5
 	import ModalDialog from '../ui/ModalDialog.svelte';
 	import Button from '../ui/Button.svelte';
 	import Toggle from '../ui/Toggle.svelte';
@@ -175,7 +176,7 @@
 		setTimeout(() => {
 			const card = document.getElementById('user-module-card-' + id);
 			if (!card) return;
-			card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+			card.scrollIntoView({ block: 'center', behavior: motionMs(1) ? 'smooth' : 'auto' }); // 53 A5
 			card.classList.add('just-installed');
 			setTimeout(() => card.classList.remove('just-installed'), 2200);
 			lastInstalled.set(null);

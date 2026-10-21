@@ -2,6 +2,7 @@ import { writable, readable, derived, get } from 'svelte/store';
 import { safeStorage } from './safeStorage';
 import { inspectorClose, inspectorKind, closeMenu, connectDocked, connectBarHeight, setInspectorFocuser } from '../stores/appStore';
 import { onLayoutRestore } from './uiLayoutsCore';
+import { scaledPx, uiScale } from './uiScale'; // 53 A1: the default + minimum width follow the UI scale
 
 // 42 I2/I3 — ONE SIDEBAR PER SCREEN SIDE (user decision 2026-10-14, roadmap 42).
 //
@@ -37,9 +38,11 @@ export const SIDES = ['left', 'right'];
 /** the tab header's height, px */
 export const STRIP_H = 30;
 /** the column's top below the corner chrome (the old drawer's top-16) */
-const TOP = 64;
+const TOP_PX = 64; // 53 A1: design px — the live top is scaledPx(TOP_PX), the chrome row grows with the UI scale
 export const MIN_W = 250;
 const DEFAULT_W = 320;
+/** 53 (A1): the default column width at the current UI scale (a 150 % device opens a 480 px column) */
+export const defaultSidebarWidth = () => scaledPx(DEFAULT_W);
 
 const ls = typeof localStorage !== 'undefined';
 
@@ -48,13 +51,14 @@ const asSide = (v) => (v === 'left' ? 'left' : 'right');
 
 /** clamp a column width to the window (the old dock rule: 250 .. 40 % of the window) @param {number} w */
 export function clampWidth(w) {
-	const max = typeof window !== 'undefined' ? Math.max(MIN_W, Math.round(window.innerWidth * 0.4)) : 1200;
-	return Math.min(Math.max(Number.isFinite(w) ? Math.round(w) : DEFAULT_W, MIN_W), max);
+	const min = scaledPx(MIN_W);
+	const max = typeof window !== 'undefined' ? Math.max(min, Math.round(window.innerWidth * 0.4)) : 1200;
+	return Math.min(Math.max(Number.isFinite(w) ? Math.round(w) : defaultSidebarWidth(), min), max);
 }
 
 /** @param {Side} side */
 function readWidth(side) {
-	if (!ls) return DEFAULT_W;
+	if (!ls) return defaultSidebarWidth();
 	let v = parseInt(safeStorage.getItem('sidebarWidth:' + side) ?? '');
 	if (Number.isNaN(v)) {
 		// migrate: the column used to take the width of its first docked window
@@ -62,9 +66,9 @@ function readWidth(side) {
 			const docked = JSON.parse(safeStorage.getItem('dockedWindows') ?? 'null');
 			const first = Array.isArray(docked?.[side]) ? docked[side][0] : null;
 			const old = first ? parseInt(safeStorage.getItem('dockWidth:' + first) ?? '') : NaN;
-			v = Number.isNaN(old) ? DEFAULT_W : old;
+			v = Number.isNaN(old) ? defaultSidebarWidth() : old;
 		} catch {
-			v = DEFAULT_W;
+			v = defaultSidebarWidth();
 		}
 	}
 	return clampWidth(v);
@@ -374,8 +378,10 @@ function measureLeftInset() {
 }
 
 export const geometry = derived(
-	[sidebarShown, sidebarFull, sidebarWidth, connectDocked, connectBarHeight, leftInsetTick, sidebarsWide, sidebarVisible],
+	// 53 A1: `uiScale` is a dependency only so the column's top re-derives with the scale
+	[sidebarShown, sidebarFull, sidebarWidth, connectDocked, connectBarHeight, leftInsetTick, sidebarsWide, sidebarVisible, uiScale],
 	([$shown, $full, $w, $cDocked, $cBar, _tick, $wide, $visible]) => {
+		const TOP = scaledPx(TOP_PX);
 		/** @param {Side} side */
 		const col = (side) => {
 			const full = !!$full[side];
@@ -404,7 +410,7 @@ export const geometry = derived(
 /** @param {any} g */
 function publish(g) {
 	const root = document.documentElement.style;
-	root.setProperty('--sb-strip-h', STRIP_H + 'px');
+	root.setProperty('--sb-strip-h', scaledPx(STRIP_H) + 'px'); // 53 A1: the strip's CSS is scaled too
 	for (const side of SIDES) {
 		root.setProperty(`--sb-${side}-w`, g[side].w + 'px');
 		root.setProperty(`--sb-${side}-top`, g[side].top + 'px');

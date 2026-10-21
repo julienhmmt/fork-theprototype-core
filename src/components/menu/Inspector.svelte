@@ -7,6 +7,7 @@
 	import * as THREE from 'three';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
 	import { fly } from 'svelte/transition';
+	import { reducedMotion } from '$lib/motion';
 	import ThemedSelect from '../ui/ThemedSelect.svelte';
 	import InspectorHead from './inspector/InspectorHead.svelte';
 	import Section from '../ui/Section.svelte';
@@ -352,10 +353,11 @@
 	const insSide = $derived($inspectorSide);
 	const insCovered = $derived(!sheetMode && $sidebarShown[insSide] !== 'inspector' && $sidebarTabs[insSide].includes('inspector'));
 	const columnShared = $derived($sidebarTabs[insSide].some((k) => k !== 'inspector'));
+	// 53 A5: instant under reduced motion
 	const insTransition = $derived(
 		sheetMode
-			? { y: 500, duration: 240, easing: sineIn }
-			: { ...transitionParamsRight, x: insSide === 'left' ? -transitionParamsRight.x : transitionParamsRight.x, duration: columnShared ? 0 : transitionParamsRight.duration }
+			? { y: 500, duration: $reducedMotion ? 0 : 240, easing: sineIn }
+			: { ...transitionParamsRight, x: insSide === 'left' ? -transitionParamsRight.x : transitionParamsRight.x, duration: columnShared || $reducedMotion ? 0 : transitionParamsRight.duration }
 	);
 	const insPlacement = $derived(sheetMode ? drawerStyle : memberPlacement(insSide) + ' z-index: calc(var(--z-dock) - 1)');
 

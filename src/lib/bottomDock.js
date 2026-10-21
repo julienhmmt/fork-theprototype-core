@@ -2,6 +2,7 @@ import { writable, derived, get } from 'svelte/store';
 import { viewPrefs } from './viewPrefs';
 import { onLayoutRestore } from './uiLayoutsCore';
 import { safeStorage } from './safeStorage';
+import { scaledPx } from './uiScale'; // 53 A1: the dock's default + minimum height follow the UI scale
 import { phoneShell } from './ui/phoneShell.js';
 
 // Bottom dock: the dock shows exactly ONE panel at a time, and every panel that is
@@ -74,10 +75,10 @@ bottomDockActive.subscribe((value) => {
 /** @param {number} h */
 function clampH(h) {
 	const max = typeof window !== 'undefined' ? Math.round(window.innerHeight * 0.8) : 800;
-	return Math.min(Math.max(h || 320, 160), max);
+	return Math.min(Math.max(h || scaledPx(320), scaledPx(160)), max);
 }
 /** shared height of the dock — ONE value for every tab, Explorer included */
-export const dockHeight = writable(clampH(parseInt(ls?.getItem('flowDockHeight') ?? '320')));
+export const dockHeight = writable(clampH(parseInt(ls?.getItem('flowDockHeight') ?? '')));
 dockHeight.subscribe((value) => {
 	try {
 		ls?.setItem('flowDockHeight', String(value));
@@ -235,7 +236,7 @@ dockTabOrder.subscribe((value) => {
 // 37 R14: a named workspace layout rewrote the dock's height and tab order — adopt them.
 // (Which tab is in front rides the layout's workspace record; minimized never persists.)
 onLayoutRestore(() => {
-	dockHeight.set(clampH(parseInt(ls?.getItem('flowDockHeight') ?? '320')));
+	dockHeight.set(clampH(parseInt(ls?.getItem('flowDockHeight') ?? '')));
 	dockTabOrder.set(readTabOrder());
 	dockMinimized.set(false);
 });

@@ -36,6 +36,7 @@
 		moveSidebarTab,
 		toggleSidebarFull,
 		setSidebarWidth,
+		defaultSidebarWidth,
 		sidebarWidth,
 		sidebarResizing,
 		inspectorTabTitle,
@@ -224,7 +225,7 @@
 	}
 	/** double-click forgets the width (back to the default) */
 	function onGripReset(side: Side) {
-		setSidebarWidth(side, 320, true);
+		setSidebarWidth(side, defaultSidebarWidth(), true); // 53 A1: 320 at the current UI scale
 	}
 </script>
 
