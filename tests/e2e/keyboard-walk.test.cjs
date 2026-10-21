@@ -24,6 +24,7 @@ const active = (page) =>
 			tag: e.tagName.toLowerCase(),
 			id: e.id,
 			title: e.getAttribute('title') || e.getAttribute('aria-label') || '',
+			aria: e.getAttribute('aria-label') || '',
 			body: e === document.body,
 			ring: cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) >= 2,
 			inToolbar: !!e.closest('#controls-pill'),
@@ -153,10 +154,11 @@ h.run(async () => {
 	const x = await page.evaluate(() => new Promise((r) => window.__stores.selectedObject.subscribe((o) => r(o?.position?.x))()));
 	h.check(Math.abs(Number(x) - 2.5) < 1e-6, `typing 2.5 + Enter moves the cube (x = ${x})`);
 	a = await active(page);
-	h.check(!a.body && a.inInspector && a.tag !== 'input', `Enter leaves the field but the keyboard keeps its place in the Inspector (${a.tag}.${a.cls.slice(0, 20)})`);
+	h.check(a.tag !== 'input', `Enter leaves the field (the locked DragRow behaviour: ${a.tag})`);
 	await press(page, 'Tab');
 	a = await active(page);
-	h.check(a.inPosition && a.tag === 'input', `the next Tab goes on to Position Y, not back to the top (${a.tag})`);
+	h.check(a.inPosition && a.tag === 'input' && a.aria === 'Y', `the next Tab goes on to Position Y, not to Edit Mesh or the top of the page (${a.tag} ${a.aria})`);
+	h.check(!(await page.evaluate(() => new Promise((r) => window.__stores.meshEdit.editingObject.subscribe(r)()))), '…and did not enter Edit Mesh on the selection');
 
 	// ---- 6. save with Ctrl+S, named inline
 	await page.keyboard.press('Escape'); // leave the field

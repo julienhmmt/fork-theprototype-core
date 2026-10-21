@@ -195,14 +195,16 @@
 		background: var(--surface-1);
 		color: var(--text);
 		border: 1px solid var(--border-strong);
-		box-shadow: var(--shadow-window);
 		font-family: var(--font-ui);
 		font-size: var(--fs-body);
 		text-decoration: none;
-		transform: translateY(calc(-100% - 24px));
+		/* parked well above the window, shadowless: a window shadow's blur reached back into the
+		   corner from just above the edge (the A/B caught it) */
+		transform: translateY(-200px);
 	}
 	.kb-skip:focus,
 	.kb-skip:focus-visible {
 		transform: none;
+		box-shadow: var(--shadow-window);
 	}
 </style>

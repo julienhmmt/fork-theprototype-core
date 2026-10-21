@@ -45,43 +45,50 @@ export function isViewportTarget(el) {
 	return el.tagName === 'CANVAS' && !!el.closest?.('#viewport');
 }
 
-/** <body> holds focus both after a press on the canvas and after Tab wrapped past the last
- *  control — only the first means "the user is in the 3D view". */
-let viewClaimed = false;
+/** <body> holds focus after a press on the canvas, after a blur — and after Tab ran past the last
+ *  control in the document. Only the last is a keyboard user moving on, so it alone must not
+ *  read as "in the 3D view": a Tab pressed ON a control that put focus on no other control. */
+let tabbedPast = false;
 let claimTracking = false;
-/** Start telling the two apart (shortcuts.startShortcuts). */
+/** Start telling them apart (shortcuts.startShortcuts). */
 export function trackViewClaim() {
 	if (claimTracking || typeof window === 'undefined') return;
 	claimTracking = true;
 	window.addEventListener(
-		'pointerdown',
+		'keydown',
 		(e) => {
 			const t = /** @type {any} */ (e.target);
-			viewClaimed = !!t && typeof t.closest === 'function' && !!t.closest('#viewport');
+			if (e.key === 'Tab' && t && typeof t.closest === 'function' && t !== document.body && t.id !== 'viewport') tabbedPast = true;
 		},
 		true
 	);
 	window.addEventListener(
 		'focusin',
 		(e) => {
-			const t = /** @type {any} */ (e.target);
-			if (t && t !== document.body && t.id !== 'viewport') viewClaimed = false;
+			if (e.target !== document.body) tabbedPast = false;
 		},
 		true
 	);
+	window.addEventListener('pointerdown', () => (tabbedPast = false), true);
+}
+
+/** A field the keyboard just LEFT (Enter / Escape in a number field blur it, the locked
+ *  behaviour): focus is on <body>, but the browser still continues Tab from that field, so the next
+ *  Tab is navigation, not Edit Mesh — the keyboard user keeps their place in the panel. */
+export function leftByKeyboard() {
+	tabbedPast = true;
 }
 
 /**
  * Is a Tab on `el` the Edit Mesh shortcut? Only on the 3D view — the focused viewport or its
- * canvas, or <body> after a press on the canvas. A Tab that wrapped focus to <body> past the
- * last control is navigation, or a keyboard user with something selected would be stuck there
- * entering and leaving Edit Mesh.
+ * canvas, or <body> — and not on a <body> that Tab itself just wrapped to past the last control,
+ * or a keyboard user with something selected would be stuck there entering and leaving Edit Mesh.
  * @param {any} el
  */
 export function tabEditsMesh(el) {
 	if (!isViewportTarget(el)) return false;
 	if (!el || typeof el.closest !== 'function') return true; // a synthetic window dispatch
-	if (el === document.body || el === document.documentElement) return viewClaimed;
+	if (el === document.body || el === document.documentElement) return !tabbedPast;
 	return true;
 }
 

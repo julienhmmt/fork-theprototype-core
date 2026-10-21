@@ -43,8 +43,8 @@ describe('isViewportTarget', () => {
 });
 
 describe('tabEditsMesh', () => {
-	it('Tab on <body> is navigation until a press lands on the canvas (a Tab that wrapped past the last control)', () => {
-		expect(tabEditsMesh(body)).toBe(false);
+	it('<body> (a press on the canvas, a blur) keeps Tab as Edit Mesh until a Tab wraps past the last control', () => {
+		expect(tabEditsMesh(body)).toBe(true);
 	});
 	it('the focused viewport, its canvas and a synthetic window dispatch keep Tab as Edit Mesh', () => {
 		expect(tabEditsMesh(viewport)).toBe(true);
