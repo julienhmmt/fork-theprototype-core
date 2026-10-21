@@ -131,7 +131,8 @@ h.run(async () => {
 	h.check(unresolved.state === 'unresolved', 'an id on no screen puts the field in the unresolved state');
 	h.check(unresolved.shown === 'ghost-element-id', 'it still SHOWS what the node holds, so nothing is hidden from you');
 	// the COMPUTED colour, never the class string (the ToolboxWindow lesson)
-	h.check(/^rgb\(251, 191, 36\)/.test(unresolved.colour), `and paints it amber (${unresolved.colour})`);
+	// 53 A2: the dark theme's colour-blind safe amber (--ink-warn)
+	h.check(/^rgb\(247, 201, 72\)/.test(unresolved.colour), `and paints it amber (${unresolved.colour})`);
 
 	// ---- 3. the chevron opens the shared menu, grouped by SCREEN -------------
 	await page.evaluate(() => document.querySelector('.hud-ep-field')?.click());
