@@ -234,3 +234,33 @@ describe('51 set format: mixed sets, tint, sink, sources, validation', () => {
 		expect(decodeInstances(encodeInstances(list, B), B)[0].scale).toBeCloseTo(1.2, 3);
 	});
 });
+
+import { withSourceAdded, withSourceRemoved } from '../../src/lib/terrainScatterCore.js';
+
+describe('51 E1: adding and removing sources of a mixed set', () => {
+	const CONE = { kind: 'primitive', type: 'Cone' };
+	const BOX = { kind: 'primitive', type: 'Box' };
+	const painted = () =>
+		normalizeScatter({ sets: [{ id: 's', source: ROCK, data: b64(encodeInstances([{ x: 1, z: 1, yaw: 0, scale: 1 }, { x: 2, z: 2, yaw: 0, scale: 1 }], B)) }] }, unb64).sets[0];
+
+	test('adding a source makes a mix; painted records keep the first source', () => {
+		const mixed = withSourceAdded(painted(), CONE, 2, IO);
+		expect(mixed.sources).toEqual([{ source: ROCK, w: 1 }, { source: CONE, w: 2 }]);
+		expect(instancesOf(mixed, B, unb64).map((i) => i.src)).toEqual([0, 0]);
+		expect(withSourceAdded(mixed, CONE, 1, IO)).toBe(mixed); // already in it
+	});
+
+	test('removing a source drops its painted records and shifts later picks', () => {
+		let set = withSourceAdded(withSourceAdded(painted(), CONE, 1, IO), BOX, 1, IO);
+		set = { ...set, pick: b64(new Uint8Array([1, 2])) };
+		const without = withSourceRemoved(set, 1, IO);
+		expect(without.sources.map((e) => e.source.type)).toEqual(['Dodecahedron', 'Box']);
+		expect(without.count).toBe(1);
+		expect(instancesOf(without, B, unb64).map((i) => i.src)).toEqual([1]);
+		const plain = withSourceRemoved(without, 0, IO);
+		expect(plain.sources).toBeUndefined();
+		expect(plain.pick).toBeUndefined();
+		expect(plain.source).toEqual(BOX);
+		expect(plain.count).toBe(1);
+	});
+});
