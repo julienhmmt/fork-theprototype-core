@@ -16,6 +16,7 @@ import { savePrefab, savePrefabSelection } from './prefabs';
 import { perfContext } from './perf/perfMarks.js'; // 34 PF: an import-free leaf
 import { vrDollhouseOpen, vrSculptActive } from './vr/worldStores.js'; // 37: a leaf
 import { sculptOp } from './terrainSculpt';
+import { registerMeasureRings } from './vr/buildRings.js'; // 52 V1
 import { primitivesCatalog } from './primitivesCatalog';
 
 // D4 (roadmap 13): selection-set helpers for the Edit ring — counted labels
@@ -200,6 +201,7 @@ export function ringTitle(ring) {
 	if (ring === 'root') return '';
 	if (ring === 'object') return 'Selected';
 	if (ring === 'sculpt') return 'Sculpt terrain'; // 37 R9: opened by a session, not a ▸ sector
+	if (ring === 'measure') return 'Measure'; // 52 V1: opened by the tool, not a ▸ sector
 	for (const list of registry.values()) {
 		const opener = list.find((e) => e.ring === ring);
 		if (opener) return typeof opener.label === 'function' ? opener.label() : opener.label;
@@ -461,7 +463,8 @@ function registerBuiltins() {
 			selCount() <= 1 &&
 			/** @type {any} */ (get(selectedObject))?.type !== 'Group' &&
 			!isSplineSelection() &&
-			!isTerrainSelection()
+			!isTerrainSelection() &&
+			!Array.isArray(/** @type {any} */ (get(selectedObject))?.userData?.measure?.points) // 52: Edit measurement
 	});
 	// 37 R9: a TERRAIN gets the sculpt brush in the same slot (the desktop object menu's Sculpt terrain)
 	registerVRMenuEntry({
@@ -604,6 +607,9 @@ function registerBuiltins() {
 	registerVRMenuEntry({ id: 'face:inset', group: 'faces', label: 'Inset', order: 1 });
 	registerVRMenuEntry({ id: 'face:move', group: 'faces', label: 'Move', order: 2 });
 	registerVRMenuEntry({ id: 'face:delete', group: 'faces', label: 'Delete', order: 3 });
+
+	// 52 V1: Tools ▸ Measure + the Measure ring, Selected ▸ Edit measurement
+	registerMeasureRings(registerVRMenuEntry);
 }
 
 registerBuiltins();
