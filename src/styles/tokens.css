@@ -57,6 +57,10 @@
 	--warn-text: #f0a07a; /* reset + soft-destructive text actions */
 	--status-warn: var(--ink-warn, #fbbf24); /* 41 G21: a status FILL (the connecting dot) — not text */
 	--danger: #d23b3b; /* destructive confirm buttons (white on it 4.8:1) */
+	/* 53 A3: the keyboard focus ring (styles/focus.css) — every theme's accent unless it says otherwise */
+	--focus-ring: var(--accent);
+	--focus-ring-width: 2px;
+	--focus-ring-offset: 2px;
 	--on-danger: #ffffff;
 	--badge-bg: #1f2b42; /* scope badges */
 	--badge-text: #9fb8e6;

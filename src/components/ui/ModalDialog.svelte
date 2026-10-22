@@ -19,7 +19,9 @@
 	//     dialog at once: an outro kept a decided dialog on screen for 100 ms after the
 	//     store that owns it had moved on (import-duplicates' Reveal check saw it).
 	//   - Escape on a NON-modal dialog fires no cancel event — callers pass their own
-	//     `onkeydown`, which lands on the <dialog> exactly as before.
+	//     `onkeydown`, which lands on the <dialog> exactly as before. 53 A3: an Escape that no
+	//     handler takes then raises the cancel itself (window, bubble phase), Tab is kept inside
+	//     the dialog, and closing hands focus back to where it was before the dialog opened.
 	//   - the close button keeps flowbite's accessible name, "Close".
 	//
 	// `frame` (default) keeps `.tp-modal-frame` — the fixed --z-modal tier, the dim, and the
@@ -34,6 +36,7 @@
 	import { sineIn } from 'svelte/easing';
 	import WindowChrome from './WindowChrome.svelte';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
+	import { rememberFocus, trapTab } from '$lib/keyboardNav.js';
 
 	/** @type {{open?: boolean, title?: string, titleId?: string, modal?: boolean, outsideclose?: boolean, dismissable?: boolean, permanent?: boolean, frame?: boolean, width?: 'sm'|'md'|'lg'|'xl', desktopWidth?: string, padded?: boolean, bodyId?: string, bodyClass?: string, class?: string, oncancel?: (e: Event) => void, actions?: import('svelte').Snippet, bar?: import('svelte').Snippet, footer?: import('svelte').Snippet, children?: import('svelte').Snippet} & Record<string, any>} */
 	let {
@@ -103,6 +106,26 @@
 
 	/** @param {HTMLDialogElement} dlg */
 	function init(dlg) {
+		// 53 A3: where the keyboard was, so closing hands it back (the button that opened us)
+		const restoreFocus = rememberFocus(() => dlg);
+		/** 53 A3: Tab stays inside the dialog (wrapping at both ends); an inner dialog's own
+		 *  trap goes first @param {KeyboardEvent} e */
+		const trap = (e) => {
+			if (!e.defaultPrevented) trapTab(dlg, e);
+		};
+		/** 53 A3: Escape closes a NON-modal dialog too (a modal one gets the platform's cancel).
+		 *  On the window, after every handler in the app: a sub-page, a search box, a field's
+		 *  revert or a menu that took the key (stopped or prevented it) keeps the dialog open,
+		 *  and only the innermost dialog holding the focus answers @param {KeyboardEvent} e */
+		const escape = (e) => {
+			if (e.key !== 'Escape' || e.defaultPrevented || !open) return;
+			const t = /** @type {Element | null} */ (e.target instanceof Element ? e.target : null);
+			if (!t || t.closest('dialog') !== dlg) return;
+			e.preventDefault();
+			cancel(dlg);
+		};
+		dlg.addEventListener('keydown', trap);
+		if (!modal) window.addEventListener('keydown', escape);
 		if (modal) dlg.showModal();
 		else dlg.show();
 		queueMicrotask(() => {
@@ -125,7 +148,13 @@
 			// @ts-ignore
 			else dlg.focus({ focusVisible: false });
 		});
-		return () => dlg.close();
+		return () => {
+			dlg.removeEventListener('keydown', trap);
+			window.removeEventListener('keydown', escape);
+			dlg.close();
+			// after the removal, so a focus left inside reads as lost
+			queueMicrotask(restoreFocus);
+		};
 	}
 </script>
 

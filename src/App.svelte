@@ -15,6 +15,8 @@
   import { PCFShadowMap } from 'three'
   import Scene from './components/Scene.svelte'
   import Menu from './components/Menu.svelte'
+  // 53 A3: the skip link, Esc out of the viewport, F6 between regions
+  import KeyboardNav from './components/KeyboardNav.svelte'
   import ConfirmModal from './components/menu/ConfirmModal.svelte'
   // loose-scenes fix (bug 2a): importing something you already have. Importing this
   // module is ALSO what registers explorer.js's duplicate-resolver seam, which is why
@@ -395,6 +397,8 @@ import { startMusicToolbox } from './lib/musicToolbox'
 </script>
 
 <svelte:window on:dragover|preventDefault on:drop|preventDefault={handleDrop} />
+<!-- 53 A3: FIRST in the document, so it is the first thing Tab reaches -->
+<KeyboardNav />
 
 {#if !$isLocked && !$embedMode}
 <Flow />
@@ -510,7 +514,9 @@ import { startMusicToolbox } from './lib/musicToolbox'
      already sits above the canvas at the default 0. No `transition` either: each
      step reallocates the composer's render targets, so animating the inset turns one
      realloc into one per frame. -->
-<div class="viewport" class:viewport-inset={$viewPrefs.dockPushesViewport && !$embedMode}>
+<!-- 53 A3: #viewport is the skip link's target; it takes focus only when the keyboard asks
+     (keyboardNav.focusViewport lends it a tabindex), so a mouse press still focuses <body> -->
+<div id="viewport" role="region" aria-label="3D viewport" class="viewport" class:viewport-inset={$viewPrefs.dockPushesViewport && !$embedMode}>
   <Canvas shadows={PCFShadowMap}>
     <Scene />
   </Canvas>
@@ -525,6 +531,11 @@ import { startMusicToolbox } from './lib/musicToolbox'
     bottom: 0;
   }
   /* the pref OFF keeps the pre-W9 behaviour: a full-window canvas the dock covers */
+  /* 53 A3: the keyboard is in the 3D view — an inset ring (the canvas fills the box) */
+  .viewport:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--focus-ring-width));
+  }
   .viewport-inset {
     bottom: var(--bottom-inset, 0px);
   }

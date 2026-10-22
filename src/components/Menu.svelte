@@ -70,14 +70,18 @@
 <Welcome />
 <WhatsNew />
 <TourCard />
+<!-- 53 A3: DOCUMENT ORDER IS TAB ORDER — the top bar reads left to right (logo menu, touch tools,
+     Connect, the top-right group + profile) before the toolbar and the panels; every one of these
+     is position:fixed on an explicit z tier, so the order moves no pixel -->
+<MenuSidebar />
+<TouchTools />
 <Connect />
+<Users />
 <Controls />
 <!-- 46 B1: the budget chip, placed beside the toolbar pill (hidden in Play with the rest of the chrome) -->
 <BudgetChip />
 <Inspector />
 <SidebarStrips />
-<MenuSidebar />
-<TouchTools />
 <MenuSettings />
 <SessionsManager />
 <CheckpointTimeline />
@@ -103,7 +107,6 @@
 <PhoneDockHost />
 <Toasts />
 <SessionPrompts />
-<Users />
 <!-- 16-P5: letterbox bars while previewing a camera at a fixed aspect -->
 <FramingGuide />
 <!-- 16-Q4: live preview window for the selected camera (chrome only — the image

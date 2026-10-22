@@ -9,6 +9,7 @@
 	} from '$lib/units';
 	import { autoFieldScope, fieldClip, nameNear } from '$lib/fieldMenu';
 	import { withHistoryGesture } from '$lib/historyGesture';
+	import { leftByKeyboard } from '$lib/keyboardNav'; // 53 A3: a field left by Enter/Esc keeps Tab navigating
 
 	// THE numeric field (phase 64.2, rebuilt in 16-Q3). One control everywhere:
 	// transform rows, the boxes beside sliders, and the loose number inputs that
@@ -218,10 +219,12 @@
 			} finally {
 				reverting = false;
 			}
+			leftByKeyboard();
 			event.preventDefault();
 			event.stopPropagation();
 		} else if (event.key === 'Enter') {
 			inputEl?.blur();
+			leftByKeyboard();
 		}
 	}
 

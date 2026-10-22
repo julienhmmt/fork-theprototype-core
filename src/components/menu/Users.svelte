@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { cameraPreviews, joinPeerPreview, previewLabel } from '$lib/cameraPreview';
 	import Icon from '../ui/Icon.svelte';
+	import { roving } from '$lib/keyboardNav'; // 53 A3: the top-right group is one tab stop
 	import * as THREE from 'three';
 	import { onMount, untrack } from 'svelte';
 	import { fade } from 'svelte/transition';
@@ -783,7 +784,7 @@
 <div class="top-right-chrome" style="position: fixed; right: var(--sb-dock-right, 0px); z-index: var(--z-chrome-top); top: {$connectDocked ? $connectBarHeight + 'px' : '0px'};">
 	<!-- 38 R8: one glass group (styles/hud.css) — notes, notifications, peers — sitting just
 	     left of the profile circle, which keeps its own place (its dropdown is anchored to it) -->
-	<div id="hud-tr" class="tp-ui hud-glass hud-tr" style="position: absolute; top: 10px; right: 76px; z-index: 2;">
+	<div id="hud-tr" class="tp-ui hud-glass hud-tr" style="position: absolute; top: 10px; right: 76px; z-index: 2;" use:roving={{ item: '.hud-cell:not(.hud-edit-item):not(.hud-edit-add)', axis: 'x' }}>
 	<!-- E2: scene-notes drawer toggle -->
 	{#if trShown('notes')}
 	<button
