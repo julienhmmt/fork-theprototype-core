@@ -37,6 +37,9 @@ function cached() {
 export function loadGithubStars() {
 	// 36-export: an exported game talks to nobody but its own origin
 	if (started || exportMode || typeof window === 'undefined') return;
+	// Automated browsers (Playwright sets navigator.webdriver) start every test with empty
+	// storage, so each one would spend a call from the machine's 60/h; e2e lanes ran it dry
+	if (navigator.webdriver) return;
 	started = true;
 	const entry = cached();
 	if (entry) githubStars.set(entry.n);
