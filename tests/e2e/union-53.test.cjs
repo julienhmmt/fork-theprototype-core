@@ -47,24 +47,27 @@ h.run(async () => {
 	await page.waitForTimeout(200);
 	h.check((await themeNow(page)) === 'light', `premise: the page starts in Light (${await themeNow(page)})`);
 	await openSettings(page, 'accessibility');
-	h.check((await page.locator('#row-high-contrast').count()) === 1, 'U1: Settings ▸ Accessibility has a "High contrast" row (COUNTERFACTUAL: no lane added it)');
-	h.check((await pressed(page)) === 'false', `U1: the switch reads off in Light (${await pressed(page)})`);
-	await page.click('#high-contrast');
-	await page.waitForTimeout(300);
-	h.check((await themeNow(page)) === 'contrast' && (await pressed(page)) === 'true', `U1: on = the High contrast theme (${await themeNow(page)}, ${await pressed(page)})`);
-	h.check((await page.evaluate(() => localStorage.getItem('theme'))) === 'contrast', 'U1: stored under the existing theme key (no new state)');
-	await openSettings(page, 'interface');
-	const sel = await page.evaluate(() => document.querySelector('#theme-select')?.textContent?.trim() ?? '');
-	h.check(/High contrast/.test(sel), `U1: Interface ▸ Theme shows the same choice (${sel})`);
-	await openSettings(page, 'accessibility');
-	await page.click('#high-contrast');
-	await page.waitForTimeout(300);
-	h.check((await themeNow(page)) === 'light', `U1: off goes back to the theme that was on before (${await themeNow(page)})`);
-	await page.click('#high-contrast');
-	await page.waitForTimeout(200);
-	await page.evaluate(() => /** @type {any} */ (window).__stores.settingsReset.resetCategory('accessibility'));
-	await page.waitForTimeout(200);
-	h.check((await themeNow(page)) === 'dark', `U1: resetting Accessibility turns High contrast off (${await themeNow(page)})`);
+	const hasRow = (await page.locator('#row-high-contrast').count()) === 1;
+	h.check(hasRow, 'U1: Settings ▸ Accessibility has a "High contrast" row (COUNTERFACTUAL: no lane added it)');
+	if (hasRow) {
+		h.check((await pressed(page)) === 'false', `U1: the switch reads off in Light (${await pressed(page)})`);
+		await page.click('#high-contrast');
+		await page.waitForTimeout(300);
+		h.check((await themeNow(page)) === 'contrast' && (await pressed(page)) === 'true', `U1: on = the High contrast theme (${await themeNow(page)}, ${await pressed(page)})`);
+		h.check((await page.evaluate(() => localStorage.getItem('theme'))) === 'contrast', 'U1: stored under the existing theme key (no new state)');
+		await openSettings(page, 'interface');
+		const sel = await page.evaluate(() => document.querySelector('#theme-select')?.textContent?.trim() ?? '');
+		h.check(/High contrast/.test(sel), `U1: Interface ▸ Theme shows the same choice (${sel})`);
+		await openSettings(page, 'accessibility');
+		await page.click('#high-contrast');
+		await page.waitForTimeout(300);
+		h.check((await themeNow(page)) === 'light', `U1: off goes back to the theme that was on before (${await themeNow(page)})`);
+		await page.click('#high-contrast');
+		await page.waitForTimeout(200);
+		await page.evaluate(() => /** @type {any} */ (window).__stores.settingsReset.resetCategory('accessibility'));
+		await page.waitForTimeout(200);
+		h.check((await themeNow(page)) === 'dark', `U1: resetting Accessibility turns High contrast off (${await themeNow(page)})`);
+	}
 	await closeSettings(page);
 
 	// ---- U2: the HC ring is the focus TOKENS -------------------------------------------------------------------
