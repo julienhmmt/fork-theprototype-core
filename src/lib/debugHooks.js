@@ -445,7 +445,8 @@ export const DEBUG_HOOKS = [
 	['scriptSockets', () => import('./scriptSockets')],
 	['scriptLint', () => import('./scriptLint')],
 	['codeWorkspace', () => import('./codeWorkspace')],
-	['sharedText', () => import('./sharedText')], // 50 Y1/Y2: the shared code/text buffers
+	// 50 Y1/Y2: the shared code/text buffers
+	['sharedText', () => import('./sharedText')],
 	['codeSidebars', () => import('./codeSidebars')],
 	['scriptAssets', () => import('./scriptAssets')],
 	['codeTabs', () => import('./codeTabs')],

@@ -38,9 +38,15 @@ const SEED_WAIT_MS = 900;
 const FLUSH_MS = 24;
 /** a change that arrived through the source waits this long for the buffer to catch up first */
 const FOLLOW_WAIT_MS = 450;
+/** the last editor letting go keeps the document this long: a remount (dock <-> float, the
+ * 50-window pop-out and back) re-binds the SAME document — undo history, cursors and all */
+const RELEASE_GRACE_MS = 2000;
 
 const REMOTE = 'tp-remote';
 const SEED = 'tp-seed';
+/** a Revert / a followed source change: shared like typing, but not in anyone's Ctrl+Z stack
+ * (the undo manager tracks typing only — an automatic follow is nobody's edit to undo) */
+const REPLACE = 'tp-replace';
 
 /** @type {Promise<{Y: any, aw: any, cm: any}> | null} */
 let loading = null;
@@ -57,7 +63,8 @@ export function loadYjs() {
  *   key: string, doc: any, text: any, meta: any, awareness: any, undo: any,
  *   refs: number, settled: boolean, ready: Promise<void>, settle: () => void,
  *   asked: Set<string>, answered: Set<string>, pending: Uint8Array[], timer: any,
- *   awPending: Set<number>, awTimer: any, remoteDepth: number, followTimer: any, seedText: string
+ *   awPending: Set<number>, awTimer: any, remoteDepth: number, followTimer: any, seedText: string,
+ *   dropTimer: any
  * }} Entry
  */
 /** @type {Map<string, Entry>} */
@@ -133,7 +140,8 @@ function createEntry(key) {
 		key, doc, text, meta, awareness, undo: null,
 		refs: 0, settled: false, ready, settle: () => {},
 		asked: new Set(), answered: new Set(), pending: [], timer: null,
-		awPending: new Set(), awTimer: null, remoteDepth: 0, followTimer: null, seedText: ''
+		awPending: new Set(), awTimer: null, remoteDepth: 0, followTimer: null, seedText: '',
+		dropTimer: null
 	};
 	entry.settle = () => {
 		if (entry.settled) return;
@@ -206,6 +214,8 @@ export async function acquire(key, sourceText) {
 		}
 	}
 	entry.refs++;
+	clearTimeout(entry.dropTimer);
+	entry.dropTimer = null;
 	await entry.ready;
 	return entry;
 }
@@ -231,6 +241,14 @@ export function release(key) {
 	if (!entry) return;
 	entry.refs = Math.max(0, entry.refs - 1);
 	if (entry.refs) return;
+	clearTimeout(entry.dropTimer);
+	entry.dropTimer = setTimeout(() => drop(entry), RELEASE_GRACE_MS);
+}
+
+/** nobody here edits it any more: leave the document @param {Entry} entry */
+function drop(entry) {
+	const key = entry.key;
+	if (entry.refs || docs.get(key) !== entry) return;
 	flush(entry);
 	clearTimeout(entry.followTimer);
 	// tell the room our cursor is gone (an awareness "null" for our client), then forget it all
@@ -265,7 +283,8 @@ export function editorBinding(key) {
 	const entry = docs.get(key);
 	if (!entry || !libs) return null;
 	const { Y, cm } = libs;
-	entry.undo ??= new Y.UndoManager(entry.text);
+	// typing only: y-codemirror adds its own sync origin; nothing else (seed, replace) is undoable
+	entry.undo ??= new Y.UndoManager(entry.text, { trackedOrigins: new Set() });
 	return {
 		text: String(entry.text.toString()),
 		extension: cm.yCollab(entry.text, entry.awareness, { undoManager: entry.undo }),
@@ -290,7 +309,7 @@ export function replaceText(key, next) {
 	entry.doc.transact(() => {
 		if (edit.remove) entry.text.delete(edit.index, edit.remove);
 		if (edit.insert) entry.text.insert(edit.index, edit.insert);
-	});
+	}, REPLACE);
 	return true;
 }
 
