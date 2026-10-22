@@ -3,7 +3,9 @@
 // simulation runs. Authored by scripts/author-templates.cjs; the schema is the comment block there.
 const POOL = { w: 8, h: 1.6, d: 5 };
 const LEVEL = 0; // the water surface sits at deck height
-const toy = (mass) => ({ mode: 'dynamic', mass, restitution: 0.5, friction: 0.4 });
+// 49 P3: inflatables and foam ride HIGH — the buoyancy default (500 kg/m³) floats a body half under,
+// which sank the ball and the rings to their middles. FLOAT_PRESETS.foam (buoyancy.js), one stamp.
+const toy = (mass) => ({ mode: 'dynamic', mass, restitution: 0.5, friction: 0.4, floats: { density: 150 } });
 
 module.exports = {
 	kind: 'example',

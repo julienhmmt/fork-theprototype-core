@@ -1,5 +1,5 @@
 {
-	"recordedAt": "2026-10-18T06:54:50.874Z",
+	"recordedAt": "2026-10-22T03:28:08.944Z",
 	"settings": {
 		"Theme": {
 			"rows": [
@@ -630,7 +630,7 @@
 				"Shortcuts"
 			]
 		},
-		"Enter mesh edit mode (inside it Tab cycles Vertices/Edges/Faces; Esc exits)": {
+		"Enter mesh edit mode (inside it Tab cycles Vertices/Edges/Faces; Esc exits) — on a measurement, edit its points": {
 			"rows": [
 				"Enter mesh edit mode (inside it Tab cycles Vertices/Edges/Faces; Esc exits) — on a measurement, edit its points"
 			],
@@ -1391,6 +1391,7 @@
 		},
 		"Water quality": {
 			"rows": [
+				"GPU fluid",
 				"Water quality"
 			],
 			"sections": [
@@ -1902,6 +1903,7 @@
 				"Double-click action",
 				"Draw repeated kit pieces together",
 				"Edit mesh wireframe colour",
+				"GPU fluid",
 				"Grid colour",
 				"Grid opacity",
 				"Grid size",
@@ -2515,6 +2517,7 @@
 				"Double-click action",
 				"Draw repeated kit pieces together",
 				"Edit mesh wireframe colour",
+				"GPU fluid",
 				"Grid colour",
 				"Grid opacity",
 				"Grid size",
@@ -3351,6 +3354,7 @@
 				"Double-click action",
 				"Draw repeated kit pieces together",
 				"Edit mesh wireframe colour",
+				"GPU fluid",
 				"Grid colour",
 				"Grid opacity",
 				"Grid size",
@@ -3999,6 +4003,7 @@
 		},
 		"water": {
 			"rows": [
+				"GPU fluid",
 				"Water quality"
 			],
 			"sections": [
@@ -4332,6 +4337,7 @@
 				"Download shared files automatically",
 				"Enable assistant",
 				"Focus mode — maximize the area under the pointer (the viewport alone, or a docked window filling the window); again to restore",
+				"GPU fluid",
 				"Ghost hands",
 				"Height",
 				"Hold to move vertex",

@@ -584,7 +584,9 @@ export async function saveSceneAsLevel(name, folderId = null, opts = {}) {
 	// for the same reason the two above do — the version is still written LOCALLY, and the
 	// manifest mark keeps its name out of every outbound document until the user shares.
 	if (opts.consent !== false && !staysPrivate) noteSceneOpened(payload.name);
-	publishSceneVersion(payload.name, item.hash);
+	// 49 J2: a save made to LEAVE (consent: false) is the joiner's own project — it records the
+	// version even while a cloud joiner already reads as the session's viewer (sent nowhere then)
+	publishSceneVersion(payload.name, item.hash, { own: opts.consent === false });
 	// R22 round 34 — A SAVE NAMES THE ROOM. After the manifest publish above: a peer that
 	// takes the name and goes looking for the scene must find its history already there,
 	// and PeerJS conns are ordered, so "after" here is "after" over there too.

@@ -51,7 +51,11 @@ const askOn = (p) =>
  *
  *  The copy is read by walking UP from a button the dialog itself minted, not by picking a
  *  `[role="dialog"]` off the document: several are mounted at once in this app, and the
- *  first one is not this one (measured — it read `""` for both). */
+ *  first one is not this one (measured — it read `""` for both).
+ *
+ *  49 J2: the TITLE is the dialog chrome's `h2.wc-title` and the copy `.cf-msg` since 38 R7 put
+ *  ConfirmModal on ModalDialog (1.30). The walk still looked for an `h3`, found none, and read
+ *  `""` — red on every build since, which 1.38's preview proof took for a cloud-build difference. */
 const modalOn = (p) =>
 	p.page.evaluate(() => {
 		const save = document.getElementById('confirm-dialog-save');
@@ -59,14 +63,14 @@ const modalOn = (p) =>
 		const cancel = document.getElementById('confirm-dialog-cancel');
 		const anyway = document.getElementById('confirm-dialog-anyway');
 		let root = save || dismiss || cancel;
-		while (root && !(root.querySelector('h3') && root.querySelector('p'))) root = root.parentElement;
+		while (root && !(root.querySelector('h2, h3') && root.querySelector('p'))) root = root.parentElement;
 		return {
 			save: save ? (save.textContent || '').trim() : null,
 			dismiss: dismiss ? (dismiss.textContent || '').trim() : null,
 			cancel: cancel ? (cancel.textContent || '').trim() : null,
 			dialAsk: !!anyway,
-			title: (root?.querySelector('h3')?.textContent ?? '').trim(),
-			message: (root?.querySelector('p')?.textContent ?? '').trim()
+			title: (root?.querySelector('h2, h3')?.textContent ?? '').trim(),
+			message: (root?.querySelector('p.cf-msg, p')?.textContent ?? '').trim()
 		};
 	});
 

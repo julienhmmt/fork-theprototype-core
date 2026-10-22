@@ -1510,6 +1510,11 @@
 		return hit ? hit[0] : 'custom';
 	}
 
+	/** 49 P1: the Continuous collision pick of one object @param {any} p */
+	function ccdChoiceOf(p) {
+		return p?.ccd === true ? 'on' : p?.ccd === false ? 'off' : 'scene';
+	}
+
 	/** CL-A A5: toggle one freeze-axis flag @param {string} key @param {boolean} on */
 	function setFreeze(key, on) {
 		// 37 R1: each member keeps its OWN other axes (the primary's map used to overwrite them)
@@ -4417,6 +4422,21 @@
 									>{label}</InsToggle
 								>
 							{/each}
+						</div>
+						<!-- 49 P1: per-body continuous collision; Scene default = no key saved -->
+						<div class="ui-row items-center gap-2">
+							<span class="w-20 shrink-0 text-xs text-text-muted" title="Continuous collision detection: a fast body cannot pass through thin walls, at a small cost per step">Continuous collision</span>
+							<ThemedSelect
+								id="physics-object-ccd"
+								items={[
+									{ value: 'scene', name: `Scene default (${$scenePhysicsDefaults.ccd ? 'on' : 'off'})` },
+									{ value: 'on', name: 'On' },
+									{ value: 'off', name: 'Off' }
+								]}
+								value={ccdChoiceOf($selectedObject.userData.physics)}
+								mixed={mixed((o) => ccdChoiceOf(o.userData.physics))}
+								onchange={(/** @type {any} */ v) => setPhysics({ ccd: v === 'on' ? true : v === 'off' ? false : null })}
+							/>
 						</div>
 						<PhysicsFloats object={$selectedObject} {setPhysics} /><!-- 36-sim I1 -->
 					{/if}

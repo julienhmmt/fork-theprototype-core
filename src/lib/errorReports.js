@@ -20,7 +20,7 @@
 import { writable, get } from 'svelte/store';
 import { safeStorage } from './safeStorage';
 import { APP_VERSION, COMMIT_SHA, IS_DEV } from './version.js';
-import { buildReport, browserOf, deviceClassOf, envOf, MAX_PER_SESSION } from './errorReportCore.js';
+import { buildReport, browserOf, deviceClassOf, envOf, releaseLabel, MAX_PER_SESSION } from './errorReportCore.js';
 
 const SEND_KEY = 'errorReports:send';
 const URL_OVERRIDE_KEY = 'errorReports:url';
@@ -135,7 +135,8 @@ function staticContext() {
 	}
 	return {
 		origin: typeof location !== 'undefined' ? location.origin : '',
-		release: APP_VERSION,
+		// 49 J3: a preview files under its own label, never the release it was branched from
+		release: releaseLabel(APP_VERSION, typeof location !== 'undefined' ? location.hostname : '', /** @type {any} */ (import.meta.env ?? {}).VITE_RELEASE_LABEL),
 		build: COMMIT_SHA,
 		device: deviceClassOf({ ua, coarse, minSide }),
 		browser,

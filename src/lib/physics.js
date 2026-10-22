@@ -90,7 +90,7 @@ export const remoteSimulating = writable(null);
  *   lastSent?: {pos: THREE.Vector3, quat: THREE.Quaternion},
  *   colliders: any[], shapeKey: string,
  *   oob?: boolean, restSince?: number | null,
- *   preVy?: number,
+ *   preVy?: number, ccd?: boolean,
  *   buoy?: {points: Float32Array, weights: Float32Array, volume: number, cellH: number}}} BodyEntry */
 /** @type {BodyEntry[]} */
 let bodies = [];
@@ -250,6 +250,7 @@ function collectParams(group) {
 		if (p.collider) map[object.uuid].collider = p.collider;
 		if (p.sensor) map[object.uuid].sensor = true; // CL-A A3: trigger volume
 		if (p.freeze) map[object.uuid].freeze = p.freeze; // CL-A A5: axis locks
+		if (typeof p.ccd === 'boolean') map[object.uuid].ccd = p.ccd; // 49 P1: absent = the scene's
 	});
 	// H1: physics nodes live in ANY graph (scene or per-object documents)
 	// 36 U11: a muted physics node does nothing (runtimeGraph drops it and its wires)
@@ -583,6 +584,11 @@ export function physicsShapeChanged(uuid) {
 	const p = collectParams(group)[uuid] ?? {};
 	const entry = bodies.find((e) => e.object.uuid === uuid);
 	if (entry) {
+		// 49 P1: a CCD pick needs no collider rebuild — the body just takes it
+		if (entry.mode === 'dynamic' && entry.ccd !== p.ccd) {
+			entry.ccd = p.ccd;
+			entry.body.enableCcd(p.ccd ?? !!get(scenePhysicsDefaults).ccd);
+		}
 		if (entry.shapeKey === shapeKeyOf(p, entry.object)) return false;
 		rebuildColliders(entry, p);
 		return true;
@@ -633,7 +639,7 @@ export function listPhysicsObjects() {
  *   friction?: number, collider?: string, sensor?: boolean|null,
  *   freeze?: any, material?: string, group?: string|null,
  *   collidesWith?: string[]|null, colliderVerts?: number[],
- *   colliderPieces?: number[][]}} patch — 36 X5: collision group + filter; 36 X3: a
+ *   colliderPieces?: number[][], ccd?: boolean|null}} patch — 36 X5: collision group + filter; 36 X3: a
  *   decomposed custom collider — 21-C4: sensor/freeze/material were
  *   missing from this type while the Inspector had been writing all three since
  *   CL-A (its collider row, its Sensor checkbox and its material presets), so any
@@ -647,6 +653,8 @@ export function setPhysicsFor(uuid, patch) {
 	if (!object) return null;
 	const before = object.userData.physics ? { ...object.userData.physics } : null;
 	const next = { mode: 'auto', ...(object.userData.physics ?? {}), ...patch };
+	// 49 P1: "Scene default" is the ABSENCE of the key, so a scene that never picked saves as before
+	if (next.ccd == null) delete next.ccd;
 	object.userData.physics = next;
 	recordEntry({ kind: 'props', uuid, before: { physics: before }, after: { physics: next } });
 	/** @type {any} */
@@ -915,8 +923,10 @@ function createBodyFor(object, p, opts) {
 	}
 	const body = world.createRigidBody(bodyDesc);
 	// B4: no CCD by default, and a 20 m/s throw moves 0.33 m per step — thin
-	// walls tunnel, which is precisely the throw gesture's failure mode
-	if (dynamic && get(scenePhysicsDefaults).ccd) body.enableCcd(true);
+	// walls tunnel, which is precisely the throw gesture's failure mode.
+	// 49 P1: a body's own pick (userData.physics.ccd) wins over the scene's.
+	const ccd = dynamic && typeof p?.ccd === 'boolean' ? p.ccd : undefined;
+	if (dynamic && (ccd ?? get(scenePhysicsDefaults).ccd)) body.enableCcd(true);
 	/** @type {BodyEntry} */
 	const entry = {
 		object,
@@ -930,6 +940,7 @@ function createBodyFor(object, p, opts) {
 		samples: /** @type {any[]} */ ([]),
 		colliders: /** @type {any[]} */ ([]),
 		shapeKey: '',
+		ccd,
 		// the pose WE last wrote — a deviation means someone else (a peer's
 		// move applier, undo, an AI edit) wrote the object mid-sim
 		lastWritten: { pos: object.position.clone(), quat: object.quaternion.clone() }
@@ -1139,7 +1150,7 @@ async function startSimulation() {
 				if (entry.mode !== 'dynamic') return;
 				entry.body.setLinearDamping(defaults.damping.linear ?? 0);
 				entry.body.setAngularDamping(defaults.damping.angular ?? 0);
-				entry.body.enableCcd(!!defaults.ccd);
+				entry.body.enableCcd(entry.ccd ?? !!defaults.ccd); // 49 P1: an own pick stays
 			});
 			// a material change is collider state, so it rides the shapeKey drift
 			// path that already exists for the per-object values
@@ -1905,7 +1916,7 @@ function stepInner(now) {
 		if (still) {
 			entry.restSince ??= now;
 			// B4: a body that was thrown fast carries CCD until it settles
-			if (!sceneCcd && body.isCcdEnabled?.()) body.enableCcd(false);
+			if (!(entry.ccd ?? sceneCcd) && body.isCcdEnabled?.()) body.enableCcd(false);
 			fireObjectRest(object.uuid, (now - entry.restSince) / 1000);
 		} else if (entry.restSince != null) {
 			entry.restSince = null;
@@ -1943,6 +1954,12 @@ function stepInner(now) {
  * DYNAMIC body (pre-step downward velocity above the threshold, not held, off
  * cooldown) registers an impact — dynamic-vs-ground, dynamic-vs-scenery and
  * dynamic-vs-dynamic all count.
+ *
+ * 49 P2: the body it landed ON hears it too when that body cannot register for itself — a
+ * fixed or kinematic object (a pressure plate, a target, a moving platform) gets the same
+ * impact with `other` = the mover. A DYNAMIC partner is left to its own test above, so two
+ * dynamic bodies never fire twice for one contact; a sensor partner has On Enter instead.
+ * The passive event rides the mover's cooldown, so it cannot machine-gun either.
  * @param {number} h1 @param {number} h2 @param {number} now step clock (ms)
  */
 function queueContact(h1, h2, now) {
@@ -1957,7 +1974,10 @@ function queueContact(h1, h2, now) {
 		lastImpactAt.set(uuid, now);
 		// 36 X6: and what it hit — the other collider's owner, '' for the ground
 		const other = handle === h1 ? h2 : h1;
-		pendingImpacts.push({ uuid, strength: down, other: groundHandles.has(other) ? '' : colliderOwner.get(other)?.uuid ?? '' });
+		const hit = groundHandles.has(other) ? null : colliderOwner.get(other);
+		pendingImpacts.push({ uuid, strength: down, other: hit?.uuid ?? '' });
+		if (hit && !hit.sensor && hit.uuid !== uuid && hit.entry?.mode !== 'dynamic')
+			pendingImpacts.push({ uuid: hit.uuid, strength: down, other: uuid });
 	}
 }
 

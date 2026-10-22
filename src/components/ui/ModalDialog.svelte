@@ -97,6 +97,11 @@
 
 	/** @param {ToggleEvent} ev */
 	function onToggle(ev) {
+		// 49 J4: the platform fires `toggle` in a later TASK. Close the modal and open it again
+		// straight away, and the OLD <dialog> (already removed by the `{#if}`) delivers its
+		// "closed" after the new one is up — writing `open = false` shut the reopened modal
+		// (the modules flight's second install found no manager). Only the live dialog speaks.
+		if (ev.currentTarget !== ref) return;
 		open = ev.newState === 'open';
 	}
 
