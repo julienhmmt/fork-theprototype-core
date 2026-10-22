@@ -5,9 +5,13 @@
    override wins over the OS in both directions; this file is the catch-all for everything that
    never had such a block — sheet swipes, dock slides, toasts, pulsing indicators go instant.
 
-   Durations go to 0.01ms rather than `animation: none` ON PURPOSE: `animationend` /
-   `transitionend` still fire, so a class a component clears on that event cannot stick (the
-   documented trap), and an infinite pulse ends on its LAST keyframe instead of looping.
+   ANIMATION durations go to 0.01ms rather than `animation: none` ON PURPOSE: `animationend` still
+   fires, so a class a component clears on that event cannot stick (the documented trap), and an
+   infinite pulse ends on its LAST keyframe instead of looping. TRANSITIONS go to 0s, not 0.01ms:
+   every element's default is `transition: all 0s`, so 0.01ms would give EVERY element a transition
+   on EVERY property — a style set and read back in one task (a px probe, /kit's contrast table)
+   reads the old value mid-flight. Nothing waits on `transitionend` but Connect's re-measure,
+   which also measures on the next tick.
    Svelte's JS transitions (toasts, docks, the drawer) read `motionMs()` instead — CSS cannot
    reach the Web Animations they run on — and so does the camera fly-to. */
 :root[data-motion='reduce'] *,
@@ -16,7 +20,7 @@
 	animation-duration: 0.01ms !important;
 	animation-delay: 0ms !important;
 	animation-iteration-count: 1 !important;
-	transition-duration: 0.01ms !important;
+	transition-duration: 0s !important;
 	transition-delay: 0ms !important;
 	scroll-behavior: auto !important;
 }

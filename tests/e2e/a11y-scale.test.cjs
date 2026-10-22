@@ -154,7 +154,7 @@ h.run(async () => {
 	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await page.waitForTimeout(300);
 	const m1 = await motion();
-	h.check(m1.attr === 'reduce' && m1.probe === '1e-05s' && /^none/.test(String(m1.knob)), `Follow system on a reduced-motion OS: data-motion=reduce, motion instant, the Toggle's own reduced rule applies (${JSON.stringify(m1)})`);
+	h.check(m1.attr === 'reduce' && m1.probe === '0s' && /^none/.test(String(m1.knob)), `Follow system on a reduced-motion OS: data-motion=reduce, motion instant, the Toggle's own reduced rule applies (${JSON.stringify(m1)})`);
 	await openSettings(page, 'accessibility');
 	await page.locator('#motion').getByRole('radio', { name: 'Full' }).click().catch(async () => page.locator('#motion').getByText('Full', { exact: true }).click());
 	await openSettings(page, 'interface');
@@ -165,7 +165,7 @@ h.run(async () => {
 	await page.locator('#motion').getByRole('radio', { name: 'Reduce' }).click().catch(async () => page.locator('#motion').getByText('Reduce', { exact: true }).click());
 	await openSettings(page, 'interface');
 	const m3 = await motion();
-	h.check(m3.attr === 'reduce' && m3.probe === '1e-05s' && /^none/.test(String(m3.knob)), `"Reduce" works on a full-motion OS (${JSON.stringify(m3)})`);
+	h.check(m3.attr === 'reduce' && m3.probe === '0s' && /^none/.test(String(m3.knob)), `"Reduce" works on a full-motion OS (${JSON.stringify(m3)})`);
 	h.check((await page.evaluate(() => localStorage.getItem('ui:motion'))) === 'reduce', 'the motion choice is saved on this device');
 	await closeAll(page);
 
