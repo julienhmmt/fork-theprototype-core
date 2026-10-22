@@ -232,6 +232,15 @@
 			font-size: var(--fs-input);
 		}
 	}
+	/* 53 A1: at a large UI scale (120 %+) a full-width segmented control no longer fits beside the
+	   (scaled) label column of a sidebar or a phone sheet — it goes UNDER the label, full width.
+	   Any width: a sidebar column is ~40 % of the window, so the narrow case is not only a phone's.
+	   100 % is untouched. */
+	:global(:root[data-ui-large]) .pr-no-value:has(:global(.seg-full)),
+	:global(:root[data-ui-large]) .pr-no-middle:has(:global(.seg-full)) {
+		grid-template-columns: minmax(0, 1fr);
+		row-gap: 6px;
+	}
 	/* an Inspector row's segmented control keeps the Inspector's 13 px text on a phone too (the
 	   Settings rows take 16 px): three options fit beside a label at 390 px */
 	@media (max-width: 639.98px) {

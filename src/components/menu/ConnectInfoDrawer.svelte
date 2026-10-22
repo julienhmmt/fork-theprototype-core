@@ -8,6 +8,7 @@
 	// cloud-plugin mount (drawerSlot — room/host settings render here, batch RM).
 	import { onMount } from 'svelte';
 	import { slide } from 'svelte/transition';
+	import { motionMs } from '$lib/motion'; // 53 A5: instant under reduced motion
 	import { cubicOut } from 'svelte/easing';
 	import {
 		peers,
@@ -176,7 +177,7 @@
 	class="ui-panel tp-ui cxd-panel"
 	data-testid="connect-info-drawer"
 	bind:this={panelEl}
-	transition:slide={{ duration: 200, easing: cubicOut }}
+	transition:slide={{ duration: motionMs(200), easing: cubicOut }}
 >
 	<div class="cxd-tabs" role="tablist">
 		<button class="cxd-tab" class:active={$connectDrawerOpen && $connectDrawerTab === 'info'} role="tab" aria-selected={$connectDrawerOpen && $connectDrawerTab === 'info'} onclick={() => setTab('info')}>Info</button>

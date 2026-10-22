@@ -16,6 +16,8 @@
 // In both, the viewport cap WINS over the minimum size: a 360px minimum on a
 // 320px-wide screen would otherwise reinstate the very thing being prevented.
 
+import { cssPx } from './uiScale'; // 53 A1: a px token may read back as calc(...)
+
 /** px of breathing room kept between a window edge and the viewport edge */
 export const WIN_MARGIN = 8;
 
@@ -63,8 +65,8 @@ export function bottomReserve({ dock: withDock = true } = {}) {
 	let dock = 0;
 	try {
 		const cs = getComputedStyle(document.documentElement);
-		inset = parseFloat(cs.getPropertyValue('--controls-inset')) || 0;
-		dock = parseFloat(cs.getPropertyValue('--viewport-inset')) || 0;
+		inset = cssPx(cs.getPropertyValue('--controls-inset')) || 0;
+		dock = cssPx(cs.getPropertyValue('--viewport-inset')) || 0;
 	} catch {}
 	const vv = window.visualViewport;
 	const overlay =

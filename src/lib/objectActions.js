@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { showConfirm } from './confirmDialog.js';
 import { get } from 'svelte/store';
+import { motionMs } from './motion'; // 53 A5
 import { dropToSurface } from './snapping';
 import { recordTransform, recordEntry, recordObjectPresence, registerHistoryKind, registerHistoryMerge, sameJson, beginHistoryBatch, endHistoryBatch, historyBatchOpen, undoEntry, undoStack } from './history';
 import { offerUndo } from './undoToast'; // 37 R25 (a leaf)
@@ -1438,6 +1439,7 @@ let focusAnimation = 0;
  */
 export function flyTo(position, target, duration = 400) {
 	if (get(specatorMode) || get(isVRMode)) return;
+	duration = motionMs(duration); // 53 A5: the camera jumps instead of flying under reduced motion
 	/** @type {any} */
 	const camera = get(globalCamera);
 	/** @type {any} */

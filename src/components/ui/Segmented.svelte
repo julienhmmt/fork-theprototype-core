@@ -131,6 +131,13 @@
 		color: var(--text);
 		background: var(--surface-hover);
 	}
+	/* 53 A1: at a large UI scale the side padding gives way first (14 px is 21 px at 150 %), and a
+	   label that still cannot fit breaks inside the word rather than spilling over its neighbour
+	   (break-word leaves an option's min-content whole). 100 % never sets data-ui-large. */
+	:global(:root[data-ui-large]) .seg-opt {
+		padding-inline: 4px;
+		overflow-wrap: anywhere;
+	}
 	.seg-opt[aria-checked='true'] {
 		background: var(--segment-on);
 		color: var(--text);

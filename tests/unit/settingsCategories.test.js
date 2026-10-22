@@ -3,13 +3,13 @@ import { describe, it, expect } from 'vitest';
 import { groupSections, orderSections, categoryMeta, SETTINGS_GROUPS } from '../../src/lib/settings/categories.js';
 
 // the section keys as Settings.svelte registers them (template order), plus one a lane might add
-const REGISTERED = ['interface', 'controls', 'input', 'touchcontrols', 'scene', 'explorer', 'vr', 'ai', 'export', 'nodetypes', 'connection', 'shortcuts', 'aboutwhatsnew'];
+const REGISTERED = ['interface', 'accessibility', 'controls', 'input', 'touchcontrols', 'scene', 'explorer', 'vr', 'ai', 'export', 'nodetypes', 'connection', 'shortcuts', 'aboutwhatsnew'];
 
 describe('settings categories', () => {
 	it('groups the menu exactly as the spec lists it, About left out (it is pinned)', () => {
 		const g = groupSections(REGISTERED);
 		expect(g.map((x) => x.group.label)).toEqual(['General', 'Workspace', 'Devices & services']);
-		expect(g[0].keys).toEqual(['interface', 'controls', 'input', 'touchcontrols', 'shortcuts']);
+		expect(g[0].keys).toEqual(['interface', 'accessibility', 'controls', 'input', 'touchcontrols', 'shortcuts']);
 		expect(g[1].keys).toEqual(['scene', 'explorer', 'nodetypes', 'export']);
 		expect(g[2].keys).toEqual(['vr', 'ai', 'connection']);
 		expect(g.flatMap((x) => x.keys)).not.toContain('aboutwhatsnew');

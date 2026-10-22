@@ -11,6 +11,7 @@
 	import '../../styles/menu.css';
 	import { tick } from 'svelte';
 	import { fade } from 'svelte/transition';
+	import { motionMs } from '$lib/motion'; // 53 A5: instant under reduced motion
 	import { save, load, importModelFiles } from '$lib/fileHandler.svelte';
 	import {
 		settingsOpen,
@@ -155,7 +156,7 @@
 {#if !$closeMenu}
 	<nav
 		id="sidebar70"
-		transition:fade={{ duration: 130 }}
+		transition:fade={{ duration: motionMs(130) }}
 		class="app-sidebar tp-ui tp-menu tp-noscrollbar fixed"
 		style="--side-top: {$connectDocked ? $connectBarHeight + 64 : 64}px; {$phoneShellActive ? `--menu-sheet-h: ${menuShown}px` : ''}"
 	>

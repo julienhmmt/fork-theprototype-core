@@ -99,6 +99,7 @@
 	import { geometry as sidebarGeometry } from '$lib/sidebars';
 	import type { ToolbarLayout, LayoutConfig, Placements, Region } from '$lib/toolbarLayout';
 	import { pivotMode, pivotParentAvailable } from '$lib/multiTransform'; // 37 R1: the toolbar Pivot cell
+	import { cssPx, scaledPx } from '$lib/uiScale'; // 53 A1: hud.css px tokens read back as calc(...)
 	import { VRButton, XRButton } from '@threlte/xr'
 
 	// A panel is "shown" when it is open AND either the visible dock tab OR floating
@@ -804,8 +805,8 @@
 		let moving = false;
 		let left = saved?.left ?? 350;
 		let top = saved?.top ?? 100;
-		let width = saved?.width ?? 300;
-		let height = saved?.height ?? 250;
+		let width = saved?.width ?? scaledPx(300); // 53 A1: the default size follows the UI scale
+		let height = saved?.height ?? scaledPx(250);
 
 		let startX = 0;
 		let startY = 0;
@@ -982,8 +983,8 @@
 			} catch {}
 			left = stored?.left ?? 350;
 			top = stored?.top ?? 100;
-			width = stored?.width ?? 300;
-			height = stored?.height ?? 250;
+			width = stored?.width ?? scaledPx(300);
+			height = stored?.height ?? scaledPx(250);
 			clampRect();
 		});
 	}
@@ -2047,7 +2048,7 @@
 		const g = get(sidebarGeometry);
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
-		const inset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bottom-inset')) || 0;
+		const inset = cssPx(getComputedStyle(document.documentElement).getPropertyValue('--bottom-inset')) || 0;
 		return {
 			left: g?.wide ? g.dockLeft : 0,
 			right: vw - (g?.wide ? g.dockRight : 0),
@@ -3269,7 +3270,7 @@
 		}
 		// the bar's ROW is its bottom bar-height: a wrapped edit bar is taller, and reading its whole box
 		// would let a corner button ABOVE the row narrow the band it wraps into (and so on)
-		const rowH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hud-bar-h')) || pill.height;
+		const rowH = cssPx(getComputedStyle(document.documentElement).getPropertyValue('--hud-bar-h')) || pill.height;
 		const rowTop = Math.max(pill.top, pill.bottom - rowH);
 		const found: HTMLElement[] = [];
 		for (const el of TOOLBAR_NEIGHBOURS.flatMap((sel) => [...document.querySelectorAll<HTMLElement>(sel)])) {
@@ -3332,8 +3333,8 @@
 		const root = getComputedStyle(document.documentElement);
 		const cs = getComputedStyle(nav);
 		const row = nav.querySelector('.hud-bar-row');
-		const cell = px(root.getPropertyValue('--hud-cell')) || 38;
-		const fab = px(root.getPropertyValue('--hud-fab')) || 44;
+		const cell = cssPx(root.getPropertyValue('--hud-cell')) || 38;
+		const fab = cssPx(root.getPropertyValue('--hud-fab')) || 44;
 		const gap = row ? px(getComputedStyle(row).columnGap) : 2;
 		const navGap = px(cs.columnGap);
 		const sep = nav.querySelector('.hud-sep');

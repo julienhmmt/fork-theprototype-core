@@ -11,6 +11,8 @@
 /* 38 R9: the phone shell's placement rules — UNLAYERED on purpose: they re-seat reused
    chrome over inline styles and must beat every utility (all scoped to :root.phone-shell) */
 @import './styles/phone.css';
+/* 53 (A5): reduced motion — the Settings override + the OS preference, one attribute (motion.css) */
+@import './styles/motion.css';
 
 /* flowbite's plugin stays for one reason: its base styles for native form controls (checkbox
    ticks, select arrows, field resets). No Flowbite COMPONENT is left (38 R11: flowbite-svelte is

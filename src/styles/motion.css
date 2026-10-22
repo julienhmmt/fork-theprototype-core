@@ -1,0 +1,22 @@
+/* 53 (A5) — REDUCED MOTION. `data-motion="reduce"` on <html> is the ONE switch ($lib/motion.js):
+   Settings ▸ Accessibility ▸ Motion is Follow system (the OS `prefers-reduced-motion`, the
+   default) / Reduce / Full. The build transform (scripts/a11y-css.cjs) re-keys every
+   `@media (prefers-reduced-motion: reduce)` block in the app onto this attribute, so the Settings
+   override wins over the OS in both directions; this file is the catch-all for everything that
+   never had such a block — sheet swipes, dock slides, toasts, pulsing indicators go instant.
+
+   Durations go to 0.01ms rather than `animation: none` ON PURPOSE: `animationend` /
+   `transitionend` still fire, so a class a component clears on that event cannot stick (the
+   documented trap), and an infinite pulse ends on its LAST keyframe instead of looping.
+   Svelte's JS transitions (toasts, docks, the drawer) read `motionMs()` instead — CSS cannot
+   reach the Web Animations they run on — and so does the camera fly-to. */
+:root[data-motion='reduce'] *,
+:root[data-motion='reduce'] *::before,
+:root[data-motion='reduce'] *::after {
+	animation-duration: 0.01ms !important;
+	animation-delay: 0ms !important;
+	animation-iteration-count: 1 !important;
+	transition-duration: 0.01ms !important;
+	transition-delay: 0ms !important;
+	scroll-behavior: auto !important;
+}
