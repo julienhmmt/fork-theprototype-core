@@ -274,5 +274,29 @@ h.run(async () => {
 	const tSet = await firstSet(A.page, terrain.uuid);
 	h.check(!tSet.host && tSet.gen.layer?.i === 2, 'a terrain set carries no host field (byte-identical shape) and keeps its mask');
 
+	// ---- a GROUP host (a placed model is one): the fill covers its children, in its frame ------------
+	const grp = await A.page.evaluate(async () => {
+		const w = window.__stores;
+		for (let i = 0; i < 2; i++) w.commandsHandler.sceneCommand('/create Box 1 1 1');
+		await new Promise((r) => setTimeout(r, 300));
+		const g = await new Promise((r) => w.objectsGroup.subscribe(r)());
+		const kids = g.children.slice(-2);
+		kids.forEach((o, i) => o.position.set(8 + i * 3, 0.5, 8));
+		w.objectActions.applySelectionSet(kids.map((o) => o.uuid));
+		const uuid = w.objectActions.groupSelection();
+		await new Promise((r) => setTimeout(r, 300));
+		const host = w.terrainPaint.isMeshHost(g.getObjectByProperty('uuid', uuid));
+		const id = w.terrainPaint.addScatterSet(uuid, { source: { kind: 'primitive', type: 'Sphere' }, gen: { count: 60, scaleMin: 0.2, scaleMax: 0.2, rot: true, slope: [0, 10] } });
+		return { uuid, id, host };
+	});
+	h.check(grp.host && !!grp.id, 'a group of meshes takes scatter (isMeshHost + a set added)');
+	const gDrawn = await drawn(A.page, grp.uuid);
+	// slope 0..10 = the two box TOPS (y = 1 in world); world x near 8 or 11
+	h.check(
+		gDrawn.length === 60 && gDrawn.every((p) => Math.abs(p.world[1] - 1) < 0.02 && (Math.abs(p.world[0] - 8) <= 0.51 || Math.abs(p.world[0] - 11) <= 0.51)),
+		`the fill lies on both children's top faces (${gDrawn.length})`
+	);
+	await h.eventually(() => drawn(B.page, grp.uuid), (d) => samePlaces(d, gDrawn, 2e-3), 'B draws the group fill identically', 15000);
+
 	await h.finish(browser);
 });

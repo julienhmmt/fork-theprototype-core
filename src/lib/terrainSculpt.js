@@ -13,6 +13,7 @@ import {
 	endPaintStroke,
 	beginScatterStroke,
 	scatterStrokeMove,
+	isMeshHost,
 	endScatterStroke,
 	terrainStrokeOpen
 } from './terrainPaint';
@@ -323,7 +324,7 @@ export function enterSculpt(uuid, opts = {}) {
 
 /** 51-surface: the scatter-only session on a plain mesh (see enterSculpt). @param {string} uuid @param {any} object */
 function enterMeshScatter(uuid, object) {
-	if (!object.isMesh || !object.geometry?.attributes?.position) {
+	if (!isMeshHost(object)) {
 		showToast('Scatter works on a mesh object');
 		return false;
 	}

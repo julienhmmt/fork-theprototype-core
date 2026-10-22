@@ -93,9 +93,17 @@ function writable_(object, anyMesh = false) {
 	return true;
 }
 
-/** 51-surface: a non-terrain mesh that can carry scatter (its own triangles are the surface) @param {any} object */
+/** 51-surface: a non-terrain object that can carry scatter — a mesh (its own triangles are the
+ * surface) or a GROUP with meshes under it (a placed model: its children's surface, in its frame).
+ * @param {any} object */
 export function isMeshHost(object) {
-	return !!object?.isMesh && !object.userData?.terrain && !!object.geometry?.attributes?.position;
+	if (!object || object.userData?.terrain || object.isLight || object.isCamera) return false;
+	if (object.isMesh) return !!object.geometry?.attributes?.position;
+	let found = false;
+	object.traverse?.((/** @type {any} */ m) => {
+		if (!found && m !== object && m.isMesh && !m.isInstancedMesh && m.geometry?.attributes?.position) found = true;
+	});
+	return found;
 }
 
 /** the host's largest world scale — the brush ring is in world metres, the instances live in the

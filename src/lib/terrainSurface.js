@@ -61,7 +61,13 @@ function objectOf(uuid) {
 /** Local XZ bounds of a terrain's geometry (the splat + scatter frame). @param {any} object */
 export function terrainBounds(object) {
 	const geo = object?.geometry;
-	if (!geo?.attributes?.position) return null;
+	if (!geo?.attributes?.position) {
+		// 51-surface: a GROUP host (a placed model) has no geometry of its own — its children's
+		// surface, in its frame, is the scatter frame
+		const S = object && !object.isMesh ? surfaceOf(object) : null;
+		if (!S) return null;
+		return { minX: S.min[0], minZ: S.min[2], sizeX: Math.max(S.max[0] - S.min[0], 1e-3), sizeZ: Math.max(S.max[2] - S.min[2], 1e-3) };
+	}
 	if (!geo.boundingBox) geo.computeBoundingBox();
 	const b = geo.boundingBox;
 	const sizeX = b.max.x - b.min.x;
@@ -488,7 +494,10 @@ function reconcileScatter(object) {
 	}
 	if (entry.holder.parent !== scene) scene.add(entry.holder);
 	const pos = object.geometry?.attributes?.position;
-	const layoutKey = (pos ? pos.version + ':' + pos.count + ':' + (pos.array?.length ?? 0) : '') + ':' + uuidTag(pos);
+	// 51-surface: a group host re-lays when any child's geometry or pose changes (its surface key)
+	const layoutKey = pos
+		? pos.version + ':' + pos.count + ':' + (pos.array?.length ?? 0) + ':' + uuidTag(pos)
+		: 'g:' + (surfaceOf(object) ? surfaces.get(object)?.key ?? '' : '');
 	const key = JSON.stringify(sets.map((s) => [s.id, s.data, s.align, s.seed, s.gen, s.ov, s.sources, s.pick, s.tint, s.sink, s.host, s.box, setSources(s).map(sourceReady)]));
 	// 51-surface: a layer-masked fill follows the PAINT, so a new splat re-lays it (compared by
 	// reference — the block's data string is replaced on every commit, never mutated)
@@ -555,7 +564,7 @@ const surfaces = new WeakMap();
 export function surfaceOf(object) {
 	const geo = object?.geometry;
 	const pos = geo?.attributes?.position;
-	if (!pos) return null;
+	if (!pos) return object ? groupSurfaceOf(object) : null;
 	const nrm = geo.attributes.normal ?? null;
 	const key = uuidTag(pos) + ':' + pos.version + ':' + (geo.index ? uuidTag(geo.index) + ':' + geo.index.version : '-') + ':' + (nrm ? uuidTag(nrm) + ':' + nrm.version : '-');
 	let entry = surfaces.get(object);
@@ -563,6 +572,84 @@ export function surfaceOf(object) {
 		entry = { key, surface: buildSurface(pos.array, geo.index?.array ?? null, nrm?.array ?? null), index: null };
 		surfaces.set(object, entry);
 	}
+	return entry.surface;
+}
+
+/** The meshes a GROUP host's surface is made of: every plain, visible-or-not descendant mesh in tree
+ * order (the order a model's file gives, the same on every peer) — never an InstancedMesh, a skinned
+ * mesh, or anything scatter/LOD made. @param {any} object */
+function surfaceMeshes(object) {
+	/** @type {any[]} */
+	const out = [];
+	object.traverse((/** @type {any} */ m) => {
+		if (m === object || !m.isMesh || m.isInstancedMesh || m.isSkinnedMesh) return;
+		if (!m.geometry?.attributes?.position) return;
+		out.push(m);
+	});
+	return out;
+}
+
+const _rel = new THREE.Matrix4();
+const _inv = new THREE.Matrix4();
+const _nm = new THREE.Matrix3();
+const _v = new THREE.Vector3();
+
+/**
+ * 51-surface: a GROUP host — a placed Library model, a kit piece — merges its child meshes into
+ * ONE surface in the group's own frame (each child's transform relative to the group baked in), so
+ * a fill covers the whole model and moving the group carries it. The key names every child's
+ * geometry and its relative pose, so a refilled kit piece or an edited child re-lays.
+ * @param {any} object
+ */
+function groupSurfaceOf(object) {
+	const meshes = surfaceMeshes(object);
+	if (!meshes.length) return null;
+	object.updateWorldMatrix(true, true);
+	_inv.copy(object.matrixWorld).invert();
+	/** @type {string[]} */
+	const parts = [];
+	/** @type {any[]} */
+	const rels = [];
+	for (const m of meshes) {
+		const g = m.geometry;
+		const rel = new THREE.Matrix4().multiplyMatrices(_inv, m.matrixWorld);
+		rels.push(rel);
+		parts.push(uuidTag(g.attributes.position) + '.' + g.attributes.position.version + '.' + (g.index ? uuidTag(g.index) : '-') + '.' + rel.elements.map((e) => Math.round(e * 1e5)).join(','));
+	}
+	const key = 'g|' + parts.join('|');
+	let entry = surfaces.get(object);
+	if (entry && entry.key === key) return entry.surface;
+	let tris = 0;
+	for (const m of meshes) tris += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3;
+	const pos = new Float32Array(Math.floor(tris) * 9);
+	const nrm = new Float32Array(Math.floor(tris) * 9);
+	let o = 0;
+	meshes.forEach((m, k) => {
+		const g = m.geometry;
+		const p = g.attributes.position;
+		const n = g.attributes.normal ?? null;
+		const idx = g.index;
+		_rel.copy(rels[k]);
+		_nm.getNormalMatrix(_rel);
+		const count = idx ? idx.count : p.count;
+		for (let i = 0; i < count - (count % 3); i++) {
+			const vi = idx ? idx.getX(i) : i;
+			_v.fromBufferAttribute(p, vi).applyMatrix4(_rel);
+			pos[o] = _v.x;
+			pos[o + 1] = _v.y;
+			pos[o + 2] = _v.z;
+			if (n) _v.fromBufferAttribute(n, vi).applyMatrix3(_nm).normalize();
+			else _v.set(0, 0, 0);
+			nrm[o] = _v.x;
+			nrm[o + 1] = _v.y;
+			nrm[o + 2] = _v.z;
+			o += 3;
+		}
+	});
+	// a child without normals: face normals for all (a zero normal would interpolate to nothing)
+	const anyMissing = meshes.some((m) => !m.geometry.attributes.normal);
+	entry = { key, surface: buildSurface(pos.subarray(0, o), null, anyMissing ? null : nrm.subarray(0, o)), index: null };
+	surfaces.set(object, entry);
 	return entry.surface;
 }
 
