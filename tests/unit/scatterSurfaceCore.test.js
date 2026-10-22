@@ -1,3 +1,4 @@
+// @ts-nocheck — a fixture test: hand-built geometry helpers, results asserted non-null by the checks themselves
 import { describe, it, expect } from 'vitest';
 import {
 	buildSurface,
