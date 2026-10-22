@@ -115,6 +115,7 @@ export const DEBUG_HOOKS = [
 	['terrainScatterCore', () => import('./terrainScatterCore')],
 	// 51 E1: the scatter source catalog (pack items, prefabs + objects as their look)
 	['scatterSources', () => import('./scatterSources')],
+	['scatterThin', () => import('./scatterThin')],
 	['userModules', () => import('./userModules')],
 	['environment', () => import('./environment')],
 	// 37-hdri: the HDRI layer (hdriDebug, installHdriLayer) + its leaf stores (skyEnv, envToneMapping, hdriStatus) + the pure core
