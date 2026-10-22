@@ -184,6 +184,48 @@ jobs:
         if: failure()
         run: tail -40 /tmp/dev.log
 
+  # 53-reader (A4): THE ACCESSIBILITY GATE. axe-core over the main surfaces (editor shell, object
+  # list, Inspector, Settings, Asset Browser on recorded fixtures, phone shell) FAILS on serious and
+  # critical violations; moderate and minor are listed in the uploaded report, not fixed. Plus the
+  # screen-reader basics (live regions, selection announce, the object-list tree). One page at a
+  # time and DOM-only assertions, so — unlike e2e-smoke — it gates.
+  a11y:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run certs
+      - name: start the dev server
+        run: |
+          npm run dev -- --port 5173 --strictPort --host localhost > /tmp/dev.log 2>&1 &
+          for i in $(seq 1 90); do
+            curl -sk -o /dev/null https://localhost:5173/ && break
+            sleep 1
+          done
+          curl -sk -o /dev/null -w 'dev server: %{http_code}\n' https://localhost:5173/
+      - name: axe gate + screen-reader basics
+        env:
+          APP_URL: https://localhost:5173/
+          AXE_REPORT_DIR: /tmp/axe
+        run: |
+          rc=0
+          npm run e2e -- a11y-axe a11y-reader || rc=$?
+          [ -f /tmp/axe/axe-after.md ] && cat /tmp/axe/axe-after.md >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: axe-report
+          path: /tmp/axe
+      - name: dev server log on failure
+        if: failure()
+        run: tail -40 /tmp/dev.log
+
   # 38 (NOTES-38 #18): THE TOKEN SCREENSHOT DIFF. /kit renders every redesign primitive in every
   # state; this job shoots it in the dark, light and custom themes on the PR's BASE ref and on its
   # HEAD, on this same runner (so fonts and anti-aliasing cannot drift between machines), and diffs

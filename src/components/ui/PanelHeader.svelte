@@ -40,7 +40,7 @@
 		</button>
 	{/if}
 	{#if onclose}
-		<button class="ui-button-quiet" title="Close" onclick={onclose}>✕</button>
+		<button class="ui-button-quiet" title="Close" aria-label="Close" onclick={onclose}>✕</button>
 	{/if}
 </div>
 

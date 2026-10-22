@@ -269,8 +269,8 @@
 		>
 			<div class="ws-panel-head flex shrink-0 items-center gap-1 px-2 py-1">
 				<span class="flex-1 truncate text-xs font-semibold opacity-80">{activeMode?.label}</span>
-				<button class="ws-mini" title="Switch sidebar side" onclick={switchSide} data-ws-switch-side>⇄</button>
-				<button class="ws-mini" title="Close" onclick={hideSecondary}>✕</button>
+				<button class="ws-mini" title="Switch sidebar side" aria-label="Switch sidebar side" onclick={switchSide} data-ws-switch-side>⇄</button>
+				<button class="ws-mini" title="Close" aria-label="Close" onclick={hideSecondary}>✕</button>
 			</div>
 			<div class="min-h-0 flex-1 overflow-y-auto" use:minimalScroll>{@render secondary?.(secondaryMode)}</div>
 		</div>

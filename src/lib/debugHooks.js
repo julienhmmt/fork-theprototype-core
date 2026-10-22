@@ -430,6 +430,7 @@ export const DEBUG_HOOKS = [
 	['arch', () => import('./arch/archParts.js')],
 	['sceneLoader', () => import('./sceneLoader')],
 	['pickCycle', () => import('./pickCycle')],
+	['a11yAnnounce', () => import('./a11y/announce')],
 	['pickPass', () => import('./pickPass')],
 	['selectThrough', () => import('./selectThrough')],
 	['vrGameInput', () => import('./vrGameInput')],

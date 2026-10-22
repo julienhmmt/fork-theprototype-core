@@ -48,7 +48,7 @@
 			<div class="flex items-center">
 				<span class="text-sm font-semibold">✨ Generate 3D model</span>
 				<span class="flex-1"></span>
-				<button class="ui-button-quiet" title="Close" onclick={close}>✕</button>
+				<button class="ui-button-quiet" title="Close" aria-label="Close" onclick={close}>✕</button>
 			</div>
 
 			{#if $meshProviders.length}

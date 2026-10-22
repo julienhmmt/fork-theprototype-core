@@ -39,6 +39,7 @@
     import { sceneCommand } from '$lib/commandsHandler.svelte';
     import { selectObject, renameObject, toggleObjectVisibility, dragUuidsFor, moveObjectsToParent } from '$lib/objectActions';
     import { nameOf, peerColor } from '$lib/lockControl';
+    import { objectName, objectTypeLabel } from '$lib/a11y/announce';
     import {
         showSidebar,
 		closeSelectionInspector,
@@ -72,6 +73,18 @@
         if (tree && tree.contains(document.activeElement)) rowEl.scrollIntoView?.({ block: 'nearest' });
     });
     const lockEntry = $derived($lockedObjects.find((lockedUuid) => lockedUuid[1] === element.uuid));
+    // 53-reader (A4): the row's NAME for a screen reader. Without it a treeitem is named from its
+    // content — "Expand group Crate Hide Properties Delete" — so it says what the row IS instead:
+    // "<name>, <type>" plus the states a sighted user reads off its badges. Level/selected/expanded
+    // ride their own aria attributes (53-keyboard owns the keys).
+    const rowLabel = $derived.by(() => {
+        void $objectsGroup;
+        const parts = [objectName(element), objectTypeLabel(element)];
+        if (element.visible === false) parts.push('hidden');
+        if (isLocal) parts.push('local only');
+        if (lockEntry) parts.push('locked by ' + nameOf(lockEntry[0]));
+        return parts.join(', ');
+    });
 
     function select(uuid, additive = false) {
         previouslySelectedObject = $selectedObject;
@@ -241,6 +254,8 @@
             (lockEntry ? '' : 'cursor-grab active:cursor-grabbing')}
         role="treeitem"
         tabindex="-1"
+        aria-label={rowLabel}
+        aria-level={depth + 1}
         aria-selected={isSelected}
         aria-expanded={kids.length > 0 ? isExpanded : undefined}
         draggable={!lockEntry}
@@ -256,7 +271,7 @@
         <div
             class="obj-row flex w-full items-center gap-1 px-1 py-0.5 text-sm"
             class:obj-row-on={isSelected}
-            style={depth ? 'padding-left:' + (depth * 12 + 4) + 'px' : ''}
+            style={flat && depth ? 'padding-left:' + (depth * 12 + 4) + 'px' : ''}
             role="presentation"
             onclick={(e) => { select(element.uuid, e.shiftKey); }}
         >
@@ -347,7 +362,7 @@
     {#if isExpanded && !flat}
     <div class="obj-kids ml-3 border-l pl-1" role="group">
         {#each kids as item (item.uuid)}
-            <Objects element={item} />
+            <Objects element={item} depth={depth + 1} />
         {/each}
     </div>
     {/if}

@@ -1964,7 +1964,7 @@
 			id="palette-side"
 			class="palette-tab {paletteSide === 'right' ? 'palette-tab-mirrored' : ''} absolute top-24 flex h-9 w-4 items-center justify-center bg-surface-2 text-[9px] text-text-2 hover:bg-surface-active"
 			style="{paletteSide === 'right' ? 'right' : 'left'}: -1px"
-			title="Move the palette to the other side"
+			title="Move the palette to the other side" aria-label="Move the palette to the other side"
 			onclick={() => {
 				paletteSide = paletteSide === 'right' ? 'left' : 'right';
 				safeStorage.setItem('flowPaletteSide', paletteSide);
@@ -2114,7 +2114,7 @@
 			id="flow-props-toggle"
 			class="palette-tab {propsSide === 'left' ? '' : 'palette-tab-mirrored'} absolute top-8 flex h-14 w-4 items-center justify-center bg-surface-2 text-xs text-text-2 hover:bg-surface-active"
 			style="{propsSide === 'left' ? 'left' : 'right'}: -1px"
-			title={propsOpen ? 'Hide properties' : 'Show properties'}
+			title={propsOpen ? 'Hide properties' : 'Show properties'} aria-label={propsOpen ? 'Hide properties' : 'Show properties'}
 			onclick={() => { propsOpen = !propsOpen; writePanelOpen('flowPropsOpen', propsOpen); }}
 		>
 			⚙
