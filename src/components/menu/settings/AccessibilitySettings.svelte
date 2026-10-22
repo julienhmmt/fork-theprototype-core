@@ -1,6 +1,8 @@
 <script module>
 	// 53 — what the settings search matches beyond the row names (`data-keywords` on the root)
 	export const keywords = ['accessibility', 'a11y', 'low vision', 'zoom', 'bigger', 'larger', 'smaller', 'text size', 'font size', 'magnify', 'motion', 'animation', 'vestibular', 'reduce motion', 'captions', 'subtitles', 'deaf', 'hard of hearing', 'hearing', 'high contrast', 'contrast', 'colour blind', 'color blind', 'theme'];
+	/** the theme the High contrast switch replaced (module-level: outlives a page remount) @type {string|null} */
+	let themeBeforeContrast = null;
 </script>
 
 <script>
@@ -19,9 +21,8 @@
 
 	// 53-int (53-contrast Q1): the High contrast THEME as one switch here — no new state and no new
 	// key, it writes the same `$theme` Settings ▸ Interface ▸ Theme does. Off goes back to the theme
-	// that was on before (remembered for this page's life), else Dark, the default.
-	/** @type {string|null} */
-	let themeBeforeContrast = null;
+	// that was on before (remembered for the app's session, at module level: Settings remounts this
+	// page every time it opens), else Dark, the default.
 	function setHighContrast(/** @type {boolean} */ on) {
 		if (on) {
 			if ($theme !== 'contrast') themeBeforeContrast = $theme;
