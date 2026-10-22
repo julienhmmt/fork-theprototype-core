@@ -269,6 +269,9 @@ export function scatterSelection() {
  * @param {Map<string, Set<number>>} picks @param {boolean} [add] */
 export function setScatterSelection(uuid, picks, add = false) {
 	if (!sel || sel.uuid !== uuid || !add) sel = { uuid, picks: new Map() };
+	// a selection is taken against the scatter AS IT IS NOW (after an undo or a peer's edit
+	// too), so that block is the one a later change is measured against
+	lastWritten = objectOf(uuid)?.userData?.terrainScatter ?? null;
 	for (const [id, ids] of picks) {
 		const cur = sel.picks.get(id) ?? new Set();
 		for (const i of ids) {
