@@ -5,6 +5,49 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.41.0 — Accessibility: bigger UI, high contrast, the whole editor by keyboard, screen readers, and games everyone can play ♿
+
+A pass over the editor and over the games you make, for people who see, hear, move or hold a controller differently.
+Everything here is saved on this device and never sent to other people in your session.
+
+### 🔎 See it
+
+- 🔠 **UI scale**: Settings ▸ **Accessibility** (a new page) ▸ **UI scale**, 90–150 %. Every panel, sheet, dock,
+  toolbar, menu, toast and the phone layout grows with it; the 3D view keeps its full resolution.
+- 🌗 **High contrast** is a real theme now: white text on black at **7:1**, every button, border and switch at 3:1,
+  a thick yellow selection outline and bigger, brighter move/rotate/scale handles. Pick it in Interface ▸ Theme or
+  with the **High contrast** switch on the Accessibility page.
+- 🎨 **Colour-blind safe status colours in every theme** — the budget chip, connection quality, badges, draw-call
+  counts and node sockets use a set people with red-green or blue-yellow colour blindness can tell apart, and every
+  status also has a **shape** (disc, triangle, cross). Node sockets have a shape per type.
+- 🌀 **Motion**: *Follow system* / *Reduce* / *Full*. Reduce makes sheet swipes, dock slides, toasts, the camera
+  fly-to and pulsing indicators instant.
+
+### ⌨️ Use it without a mouse
+
+- **Tab** walks every control in reading order with a visible focus ring; **arrow keys** move inside toolbars;
+  **F6** jumps between regions; a **skip link** goes to the 3D view and **Esc** gives the keyboard back.
+- Menus, dialogs, docks and sheets open, walk and close from the keyboard, and focus goes back where it was.
+  **Shift+F10** (or the Menu key) opens the selection's menu. The object list is a tree you walk with the arrows.
+
+### 🔊 Hear it
+
+- 🗣️ **Screen readers**: toasts are read aloud (errors interrupt), selecting an object says its name and kind, the
+  object list is a proper tree, and every icon button, menu and window has a name.
+- 💬 **Captions**: Timeline audio clips, Sound and Game Sound nodes take a caption line; Settings ▸ Accessibility ▸
+  **Show captions** turns them on everywhere, the editor included.
+
+### 🎮 Games everyone can play
+
+- **Pause menu ▸ Accessibility** in every game (and on the start card of play links, embeds and exports): captions
+  and their size, a **colour-blind filter**, **HUD text size** and **remappable controls**. Kept per player per game.
+- 🥽 **VR comfort**: the comfort vignette is *Off* / *Low* / *High*, **Recenter** for seated play, and **One-handed**
+  mode (one controller walks, turns, teleports and opens the menus).
+
+### 🛠️ Under the hood
+
+- A new accessibility check in CI blocks serious and critical axe-core violations on the main surfaces.
+
 ## 1.40.0 — Physics and water: bodies that never miss a wall, tanks that pour into pools, fluid on the graphics card 🌊
 
 Fast things hit what they should, the body that is hit hears about it, and a fluid tank's water finally reaches the pool

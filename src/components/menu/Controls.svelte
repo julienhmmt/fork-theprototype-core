@@ -3696,6 +3696,7 @@
 	class="tp-ui hud-glass hud-bar absolute -translate-x-1/2 rtl:translate-x-1/2 bottom-4 start-1/2 w-max min-w-max shrink-0 {pillZClass}"
 	class:hud-editing={editing !== null}
 	style={pillStyle}
+	aria-label="Scene tools"
 	use:toolbarDrag
 	use:cellMenu={BAR}
 	use:roving={{ item: editing ? ':not(*)' : '.hud-cell, .hud-play', axis: 'x' }}
@@ -3865,7 +3866,7 @@
      entries now, stacked bottom → top, at most three a side. Under the bottom dock's z-tier as
      before, so an open flow editor / Explorer covers them. -->
 {#snippet stack(side: 'left' | 'right', list: string[])}
-	<div id="hud-stack-{side}" class="tp-ui hud-stack hud-stack-{side}" class:hud-editing={editing !== null} role="group" aria-label="{side === 'left' ? 'Left' : 'Right'} corner buttons" use:cellMenu={BAR} use:roving={{ item: editing ? ':not(*)' : '.hud-fab', axis: 'both' }}>
+	<div id="hud-stack-{side}" class="tp-ui hud-stack hud-stack-{side}" class:hud-editing={editing !== null} role="toolbar" aria-label="{side === 'left' ? 'Left' : 'Right'} corner buttons" use:cellMenu={BAR} use:roving={{ item: editing ? ':not(*)' : '.hud-fab', axis: 'both' }}>
 		{#if editing}
 			{#each stackSlots(list) as id (id)}
 				{#if id.startsWith('__empty:')}

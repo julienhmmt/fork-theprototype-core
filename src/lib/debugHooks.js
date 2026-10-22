@@ -154,6 +154,7 @@ export const DEBUG_HOOKS = [
 	['themes', () => import('./themes')],
 	// 53 A1 / A5: the UI scale + reduced-motion settings
 	['uiScale', () => import('./uiScale')],
+	['settingsReset', () => import('./settings/resetCategory')],
 	['motion', () => import('./motion')],
 	['captionsPref', () => import('./captionsPref')],
 	['phoneShell', () => import('./ui/phoneShell.js')],

@@ -505,7 +505,14 @@
 	border-width: 2px;
 	box-shadow: none;
 }
+/* 53-int: the HC ring is drawn from 53-keyboard's focus tokens (tokens.css), retuned here — the
+   same 2px / 1px look as before, now on every control incl. typing fields (focus.css skips those) */
+:root[data-theme='contrast'] {
+	--focus-ring: var(--accent);
+	--focus-ring-width: 2px;
+	--focus-ring-offset: 1px;
+}
 :root[data-theme='contrast'] :focus-visible {
-	outline: 2px solid var(--accent) !important;
-	outline-offset: 1px;
+	outline: var(--focus-ring-width) solid var(--focus-ring) !important;
+	outline-offset: var(--focus-ring-offset);
 }

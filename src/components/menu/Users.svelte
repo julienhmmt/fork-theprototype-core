@@ -784,7 +784,7 @@
 <div class="top-right-chrome" style="position: fixed; right: var(--sb-dock-right, 0px); z-index: var(--z-chrome-top); top: {$connectDocked ? $connectBarHeight + 'px' : '0px'};">
 	<!-- 38 R8: one glass group (styles/hud.css) — notes, notifications, peers — sitting just
 	     left of the profile circle, which keeps its own place (its dropdown is anchored to it) -->
-	<div id="hud-tr" class="tp-ui hud-glass hud-tr" style="position: absolute; top: 10px; right: 76px; z-index: 2;" use:roving={{ item: '.hud-cell:not(.hud-edit-item):not(.hud-edit-add)', axis: 'x' }}>
+	<div id="hud-tr" class="tp-ui hud-glass hud-tr" style="position: absolute; top: 10px; right: 76px; z-index: 2;" role="toolbar" aria-label="Notes, notifications and people" use:roving={{ item: '.hud-cell:not(.hud-edit-item):not(.hud-edit-add)', axis: 'x' }}>
 	<!-- E2: scene-notes drawer toggle -->
 	{#if trShown('notes')}
 	<button

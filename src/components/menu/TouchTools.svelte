@@ -174,6 +174,7 @@
 		class="touch-tools"
 		class:tt-stacked={stacked}
 		style="--tt-anchor: {$connectDocked ? $connectBarHeight + 8 : 20}px; --tt-slide: {slide}px"
+		role="toolbar"
 		aria-label="Touch tools"
 		use:roving={{ item: $toolbarSlots.editing ? ':not(*)' : '.tt-btn', axis: 'both' }}
 	>

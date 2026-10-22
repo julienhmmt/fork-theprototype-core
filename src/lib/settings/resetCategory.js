@@ -132,6 +132,8 @@ const RESETS = {
 		uiScale.set(DEFAULT_UI_SCALE);
 		motionPref.set(DEFAULT_MOTION);
 		editorCaptions.set(false);
+		// 53-int: the page's High contrast switch writes $theme, so its reset turns it off (only when on)
+		if (get(theme) === 'contrast') theme.set('dark');
 	},
 	interface() {
 		allowTextSelection.set(false);

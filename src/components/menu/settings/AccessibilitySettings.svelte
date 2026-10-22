@@ -1,6 +1,6 @@
 <script module>
 	// 53 — what the settings search matches beyond the row names (`data-keywords` on the root)
-	export const keywords = ['accessibility', 'a11y', 'low vision', 'zoom', 'bigger', 'larger', 'smaller', 'text size', 'font size', 'magnify', 'motion', 'animation', 'vestibular', 'reduce motion', 'captions', 'subtitles', 'deaf', 'hard of hearing', 'hearing'];
+	export const keywords = ['accessibility', 'a11y', 'low vision', 'zoom', 'bigger', 'larger', 'smaller', 'text size', 'font size', 'magnify', 'motion', 'animation', 'vestibular', 'reduce motion', 'captions', 'subtitles', 'deaf', 'hard of hearing', 'hearing', 'high contrast', 'contrast', 'colour blind', 'color blind', 'theme'];
 </script>
 
 <script>
@@ -15,6 +15,21 @@
 	import { motionPref, MOTION_PREFS, systemReducedMotion, normalizeMotion } from '$lib/motion';
 	import Toggle from '../../ui/Toggle.svelte';
 	import { editorCaptions } from '$lib/captionsPref';
+	import { theme } from '$lib/themes';
+
+	// 53-int (53-contrast Q1): the High contrast THEME as one switch here — no new state and no new
+	// key, it writes the same `$theme` Settings ▸ Interface ▸ Theme does. Off goes back to the theme
+	// that was on before (remembered for this page's life), else Dark, the default.
+	/** @type {string|null} */
+	let themeBeforeContrast = null;
+	function setHighContrast(/** @type {boolean} */ on) {
+		if (on) {
+			if ($theme !== 'contrast') themeBeforeContrast = $theme;
+			theme.set('contrast');
+		} else if ($theme === 'contrast') {
+			theme.set(themeBeforeContrast && themeBeforeContrast !== 'contrast' ? themeBeforeContrast : 'dark');
+		}
+	}
 
 	const scaleItems = UI_SCALES.map((p) => ({ value: p, name: p === DEFAULT_UI_SCALE ? `${p} % (default)` : `${p} %` }));
 </script>
@@ -28,6 +43,16 @@
 			keywords="zoom size bigger larger smaller text font magnify"
 		>
 			<ThemedSelect id="ui-scale" items={scaleItems} value={$uiScale} onchange={(v) => uiScale.set(v)} />
+		</SettingRow>
+	</Section>
+	<Section variant="card" label="Colour" badge="This device">
+		<SettingRow
+			id="row-high-contrast"
+			label="High contrast"
+			description="Switches to the High contrast theme: black panels, bright text and thicker outlines and handles. The same choice as Interface ▸ Theme; status colours are colour-blind safe in every theme."
+			keywords="high contrast theme low vision colour blind color blind contrast"
+		>
+			<Toggle id="high-contrast" label="High contrast" checked={$theme === 'contrast'} onchange={setHighContrast} />
 		</SettingRow>
 	</Section>
 	<Section variant="card" label="Movement" badge="This device">
