@@ -445,6 +445,8 @@ export const DEBUG_HOOKS = [
 	['scriptSockets', () => import('./scriptSockets')],
 	['scriptLint', () => import('./scriptLint')],
 	['codeWorkspace', () => import('./codeWorkspace')],
+	// 50-window (C1): the code workspace in its own browser window
+	['codePopout', () => import('./codePopout')],
 	['codeSidebars', () => import('./codeSidebars')],
 	['scriptAssets', () => import('./scriptAssets')],
 	['codeTabs', () => import('./codeTabs')],
