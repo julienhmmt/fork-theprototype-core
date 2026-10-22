@@ -84,7 +84,7 @@ export function registerMeasureRings(register) {
 		id: 'measure:done',
 		group: 'measure',
 		label: 'Done',
-		icon: 'log-out',
+		icon: 'circle-check',
 		order: 4,
 		closes: true,
 		action: () => void vrMeasure().then((m) => m.stopVRMeasure())

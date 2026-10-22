@@ -93,4 +93,5 @@ export const LUCIDE_NODES = {
 	'align-end-vertical': [["rect",{"width":"16","height":"6","x":"2","y":"4","rx":"2"}],["rect",{"width":"9","height":"6","x":"9","y":"14","rx":"2"}],["path",{"d":"M22 22V2"}]], // 52 V2: the VR Arrange ring
 	'align-horizontal-space-around': [["rect",{"width":"6","height":"10","x":"9","y":"7","rx":"2"}],["path",{"d":"M4 22V2"}],["path",{"d":"M20 22V2"}]], // 52 V2: the VR Arrange ring
 	'arrow-down-to-line': [["path",{"d":"M12 17V3"}],["path",{"d":"m6 11 6 6 6-6"}],["path",{"d":"M19 21H5"}]], // 52 V2: the VR Arrange ring
+	'circle-check': [["circle",{"cx":"12","cy":"12","r":"10"}],["path",{"d":"m16 9-5.5 5.5L8 12"}]], // 52 V1: the Measure ring's Done
 };
