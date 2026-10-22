@@ -13,6 +13,10 @@
 //      panel off the wrist and lets go of it PINNED and 1.6x bigger, a grip near the wrist puts it back
 //      (the Pin / To wrist button too); Free CC0: a card downloads (progress on the card), lands in the
 //      Library and rides the laser; My library lists it; one draw call for the whole panel
+//   H. light hand tracking (IWER's tracked hands): a PINCH is the trigger — it presses a panel card, a
+//      pinch held while the hand moves drops the item where the pinch lets go, a pinch-click arms it and the
+//      next pinch places; a PRECISE tool (the sculpt brush) answers a pinch with "Pick up a controller" at
+//      that hand and does nothing
 // Run: APP_URL=https://theprototype.app:5484/ node tests/e2e/vr-asset-browser-iwer.test.cjs   (ONLY=G,… to pick rows)
 const h = require('./helpers.cjs');
 const iwer = require('./iwer.cjs');
@@ -380,6 +384,148 @@ h.run(async () => {
 		await shot(page, '05-panel-library');
 		await press('close');
 		h.check(!(await dbg()).open, '✕ closes the panel');
+	}
+
+
+	// ---- H. light hand tracking ----------------------------------------------------------------------
+	if (want('H')) {
+		console.log('\n=== H. hands: pinch = trigger, pinch-drag = the ghost, precise tools ask for a controller ===');
+		const hdbg = () => g(() => window.__stores.vrHands.handInputDebug());
+		await g(() => (window.__iwer.device.primaryInputMode = 'hand'));
+		await settle(10);
+		await h.eventually(async () => (await hdbg()).sources.join(), (v) => /left:hand/.test(v) && /right:hand/.test(v), 'IWER switches to tracked hands (no controllers)', 8000);
+		const handPose = async (hand, pos, aim = {}) =>
+			g(({ hand, pos, aim }) => {
+				const t = window.__iwer.device.hands[hand];
+				t.position.set(pos[0], pos[1], pos[2]);
+				const cy = Math.cos((aim.yaw ?? 0) / 2), sy = Math.sin((aim.yaw ?? 0) / 2);
+				const cp = Math.cos((aim.pitch ?? 0) / 2), sp = Math.sin((aim.pitch ?? 0) / 2);
+				t.quaternion.set(cy * sp, sy * cp, -sy * sp, cy * cp);
+			}, { hand, pos, aim });
+		const pinch = (hand, v) => g(({ hand, v }) => window.__iwer.device.hands[hand].updatePinchValue(v), { hand, v });
+		/** the app's ray of a hand (where three put the target-ray group) */
+		const appRay = (hand) =>
+			g((hand) => {
+				let r;
+				window.__stores.globalRenderer.subscribe((v) => (r = v))();
+				const T = window.__stores.THREE;
+				const c = [0, 1].map((i) => r.xr.getController(i)).find((x) => x.userData.handedness === hand);
+				c.updateMatrixWorld(true);
+				const o = new T.Vector3().setFromMatrixPosition(c.matrixWorld);
+				const d = new T.Vector3(0, 0, -1).applyMatrix4(new T.Matrix4().extractRotation(c.matrixWorld));
+				return { o: o.toArray(), d: d.toArray() };
+			}, hand);
+		/** aim the pointing hand's RAY at a world point: pose, read the ray three derived, correct the aim */
+		const aimHandAt = async (target, from) => {
+			let yaw = Math.atan2(-(target[0] - from[0]), -(target[2] - from[2]));
+			let pitch = Math.atan2(target[1] - from[1], Math.hypot(target[0] - from[0], target[2] - from[2]));
+			for (let k = 0; k < 4; k++) {
+				await handPose(pointer, from, { yaw, pitch });
+				await settle(3);
+				const ray = await appRay(pointer);
+				const want = target.map((v, i) => v - ray.o[i]);
+				const wy = Math.atan2(-want[0], -want[2]);
+				const wp = Math.atan2(want[1], Math.hypot(want[0], want[2]));
+				const hy = Math.atan2(-ray.d[0], -ray.d[2]);
+				const hp = Math.atan2(ray.d[1], Math.hypot(ray.d[0], ray.d[2]));
+				yaw += wy - hy;
+				pitch += wp - hp;
+			}
+			await handPose(pointer, from, { yaw, pitch });
+			await settle(3);
+		};
+		const dbg = () => g(() => window.__stores.vrAssetBrowser.vrAssetBrowserDebug());
+		await handPose(menuHand, [menuHand === 'left' ? -0.18 : 0.18, 1.25, -0.3], { pitch: 0.3 });
+		const fromH = [pointer === 'left' ? -0.12 : 0.12, 1.3, -0.12];
+		await handPose(pointer, fromH);
+		await g(() => window.__stores.vrControls.executeVRMenuAction('assets'));
+		await settle(8);
+		const aimCtl = async (id) => {
+			const pt = await g((cid) => window.__stores.vrAssetBrowser.assetControlPoint(cid), id);
+			if (!pt) throw new Error('no control ' + id + ': ' + JSON.stringify(await dbg()));
+			await aimHandAt(pt, fromH);
+		};
+		const pinchTap = async () => {
+			await pinch(pointer, 1);
+			await settle(4);
+			await pinch(pointer, 0);
+			await settle(4);
+		};
+		let d = await dbg();
+		h.check(d.open && d.visible, `the panel opens with hands too (${d.mode}, wrist ${d.wristHand})`);
+		await aimCtl('tab:packs');
+		await pinchTap();
+		await h.eventually(async () => (await dbg()).cards, (c) => c.includes('pack:default') || c.includes('item:default/Duck'), 'a PINCH presses a tab (pinch = trigger)', 8000);
+		d = await dbg();
+		if (!d.cards.includes('item:default/Duck')) {
+			await aimCtl('card:pack:default');
+			await pinchTap();
+			await h.eventually(async () => (await dbg()).cards, (c) => c.includes('item:default/Duck'), 'a pinch opens the pack', 8000);
+		}
+		// pinch-DRAG: pinch the Duck, move the hand to the floor, let go
+		const n0 = await count();
+		await aimCtl('card:item:default/Duck');
+		await pinch(pointer, 1);
+		await settle(4);
+		const held = await g(() => window.__stores.vrPlace.vrPlaceDebug());
+		h.check(held.active && held.current?.dragging, `a pinch on a card puts it on the hand's ray, the pinch still held (${JSON.stringify(held.current)})`);
+		d = await dbg();
+		h.check(/let go over the world/.test(d.status), `the panel speaks hands (${d.status})`);
+		// a clear stretch of floor on the pointing hand's own side (the wrist panel is on the other; the
+		// earlier rows left their placements straight ahead)
+		const side = pointer === 'left' ? -1 : 1;
+		await aimHandAt([0.9 * side, 0, -0.9], fromH);
+		await settle(4);
+		const ghostH = (await g(() => window.__stores.placeGhost.ghostInfo())).items[0]?.position;
+		await pinch(pointer, 0);
+		await settle(4);
+		await h.eventually(count, (n) => n === n0 + 1, 'releasing the pinch over the floor drops ONE Duck', 8000);
+		const where = await g(async () => {
+			const group = await new Promise((r) => window.__stores.objectsGroup.subscribe(r)());
+			return group.children[group.children.length - 1].position.toArray();
+		});
+		h.check(!!ghostH && near(where, ghostH, 0.02), `it lands at the ghost the hand's ray showed (${where.map((v) => v.toFixed(2))} vs ${ghostH?.map((v) => v.toFixed(2))})`);
+		// pinch-click arms; the next pinch places
+		await aimCtl('card:item:default/Duck');
+		await pinchTap();
+		h.check((await g(() => window.__stores.vrPlace.vrPlaceDebug())).active, 'a pinch-click arms the card');
+		d = await dbg();
+		h.check(/pinch to place/.test(d.status), `and says so for a hand (${d.status})`);
+		await aimHandAt([0.6 * side, 0, -1.4], fromH);
+		await pinchTap();
+		await h.eventually(count, (n) => n === n0 + 2, 'the next pinch places it', 8000);
+		await g(() => window.__stores.vrPlace.cancelVRPlace('test'));
+		await g(() => window.__stores.vrAssetBrowser.closeVRAssetBrowser());
+
+		// a precise tool: the sculpt brush asks for a controller
+		const sc = () => g(() => window.__stores.vrSculpt.vrSculptDebug());
+		await g(() => {
+			const s = window.__stores;
+			s.vrMenuOpen.set(true);
+			s.vrControls.executeVRMenuAction('nav:add');
+			s.vrControls.executeVRMenuAction('terrain');
+		});
+		await h.eventually(sc, (x) => x.active && !!x.uuid, 'premise: Add ▸ Terrain starts a VR sculpt session', 8000);
+		await g(() => window.__stores.vrMenuOpen.set(false));
+		const terr = await g(() => {
+			let grp;
+			window.__stores.objectsGroup.subscribe((x) => (grp = x))();
+			const t = grp.children.find((c) => c.userData?.terrain);
+			t.updateMatrixWorld(true);
+			const e = t.matrixWorld.elements;
+			return [e[12], e[13], e[14]];
+		});
+		await aimHandAt(terr, fromH);
+		const strokes0 = (await sc()).strokes ?? null;
+		await pinchTap();
+		const note = await hdbg();
+		const strokes1 = (await sc()).strokes ?? null;
+		h.check(note.note?.text === 'Pick up a controller to sculpt' && note.note?.hand === pointer, `a pinch on the brush says "Pick up a controller" at that hand (${JSON.stringify(note.note)})`);
+		h.check(note.chipVisible, 'the note is drawn by the hand');
+		h.check(strokes0 != null && strokes0 === strokes1, `and no stroke ran (${strokes0} -> ${strokes1})`);
+		await g(() => window.__stores.vrControls.executeVRMenuAction('sculpt:done'));
+		await g(() => (window.__iwer.device.primaryInputMode = 'controller'));
+		await settle(10);
 	}
 
 	await iwer.exit(page);

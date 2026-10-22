@@ -248,7 +248,8 @@ function currentView() {
 	const placing = get(vrPlacing);
 	let text = status.text && Date.now() < status.until ? status.text : '';
 	let tone = status.tone;
-	if (!text && placing) {
+	// what the trigger does NOW outranks a passing note; a warning or a refusal still shows
+	if (placing && (!text || tone === 'info')) {
 		const handSource = sourceIsHand(placing.hand);
 		text = handSource
 			? placing.armed
