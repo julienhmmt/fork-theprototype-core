@@ -301,6 +301,12 @@
 							onclick={() => rerollSelectedInstances()}>Re-roll</button
 						>
 						<button id="sculpt-scatter-delete" class="tbx-cmd tbx-danger" title="Delete the selected instances (Delete)" onclick={() => deleteSelectedInstances()}>Delete</button>
+						<button
+							id="sculpt-scatter-to-objects"
+							class="tbx-cmd"
+							title="Make the selected instances real objects (a logic prefab comes with its logic); one undo turns them back"
+							onclick={() => import('$lib/scatterConvert').then((m) => m.instancesToObjects({ scope: 'selection' }))}>To objects</button
+						>
 					</div>
 				{/if}
 			{/if}

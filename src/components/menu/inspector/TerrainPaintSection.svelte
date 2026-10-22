@@ -164,6 +164,12 @@
 							<Checkbox label="Align to slope" checked={s.align} onchange={(/** @type {boolean} */ v) => editScatterSet(uuid, s.id, { align: !!v })} />
 							Align
 						</label>
+						<button
+							class="ui-button-quiet"
+							data-scatter-to-objects={s.id}
+							title="Make every instance of this model a real object (one undo turns them back)"
+							onclick={() => import('$lib/scatterConvert').then((m) => m.instancesToObjects({ scope: 'set', uuid, setId: s.id }))}>To objects</button
+						>
 						<button class="ui-button-quiet" title="Remove every instance of this model" onclick={() => editScatterSet(uuid, s.id, null)}>Remove</button>
 					</div>
 					<!-- 48 B1: what a simulation gives each instance (static, built on every peer from this field) -->

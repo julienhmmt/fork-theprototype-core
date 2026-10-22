@@ -330,6 +330,38 @@ function primitiveParts(type) {
 	return [{ geometry: geo, material: mat }];
 }
 
+/** 51 E5: what an instance of a primitive becomes as a REAL object — the `/create` command
+ * that builds the SAME geometry as primitiveParts (centred, the way /create builds it), how
+ * far its centre sits above the instance's base, and the scatter look (colour, roughness).
+ * @param {string} type @returns {{command: string, offset: number, color: string, roughness: number}} */
+export function scatterPrimitiveSpec(type) {
+	const args = /** @type {Record<string, string>} */ ({
+		Box: '1 1 1',
+		Sphere: '0.5 12 8',
+		Cone: '0.5 1 10',
+		Cylinder: '0.5 0.5 1 12',
+		Capsule: '0.3 0.4 4 10',
+		Dodecahedron: '0.5'
+	});
+	const t = args[type] ? type : 'Dodecahedron';
+	const geo =
+		t === 'Box'
+			? new THREE.BoxGeometry(1, 1, 1)
+			: t === 'Sphere'
+				? new THREE.SphereGeometry(0.5, 12, 8)
+				: t === 'Cone'
+					? new THREE.ConeGeometry(0.5, 1, 10)
+					: t === 'Cylinder'
+						? new THREE.CylinderGeometry(0.5, 0.5, 1, 12)
+						: t === 'Capsule'
+							? new THREE.CapsuleGeometry(0.3, 0.4, 4, 10)
+							: new THREE.DodecahedronGeometry(0.5);
+	geo.computeBoundingBox();
+	const offset = -(geo.boundingBox?.min.y ?? -0.5);
+	geo.dispose();
+	return { command: `/create ${t} ${args[t]}`, offset, color: '#' + new THREE.Color(PRIM_COLOR[t] ?? 0x8a8a84).getHexString(), roughness: 0.9 };
+}
+
 /** hash -> parts (null while loading / missing) */
 /** @type {Map<string, {parts: {geometry: any, material: any}[] | null, state: 'loading'|'ready'|'missing'}>} */
 const models = new Map();

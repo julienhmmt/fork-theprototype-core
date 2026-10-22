@@ -289,6 +289,13 @@ export function buildObjectMenuItems(uuid, opts = {}) {
 						icon: 'group',
 						tooltip: 'Move the selected objects into one new group',
 						action: () => groupSelection()
+					},
+					// 51 E5: many copies of one object on a terrain become instances of its scatter
+					{
+						label: 'Make scatter' + suffix,
+						icon: 'tool:scatter',
+						tooltip: 'Turn copies of one object standing on a Terrain into scatter instances (one undo turns them back)',
+						action: () => import('./scatterConvert').then((m) => m.objectsToScatter(selection))
 					}
 				]
 			: []),
