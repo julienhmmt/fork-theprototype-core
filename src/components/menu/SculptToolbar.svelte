@@ -33,7 +33,22 @@
 		scatterErase,
 		layersOf
 	} from '$lib/terrainPaint';
-	import { SCATTER_PRIMITIVES, sourceKey } from '$lib/terrainScatterCore';
+	import { SCATTER_PRIMITIVES, sourceKey, normalizeScatter } from '$lib/terrainScatterCore';
+	import { base64ToBytes } from '$lib/terrainPaintCore';
+	// 51 E4: the tools that EDIT what is scattered (brushes + the Select tool)
+	import {
+		scatterTool,
+		scatterAffects,
+		scatterBrushReverse,
+		scatterSelectionCount,
+		scatterGizmoMode,
+		setScatterTool,
+		setScatterGizmoMode,
+		rotateSelectedInstances,
+		scaleSelectedInstances,
+		rerollSelectedInstances,
+		deleteSelectedInstances
+	} from '$lib/scatterEdit';
 	import { explorerItems } from '$lib/explorer';
 
 	const OPS = [
@@ -79,6 +94,41 @@
 			scatterSource.set({ kind: 'library', hash: key.slice(2), name: item?.name ?? '' });
 		}
 	}
+
+	// 51 E4: Paint/Erase were two buttons; the edit tools join them in one armed row
+	const SCATTER_TOOLS = [
+		{ tool: 'paint', label: 'Paint', icon: 'scatter', desc: 'paint instances of the model above' },
+		{ tool: 'erase', label: 'Erase', icon: 'scatter-erase', desc: 'erase instances (Affects picks which models)' },
+		{ tool: 'rotate', label: 'Rotate', icon: 'scatter-rotate', desc: 'turn the instances under the brush' },
+		{ tool: 'scale', label: 'Scale', icon: 'scatter-scale', desc: 'grow (or shrink) the instances under the brush' },
+		{ tool: 'relax', label: 'Relax', icon: 'scatter-relax', desc: 'even out the spacing under the brush' },
+		{ tool: 'select', label: 'Select', icon: 'scatter-select', desc: 'pick instances and move, turn, scale, delete or re-roll them' }
+	];
+	const GIZMO_MODES = /** @type {const} */ ([
+		{ mode: 'translate', label: 'Move', desc: 'Slide the selection over the ground (height follows the terrain)' },
+		{ mode: 'rotate', label: 'Turn', desc: 'Turn the selection about up' },
+		{ mode: 'scale', label: 'Size', desc: 'Scale the selection' }
+	]);
+	// the armed tool; the 47 erase flag still reads as Erase (a suite or an old caller sets it)
+	const tool = $derived($scatterErase && $scatterTool === 'paint' ? 'erase' : $scatterTool);
+	/** @param {string} t */
+	function pickTool(t) {
+		scatterErase.set(false);
+		setScatterTool(/** @type {any} */ (t));
+	}
+	// Affects: every model on this terrain, or one of them
+	const affectItems = $derived.by(() => {
+		void $sceneRevision;
+		const object = /** @type {any} */ ($objectsGroup)?.getObjectByProperty?.('uuid', $sculptObject);
+		const sets = normalizeScatter(object?.userData?.terrainScatter, base64ToBytes)?.sets ?? [];
+		return [
+			{ value: '', name: 'All models' },
+			...sets.map((/** @type {any} */ s) => ({
+				value: s.id,
+				name: (s.source.kind === 'primitive' ? s.source.type : s.source.name || 'Library model') + ` (${s.count})`
+			}))
+		];
+	});
 
 	/** @param {KeyboardEvent} event */
 	function onKeydown(event) {
@@ -133,7 +183,7 @@
 				<span class="w-7">{$sculptRadius}m</span>
 			</label>
 		</div>
-		{#if $sculptOp !== 'scatter'}
+		{#if $sculptOp !== 'scatter' || tool === 'rotate' || tool === 'scale' || tool === 'relax'}
 		<div class="tbx-row text-xs">
 			<label class="flex items-center gap-1.5">
 				Strength
@@ -170,7 +220,7 @@
 		{/if}
 
 		{#if $sculptOp === 'scatter' && $sculptMode === 'terrain'}
-			<!-- 47 T2: what to scatter + how; Erase removes the chosen source's instances -->
+			<!-- 47 T2 + 51 E4: what to scatter + how, and the TOOLS that edit what is there -->
 			<span class="tbx-label">Scatter</span>
 			<div class="tbx-row text-xs">
 				<ThemedSelect
@@ -182,22 +232,79 @@
 					onchange={(v) => pickSource(String(v))}
 				/>
 			</div>
-			<div class="tbx-row text-xs">
-				<button
-					id="sculpt-scatter-paint"
-					class="tbx-btn {!$scatterErase ? 'tbx-on bg-accent-fill text-on-accent' : ''}"
-					aria-pressed={!$scatterErase}
-					title="Paint instances"
-					onclick={() => scatterErase.set(false)}><Icon name="tool:scatter" size={20} aria-hidden="true" /></button
-				>
-				<button
-					id="sculpt-scatter-erase"
-					class="tbx-btn {$scatterErase ? 'tbx-on bg-accent-fill text-on-accent' : ''}"
-					aria-pressed={$scatterErase}
-					title="Erase instances of this source"
-					onclick={() => scatterErase.set(true)}><Icon name="tool:scatter-erase" size={20} aria-hidden="true" /></button
-				>
+			<div class="tbx-row text-xs" role="toolbar" aria-label="Scatter tools">
+				{#each SCATTER_TOOLS as t (t.tool)}
+					<button
+						id={`sculpt-scatter-${t.tool}`}
+						class="tbx-btn {tool === t.tool ? 'tbx-on bg-accent-fill text-on-accent' : ''}"
+						aria-label={t.label}
+						aria-pressed={tool === t.tool}
+						title={`${t.label} — ${t.desc}`}
+						onclick={() => pickTool(t.tool)}><Icon name={'tool:' + t.icon} size={20} aria-hidden="true" /></button
+					>
+				{/each}
 			</div>
+			{#if tool !== 'paint'}
+				<!-- 51 E4: per-source edits — every tool can be held to ONE model -->
+				<div class="tbx-row text-xs" title="Which scattered model the tool may touch">
+					<span>Affects</span>
+					<ThemedSelect
+						id="sculpt-scatter-affects"
+						class="min-w-0 flex-1"
+						clip={false}
+						items={affectItems}
+						value={$scatterAffects}
+						onchange={(v) => scatterAffects.set(String(v))}
+					/>
+				</div>
+			{/if}
+			{#if tool === 'rotate' || tool === 'scale'}
+				<div class="tbx-row text-xs">
+					<label class="flex items-center gap-1.5">
+						<Checkbox
+							id="sculpt-scatter-reverse"
+							label={tool === 'rotate' ? 'Turn the other way' : 'Shrink'}
+							checked={$scatterBrushReverse}
+							onchange={(v) => scatterBrushReverse.set(!!v)}
+						/>
+						{tool === 'rotate' ? 'Turn the other way' : 'Shrink'}
+					</label>
+				</div>
+			{/if}
+			{#if tool === 'select'}
+				<div id="sculpt-scatter-selection" class="tbx-row text-xs" aria-live="polite">
+					{$scatterSelectionCount
+						? `${$scatterSelectionCount} selected`
+						: 'Click an instance, drag a box, Ctrl+A for all'}
+				</div>
+				{#if $scatterSelectionCount}
+					<div class="tbx-row text-xs" role="group" aria-label="Gizmo">
+						{#each GIZMO_MODES as g (g.mode)}
+							<button
+								id={`sculpt-scatter-gizmo-${g.mode}`}
+								class="tbx-cmd {$scatterGizmoMode === g.mode ? 'tbx-on bg-accent-fill text-on-accent' : ''}"
+								aria-pressed={$scatterGizmoMode === g.mode}
+								title={g.desc}
+								onclick={() => setScatterGizmoMode(g.mode)}>{g.label}</button
+							>
+						{/each}
+					</div>
+					<div class="tbx-row flex-wrap text-xs" role="group" aria-label="Selected instances">
+						<button id="sculpt-scatter-turn-left" class="tbx-cmd" title="Turn each selected instance 15° left" onclick={() => rotateSelectedInstances(15)}>Turn left</button>
+						<button id="sculpt-scatter-turn-right" class="tbx-cmd" title="Turn each selected instance 15° right" onclick={() => rotateSelectedInstances(-15)}>Turn right</button>
+						<button id="sculpt-scatter-bigger" class="tbx-cmd" title="Scale the selection up 10 %" onclick={() => scaleSelectedInstances(1.1)}>Bigger</button>
+						<button id="sculpt-scatter-smaller" class="tbx-cmd" title="Scale the selection down 10 %" onclick={() => scaleSelectedInstances(1 / 1.1)}>Smaller</button>
+						<button
+							id="sculpt-scatter-reroll"
+							class="tbx-cmd"
+							title="New random turn and size for the selection (from Scale and Random rotation below); every other instance keeps its edits"
+							onclick={() => rerollSelectedInstances()}>Re-roll</button
+						>
+						<button id="sculpt-scatter-delete" class="tbx-cmd tbx-danger" title="Delete the selected instances (Delete)" onclick={() => deleteSelectedInstances()}>Delete</button>
+					</div>
+				{/if}
+			{/if}
+			{#if tool === 'paint'}
 			<div class="tbx-row text-xs">
 				<label class="flex items-center gap-1.5" title="Instances per square metre (the footer shows /m²)">
 					Density
@@ -214,6 +321,8 @@
 					<span class="w-7">{$scatterDensity.toFixed(2)}</span>
 				</label>
 			</div>
+			{/if}
+			{#if tool === 'paint' || tool === 'select'}
 			<div class="tbx-row text-xs">
 				<label class="flex items-center gap-1.5">
 					Scale
@@ -246,6 +355,8 @@
 					Random rotation
 				</label>
 			</div>
+			{/if}
+			{#if tool === 'paint'}
 			<div class="tbx-row text-xs">
 				<label class="flex items-center gap-1.5">
 					<Checkbox id="sculpt-scatter-align" label="Align to slope" checked={$scatterAlign} onchange={(v) => scatterAlign.set(!!v)} />
@@ -268,6 +379,7 @@
 					onchange={(v) => scatterCollider.set(v)}
 				/>
 			</div>
+			{/if}
 		{/if}
 
 		<!-- DISPLAY: gizmo opt-in — sculpt entry always suppresses the transform

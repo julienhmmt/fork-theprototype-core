@@ -500,6 +500,7 @@ function layoutScatter(object, holder, sets) {
 				mesh.castShadow = true;
 				mesh.receiveShadow = true;
 				mesh.userData.scatterSet = set.id;
+				mesh.userData.scatterIds = ids; // 51 E4: instance k of this mesh is list[ids[k]] (picking)
 				ids.forEach((id, k) => mesh.setMatrixAt(k, matrices[id]));
 				mesh.instanceMatrix.needsUpdate = true;
 				mesh.computeBoundingSphere();
@@ -575,6 +576,12 @@ function cellsOf(list, b) {
 		else cells.set(key, [k]);
 	});
 	return [...cells.values()];
+}
+
+/** 51 E4: the scene-root holder drawing a terrain's scatter (its children are the
+ * InstancedMeshes; null when nothing is drawn). Picking reads it. @param {any} object */
+export function scatterHolderOf(object) {
+	return scatters.get(object)?.holder ?? null;
 }
 
 /** @param {string} uuid @param {any} block null = no scatter */

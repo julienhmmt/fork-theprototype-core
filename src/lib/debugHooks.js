@@ -111,6 +111,9 @@ export const DEBUG_HOOKS = [
 	['terrainPaint', () => import('./terrainPaint')],
 	['terrainSurface', () => import('./terrainSurface')],
 	['terrainPaintCore', () => import('./terrainPaintCore')],
+	// 51 E4/E5: editing scatter instances (tools, selection, gizmo) and its pure half
+	['scatterEdit', () => import('./scatterEdit')],
+	['scatterEditCore', () => import('./scatterEditCore')],
 	['scatterColliders', () => import('./scatterColliders')],
 	['terrainScatterCore', () => import('./terrainScatterCore')],
 	['userModules', () => import('./userModules')],

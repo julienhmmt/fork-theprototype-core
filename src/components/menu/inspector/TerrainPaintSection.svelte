@@ -11,8 +11,8 @@
 	import Checkbox from '../../ui/Checkbox.svelte';
 	import ShaderTexturePicker from '../../editors/nodes/ShaderTexturePicker.svelte';
 	import { sceneRevision } from '../../../stores/sceneStore';
-	import { layersOf, setTerrainLayers, clearTerrainPaint, editScatterSet } from '$lib/terrainPaint';
-	import { layerCoverage, base64ToBytes, decodeSplatBlock } from '$lib/terrainPaintCore';
+	import { layersOf, setTerrainLayers, clearTerrainPaint, editScatterSet, setSplatResolution, splatResolutionOf } from '$lib/terrainPaint';
+	import { layerCoverage, base64ToBytes, decodeSplatBlock, SPLAT_RES_CHOICES } from '$lib/terrainPaintCore';
 	import { normalizeScatter, scatterColliderOf, MAX_INSTANCES } from '$lib/terrainScatterCore';
 	import ThemedSelect from '../../ui/ThemedSelect.svelte';
 
@@ -35,6 +35,12 @@
 		return normalizeScatter(object?.userData?.terrainScatter, base64ToBytes)?.sets ?? [];
 	});
 	const total = $derived(scatter.reduce((sum, s) => sum + s.count, 0));
+	// 51 E4: how fine this terrain's paint is (its own map, resampled on change)
+	const splatRes = $derived.by(() => {
+		void $sceneRevision;
+		return uuid ? splatResolutionOf(uuid) : 128;
+	});
+	const RES_ITEMS = SPLAT_RES_CHOICES.map((r) => ({ value: String(r), name: `${r} × ${r}` + (r === 128 ? ' (default)' : '') }));
 	const materialColor = $derived.by(() => {
 		void $sceneRevision;
 		const m = Array.isArray(object?.material) ? object.material[0] : object?.material;
@@ -122,6 +128,16 @@
 				>
 			{/if}
 		{/each}
+	</div>
+	<div class="flex items-center gap-2 text-xs" title="How fine the paint is across this terrain — a bigger map paints sharper edges and costs more to send while you paint">
+		<span class="w-12 shrink-0 text-text-muted">Detail</span>
+		<ThemedSelect
+			id="terrain-paint-resolution"
+			class="min-w-0 flex-1"
+			items={RES_ITEMS}
+			value={String(splatRes)}
+			onchange={(/** @type {string} */ v) => setSplatResolution(uuid, Number(v))}
+		/>
 	</div>
 	{#if coverage}
 		<p id="terrain-paint-coverage" class="text-[length:var(--fs-badge)] text-text-muted">
