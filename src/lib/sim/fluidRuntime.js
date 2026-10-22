@@ -488,7 +488,8 @@ export function fluidDebug() {
 		landed: t.landed ?? 0,
 		ripples: t.ripples ?? 0,
 		surfaces: t.surfaces?.length ?? 0,
-		worker: worker ? 'worker' : worker === false ? 'main' : 'none',
+		// the tank's own thread: a GPU tank runs in the GPU worker, so the CPU one may never exist
+		worker: t.on ? 'worker' : t.local ? 'main' : worker ? 'worker' : worker === false ? 'main' : 'none',
 		solver: t.local ? 'cpu' : t.solver ?? 'cpu'
 	}));
 }
