@@ -15,9 +15,12 @@
 //     answer, on A and B, ONE undo restores the whole set on both
 //  F  frame cost on the Quest profile: the hover search + the label posing per frame, against 13.9 ms
 // A real-Quest row (feel, label legibility at the true eye resolution, haptics) goes on 52-int's checklist.
-// Run: APP_URL=https://localhost:5481/ node tests/e2e/vr-measure-iwer.test.cjs   (ONLY=M,A to pick rows)
+// Run: APP_URL=https://localhost:5481/ node tests/e2e/vr-measure-iwer.test.cjs   (ONLY=M,A to pick rows;
+// SHOTS=<dir> also writes headset eye shots of the labels and the rings there — vrEyes.cjs)
 const h = require('./helpers.cjs');
 const iwer = require('./iwer.cjs');
+const SHOTS = process.env.SHOTS || '';
+const eyes = SHOTS ? require('./vrEyes.cjs') : null;
 
 const ONLY = (process.env.ONLY || '').split(',').filter(Boolean);
 const want = (row) => !ONLY.length || ONLY.includes(row);
@@ -81,6 +84,21 @@ h.run(async () => {
 		}, uuids);
 
 	// ---- the headset ---------------------------------------------------------------------------------
+	/** eye shots from where the XR camera stands (the labels face IT) — only with SHOTS set */
+	const shot = async (name) => {
+		if (!eyes) return;
+		await settle(4);
+		const head = await g(() => {
+			let r; window.__stores.globalRenderer.subscribe((v) => (r = v))();
+			const cam = r.xr.getCamera();
+			cam.updateMatrixWorld(true);
+			const e = cam.matrixWorld.elements;
+			const f = [-e[8], -e[9], -e[10]];
+			return { position: [e[12], e[13], e[14]], yaw: Math.atan2(-f[0], -f[2]), pitch: Math.asin(Math.max(-1, Math.min(1, f[1]))) };
+		});
+		const out = await eyes.save(page, SHOTS + '/' + name, { size: 768, head });
+		console.log('shot', out.pair);
+	};
 	const st = await iwer.enter(page);
 	h.check(st.presenting && st.same, 'premise: Play presents the IWER session');
 	const menuHand = await read('vrMenuHand');
@@ -224,6 +242,9 @@ h.run(async () => {
 		h.check(labels.includes('2.000 m') && labels.includes('1.000 m'), `the segments read 2.000 m and 1.000 m (${labels.join(' | ')})`);
 		h.check(labels.includes('90.0°'), 'the turn at the corner reads 90.0°');
 		h.check(labels.some((t) => t.startsWith('Total 3.000 m')), 'the running total reads Total 3.000 m');
+		await iwer.pose(page, 'head', [0, 1.6, 0], { pitch: -0.45 });
+		await shot('01-measure-chain-near');
+		await iwer.pose(page, 'head', [0, 1.6, 0]);
 	}
 
 	// ---- L. the labels: troika text facing you, the same angle tall near and far -----------------------------
@@ -257,6 +278,8 @@ h.run(async () => {
 		const seg2 = b.list.find((l) => l.text === '2.000 m');
 		h.check(!!seg2 && seg2.distance > seg.distance + 2 && Math.abs(seg2.height / seg2.distance - 0.03) < 1e-6, `stepping back, the label GROWS with its distance (${seg?.height.toFixed(3)} m → ${seg2?.height.toFixed(3)} m at ${seg2?.distance.toFixed(2)} m): the same size to the eye`);
 		h.check(b.out.every((x) => x.dot > 0.999), '…and still faces the viewer');
+		await iwer.pose(page, 'head', [0, 1.6, 2.5], { pitch: -0.25 });
+		await shot('02-measure-labels-far');
 		await iwer.pose(page, 'head', [0, 1.6, 0]);
 		await settle(6);
 	}
@@ -291,6 +314,11 @@ h.run(async () => {
 		itemId = item?.uuid ?? null;
 		h.check(!!item && item.points.length === 3 && near(item.points[0], FL) && near(item.points[2], BR), `the item holds the three snapped corners (${item?.points.map(fmt).join(' → ')})`);
 		await h.eventually(() => items(B.page), (b) => b.some((x) => x.uuid === itemId && x.points.length === 3 && near(x.points[1], FR, 1e-4)), 'B holds the same measurement item (synced)', 15000);
+		if (SHOTS) {
+			await B.page.evaluate((c) => window.__stores.objectActions.flyTo([c[0] + 2.5, 3, c[2] + 3.5], c, 0), C);
+			await B.page.waitForTimeout(1200);
+			await B.page.screenshot({ path: SHOTS + '/03-peer-sees-the-item.png' });
+		}
 	}
 
 	// ---- N. snap off: the same laser does NOT land on the corner (the counterfactual for M) --------------------
@@ -299,6 +327,9 @@ h.run(async () => {
 		h.check(await openMenu(), 'the menu button opens the radial while measuring…');
 		const ring = await g(() => { let v; window.__stores.vrRadialMenu.activeRing.subscribe((x) => (v = x))(); return v; });
 		h.check(ring === 'measure', `…on the Measure ring (${ring})`);
+		if (SHOTS) await iwer.pose(page, 'head', [0, 1.6, 0], { pitch: -0.75, yaw: menuHand === 'right' ? -0.4 : 0.4 });
+		await shot('04-measure-ring');
+		if (SHOTS) await iwer.pose(page, 'head', [0, 1.6, 0]);
 		h.check(await stickRun('measure:snap'), 'the stick picks Snap');
 		const snapOn = await g(() => { let v; window.__stores.measure.measureSnap.subscribe((x) => (v = x))(); return v; });
 		h.check(snapOn === false, 'Snap is off');
@@ -428,6 +459,9 @@ h.run(async () => {
 		h.check(await openMenu(), 'the radial opens');
 		h.check(await stickRun(null), 'the hub opens Selected');
 		h.check(await stickRun('nav:arrange'), 'the stick picks Arrange ▸');
+		if (SHOTS) await iwer.pose(page, 'head', [0, 1.6, 0], { pitch: -0.75, yaw: menuHand === 'right' ? -0.4 : 0.4 });
+		await shot('05-arrange-ring');
+		if (SHOTS) await iwer.pose(page, 'head', [0, 1.6, 0]);
 		h.check(await stickRun('arrange:min'), '…Align X min');
 		const minX = START[0].pos[0] - 0.5;
 		const test = (b) => b.every((q) => q && Math.abs(q.min[0] - minX) < 1e-6);
