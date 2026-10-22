@@ -50,7 +50,8 @@ h.run(async () => {
 	const A = await h.setupPage(browser, 'A');
 	const page = A.page;
 	await S(page, () => window.__stores.checkpoints.autoCheckpoints.set(true));
-	await S(page, () => window.__stores.checkpoints.autoCheckpointsLarge.set(false));
+	// optional: a base without C2 still reaches the pixel A/B below (the counterfactual)
+	await S(page, () => window.__stores.checkpoints.autoCheckpointsLarge?.set(false));
 
 	// ---------------------------------------------------------------- 1 clean thumbnails (A/B)
 	await S(page, async () => {
