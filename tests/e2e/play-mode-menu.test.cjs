@@ -122,7 +122,8 @@ h.run(async () => {
 	);
 
 	// a disabled row must do NOTHING, not silently pick a mode
-	await A.page.getByRole('menuitem', { name: 'Enter VR' }).click();
+	// 1.41 (53-reader): a refused row says aria-disabled, which Playwright will not click — force the press
+	await A.page.getByRole('menuitem', { name: 'Enter VR' }).click({ force: true });
 	await A.page.waitForTimeout(250);
 	const afterDisabled = await A.page.evaluate(() => ({
 		rows: document.querySelectorAll('[role="menuitem"]').length,

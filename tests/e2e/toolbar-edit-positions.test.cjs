@@ -98,8 +98,9 @@ h.run(async () => {
 			return { remove: cs('.hud-edit-remove').backgroundColor, apply: cs('#toolbar-edit-apply').backgroundColor, add: cs('#hud-stack-left .hud-edit-add').color, round: cs('#toolbar-edit-apply').borderRadius, anim: cs('#controls-pill [data-edit-wrap="move"]').animationName };
 		});
 		const red = (c) => { const [r, g, b] = c.match(/\d+/g).map(Number); return r > g * 1.6 && r > b * 1.6; };
-		const green = (c) => { const [r, g, b] = c.match(/\d+/g).map(Number); return g > r * 1.3 && g > b; };
-		h.check(red(look.remove) && green(look.apply) && green(look.add) && look.round === '50%' && look.anim === 'hud-jiggle', T + `red −, green ✓ and +, the ✓ is round, placeholders jiggle (${JSON.stringify(look)})`);
+		// 53-contrast: "good" is a colour-blind-safe teal now (--ink-good), so only "far from red" is asked
+		const good = (c) => { const [r, g] = c.match(/\d+/g).map(Number); return g > r * 1.3; };
+		h.check(red(look.remove) && good(look.apply) && good(look.add) && look.round === '50%' && look.anim === 'hud-jiggle', T + `red −, good ✓ and +, the ✓ is round, placeholders jiggle (${JSON.stringify(look)})`);
 		await shot(P, `g1-${theme}-desktop-edit`, { x: 0, y: 700, width: 1440, height: 200 });
 
 		// ---- drag (real mouse): Animation from the bar into the left corner's empty place ----------

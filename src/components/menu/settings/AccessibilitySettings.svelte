@@ -77,3 +77,9 @@
 		</SettingRow>
 	</Section>
 </div>
+
+<style>
+	.settings-page-body {
+		display: contents;
+	}
+</style>

@@ -162,12 +162,16 @@ h.run(async () => {
 		onNav = await page.evaluate(() => document.activeElement?.classList.contains('sn-row') ?? false);
 	}
 	h.check(onNav, 'Tab from the search reaches the menu (after the close button)');
+	// 1.41: Accessibility sits between Interface and Controls, so walk to Input by the menu's own order
+	const steps = await page.evaluate(() => {
+		const rows = [...document.querySelectorAll('#settings-nav .sn-row')].map((r) => r.textContent?.trim() ?? '');
+		return rows.findIndex((t) => t.startsWith('Input')) - rows.findIndex((t) => t.startsWith('Interface'));
+	});
 	await page.locator('#settings-nav .sn-row', { hasText: 'Interface' }).first().focus();
-	await page.keyboard.press('ArrowDown');
-	await page.keyboard.press('ArrowDown');
+	for (let i = 0; i < steps; i++) await page.keyboard.press('ArrowDown');
 	await page.waitForTimeout(250);
 	const title = await page.evaluate(() => document.querySelector('#settings-sections .ss-page .ss-title')?.textContent?.trim());
-	h.check(title === 'Input', `↓↓ walks the menu to Input (${title})`);
+	h.check(steps > 1 && title === 'Input', `arrow-down ${steps}x walks the menu to Input (${title})`);
 	// into the page: Tab reaches the first control; Space flips a toggle; arrows move a segmented control
 	await page.locator('#gamepad-enabled').focus();
 	const before = await page.locator('#gamepad-enabled').getAttribute('aria-pressed');

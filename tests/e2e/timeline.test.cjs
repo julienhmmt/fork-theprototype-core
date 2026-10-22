@@ -443,10 +443,24 @@ h.run(async () => {
 		typeof atA === 'number' && atA === atB,
 		`both run from the SAME shared stamp (A ${atA}, B ${atB})`
 	);
-	const viewB = await player(B.page);
+	// the cut may land a few ticks after the run starts on a loaded peer (applyShot retries per tick)
+	let viewB = await player(B.page);
+	const shotOver = (/** @type {any} */ d) => d.runs.find((/** @type {any} */ r) => r.id === id)?.t > 2.1;
+	const pastAlready = shotOver(viewB);
+	// while the shot is still on, give B a few ticks to make the cut — never past the shot's end
+	for (let i = 0; i < 8 && !pastAlready && viewB.preview !== made.cam1; i++) {
+		await B.page.waitForTimeout(150);
+		const next = await player(B.page);
+		if (shotOver(next)) break;
+		viewB = next;
+	}
+	const diagB = await B.page.evaluate((cam) => ({
+		cam: !!window.__stores.objectsGroup && (() => { let g; window.__stores.objectsGroup.subscribe((v) => (g = v))(); return !!g?.getObjectByProperty?.('uuid', cam); })(),
+		t: (() => { const d = window.__stores.sequencePlayer.sequencePlayerDebug(); return d.runs.map((r) => r.t?.toFixed?.(2)); })()
+	}), made.cam1);
 	h.check(
-		viewB.preview === made.cam1 || viewB.runs.find((r) => r.id === id)?.t > 2.1,
-		`B's own view cuts to the shot (${viewB.preview})`
+		viewB.preview === made.cam1 || pastAlready,
+		`B's own view cuts to the shot (${viewB.preview}; B has cam ${diagB.cam}, run t ${diagB.t})`
 	);
 	await shot(B.page, '04-peer-b-shot-dark.png');
 	// a pulse is a fresh STAMP in the trigger log (count is only kept for counting targets)
@@ -646,7 +660,7 @@ h.run(async () => {
 	});
 	h.check(phone.lanes === 4, `the phone sheet shows the four lanes (${phone.lanes})`);
 	h.check(
-		phone.head === '104px' && phone.headW <= 106,
+		/(^|\D)104px/.test(phone.head) && phone.headW <= 106, // 1.41: the token is calc(104px * <ui scale>)
 		`with a narrow header column (${phone.head}, ${phone.headW}px)`
 	);
 	h.check(phone.row >= 40, `finger-sized rows (${phone.row}px)`);

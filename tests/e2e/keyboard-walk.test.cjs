@@ -68,11 +68,15 @@ h.run(async () => {
 	/** @type {string[]} */
 	const order = [];
 	let ringless = [];
-	for (let i = 0; i < 14; i++) {
+	// walk until the toolbar, then a few stops past it (a cloud build has more top-bar stops: rooms,
+	// sign-in and the links inside the profile panel, which opens on focus) — no fixed window
+	let afterToolbar = -1;
+	for (let i = 0; i < 40 && afterToolbar < 6; i++) {
 		await press(page, 'Tab');
 		a = await active(page);
 		if (a.body) break;
 		order.push(a.inToolbar ? 'toolbar' : a.id || a.title.slice(0, 18));
+		if (afterToolbar >= 0 || a.inToolbar) afterToolbar++;
 		if (!a.ring && a.tag !== 'input') ringless.push(`${a.tag}#${a.id}`);
 	}
 	const firstToolbar = order.indexOf('toolbar');
