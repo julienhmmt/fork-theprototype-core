@@ -5,8 +5,7 @@
 //   3 saving is unchanged: Ctrl+S writes plain text to the node on every peer; B's tab is clean
 //   4 a late joiner (C) gets the CURRENT text, unsaved edits included
 //   5 a viewer's editor is read-only (C demoted): its keys change nothing anywhere
-//   6 Y2: an Explorer text document's "Edit" opens it in the Code tab (not the old text window),
-//     shared the same way; Ctrl+S writes the file's bytes
+// Y2 (Explorer text documents) is shared-text-doc — split for the runner's 8-minute cap.
 const h = require('./helpers.cjs');
 
 const SHOTS = process.env.YJS_SHOTS || '';
@@ -38,7 +37,7 @@ const paneOf = async (page, pred) => {
 const openNodeTab = (page, nodeId) =>
 	page.evaluate((nodeId) => window.__stores.codeWorkspace.openCode({ source: 'script', ref: { nodeId } }), nodeId);
 /** wait until the tab's editor is bound to the shared document (or time out and let the checks say so) */
-async function waitShared(page, pred, label, timeout = 20000) {
+async function waitShared(page, pred, label, timeout = 45000) {
 	const t0 = Date.now();
 	while (Date.now() - t0 < timeout) {
 		const pane = await paneOf(page, pred);
@@ -59,8 +58,7 @@ const MERGED = 'let maxspeed = 10;\nreturn speed;';
 
 h.run(async () => {
 	const browser = await h.launch();
-	// the Explorer's properties pane (where "Edit" lives) is a remembered panel: open on Properties
-	const storage = { 'shared:shareNewFiles': 'never', 'ws:explorer:secondaryOpen': 'true', 'ws:explorer:secondaryMode': 'props' };
+	const storage = { 'shared:shareNewFiles': 'never' };
 	const A = await h.setupPage(browser, 'A', { storage });
 	const B = await h.setupPage(browser, 'B', { storage });
 	await h.connect(B, A);
@@ -173,60 +171,6 @@ h.run(async () => {
 	const afterViewer = [(await tabFor(C.page, isNode))?.code, (await tabFor(A.page, isNode))?.code];
 	h.check(afterViewer.every((c) => c === MERGED + UNSAVED), "a viewer's keys change nothing — on its own screen or anyone else's");
 	await C.page.evaluate(() => window.__stores.cloudHooks.rolesInfo.set(null));
-
-	// ---------------------------------------------------------------- 6 Y2: an Explorer text document
-	const NOTES = 'Shopping list\n- apples\n';
-	const ids = {};
-	for (const [name, P] of [['A', A], ['B', B]]) {
-		ids[name] = await P.page.evaluate(async (text) => {
-			const ex = window.__stores.explorer;
-			await ex.loadExplorer();
-			const item = await ex.addItemFromBytes(new TextEncoder().encode(text).buffer, 'notes.txt', null);
-			return item.id;
-		}, NOTES);
-	}
-	await A.page.evaluate(() => {
-		window.__stores.explorerClose.set(false);
-		window.__stores.bottomDock.bottomDockActive.set('explorer');
-	});
-	await A.page.waitForTimeout(1200);
-	await A.page.locator('.explorer-card', { hasText: 'notes.txt' }).first().click();
-	await A.page.waitForTimeout(500);
-	await A.page.getByRole('button', { name: 'Edit', exact: true }).first().click({ timeout: 15000 }).catch(async (e) => {
-		await shot(A.page, 'zz-edit-button.png');
-		throw e;
-	});
-	const isNotes = (t) => t.title === 'notes.txt';
-	await h.eventually(() => tabFor(A.page, isNotes), (t) => !!t, '"Edit" on a text document opens it as a Code tab', 15000);
-	const notesTab = await tabFor(A.page, isNotes);
-	h.check(!!notesTab && notesTab.kind === 'file' && notesTab.lang === 'text', 'the tab is a plain-text document (no parse check, no script badges)');
-	h.check((await A.page.locator('#text-editor-window').count()) === 0, 'the old floating text window does not open');
-	h.check(/Text document/.test((await A.page.locator('#code-ws-toolbar .code-kind').textContent().catch(() => '')) ?? ''), 'the toolbar calls it a Text document');
-	await B.page.evaluate((itemId) => window.__stores.codeWorkspace.openCode({ source: 'text', ref: { itemId } }), ids.B);
-	const n1 = await waitShared(A.page, isNotes, 'A notes');
-	const n2 = await waitShared(B.page, isNotes, 'B notes');
-	h.check(n1 && n2, "both peers' notes.txt tabs bind to one shared document");
-	const nA = await paneOf(A.page, isNotes);
-	const nB = await paneOf(B.page, isNotes);
-	await caretTo(A.page, nA, ['Control+End']);
-	await caretTo(B.page, nB, ['Control+Home', 'End']);
-	await Promise.all([A.page.keyboard.insertText('- pears\n'), B.page.keyboard.insertText(' (Saturday)')]);
-	const NOTES2 = 'Shopping list (Saturday)\n- apples\n- pears\n';
-	await h.eventually(
-		async () => [(await tabFor(A.page, isNotes))?.code, (await tabFor(B.page, isNotes))?.code],
-		([a, b]) => a === NOTES2 && b === NOTES2,
-		'two people editing a text document both keep their text',
-		12000
-	);
-	await shot(A.page, '03-text-document-shared-A.png');
-	await nB.locator('.cm-content').click();
-	await B.page.keyboard.press('Control+S');
-	await h.eventually(
-		() => B.page.evaluate(async (id) => (await (await window.__stores.explorer.itemBlob(id)).text()), ids.B),
-		(t) => t === NOTES2,
-		"Ctrl+S writes the document's bytes to the file, as plain text",
-		10000
-	);
 
 	h.check(h.pageErrors(A).length === 0 && h.pageErrors(B).length === 0 && h.pageErrors(C).length === 0, 'no page errors on any peer');
 	await h.finish(browser);

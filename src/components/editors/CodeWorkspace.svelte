@@ -680,7 +680,9 @@
 		</div>
 	{/if}
 	<div class="relative min-h-0 flex-1 p-1">
-		{#each tabs as tab (tab.id)}
+		<!-- 50 Y1: keyed by the shared document too — a tab that changes identity (Save as file, a
+		     rename) remounts its editor on the RIGHT document instead of staying bound to the old one -->
+		{#each tabs as tab (tab.id + '|' + (sharedDocKey(tab) ?? ''))}
 			<div class="code-pane h-full" class:hidden={active?.id !== tab.id} id="code-pane-{tab.id}" role="tabpanel" aria-labelledby="code-tab-{tab.id}" data-pane={tab.id} data-readonly={!!tab.readOnly}>
 				<CodeEditor
 					value={tab.code}
