@@ -16,7 +16,7 @@ import { savePrefab, savePrefabSelection } from './prefabs';
 import { perfContext } from './perf/perfMarks.js'; // 34 PF: an import-free leaf
 import { vrDollhouseOpen, vrSculptActive } from './vr/worldStores.js'; // 37: a leaf
 import { sculptOp } from './terrainSculpt';
-import { registerMeasureRings } from './vr/buildRings.js'; // 52 V1
+import { registerMeasureRings, registerArrangeRings } from './vr/buildRings.js'; // 52 V1/V2
 import { primitivesCatalog } from './primitivesCatalog';
 
 // D4 (roadmap 13): selection-set helpers for the Edit ring — counted labels
@@ -608,8 +608,9 @@ function registerBuiltins() {
 	registerVRMenuEntry({ id: 'face:move', group: 'faces', label: 'Move', order: 2 });
 	registerVRMenuEntry({ id: 'face:delete', group: 'faces', label: 'Delete', order: 3 });
 
-	// 52 V1: Tools ▸ Measure + the Measure ring, Selected ▸ Edit measurement
+	// 52 V1/V2: Tools ▸ Measure + the Measure ring, Selected ▸ Edit measurement, Selected ▸ Arrange
 	registerMeasureRings(registerVRMenuEntry);
+	registerArrangeRings(registerVRMenuEntry);
 }
 
 registerBuiltins();

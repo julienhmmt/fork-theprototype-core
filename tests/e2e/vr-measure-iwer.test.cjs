@@ -404,6 +404,67 @@ h.run(async () => {
 		await g(() => window.__stores.vrMeasure.stopVRMeasure({ keep: false }));
 	}
 
+	// ---- A. Selected ▸ Arrange -------------------------------------------------------------------------------------
+	if (want('A')) {
+		console.log('\n=== A. arrange from the radial ===');
+		const ids = await createBoxes(['1 1 1', '2 1 1', '0.5 1 1']);
+		await page.waitForTimeout(1500);
+		const START = [
+			{ uuid: ids[0], pos: [head[0] - 3, 0.5, head[2] - 4] }, // x [-3.5, -2.5] rel
+			{ uuid: ids[1], pos: [head[0] + 1, 2, head[2] - 3] }, //   x [0, 2]
+			{ uuid: ids[2], pos: [head[0] + 4, 0.5, head[2] - 5] } //  x [3.75, 4.25]
+		];
+		await place(START);
+		await h.eventually(() => boxes(B.page, ids), (b) => b.every((q, i) => q && near(q.pos, START[i].pos, 1e-6)), 'premise: three boxes posed on A and B', 15000);
+		await g((u) => window.__stores.objectActions.applySelectionSet(u), ids.slice(0, 2));
+		await settle(3);
+		const dis = await g(() => window.__stores.vrRadialMenu.findMenuEntry('arrange:gaps').disabled());
+		h.check(dis === true, 'with two selected, Even gaps is greyed (it needs three)');
+		await g((u) => window.__stores.objectActions.applySelectionSet(u), ids);
+		await settle(3);
+		await g(() => window.__stores.vrBuildRings.vrArrangeAxis.set('x'));
+		const d0 = await depth();
+		const d0B = await depth(B.page);
+		h.check(await openMenu(), 'the radial opens');
+		h.check(await stickRun(null), 'the hub opens Selected');
+		h.check(await stickRun('nav:arrange'), 'the stick picks Arrange ▸');
+		h.check(await stickRun('arrange:min'), '…Align X min');
+		const minX = START[0].pos[0] - 0.5;
+		const test = (b) => b.every((q) => q && Math.abs(q.min[0] - minX) < 1e-6);
+		const a = await boxes(page, ids);
+		h.check(test(a), `Align X min: every box's left edge on the selection's (${a.map((q) => q.min[0].toFixed(3)).join(', ')} = ${minX.toFixed(3)})`);
+		h.check((await depth()) === d0 + 1, `ONE undo entry for the set (${d0} → ${await depth()})`);
+		await h.eventually(() => boxes(B.page, ids), test, 'B sees the aligned set', 15000);
+		await g(() => window.__stores.vrControls.executeVRMenuAction('undo'));
+		await settle(3);
+		const u = await boxes(page, ids);
+		h.check(u.every((q, i) => near(q.pos, START[i].pos, 1e-6)), 'ONE Undo puts all three back on A');
+		await h.eventually(() => boxes(B.page, ids), (b) => b.every((q, i) => q && near(q.pos, START[i].pos, 1e-6)), '…and on B', 15000);
+		h.check((await depth(B.page)) === d0B, 'B records no undo entry of its own (the move path)');
+		// distribute gaps on X through the radial entries (the stick path is proven above)
+		await g(() => {
+			const r = window.__stores.vrControls;
+			window.__stores.vrMenuOpen.set(true);
+			['nav:object', 'nav:arrange', 'arrange:gaps'].forEach((id) => r.executeVRMenuAction(id));
+		});
+		await h.eventually(() => boxes(page, ids), (b) => {
+			const s = [...b].sort((p, q) => p.min[0] - q.min[0]);
+			return Math.abs((s[1].min[0] - s[0].max[0]) - (s[2].min[0] - s[1].max[0])) < 1e-6;
+		}, 'Distribute X gaps: equal space between neighbours', 5000);
+		await h.eventually(() => boxes(B.page, ids), (b) => {
+			const s = [...b].sort((p, q) => p.min[0] - q.min[0]);
+			return Math.abs((s[1].min[0] - s[0].max[0]) - (s[2].min[0] - s[1].max[0])) < 1e-6;
+		}, '…on B', 15000);
+		await g(() => {
+			const r = window.__stores.vrControls;
+			window.__stores.vrMenuOpen.set(true);
+			['nav:object', 'nav:arrange', 'arrange:drop'].forEach((id) => r.executeVRMenuAction(id));
+		});
+		const groundTest = (b) => b.every((q) => q && Math.abs(q.min[1]) < 1e-4);
+		await h.eventually(() => boxes(page, ids), groundTest, 'Drop to ground: every box rests on y = 0', 5000);
+		await h.eventually(() => boxes(B.page, ids), groundTest, '…on B', 15000);
+	}
+
 	// ---- F. frame cost on the Quest profile ----------------------------------------------------------------------------
 	if (want('F')) {
 		console.log('\n=== F. frame cost ===');

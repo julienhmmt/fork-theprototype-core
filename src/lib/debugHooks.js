@@ -174,6 +174,7 @@ export const DEBUG_HOOKS = [
 	['vrMeasure', () => import('./vr/measure.js')],
 	['vrMeasureCore', () => import('./vrMeasureCore')],
 	['vrBuildRings', () => import('./vr/buildRings.js')],
+	['align', () => import('./align')],
 	['vrTourTargets', () => import('./vr/tourTargets.js')],
 	['vrPrefs', () => import('./vr/prefs.js')],
 	// 53 (A7): recenter + the lift / recenter counts
