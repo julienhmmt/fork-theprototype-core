@@ -594,6 +594,74 @@ function pickPose(e) {
 	return out;
 }
 
+/**
+ * 51 E1: make a set MIXED by adding a source (weight `w`; a single-source set becomes a mix of
+ * its own source at weight 1 and this one). Painted records keep drawing what they drew (pick
+ * 0 = the original source). Refused (input returned) past MAX_MIX or for a source already in it.
+ * @param {ScatterSet} set @param {any} source @param {number} w
+ * @param {{decode: (b64: string) => Uint8Array | null, encode: (bytes: Uint8Array) => string}} io
+ * @returns {ScatterSet}
+ */
+export function withSourceAdded(set, source, w, io) {
+	const s = sourceOf(source);
+	const list = set.sources ?? [{ source: set.source, w: 1 }];
+	if (!s || list.length >= MAX_MIX || list.some((e) => sourceKey(e.source) === sourceKey(s))) return set;
+	/** @type {ScatterSet} */
+	const next = { ...set, sources: [...list, { source: s, w: Math.max(0.01, w || 1) }] };
+	if (set.count && !set.pick) next.pick = io.encode(new Uint8Array(set.count));
+	return next;
+}
+
+/**
+ * 51 E1: drop source i from a mixed set. Its PAINTED records go with it (they were that model);
+ * later picks shift down; a mix left with one source becomes a plain set again. Generated slots
+ * simply re-pick among what is left (deterministic, the same on every peer).
+ * @param {ScatterSet} set @param {number} i
+ * 51-surface: a `host: 'mesh'` set's painted records go through `io.records` (as in withOverrides).
+ * @param {{bounds: Bounds, decode: (b64: string) => Uint8Array | null, encode: (bytes: Uint8Array) => string,
+ *   records?: {decode: (bytes: Uint8Array, set: any) => any[], encode: (list: any[]) => {bytes: Uint8Array, box: number[]}}}} io
+ * @returns {ScatterSet}
+ */
+export function withSourceRemoved(set, i, io) {
+	if (!set.sources || i < 0 || i >= set.sources.length) return set;
+	const sources = set.sources.filter((_, k) => k !== i);
+	/** @type {ScatterSet} */
+	const next = { ...set, source: sources[0].source };
+	if (set.count) {
+		const bytes = io.decode(set.data);
+		const pick = set.pick ? io.decode(set.pick) : new Uint8Array(set.count);
+		const codec = set.host === 'mesh' ? io.records : null;
+		if (bytes && pick && (codec || set.host !== 'mesh')) {
+			const list = codec ? codec.decode(bytes, set) : decodeInstances(bytes, io.bounds);
+			/** @type {Instance[]} */
+			const kept = [];
+			/** @type {number[]} */
+			const keptPick = [];
+			list.forEach((inst, j) => {
+				const p = pick[j] ?? 0;
+				if (p === i) return;
+				kept.push(inst);
+				keptPick.push(p > i ? p - 1 : p);
+			});
+			next.count = kept.length;
+			if (codec) {
+				const enc = codec.encode(kept);
+				next.data = kept.length ? io.encode(enc.bytes) : '';
+				if (kept.length) next.box = enc.box;
+				else delete next.box;
+			} else next.data = kept.length ? io.encode(encodeInstances(kept, io.bounds)) : '';
+			if (sources.length > 1 && kept.length) next.pick = io.encode(new Uint8Array(keptPick));
+			else delete next.pick;
+		}
+	}
+	if (sources.length > 1) next.sources = sources;
+	else {
+		delete next.sources;
+		delete next.pick;
+	}
+	return next;
+}
+
 /** The whole-set RE-ROLL: a new seed, every hand edit kept (keyed by slot). @param {ScatterSet} set @param {number} seed */
 export function withSeed(set, seed) {
 	return { ...set, seed: seed >>> 0 };

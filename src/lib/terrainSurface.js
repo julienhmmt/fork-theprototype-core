@@ -7,6 +7,7 @@ import { normalizeScatter, instancesOf, blockVersion, buildHeightGrid, sampleHei
 import { buildSurface, surfaceInstancesOf, maskOf, maskIsEmpty, passesMask, splatWeightAt } from './scatterSurfaceCore';
 import { lodObject, releaseOwner } from './lod';
 import { EXPLICIT_MIN_TRIANGLES } from './lodCore';
+import { registerThinMesh, unregisterThinMesh } from './scatterThin';
 
 // 47 T1 + T2 — HOW A PAINTED / SCATTERED TERRAIN LOOKS, on every peer. A LEAF: three, the
 // scene store and the two pure cores; no history, no peers (terrainPaint.js is the write
@@ -466,6 +467,7 @@ function makeHolder(terrain) {
 function clearHolder(holder) {
 	releaseOwner(holder); // 47-int: the cells' LOD entries (lod.js holds them until their owner lets go)
 	for (const child of [...holder.children]) {
+		unregisterThinMesh(child);
 		holder.remove(child);
 		child.dispose?.();
 	}
@@ -773,6 +775,8 @@ function layoutScatter(object, holder, sets) {
 					mesh.computeBoundingSphere();
 					holder.add(mesh);
 					if (lodded) lodObject(mesh, {}, holder);
+					// 51: far instances thin to this device's budget (draws only — colliders read the set)
+					registerThinMesh(mesh, trianglesOfGeo(part.geometry));
 				}
 			}
 		});

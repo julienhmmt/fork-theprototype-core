@@ -34,8 +34,11 @@
 		scatterErase,
 		layersOf
 	} from '$lib/terrainPaint';
-	import { SCATTER_PRIMITIVES, sourceKey } from '$lib/terrainScatterCore';
+	import { sourceKey } from '$lib/terrainScatterCore';
 	import { explorerItems } from '$lib/explorer';
+	import { prefabs, loadPrefabs } from '$lib/prefabs';
+	// 51 E1: one catalog (primitives, Library, pack items, prefabs) shared with Properties ▸ Scatter
+	import { sourceChoices, resolveSourceChoice, packChoiceList, loadPackChoices } from '$lib/scatterSources';
 
 	const OPS = [
 		{ op: 'raise', label: 'Raise', icon: 'raise', desc: 'pull the surface up along its normals' },
@@ -66,19 +69,29 @@
 	/** @param {number} i */
 	const swatch = (i) => (i === 0 && !layers[0]?.color ? baseColor : layers[i]?.color || '#ffffff'); // tokens-ok: a layer colour fallback (data)
 
-	// scatter sources: the primitives, then every Library model (Explorer object items)
-	const sourceItems = $derived([
-		...SCATTER_PRIMITIVES.map((type) => ({ value: 'p:' + type, name: type })),
-		...(/** @type {any[]} */ ($explorerItems) ?? [])
-			.filter((item) => item?.kind === 'object' && item.hash)
-			.map((item) => ({ value: 'l:' + item.hash, name: item.name }))
-	]);
+	// scatter sources: the primitives, every Library model, the pack items, the prefabs (look only)
+	let prefabsAsked = false;
+	$effect(() => {
+		if ($sculptOp !== 'scatter') return;
+		loadPackChoices();
+		if (!prefabsAsked) {
+			prefabsAsked = true;
+			void loadPrefabs(); // the prefab list is read lazily (the Explorer reads it on open)
+		}
+	});
+	const sourceItems = $derived(
+		sourceChoices({ library: $explorerItems, packs: $packChoiceList, prefabs: $prefabs, current: [$scatterSource] })
+	);
+	let preparing = $state(false);
 	/** @param {string} key */
-	function pickSource(key) {
-		if (key.startsWith('p:')) scatterSource.set({ kind: 'primitive', type: key.slice(2) });
-		else {
-			const item = /** @type {any[]} */ ($explorerItems).find((i) => i?.hash === key.slice(2));
-			scatterSource.set({ kind: 'library', hash: key.slice(2), name: item?.name ?? '' });
+	async function pickSource(key) {
+		// a prefab is exported to its look first (a GLB in the Library) — say so while it runs
+		if (key.startsWith('f:')) preparing = true;
+		try {
+			const source = await resolveSourceChoice(key, $explorerItems);
+			if (source) scatterSource.set(source);
+		} finally {
+			preparing = false;
 		}
 	}
 
@@ -177,13 +190,18 @@
 			<div class="tbx-row text-xs">
 				<ThemedSelect
 					id="sculpt-scatter-source"
-					title="What the brush scatters — a primitive or a Library model"
+					title="What the brush scatters — a primitive, a Library model, a pack item or a prefab (its look only)"
 					clip={false}
 					items={sourceItems}
 					value={sourceKey($scatterSource)}
 					onchange={(v) => pickSource(String(v))}
 				/>
 			</div>
+			{#if preparing || $scatterSource?.note}
+				<p id="sculpt-scatter-source-note" class="tbx-row text-[length:var(--fs-badge)] text-text-muted" role="status">
+					{preparing ? 'Preparing the prefab\u2019s look\u2026' : $scatterSource.note}
+				</p>
+			{/if}
 			<div class="tbx-row text-xs">
 				<button
 					id="sculpt-scatter-paint"

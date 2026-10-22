@@ -11,6 +11,8 @@ import {
 	scatterInCircle,
 	withOverrides,
 	withSeed,
+	withSourceAdded,
+	withSourceRemoved,
 	newSeed,
 	pickSource,
 	blockVersion,
@@ -595,6 +597,45 @@ export function addScatterSet(uuid, set) {
 		return [...block.sets, next];
 	});
 	return ok ? id : null;
+}
+
+/** @param {string} uuid @param {string} setId @param {(set: any, io: any) => any} fn one set, rewritten */
+function rewriteSet(uuid, setId, fn) {
+	const b = terrainBounds(objectOf(uuid));
+	if (!b) return false;
+	const io = { bounds: b, decode: base64ToBytes, encode: bytesToBase64, records: surfaceRecords };
+	return writeScatter(uuid, (block) => {
+		const set = block.sets.find((s) => s.id === setId);
+		if (!set) return null;
+		const next = fn(set, io);
+		if (next === set) return null;
+		return block.sets.map((s) => (s === set ? next : s)).filter((s) => s.count || s.gen);
+	});
+}
+
+/** 51 E1: add a model to a set (it becomes a weighted mix). @param {string} uuid @param {string} setId @param {any} source @param {number} [w] */
+export function addScatterSource(uuid, setId, source, w = 1) {
+	return rewriteSet(uuid, setId, (set, io) => withSourceAdded(set, source, w, io));
+}
+
+/** 51 E1: drop model i from a mix (its painted instances go with it). @param {string} uuid @param {string} setId @param {number} i */
+export function removeScatterSource(uuid, setId, i) {
+	return rewriteSet(uuid, setId, (set, io) => withSourceRemoved(set, i, io));
+}
+
+/** 51 E1: one model's weight in a mix (a scrub previews with {record: false} and commits with {before}).
+ * @param {string} uuid @param {string} setId @param {number} i @param {number} w @param {{before?: any, record?: boolean, send?: boolean}} [opts] */
+export function setScatterSourceWeight(uuid, setId, i, w, opts) {
+	const set = scatterBlockOf(objectOf(uuid))?.sets.find((s) => s.id === setId);
+	if (!set?.sources?.[i]) return false;
+	const sources = set.sources.map((e, k) => (k === i ? { ...e, w: Math.max(0.01, w) } : e));
+	return editScatterSet(uuid, setId, { sources }, opts);
+}
+
+/** The block as it stands (a gesture's `before`). @param {string} uuid */
+export function scatterBlockNow(uuid) {
+	const block = scatterBlockOf(objectOf(uuid));
+	return block?.sets.length ? block : null;
 }
 
 /** 51: every instance a terrain's set draws, with ids — what an edit tool reads.

@@ -138,7 +138,7 @@
 			<button
 				id={idBase + '-reroll'}
 				class="ui-button-quiet ml-auto"
-				title="A new seed: a fresh layout with the same settings (hand edits are kept)"
+				title={`A new seed (now ${set.seed}): a fresh layout with the same settings (hand edits are kept)`}
 				onclick={() => rerollScatterSet(uuid, set.id)}>Re-roll</button
 			>
 		</div>
