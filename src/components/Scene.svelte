@@ -102,6 +102,7 @@
 	import VRSelectionShell from './play/VRSelectionShell.svelte';
 	// 36 U3b: the VR welcome tour's world-space panel
 	import TourVRPanel from './tours/TourVRPanel.svelte';
+	import VRAssetBrowser from './play/VRAssetBrowser.svelte'; // 52-browser: the wrist Asset Browser
 	// 36 A2: the headset browser's own "Enter VR" offer — decided by us, not threlte's default
 	import { xrOfferMode } from '$lib/xrOffer';
 	import MeasureOverlay from './MeasureOverlay.svelte';
@@ -1874,6 +1875,7 @@ position={[0, 2, 3]}
 <VRKeyboard />
 <VRSelectionShell />
 <TourVRPanel />
+<VRAssetBrowser />
 
 <XR
 	offerSession={$xrOfferMode}

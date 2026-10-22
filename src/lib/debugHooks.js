@@ -45,6 +45,7 @@ export const DEBUG_HOOKS = [
 	['packCache', () => import('./packCache.js')],
 	['placeGhost', () => import('./placeGhost.js')],
 	['vrPlace', () => import('./vr/placeRay.js')],
+	['vrAssetBrowser', () => import('./vr/assetBrowser.js')],
 	['tourVR', () => import('./tours/vrPanel.js')],
 	// 36-share (B13): the recorder + its stores
 	['recording', () => import('./recording/recorder.js')],

@@ -134,9 +134,10 @@ export function vrPlaceActive() {
 
 /**
  * Place at the ghost (the trigger / the drag release). A click placement re-arms the same item; a
- * drag places once. Returns true when something spawned.
+ * drag (`opts.drop`) places once. Returns true when something spawned.
+ * @param {{drop?: boolean}} [opts]
  */
-export function placeVRNow() {
+export function placeVRNow(opts = {}) {
 	if (!current || !rayPlaceActive()) return false;
 	const host = current;
 	const rotation = placeRotation();
@@ -150,7 +151,7 @@ export function placeVRNow() {
 	debug.placed++;
 	host.placed++;
 	hapticPulse(0.35, 40, host.hand);
-	if (host.repeat && !host.dragging) {
+	if (host.repeat && !opts.drop) {
 		// stay armed, turned as before: the next trigger places another
 		beginRayPlace({ payload: host.payload, hand: host.hand, rotation });
 		current = host;
@@ -221,7 +222,7 @@ function onTriggerEnd(index) {
 	// let go over the world = the drag's drop; still on the panel = a click, stay armed
 	if (laser && !beamTarget(laser).panel) {
 		claimSelect();
-		placeVRNow();
+		placeVRNow({ drop: true });
 		return true;
 	}
 	publish();
