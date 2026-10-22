@@ -412,3 +412,56 @@ describe('perf: 5,000 instances on a 100k-triangle mesh', () => {
 		expect(t3 - t1).toBeLessThan(1500);
 	});
 });
+
+// ---- a mesh host's SET in the 51 format ---------------------------------------------------------
+
+import { surfaceInstancesOf, surfaceRecords } from '../../src/lib/scatterSurfaceCore.js';
+import { normalizeScatter, withOverrides } from '../../src/lib/terrainScatterCore.js';
+
+const b64 = (bytes) => Buffer.from(bytes).toString('base64');
+const unb64 = (s) => new Uint8Array(Buffer.from(s, 'base64'));
+
+describe('host: mesh sets (format + instances + edits)', () => {
+	const sp = sphere(2, 32, 24);
+	const S = buildSurface(sp.pos, sp.index, sp.nrm);
+	const CONE = { kind: 'primitive', type: 'Cone' };
+
+	it('normalize keeps a 16-byte painted set with its box, and refuses one without a box', () => {
+		const list = generateSurfaceSlots({ ...GEN, count: 12 }, S, { draws: drawsFor(1) });
+		const enc = surfaceRecords.encode(list);
+		const ok = normalizeScatter({ sets: [{ source: CONE, host: 'mesh', data: b64(enc.bytes), box: enc.box }] }, unb64);
+		expect(ok.v).toBe(2);
+		expect(ok.sets[0]).toMatchObject({ host: 'mesh', count: 12, box: enc.box });
+		const noBox = normalizeScatter({ sets: [{ source: CONE, host: 'mesh', data: b64(enc.bytes) }] }, unb64);
+		expect(noBox.sets).toHaveLength(0);
+		// a terrain set never grows a host field (a 1.38 scene stays byte-identical)
+		const t = normalizeScatter({ sets: [{ source: CONE, data: b64(new Uint8Array(8)) }] }, unb64);
+		expect('host' in t.sets[0]).toBe(false);
+		expect(t.v).toBe(1);
+	});
+
+	it('generated + painted instances, with stable ids, on two peers', () => {
+		const painted = surfaceRecords.encode(generateSurfaceSlots({ ...GEN, count: 5 }, S, { draws: drawsFor(77) }));
+		const raw = { sets: [{ id: 'm', source: CONE, host: 'mesh', seed: 99, gen: { ...GEN, count: 40, spacing: 0.2 }, data: b64(painted.bytes), box: painted.box }] };
+		const set = normalizeScatter(raw, unb64).sets[0];
+		const a = surfaceInstancesOf(set, S, unb64);
+		const b = surfaceInstancesOf(normalizeScatter(JSON.parse(JSON.stringify(raw)), unb64).sets[0], buildSurface(new Float32Array([...sp.pos]), new Uint32Array([...sp.index]), new Float32Array([...sp.nrm])), unb64);
+		expect(a).toHaveLength(45);
+		expect(b).toEqual(a);
+		expect(a.slice(0, 40).every((p) => p.id.startsWith('g'))).toBe(true);
+		expect(a.slice(40).map((p) => p.id)).toEqual(['p0', 'p1', 'p2', 'p3', 'p4']);
+		for (const p of a) expect(Math.hypot(p.x, p.y, p.z)).toBeGreaterThan(1.95);
+	});
+
+	it('hand edits: a generated slot moves (with y) or goes; a painted record is rewritten through the 16-byte codec', () => {
+		const painted = surfaceRecords.encode(generateSurfaceSlots({ ...GEN, count: 3 }, S, { draws: drawsFor(5) }));
+		const set = normalizeScatter({ sets: [{ id: 'm', source: CONE, host: 'mesh', seed: 3, gen: { ...GEN, count: 10 }, data: b64(painted.bytes), box: painted.box }] }, unb64).sets[0];
+		const io = { bounds: { minX: -2, minZ: -2, sizeX: 4, sizeZ: 4 }, decode: unb64, encode: b64, records: surfaceRecords };
+		const next = withOverrides(set, { g2: { x: 0, y: 2, z: 0 }, g3: { del: true }, p1: { del: true } }, io);
+		const list = surfaceInstancesOf(normalizeScatter({ sets: [next] }, unb64).sets[0], S, unb64);
+		expect(list.find((p) => p.id === 'g2')).toMatchObject({ x: 0, y: 2, z: 0 });
+		expect(list.find((p) => p.id === 'g3')).toBeUndefined();
+		expect(next.count).toBe(2);
+		expect(list.filter((p) => p.id.startsWith('p'))).toHaveLength(2);
+	});
+});

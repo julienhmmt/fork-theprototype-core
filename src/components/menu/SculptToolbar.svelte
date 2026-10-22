@@ -9,6 +9,7 @@
 		sculptObject,
 		sculptMode,
 		sculptOp,
+		sculptScatterOnly,
 		sculptRadius,
 		sculptStrength,
 		exitSculpt,
@@ -42,12 +43,13 @@
 		{ op: 'smooth', label: 'Smooth', icon: 'smooth', desc: 'relax the surface' },
 		{ op: 'flatten', label: 'Flatten', icon: 'flatten', desc: 'level toward the hit plane' }
 	];
-	// terrain only: a plain mesh has no splat map or height grid
-	const TERRAIN_OPS = [
-		{ op: 'paint', label: 'Paint', icon: 'paint', desc: 'paint a texture layer onto the terrain' },
-		{ op: 'scatter', label: 'Scatter', icon: 'scatter', desc: 'paint (or erase) instances of a model' }
-	];
-	const ops = $derived($sculptMode === 'terrain' ? [...OPS, ...TERRAIN_OPS] : OPS);
+	// terrain only: a plain mesh has no splat map
+	const PAINT_OP = { op: 'paint', label: 'Paint', icon: 'paint', desc: 'paint a texture layer onto the terrain' };
+	// 51-surface: scatter paints on ANY mesh's own surface
+	const SCATTER_OP = { op: 'scatter', label: 'Scatter', icon: 'scatter', desc: 'paint (or erase) instances of a model' };
+	const ops = $derived(
+		$sculptScatterOnly ? [SCATTER_OP] : $sculptMode === 'terrain' ? [...OPS, PAINT_OP, SCATTER_OP] : [...OPS, SCATTER_OP]
+	);
 
 	// the four layer swatches re-read the terrain on every scene change (an Inspector edit,
 	// a peer's message, undo); layer 0 with no colour shows the material's own colour
@@ -93,7 +95,7 @@
 	<ToolboxWindow
 		id="sculpt-toolbar"
 		key="sculptToolbox"
-		title={$sculptMode === 'mesh' ? 'Sculpt mesh' : 'Sculpt terrain'}
+		title={$sculptScatterOnly ? 'Scatter on object' : $sculptMode === 'mesh' ? 'Sculpt mesh' : 'Sculpt terrain'}
 	>
 		{#snippet actions()}
 			<button
@@ -169,7 +171,7 @@
 			{/each}
 		{/if}
 
-		{#if $sculptOp === 'scatter' && $sculptMode === 'terrain'}
+		{#if $sculptOp === 'scatter'}
 			<!-- 47 T2: what to scatter + how; Erase removes the chosen source's instances -->
 			<span class="tbx-label">Scatter</span>
 			<div class="tbx-row text-xs">

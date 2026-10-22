@@ -1,4 +1,5 @@
-// 51-surface (E2 + E3) — SCATTER ON ANY SURFACE, the pure half (imports NOTHING; vitest-covered).
+// 51-surface (E2 + E3) — SCATTER ON ANY SURFACE, the pure half (imports only the pure set format,
+// terrainScatterCore, for its per-slot draws; vitest-covered).
 //
 // A terrain's scatter is (x, z) over its rectangle with the height read off its grid. A rock,
 // a sphere or a house has neither, so a mesh host samples its own TRIANGLES:
@@ -24,6 +25,8 @@
 // an instance already accepted is rejected. Slot order is fixed by the draws, so the result is the
 // same on every peer and after every reload.
 
+import { slotDraws, slotSeed, pickSource, ATTEMPTS_PER_SLOT } from './terrainScatterCore.js';
+
 const TAU = Math.PI * 2;
 const Q = 65535;
 const DEG = 180 / Math.PI;
@@ -31,7 +34,7 @@ const DEG = 180 / Math.PI;
 /** caps the core enforces whatever the caller asks (the terrain core's numbers) */
 export const SURFACE_MAX_INSTANCES = 8000;
 /** COUNT mode keeps drawing slots until `count` are placed, up to this many attempts per instance */
-export const ATTEMPTS_PER_INSTANCE = 30;
+export const ATTEMPTS_PER_INSTANCE = ATTEMPTS_PER_SLOT;
 export const SLOPE_MAX = 180;
 export const SPACING_MAX = 50;
 /** bytes per painted instance on a mesh host */
@@ -642,6 +645,71 @@ export function decodeSurfaceRecords(bytes, box) {
 			yaw: (view.getUint16(o + 10, true) / Q) * TAU,
 			scale: view.getUint16(o + 12, true) / 1000
 		};
+	}
+	return out;
+}
+
+// ---- a mesh host's SET: its one instance list, its record codec ------------------------------
+
+/** The 16-byte record codec a `host: 'mesh'` set's painted instances use (the `io.records` that
+ * terrainScatterCore.withOverrides takes). */
+export const surfaceRecords = {
+	/** @param {Uint8Array} bytes @param {any} set */
+	decode(bytes, set) {
+		const box = boxFrom(set?.box);
+		return box ? decodeSurfaceRecords(bytes, box) : [];
+	},
+	/** @param {SurfaceInstance[]} list */
+	encode(list) {
+		const box = boxOf(list);
+		return { bytes: encodeSurfaceRecords(list, box), box };
+	}
+};
+
+/** A painted record's tint draw: a hash of its quantized position (stable under erase, the same on
+ * every peer). @param {DataView} view @param {number} o */
+function recordTint(view, o) {
+	const h = slotSeed(view.getUint32(o, true) ^ view.getUint16(o + 4, true), 0x51);
+	return (h / 4294967296) * 2 - 1;
+}
+
+/**
+ * EVERY instance a `host: 'mesh'` set draws — the surface twin of terrainScatterCore.instancesOf,
+ * and the ONE list the renderer, the colliders, the brush and the edit tools read on a mesh: the
+ * generated slots (the set's own seeded per-slot stream, so slot ids mean what they mean on a
+ * terrain) with their hand edits applied, then the painted 16-byte records.
+ * @param {any} set a normalized set @param {Surface | null} S the host's surface (null = no fill)
+ * @param {(b64: string) => Uint8Array | null} decode
+ * @param {{room?: number, accept?: ((p: SurfacePoint, k: number) => boolean) | null}} [opts]
+ * @returns {(SurfaceInstance & {id: string, src: number, tint: number, index?: number})[]}
+ */
+export function surfaceInstancesOf(set, S, decode, opts = {}) {
+	/** @type {any[]} */
+	const out = [];
+	if (set?.gen && S) {
+		const seed = set.seed ?? 0;
+		for (const inst of generateSurfaceSlots(set.gen, S, { draws: (k) => slotDraws(seed, k), room: opts.room, accept: opts.accept ?? null })) {
+			const o = set.ov?.[String(inst.slot)];
+			if (o?.del) continue;
+			const { pick, ...rest } = /** @type {any} */ (inst);
+			const base = { ...rest, src: pickSource(set.sources, pick ?? 0), tint: inst.tint ?? 0 };
+			out.push(o ? { ...base, ...o } : base);
+		}
+	}
+	const bytes = set?.count && set.data ? decode(set.data) : null;
+	const box = boxFrom(set?.box);
+	if (bytes && box) {
+		const pick = set.pick ? decode(set.pick) : null;
+		const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+		decodeSurfaceRecords(bytes, box).forEach((inst, j) => {
+			out.push({
+				id: 'p' + j,
+				index: j,
+				...inst,
+				src: pick && set.sources ? Math.min(pick[j] ?? 0, set.sources.length - 1) : 0,
+				tint: recordTint(view, j * SURFACE_RECORD)
+			});
+		});
 	}
 	return out;
 }

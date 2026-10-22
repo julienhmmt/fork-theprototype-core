@@ -186,6 +186,10 @@ export function sourceKey(s) {
  *   sources   a MIXED set [{source, w}] (2..8, weights > 0); `source` stays sources[0]
  *   pick      one byte per PAINTED instance in a mixed set: which source it drew
  *   tint      0..1 colour variation, `sink` metres pushed into the ground (x the instance scale)
+ *   host+box  51-surface: `host: 'mesh'` = the set lives on a NON-terrain mesh (any rock, sphere,
+ *             house): its painted records are 16 bytes (scatterSurfaceCore — xyz over the stored
+ *             `box` [minX, minY, minZ, sizeX, sizeY, sizeZ], a normal, yaw, scale) and its slots
+ *             are placed on the mesh's own triangles. Absent on every terrain set.
  * @param {any} block @param {(b64: string) => Uint8Array | null} decode
  * @returns {{v: number, sets: ScatterSet[]} | null}
  */
@@ -200,8 +204,13 @@ export function normalizeScatter(block, decode) {
 		const source = sources ? sources[0].source : sourceOf(s.source);
 		if (!source) continue;
 		const bytes = typeof s.data === 'string' && s.data ? decode(s.data) : null;
-		if (bytes && bytes.length % 8 !== 0) continue;
-		const count = bytes ? bytes.length / 8 : 0;
+		// 51-surface: a mesh host's painted record is 16 bytes, and it cannot be read without its box
+		const mesh = s.host === 'mesh';
+		const rec = mesh ? 16 : 8;
+		if (bytes && bytes.length % rec !== 0) continue;
+		const count = bytes ? bytes.length / rec : 0;
+		const box = mesh && count ? boxOf(s.box) : null;
+		if (mesh && count && !box) continue;
 		const gen = genOf(s.gen);
 		if (!count && !gen) continue;
 		if (total + count > MAX_INSTANCES) continue;
@@ -214,7 +223,9 @@ export function normalizeScatter(block, decode) {
 			align: !!s.align,
 			data: count ? s.data : '',
 			count,
-			...(collider === 'none' ? {} : { collider })
+			...(collider === 'none' ? {} : { collider }),
+			...(mesh ? { host: 'mesh' } : {}),
+			...(box ? { box } : {})
 		};
 		if (gen) {
 			if (gen.count != null) {
@@ -242,15 +253,23 @@ export function normalizeScatter(block, decode) {
 
 /** @typedef {{id: string, source: any, align: boolean, data: string, count: number, collider?: string,
  *   seed?: number, gen?: Gen, ov?: Record<string, Override>, sources?: {source: any, w: number}[],
- *   pick?: string, tint?: number, sink?: number}} ScatterSet */
+ *   pick?: string, tint?: number, sink?: number, host?: 'mesh', box?: number[]}} ScatterSet */
+
+/** 51-surface: a stored record box [minX, minY, minZ, sizeX, sizeY, sizeZ] (sizes > 0), else null
+ * @param {any} box @returns {number[] | null} */
+function boxOf(box) {
+	if (!Array.isArray(box) || box.length !== 6) return null;
+	const out = box.map(Number);
+	return out.every((n) => Number.isFinite(n)) && out[3] > 0 && out[4] > 0 && out[5] > 0 ? out : null;
+}
 /** @typedef {{count?: number, density?: number, scaleMin: number, scaleMax: number, rot: boolean,
  *   spacing?: number}} Gen */
-/** @typedef {{x?: number, z?: number, yaw?: number, scale?: number, del?: 1}} Override */
+/** @typedef {{x?: number, y?: number, z?: number, yaw?: number, scale?: number, del?: 1}} Override */
 
 /** 1 while every set is the 1.38 shape (so an untouched scene saves byte-identical), else 2
  * @param {ScatterSet[]} sets */
 export function blockVersion(sets) {
-	return sets.some((s) => s.gen || s.sources || s.tint || s.sink) ? 2 : SCATTER_VERSION;
+	return sets.some((s) => s.gen || s.sources || s.tint || s.sink || s.host) ? 2 : SCATTER_VERSION;
 }
 
 export const SINK_MIN = -2;
@@ -313,7 +332,8 @@ function overrideOf(o) {
 	if (o.del) return { del: 1 };
 	/** @type {Override} */
 	const out = {};
-	for (const k of /** @type {const} */ (['x', 'z', 'yaw'])) if (Number.isFinite(o[k])) out[k] = o[k];
+	// `y`: 51-surface — a slot on a mesh host has a height of its own (a terrain slot's comes from the grid)
+	for (const k of /** @type {const} */ (['x', 'y', 'z', 'yaw'])) if (Number.isFinite(o[k])) out[k] = o[k];
 	if (Number.isFinite(o.scale)) out.scale = Math.min(SCALE_MAX, Math.max(SCALE_MIN, o.scale));
 	return Object.keys(out).length ? out : null;
 }
@@ -380,6 +400,9 @@ export function pickSource(sources, r) {
 	return sources.length - 1;
 }
 
+/** 51-surface: COUNT mode's attempt budget per wanted instance (scatterSurfaceCore keeps the same number) */
+export const ATTEMPTS_PER_SLOT = 30;
+
 /** How many slots a seeded set has on these bounds (`room` = what the terrain may still hold).
  * @param {ScatterSet} set @param {Bounds} b @param {number} [room] */
 export function slotCount(set, b, room = MAX_INSTANCES) {
@@ -410,7 +433,13 @@ export function generateSlots(set, b, opts = {}) {
 	const cell = (/** @type {number} */ x, /** @type {number} */ z) => Math.floor(x / spacing) + ',' + Math.floor(z / spacing);
 	/** @type {ScatterInstance[]} */
 	const out = [];
-	for (let k = 0; k < n; k++) {
+	// 51-surface: COUNT mode means count PLACED — while a mask or the spacing rejects slots, keep
+	// drawing (k is still the slot id, so raising the count still adds without moving) up to
+	// ATTEMPTS_PER_SLOT x count; DENSITY mode stays density x area draws, so a mask keeps the
+	// density right where it passes
+	const placing = g.count != null && (!!opts.accept || !!opts.place || spacing > 0);
+	const attempts = placing ? n * ATTEMPTS_PER_SLOT : n;
+	for (let k = 0; k < attempts && out.length < n; k++) {
 		const d = slotDraws(set.seed ?? 0, k);
 		const at = opts.place ? opts.place(d.u, d.v, k) : { x: b.minX + d.u * b.sizeX, z: b.minZ + d.v * b.sizeZ };
 		if (!at) continue;
@@ -494,7 +523,10 @@ export function parseInstanceId(id) {
  * record (null does nothing — a painted instance has no seed to fall back to; del drops it).
  * Returns a NEW set; the input is untouched.
  * @param {ScatterSet} set @param {Record<string, Partial<Override> & {del?: any} | null>} patch
- * @param {{bounds: Bounds, decode: (b64: string) => Uint8Array | null, encode: (bytes: Uint8Array) => string}} io
+ * 51-surface: a `host: 'mesh'` set's painted records are 16 bytes — `io.records` is their codec
+ * (scatterSurfaceCore.surfaceRecords), and the re-encode writes the set's new `box` with them.
+ * @param {{bounds: Bounds, decode: (b64: string) => Uint8Array | null, encode: (bytes: Uint8Array) => string,
+ *   records?: {decode: (bytes: Uint8Array, set: any) => any[], encode: (list: any[]) => {bytes: Uint8Array, box: number[]}}}} io
  * @returns {ScatterSet}
  */
 export function withOverrides(set, patch, io) {
@@ -523,8 +555,9 @@ export function withOverrides(set, patch, io) {
 	}
 	if (painted.size && set.count) {
 		const bytes = io.decode(set.data);
-		if (bytes) {
-			const list = decodeInstances(bytes, io.bounds);
+		const codec = set.host === 'mesh' ? io.records : null;
+		if (bytes && (codec || set.host !== 'mesh')) {
+			const list = codec ? codec.decode(bytes, set) : decodeInstances(bytes, io.bounds);
 			const pick = set.pick ? io.decode(set.pick) : null;
 			/** @type {Instance[]} */
 			const kept = [];
@@ -537,7 +570,12 @@ export function withOverrides(set, patch, io) {
 				if (pick) keptPick.push(pick[j] ?? 0);
 			});
 			next.count = kept.length;
-			next.data = kept.length ? io.encode(encodeInstances(kept, io.bounds)) : '';
+			if (codec) {
+				const enc = codec.encode(kept);
+				next.data = kept.length ? io.encode(enc.bytes) : '';
+				if (kept.length) next.box = enc.box;
+				else delete next.box;
+			} else next.data = kept.length ? io.encode(encodeInstances(kept, io.bounds)) : '';
 			if (pick) {
 				if (kept.length) next.pick = io.encode(new Uint8Array(keptPick));
 				else delete next.pick;
@@ -551,7 +589,7 @@ export function withOverrides(set, patch, io) {
 function pickPose(e) {
 	/** @type {any} */
 	const out = {};
-	for (const k of ['x', 'z', 'yaw', 'scale']) if (Number.isFinite(e[k])) out[k] = e[k];
+	for (const k of ['x', 'y', 'z', 'yaw', 'scale']) if (Number.isFinite(e[k])) out[k] = e[k];
 	if (out.scale != null) out.scale = Math.min(SCALE_MAX, Math.max(SCALE_MIN, out.scale));
 	return out;
 }

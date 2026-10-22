@@ -8,10 +8,12 @@
 	import UiButton from '../../ui/Button.svelte';
 	import Checkbox from '../../ui/Checkbox.svelte';
 	import { sceneRevision } from '../../../stores/sceneStore';
-	import { editScatterSet } from '$lib/terrainPaint';
+	import { editScatterSet, addScatterSet, scatterSource } from '$lib/terrainPaint';
 	import { base64ToBytes } from '$lib/terrainPaintCore';
-	import { normalizeScatter, scatterColliderOf, MAX_INSTANCES } from '$lib/terrainScatterCore';
+	import { normalizeScatter, scatterColliderOf, sourceOf, MAX_INSTANCES } from '$lib/terrainScatterCore';
+	import { scatterCounts } from '$lib/terrainSurface';
 	import ThemedSelect from '../../ui/ThemedSelect.svelte';
+	import ScatterFillRows from './ScatterFillRows.svelte'; // 51-surface E3
 
 	/** @type {{ object: any }} */
 	let { object } = $props();
@@ -22,11 +24,24 @@
 		void $sceneRevision;
 		return normalizeScatter(object?.userData?.terrainScatter, base64ToBytes)?.sets ?? [];
 	});
-	const total = $derived(scatter.reduce((sum, s) => sum + s.count, 0));
+	// 51-surface: what each set DRAWS (painted + its fill after masks/spacing), from the last layout
+	const drawn = $derived.by(() => {
+		void $sceneRevision;
+		return scatterCounts(object);
+	});
+	const countOf = (/** @type {any} */ s) => drawn[s.id] ?? s.count;
+	const total = $derived(scatter.reduce((sum, s) => sum + countOf(s), 0));
+	const terrain = $derived(!!object?.userData?.terrain);
 
 	async function openScatter() {
 		const ts = await import('$lib/terrainSculpt');
-		if (ts.enterSculpt(uuid)) ts.sculptOp.set('scatter');
+		// 51-surface: on a plain mesh a scatter-only session (the geometry is left untouched)
+		if (ts.enterSculpt(uuid, { scatter: !terrain })) ts.sculptOp.set('scatter');
+	}
+	/** 51-surface: a new FILL set — the brush's current source over the whole surface */
+	function addFill() {
+		const source = sourceOf($scatterSource) ?? { kind: 'primitive', type: 'Cone' };
+		addScatterSet(uuid, { source, gen: { count: 200, scaleMin: 0.8, scaleMax: 1.2, rot: true } });
 	}
 	const COLLIDER_ITEMS = [
 		{ value: 'none', name: 'None' },
@@ -45,9 +60,9 @@
 				<div class="flex flex-col gap-1 text-xs" data-scatter-set={s.id}>
 					<div class="flex items-center gap-2">
 						<span class="min-w-0 flex-1 truncate" title={setName(s)}>{setName(s)}</span>
-						<span class="text-text-muted">{s.count}</span>
+						<span class="text-text-muted" data-scatter-count={countOf(s)}>{countOf(s)}</span>
 						<label class="flex items-center gap-1">
-							<Checkbox label="Align to slope" checked={s.align} onchange={(/** @type {boolean} */ v) => editScatterSet(uuid, s.id, { align: !!v })} />
+							<Checkbox label={terrain ? 'Align to slope' : 'Align to surface'} checked={s.align} onchange={(/** @type {boolean} */ v) => editScatterSet(uuid, s.id, { align: !!v })} />
 							Align
 						</label>
 						<button class="ui-button-quiet" title="Remove every instance of this model" onclick={() => editScatterSet(uuid, s.id, null)}>Remove</button>
@@ -64,12 +79,20 @@
 							onchange={(/** @type {string} */ v) => editScatterSet(uuid, s.id, { collider: v })}
 						/>
 					</div>
+					<ScatterFillRows {object} set={s} />
 				</div>
 			{/each}
 		</div>
 		<p id="terrain-scatter-total" class="text-[length:var(--fs-badge)] text-text-muted">{total} of {MAX_INSTANCES} instances</p>
 	{:else}
-		<p class="text-[length:var(--fs-badge)] text-text-muted">No scattered models yet.</p>
+		<p class="text-[length:var(--fs-badge)] text-text-muted">
+			{terrain ? 'No scattered models yet.' : 'Scatter models over this object’s surface — they move, turn and scale with it.'}
+		</p>
 	{/if}
-	<UiButton id="terrain-scatter-open" size="sm" variant="outline" onclick={openScatter}>Scatter…</UiButton>
+	<div class="flex flex-wrap gap-2">
+		<!-- 51-surface E2: the "Add scatter" row (any mesh — the Water section's Add bubble / pour
+		     emitter rows sit just above it); it adds a FILL over the whole surface -->
+		<UiButton id="scatter-add" size="sm" variant="outline" onclick={addFill}>{scatter.length ? 'Add fill' : 'Add scatter'}</UiButton>
+		<UiButton id="terrain-scatter-open" size="sm" variant="outline" onclick={openScatter}>{terrain ? 'Scatter…' : 'Paint scatter…'}</UiButton>
+	</div>
 </Section>
