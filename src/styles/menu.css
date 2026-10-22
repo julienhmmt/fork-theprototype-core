@@ -2,7 +2,10 @@
 
 .burger {
 	position: absolute;
-	z-index: var(--z-chrome-top); /* top-bar chrome: modals, What's new and menus all cover it (41 G3b) */
+	/* top-bar chrome: modals, What's new and menus all cover it (41 G3b). 53 A3: one step up
+	   the tier, because the logo now comes FIRST in the document (Tab order = reading order)
+	   and its glass would otherwise blur a backdrop without the docked Connect bar's shadow */
+	z-index: calc(var(--z-chrome-top) + 1);
 }
 
 /* hamburger menu — positioning only: typography belongs to the drawer

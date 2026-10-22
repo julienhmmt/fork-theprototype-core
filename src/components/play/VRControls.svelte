@@ -9,7 +9,7 @@
 	import { vrFlying, vrMenuOpen, vrObjectsPanelOpen, vrSettingsPanelOpen, vrGrabbedHand } from '../../stores/sceneStore';
 	import { computeMoveOffset, worldScale, twoGripStretchActive, controllerIndexFor, vrNavigationSuppressed, tickVRInteractLocomotion, stickOwned } from '$lib/vrControls';
 	import { inputClaims } from '$lib/inputRuntime';
-	import { handOf } from '$lib/vr/bindings.js';
+	import { handOf, oneHandedHand } from '$lib/vr/bindings.js';
 
 	const { renderer, camera, scene } = useThrelte();
 	const { xr } = renderer;
@@ -60,9 +60,13 @@
 			// aim of the left controller (pitch included) for flying — 194/210: the
 			// controller SLOT by handedness, not the inputSources order (they diverge)
 			aimDir.set(0, 0, -1).applyQuaternion(xr.getController(controllerIndexFor(moveHand)).getWorldQuaternion(new THREE.Quaternion()));
+			// 53 (A7): one-handed, sideways turns — the stick only flies forward/back (pushed more that way)
+			const one = !!oneHandedHand();
+			const sx = axes[2] ?? 0;
+			const sy = axes[3] ?? 0;
 			const offset = computeMoveOffset({
-				x: axes[2] ?? 0,
-				y: axes[3] ?? 0,
+				x: one ? 0 : sx,
+				y: one && Math.abs(sy) <= Math.abs(sx) ? 0 : sy,
 				grip,
 				flying: $vrFlying,
 				aimDir: { x: aimDir.x, y: aimDir.y, z: aimDir.z },

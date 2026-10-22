@@ -68,18 +68,22 @@
 	/* 34 R1: reports on — grey until the first send, green after one landed, amber after a failure */
 	.report-dot {
 		display: inline-block;
-		width: 7px;
-		height: 7px;
+		width: 9px;
+		height: 9px;
 		margin-right: 5px;
 		border-radius: 50%;
 		vertical-align: 1px;
 		background: var(--text-faint);
 	}
 	.report-dot[data-state='sent'] {
-		background: var(--ink-good);
+		background: var(--status-good);
+		clip-path: var(--shape-ok);
 	}
+	/* 53 A2: a failed send is a triangle, not only a different colour */
 	.report-dot[data-state='failed'] {
-		background: var(--ink-warn);
+		background: var(--status-warn);
+		border-radius: 0;
+		clip-path: var(--shape-warn);
 	}
 	.fps-detail {
 		color: var(--text-2);
@@ -94,5 +98,12 @@
 	.fps-calls[data-tier='over'] {
 		color: var(--ink-bad);
 		font-weight: 700;
+	}
+	/* 53 A2: the tier's shape before the number (TIER_MARKS in fpsMeter.js, the VR strip's twin) */
+	.fps-calls[data-tier='warn']::before {
+		content: '▲ ';
+	}
+	.fps-calls[data-tier='over']::before {
+		content: '✕ ';
 	}
 </style>

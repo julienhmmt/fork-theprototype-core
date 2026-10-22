@@ -1,13 +1,18 @@
 {
-	"recordedAt": "2026-10-22T03:28:08.944Z",
+	"recordedAt": "2026-10-22T17:48:57.949Z",
 	"settings": {
 		"Theme": {
 			"rows": [
 				"Custom theme",
-				"Theme"
+				"High contrast",
+				"Motion",
+				"Show captions",
+				"Theme",
+				"UI scale"
 			],
 			"sections": [
-				"Interface"
+				"Interface",
+				"Accessibility"
 			]
 		},
 		"Density": {
@@ -62,10 +67,12 @@
 		},
 		"Game sounds": {
 			"rows": [
-				"Game sounds"
+				"Game sounds",
+				"Show captions"
 			],
 			"sections": [
-				"Interface"
+				"Interface",
+				"Accessibility"
 			]
 		},
 		"Music": {
@@ -387,6 +394,7 @@
 				"HUD editor: show / bring to front / hide",
 				"Node editor: show / bring to front / hide",
 				"Shader editor: show / bring to front / hide",
+				"Show captions",
 				"Show in edit",
 				"Show tours automatically",
 				"Tool dock: show / hide (Node editor, Explorer, Animation, UV, Shader, HUD…)",
@@ -394,6 +402,7 @@
 			],
 			"sections": [
 				"Interface",
+				"Accessibility",
 				"Touch controls",
 				"Shortcuts"
 			]
@@ -431,10 +440,12 @@
 				"Project actions",
 				"Show in edit",
 				"Show touch controls",
+				"UI scale",
 				"Workspace layouts"
 			],
 			"sections": [
 				"Interface",
+				"Accessibility",
 				"Touch controls",
 				"Shortcuts"
 			]
@@ -463,6 +474,7 @@
 				"Pivot point",
 				"Rotate",
 				"Rotate — in the viewport PiP",
+				"Theme",
 				"World grab snapping"
 			],
 			"sections": [
@@ -478,10 +490,13 @@
 				"Pivot point",
 				"Scale",
 				"Scale — in the viewport PiP",
+				"Theme",
+				"UI scale",
 				"World grab snapping"
 			],
 			"sections": [
 				"Interface",
+				"Accessibility",
 				"Shortcuts",
 				"VR"
 			]
@@ -1572,9 +1587,11 @@
 		},
 		"Selection outline colour": {
 			"rows": [
-				"Selection outline colour"
+				"Selection outline colour",
+				"Theme"
 			],
 			"sections": [
+				"Interface",
 				"Scene"
 			]
 		},
@@ -2039,6 +2056,7 @@
 		},
 		"Teleport": {
 			"rows": [
+				"One-handed",
 				"Teleport"
 			],
 			"sections": [
@@ -2077,7 +2095,9 @@
 		"Menu hand": {
 			"rows": [
 				"Menu hand",
-				"Phone grab handle"
+				"One-handed",
+				"Phone grab handle",
+				"Theme"
 			],
 			"sections": [
 				"Interface",
@@ -2086,7 +2106,8 @@
 		},
 		"Hold to open menu": {
 			"rows": [
-				"Hold to open menu"
+				"Hold to open menu",
+				"One-handed"
 			],
 			"sections": [
 				"VR"
@@ -2394,39 +2415,54 @@
 				"Custom theme",
 				"Edit mesh wireframe colour",
 				"Grid colour",
+				"High contrast",
+				"Motion",
 				"Ping colour",
 				"Reset line colours",
 				"Selection outline colour",
+				"Show captions",
 				"Theme",
+				"UI scale",
 				"Wireframe colour",
 				"Your character"
 			],
 			"sections": [
 				"Interface",
+				"Accessibility",
 				"Scene"
 			]
 		},
 		"color": {
 			"rows": [
 				"Custom theme",
+				"High contrast",
+				"Motion",
 				"Ping colour",
 				"Ping sound",
 				"Reset line colours",
 				"Selection outline colour",
+				"Show captions",
 				"Theme",
+				"UI scale",
 				"Wireframe colour"
 			],
 			"sections": [
 				"Interface",
+				"Accessibility",
 				"Scene"
 			]
 		},
 		"contrast": {
 			"rows": [
-				"Theme"
+				"High contrast",
+				"Motion",
+				"Show captions",
+				"Theme",
+				"UI scale"
 			],
 			"sections": [
-				"Interface"
+				"Interface",
+				"Accessibility"
 			]
 		},
 		"appearance": {
@@ -2484,10 +2520,12 @@
 			"rows": [
 				"Game sounds",
 				"Music",
+				"Show captions",
 				"Spatial voice"
 			],
 			"sections": [
 				"Interface",
+				"Accessibility",
 				"Scene",
 				"Node types"
 			]
@@ -2627,6 +2665,7 @@
 				"Menu hand",
 				"Node editor mouse",
 				"Node editor opens",
+				"One-handed",
 				"Reset panel positions",
 				"Stick deadzone",
 				"Swap sticks",
@@ -2829,6 +2868,7 @@
 				"Pivot point",
 				"Rotate",
 				"Rotate — in the viewport PiP",
+				"Theme",
 				"World grab snapping"
 			],
 			"sections": [
@@ -3085,6 +3125,7 @@
 				"Knocked-off idle",
 				"Lift the corner buttons above docked panels",
 				"Lift the toolbar above docked panels",
+				"Move focus to the next region — top bar, panels, toolbar, viewport (Shift+F6: back)",
 				"Music",
 				"Object search in the right-click menu",
 				"Offer Enter VR in a headset browser",
@@ -3104,6 +3145,7 @@
 				"Theme",
 				"Toolbar always on top",
 				"Touch tools",
+				"UI scale",
 				"Undock button",
 				"VR welcome tour",
 				"Welcome card on start",
@@ -3112,7 +3154,9 @@
 				"Your character"
 			],
 			"sections": [
-				"Interface"
+				"Interface",
+				"Accessibility",
+				"Shortcuts"
 			]
 		},
 		"menu": {
@@ -3135,6 +3179,7 @@
 				"Music",
 				"Object search in the right-click menu",
 				"Offer Enter VR in a headset browser",
+				"One-handed",
 				"Phone dock tab row",
 				"Phone grab handle",
 				"Phone selection toolbar",
@@ -3145,6 +3190,7 @@
 				"Shift+A opens the Add menu",
 				"Show FPS",
 				"Show FPS and draw calls",
+				"Show captions",
 				"Show others as classic heads",
 				"Show pop-ups only in the drawer",
 				"Show system objects in the object list",
@@ -3154,6 +3200,7 @@
 				"Theme",
 				"Toolbar always on top",
 				"Touch tools",
+				"UI scale",
 				"Undock button",
 				"Use a connected gamepad",
 				"VR welcome tour",
@@ -3165,6 +3212,7 @@
 			],
 			"sections": [
 				"Interface",
+				"Accessibility",
 				"Controls",
 				"Input",
 				"Explorer",
@@ -3253,6 +3301,7 @@
 				"Keyboard cheat sheet (every scope; the focused one first)",
 				"Leave focus mode",
 				"Leave isolation (double-click view)",
+				"Leave the 3D viewport (when it has the keyboard and nothing else wants Esc)",
 				"Leave the group you are in",
 				"Left sidebar: show / hide",
 				"Loop cut (faces)",
@@ -3260,6 +3309,7 @@
 				"Move (grab) — same as 1",
 				"Move (translate)",
 				"Move (translate) — in the viewport PiP",
+				"Move focus to the next region — top bar, panels, toolbar, viewport (Shift+F6: back)",
 				"Mute / unmute the selection (a muted node does nothing)",
 				"Next element mode (Vertices - Edges - Faces)",
 				"Node editor: show / bring to front / hide",
@@ -3492,6 +3542,7 @@
 				"Menu hand",
 				"Mirror turn",
 				"My hand model",
+				"One-handed",
 				"Passthrough",
 				"Peer hands",
 				"Pivot point",
@@ -3657,6 +3708,7 @@
 				"Keyboard cheat sheet (every scope; the focused one first)",
 				"Leave focus mode",
 				"Leave isolation (double-click view)",
+				"Leave the 3D viewport (when it has the keyboard and nothing else wants Esc)",
 				"Leave the group you are in",
 				"Left sidebar: show / hide",
 				"Loop cut (faces)",
@@ -3664,6 +3716,7 @@
 				"Move (grab) — same as 1",
 				"Move (translate)",
 				"Move (translate) — in the viewport PiP",
+				"Move focus to the next region — top bar, panels, toolbar, viewport (Shift+F6: back)",
 				"Mute / unmute the selection (a muted node does nothing)",
 				"Next element mode (Vertices - Edges - Faces)",
 				"Node editor: show / bring to front / hide",
@@ -3777,6 +3830,7 @@
 				"Keyboard cheat sheet (every scope; the focused one first)",
 				"Leave focus mode",
 				"Leave isolation (double-click view)",
+				"Leave the 3D viewport (when it has the keyboard and nothing else wants Esc)",
 				"Leave the group you are in",
 				"Left sidebar: show / hide",
 				"Loop cut (faces)",
@@ -3784,6 +3838,7 @@
 				"Move (grab) — same as 1",
 				"Move (translate)",
 				"Move (translate) — in the viewport PiP",
+				"Move focus to the next region — top bar, panels, toolbar, viewport (Shift+F6: back)",
 				"Mute / unmute the selection (a muted node does nothing)",
 				"Next element mode (Vertices - Edges - Faces)",
 				"Node editor: show / bring to front / hide",
@@ -3897,6 +3952,7 @@
 				"Keyboard cheat sheet (every scope; the focused one first)",
 				"Leave focus mode",
 				"Leave isolation (double-click view)",
+				"Leave the 3D viewport (when it has the keyboard and nothing else wants Esc)",
 				"Leave the group you are in",
 				"Left sidebar: show / hide",
 				"Loop cut (faces)",
@@ -3904,6 +3960,7 @@
 				"Move (grab) — same as 1",
 				"Move (translate)",
 				"Move (translate) — in the viewport PiP",
+				"Move focus to the next region — top bar, panels, toolbar, viewport (Shift+F6: back)",
 				"Mute / unmute the selection (a muted node does nothing)",
 				"Next element mode (Vertices - Edges - Faces)",
 				"Node editor mouse",
@@ -4162,10 +4219,15 @@
 		"theme": {
 			"rows": [
 				"Custom theme",
-				"Theme"
+				"High contrast",
+				"Motion",
+				"Show captions",
+				"Theme",
+				"UI scale"
 			],
 			"sections": [
-				"Interface"
+				"Interface",
+				"Accessibility"
 			]
 		},
 		"pinch": {
@@ -4181,12 +4243,17 @@
 		"zoom": {
 			"rows": [
 				"Allow browser pinch zoom",
+				"High contrast",
+				"Motion",
 				"Node editor opens",
 				"Pinch zoom",
+				"Show captions",
 				"Trackpad gestures",
-				"Two-finger pan"
+				"Two-finger pan",
+				"UI scale"
 			],
 			"sections": [
+				"Accessibility",
 				"Controls",
 				"Input"
 			]
@@ -4200,9 +4267,11 @@
 				"Explorer: show / bring to front / hide",
 				"Flow Code: show / bring to front / hide",
 				"HUD editor: show / bring to front / hide",
+				"High contrast",
 				"Left sidebar: show / hide",
 				"Lift the corner buttons above docked panels",
 				"Lift the toolbar above docked panels",
+				"Move focus to the next region — top bar, panels, toolbar, viewport (Shift+F6: back)",
 				"Node editor mouse",
 				"Node editor opens",
 				"Node editor: show / bring to front / hide",
@@ -4220,11 +4289,13 @@
 				"Toolbar always on top",
 				"Trackpad gestures",
 				"Two-finger pan",
+				"UI scale",
 				"UV editor: show / bring to front / hide",
 				"Workspace layouts"
 			],
 			"sections": [
 				"Interface",
+				"Accessibility",
 				"Controls",
 				"Input",
 				"Shortcuts",
@@ -4248,15 +4319,19 @@
 			"rows": [
 				"Ghost hands",
 				"Grab style",
+				"High contrast",
 				"Left-handed",
 				"Menu hand",
 				"My hand model",
+				"One-handed",
 				"Peer hands",
 				"Phone grab handle",
-				"Statistics card"
+				"Statistics card",
+				"Theme"
 			],
 			"sections": [
 				"Interface",
+				"Accessibility",
 				"VR"
 			]
 		},
@@ -4295,6 +4370,7 @@
 				"Mirror turn",
 				"My hand model",
 				"Offer Enter VR in a headset browser",
+				"One-handed",
 				"Optimize for",
 				"Passthrough",
 				"Peer hands",

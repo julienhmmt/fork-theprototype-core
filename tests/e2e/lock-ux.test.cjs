@@ -49,6 +49,13 @@ h.run(async () => {
 		(n) => n === 1,
 		'B renders a lock highlight box'
 	);
+	if ((await highlightCount(B.page)) !== 1)
+		console.log('  B why: ' + JSON.stringify(await B.page.evaluate(async () => {
+			const s = window.__stores; const read = (st) => { let v; st?.subscribe?.((x) => (v = x))(); return v; };
+			const f0 = read(s.globalRenderer)?.info?.render?.frame; await new Promise((r) => setTimeout(r, 1000));
+			const scene = read(s.globalScene); const g = scene?.getObjectByName('lock-highlights');
+			return { group: !!g, children: g?.children.length, visible: g?.visible, helpers: read(s.helperLayer?.editorHelpersShown), mode: read(s.editorMode), frames1s: (read(s.globalRenderer)?.info?.render?.frame ?? 0) - (f0 ?? 0), hidden: document.hidden };
+		})));
 	h.check((await highlightCount(A.page)) === 0, 'A has no highlight for its own lock');
 
 	// B requests control; A approves via the toast button

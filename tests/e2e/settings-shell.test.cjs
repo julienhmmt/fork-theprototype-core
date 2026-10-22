@@ -48,10 +48,12 @@ h.run(async () => {
 	const groups = await page.$$eval('#settings-nav .sn-group-label', (els) => els.map((e) => (e.textContent || '').trim()));
 	h.check(JSON.stringify(groups) === JSON.stringify(['General', 'Workspace', 'Devices & services']), 'the menu is grouped General · Workspace · Devices & services (' + groups.join(' · ') + ')');
 	const byGroup = (g) => s.rows.filter((r) => r.group === g).map((r) => r.label);
-	h.check(JSON.stringify(byGroup('general')) === JSON.stringify(['Interface', 'Controls', 'Input', 'Touch controls', 'Shortcuts']), 'General: Interface, Controls, Input, Touch controls, Shortcuts (' + byGroup('general').join(', ') + ')');
+	// 53 A1: Accessibility sits right under Interface
+	h.check(JSON.stringify(byGroup('general')) === JSON.stringify(['Interface', 'Accessibility', 'Controls', 'Input', 'Touch controls', 'Shortcuts']), 'General: Interface, Accessibility, Controls, Input, Touch controls, Shortcuts (' + byGroup('general').join(', ') + ')');
 	// 46 P2: Settings ▸ Import sits beside Export
 	h.check(JSON.stringify(byGroup('workspace')) === JSON.stringify(['Scene', 'Explorer', 'Node types', 'Import', 'Export']), 'Workspace: Scene, Explorer, Node types, Import, Export');
-	h.check(JSON.stringify(byGroup('devices')) === JSON.stringify(['VR', 'AI', 'Connection']), 'Devices & services: VR, AI, Connection');
+	// 48 O1: Privacy (the error-report switch) closes the group
+	h.check(JSON.stringify(byGroup('devices')) === JSON.stringify(['VR', 'AI', 'Connection', 'Privacy']), 'Devices & services: VR, AI, Connection, Privacy (' + byGroup('devices').join(', ') + ')');
 	h.check(labels[labels.length - 1] === 'About & what’s new' && s.rows[s.rows.length - 1].group === 'about', '"About & what’s new" is pinned last');
 	const pinned = await page.evaluate(() => {
 		const about = document.querySelector('#settings-nav .sn-about')?.getBoundingClientRect();
@@ -102,7 +104,7 @@ h.run(async () => {
 	await page.keyboard.press('ArrowDown');
 	await page.waitForTimeout(250);
 	s = await state(page);
-	h.check(s.titles[0] === 'Controls', '↓ in the menu shows the next page (' + s.titles[0] + ')');
+	h.check(s.titles[0] === 'Accessibility', '↓ in the menu shows the next page (' + s.titles[0] + ')');
 	await page.locator('#settings-nav .sn-row', { hasText: 'VR' }).first().click();
 	await page.evaluate(() => window.__stores.settingsOpen.set(false));
 	await page.waitForTimeout(400);

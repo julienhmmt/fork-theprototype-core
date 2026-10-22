@@ -26,6 +26,8 @@ import { get } from 'svelte/store';
 import { globalCamera, objectsGroup } from '../stores/sceneStore';
 import { playGameSound, isGameSound, GAME_SOUNDS } from './gameSfx';
 import { announce } from './gameAnnounce';
+// 53 (A6): the Game Sound node's caption line
+import { captionSound } from './captions';
 import { playGameMusic, stopGameMusic, gameMusicState, MUSIC_PRESET_IDS } from './gameMusic';
 import { gameFeelActive } from './gameFeel';
 import { HAPTIC_PATTERN_NAMES } from './hapticPatterns';
@@ -132,6 +134,8 @@ export function runGameFeelAction(type, data) {
 		const name = String(data.sound ?? 'click');
 		if (!isGameSound(name)) return false;
 		const at = worldPositionOf(data.at);
+		// 53 (A6): captioned whether or not this player has the sound on (a deaf player may mute it)
+		captionSound(data.caption, { source: 'gamesound', sound: name });
 		const ok = playGameSound(name, at);
 		debug.sounds[name] = (debug.sounds[name] ?? 0) + 1;
 		note(type, { sound: name, spatial: !!at, played: ok });

@@ -216,6 +216,8 @@
 			class:ctx-open={openChild === item.label}
 			data-ctx-active={atNav && indexOf.get(item) === highlight}
 			role="menuitem"
+			aria-haspopup="menu"
+			aria-expanded={openChild === item.label}
 			on:mouseenter={() => hoverRow(item, indexOf.get(item) ?? -1)}
 			on:mouseleave={leaveRow}
 			on:click={(e) => tapRow(e, item)}
@@ -267,6 +269,7 @@
 			class:ctx-checked={item.checked}
 			data-ctx-active={atNav && indexOf.get(item) === highlight}
 			role="menuitem"
+			aria-disabled={item.disabled ? 'true' : undefined}
 			title={(item.tooltip ?? '') + (item.multiPick ? (item.tooltip ? ' — ' : '') + 'Ctrl- or Shift-click to pick several' : '')}
 			aria-label={item.rowActions ? item.label : undefined}
 			on:mouseenter={() => hoverRow(item, indexOf.get(item) ?? -1)}

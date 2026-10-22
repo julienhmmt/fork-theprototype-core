@@ -61,9 +61,9 @@ describe('levels', () => {
 
 describe('the menu', () => {
 	it('Levels appears third only when registered; VR drops Back to editor', () => {
-		expect(shellMenuItems().map((i) => i.id)).toEqual(['resume', 'restart', 'settings', 'help', 'mainmenu', 'editor']);
+		expect(shellMenuItems().map((i) => i.id)).toEqual(['resume', 'restart', 'settings', 'access', 'help', 'mainmenu', 'editor']);
 		setGameLevels({ list: [{ id: 'a' }] }, 'm');
-		expect(shellMenuItems({ vr: true }).map((i) => i.id)).toEqual(['resume', 'restart', 'levels', 'settings', 'help', 'mainmenu']);
+		expect(shellMenuItems({ vr: true }).map((i) => i.id)).toEqual(['resume', 'restart', 'levels', 'settings', 'access', 'help', 'mainmenu']);
 	});
 	it('help: the game\'s own words first, then the device controls', () => {
 		setGameHelp('Line one\nLine two', 'm');

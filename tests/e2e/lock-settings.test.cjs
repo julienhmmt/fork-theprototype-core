@@ -34,6 +34,10 @@ const inPart = (section) => PART === 'all' || (PART === 'a') === PART_A.includes
 const SETTLE = 450;
 /** buttons whose effect is reloading the page (the probes would not survive it) */
 const RELOADS = new Set(['peer-server-reload']);
+/** storage a control writes when a MEASUREMENT ends (timings inside, landing whenever the GPU is
+ *  done): Scene ▸ GPU fluid ▸ Measure again. Its effect is the verdict store; the stored bench is
+ *  never part of the fingerprint */
+const MEASURED = new Set(['fluid:gpuBench']);
 // Messages that are presence/telemetry and fire on their own (camera pose, look, cursor…):
 // they never count as a setting's effect.
 const PRESENCE = new Set(['camera', 'vrhands', 'cursor', 'atscene', 'look', 'perflive', 'userdata', 'playmode']);
@@ -409,6 +413,7 @@ async function sweep(browser, tag) {
 				const after = await L.snap(page);
 				const sent = (await L.sentSince(page, before.sent)).filter((t) => !PRESENCE.has(t));
 				const fx = L.effectsOf(before, after, sent, new Set([...noisy].filter(() => true)));
+				for (const k of MEASURED) delete fx.storage[k];
 				entry.state = await readState(page, sel);
 				entry.effects = { ...fx, events: [...new Set(events)].sort() };
 				entry.scope = fx.broadcasts.length ? 'shared' : 'device';

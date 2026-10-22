@@ -34,7 +34,8 @@
 	import { faceEditObject, meshEditOutline } from '$lib/faceEdit';
 	import { editingObject } from '$lib/meshEdit';
 	import { coarsePointer } from '$lib/inputDevice';
-	import { viewPrefs } from '$lib/viewPrefs';
+	import { viewPrefs, DEFAULT_VIEW_PREFS } from '$lib/viewPrefs';
+	import { highContrast, outlineColors } from '$lib/viewportContrast';
 	import { recordingClean } from '$lib/helperLayer';
 	// 41 G10: the character studio hides the scene, so the selection glare stands down with it
 	import { studioIsolating } from '$lib/avatars/avatarState';
@@ -49,7 +50,8 @@
 		EffectPass,
 		NormalPass,
 		OutlineEffect,
-		RenderPass
+		RenderPass,
+		KernelSize
 	} from 'postprocessing';
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { renderPaused } from '$lib/overloadGuard';
@@ -86,10 +88,16 @@
 	// 18-A: the SELECTION outline follows the local colour preference. The LOCKED
 	// outline below deliberately does not — it means "a peer holds this", which is
 	// protocol state, not a look.
+	// 53 A2: in the High contrast theme the outline takes the theme's viewport tokens (a thick
+	// yellow edge, a peer's lock in the "over" colour) unless the person picked their own colour.
 	$effect(() => {
-		const hex = $viewPrefs.outlineColor;
-		outlineEffectSelected?.visibleEdgeColor.set(hex);
-		outlineEffectSelected?.hiddenEdgeColor.set(hex);
+		const c = outlineColors($highContrast, $viewPrefs.outlineColor, DEFAULT_VIEW_PREFS.outlineColor);
+		outlineEffectSelected?.visibleEdgeColor.set(c.selected);
+		outlineEffectSelected?.hiddenEdgeColor.set(c.selected);
+		const locked = c.locked ?? 0x0a0000;
+		outlineEffectLocked?.visibleEdgeColor.set(locked);
+		outlineEffectLocked?.hiddenEdgeColor.set(locked);
+		for (const fx of [outlineEffectSelected, outlineEffectLocked]) if (fx) fx.blurPass.kernelSize = c.thick ? KernelSize.MEDIUM : KernelSize.VERY_SMALL;
 	});
 	outlineEffectLocked = new OutlineEffect(scene, camera.current, {
 		blendFunction: BlendFunction.ALPHA,
@@ -560,7 +568,9 @@
 				locked: outlineEffectLocked?.selection.size ?? -1,
 				// 18-A: the colour lives on the effect's uniform, nowhere a store can see
 				selectedColor: outlineEffectSelected?.visibleEdgeColor.getHexString() ?? '',
-				lockedColor: outlineEffectLocked?.visibleEdgeColor.getHexString() ?? ''
+				lockedColor: outlineEffectLocked?.visibleEdgeColor.getHexString() ?? '',
+				// 53 A2: the High contrast outline is thicker (the blur kernel)
+				kernel: outlineEffectSelected?.blurPass.kernelSize ?? -1
 			});
 		// L1: the compiled chain lives in this component only, and its ORDER is the
 		// thing worth asserting — so the hook names each pass by identity rather than

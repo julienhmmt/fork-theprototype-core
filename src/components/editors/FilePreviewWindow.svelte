@@ -625,8 +625,8 @@
 			<span class="flex-1"></span>
 			{#if face === 'image' && !hideZoom}
 				<span id="image-zoom" class="text-xs text-text-muted">{Math.round(zoom * 100)}%</span>
-				<button class="ui-button-quiet" title="Zoom out" onclick={() => (zoom = clamp(zoom * 0.8))}>−</button>
-				<button class="ui-button-quiet" title="Zoom in" onclick={() => (zoom = clamp(zoom * 1.25))}>＋</button>
+				<button class="ui-button-quiet" title="Zoom out" aria-label="Zoom out" onclick={() => (zoom = clamp(zoom * 0.8))}>−</button>
+				<button class="ui-button-quiet" title="Zoom in" aria-label="Zoom in" onclick={() => (zoom = clamp(zoom * 1.25))}>＋</button>
 				<button class="ui-button-quiet" title="Reset" onclick={() => ((zoom = 1), (panX = 0), (panY = 0))}>1:1</button>
 			{/if}
 			{#if editable}
@@ -651,7 +651,7 @@
 				onclick={() => openPreviewCog.set(cogOpen ? null : winId)}
 				><Icon name="settings" size={16} aria-hidden="true" /></button
 			>
-			<button class="ui-button-quiet" title="Close" onclick={close}>✕</button>
+			<button class="ui-button-quiet" title="Close" aria-label="Close" onclick={close}>✕</button>
 		</div>
 
 		{#if cogOpen}

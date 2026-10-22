@@ -3,6 +3,7 @@
 	import { minimalScroll } from '$lib/ui/minimalScroll.js'
 	// 41 G18: on a phone both sidebars start HIDDEN until the user opens them (per window, per device)
 	import { readPanelOpen, writePanelOpen, handheld } from '$lib/ui/handheldPanels.js'
+	import { uiScale } from '$lib/uiScale'
 
 	// 197: reusable window CHROME. A MAIN area flanked by a collapsible PRIMARY
 	// sidebar and a SECONDARY panel that can show one of several MODES (e.g.
@@ -77,8 +78,11 @@
 	const MAIN_MIN = 160
 	const CHROME = 8 + 16
 	let rootW = $state(0)
+	// 53 A1: the two widths are DESIGN px (stored and clamped as at 100 %) and drawn × the UI scale,
+	// like every CSS length around them — so a stored width needs no rescale when the scale changes
+	const k = $derived($uiScale / 100)
 	let secondaryMax = $derived(
-		Math.max(SEC_MIN, (rootW || 640) - CHROME - (primaryOpen ? primaryWidth : 0) - MAIN_MIN)
+		Math.max(SEC_MIN, (rootW || 640) / k - CHROME - (primaryOpen ? primaryWidth : 0) - MAIN_MIN)
 	)
 	// This derived IS the re-clamp: a dock that SHRINKS narrows the panel on the next
 	// frame, with no effect and no write. The pref is kept WHOLE, so widening the dock
@@ -137,7 +141,7 @@
 	}
 	function doResize(e: PointerEvent) {
 		if (!resizing) return
-		const dx = side === 'left' ? e.movementX : -e.movementX
+		const dx = (side === 'left' ? e.movementX : -e.movementX) / k
 		primaryWidth = Math.min(Math.max(110, primaryWidth + dx), 460)
 	}
 	function endResize(e: PointerEvent) {
@@ -159,7 +163,7 @@
 	}
 	function doSecResize(e: PointerEvent) {
 		if (!resizingSec) return
-		const dx = secondarySide === 'left' ? e.movementX : -e.movementX
+		const dx = (secondarySide === 'left' ? e.movementX : -e.movementX) / k
 		// from the RENDERED width, so a drag that starts against the ceiling tracks the
 		// pointer instead of first replaying the pref it was clamped from
 		secondaryWidth = Math.min(Math.max(SEC_MIN, secondaryEff + dx), secondaryMax)
@@ -192,7 +196,7 @@
 <div class="ws-root flex h-full w-full overflow-hidden" bind:clientWidth={rootW}>
 	<!-- PRIMARY panel -->
 	{#if primaryOpen && !hidePrimary}
-		<div class="ws-panel flex h-full shrink-0 flex-col overflow-y-auto" use:minimalScroll style="order: {primaryPanelOrder}; width: {primaryWidth}px">
+		<div class="ws-panel flex h-full shrink-0 flex-col overflow-y-auto" use:minimalScroll style="order: {primaryPanelOrder}; width: {primaryWidth * k}px">
 			{@render primary?.()}
 		</div>
 	{/if}
@@ -261,12 +265,12 @@
 	{#if secondaryOpen}
 		<div
 			class="ws-panel ws-panel-secondary tp-noscrollbar flex h-full shrink-0 flex-col overflow-y-auto"
-			style="order: {secondaryPanelOrder}; width: {secondaryEff}px"
+			style="order: {secondaryPanelOrder}; width: {secondaryEff * k}px"
 		>
 			<div class="ws-panel-head flex shrink-0 items-center gap-1 px-2 py-1">
 				<span class="flex-1 truncate text-xs font-semibold opacity-80">{activeMode?.label}</span>
-				<button class="ws-mini" title="Switch sidebar side" onclick={switchSide} data-ws-switch-side>⇄</button>
-				<button class="ws-mini" title="Close" onclick={hideSecondary}>✕</button>
+				<button class="ws-mini" title="Switch sidebar side" aria-label="Switch sidebar side" onclick={switchSide} data-ws-switch-side>⇄</button>
+				<button class="ws-mini" title="Close" aria-label="Close" onclick={hideSecondary}>✕</button>
 			</div>
 			<div class="min-h-0 flex-1 overflow-y-auto" use:minimalScroll>{@render secondary?.(secondaryMode)}</div>
 		</div>

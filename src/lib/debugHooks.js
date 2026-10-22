@@ -152,6 +152,11 @@ export const DEBUG_HOOKS = [
 	['nodeGroups', () => import('./nodeGroups')],
 	['nodeEditorActions', () => import('./nodeEditorActions')],
 	['themes', () => import('./themes')],
+	// 53 A1 / A5: the UI scale + reduced-motion settings
+	['uiScale', () => import('./uiScale')],
+	['settingsReset', () => import('./settings/resetCategory')],
+	['motion', () => import('./motion')],
+	['captionsPref', () => import('./captionsPref')],
 	['phoneShell', () => import('./ui/phoneShell.js')],
 	// 42 I5: the phone bar list (phoneBar / setBar) and More's three chrome switches
 	['phoneBar', () => import('./ui/phoneBar.js')],
@@ -167,6 +172,8 @@ export const DEBUG_HOOKS = [
 	['vrSculpt', () => import('./vr/sculpt.js')],
 	['vrTourTargets', () => import('./vr/tourTargets.js')],
 	['vrPrefs', () => import('./vr/prefs.js')],
+	// 53 (A7): recenter + the lift / recenter counts
+	['vrLocomotion', () => import('./vr/locomotion.js')],
 	['vrPalette', () => import('./vrPalette')],
 	['vrWindowPoses', () => import('./vrWindowPoses')],
 	['vrKeyboard', () => import('./vrKeyboard')],
@@ -426,6 +433,7 @@ export const DEBUG_HOOKS = [
 	['arch', () => import('./arch/archParts.js')],
 	['sceneLoader', () => import('./sceneLoader')],
 	['pickCycle', () => import('./pickCycle')],
+	['a11yAnnounce', () => import('./a11y/announce')],
 	['pickPass', () => import('./pickPass')],
 	['selectThrough', () => import('./selectThrough')],
 	['vrGameInput', () => import('./vrGameInput')],

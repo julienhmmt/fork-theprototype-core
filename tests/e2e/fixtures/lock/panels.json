@@ -1,25 +1,25 @@
 {
-	"recordedAt": "2026-10-05T23:01:46.168Z",
+	"recordedAt": "2026-10-22T17:46:07.352Z",
 	"surfaces": {
 		"logo-menu": {
 			"shown": true,
 			"closer": true,
-			"escape": false
+			"escape": true
 		},
 		"connect-drawer": {
 			"shown": true,
 			"closer": true,
-			"escape": false
+			"escape": true
 		},
 		"notifications": {
 			"shown": true,
 			"closer": null,
-			"escape": false
+			"escape": true
 		},
 		"notes": {
 			"shown": true,
 			"closer": true,
-			"escape": false
+			"escape": true
 		},
 		"chat": {
 			"shown": true,
@@ -240,11 +240,27 @@
 			"storage": [],
 			"dialogs": []
 		},
+		"Pivot: Median point (click to change)": {
+			"title": "Pivot: Median point (click to change)",
+			"stores": {
+				"a11yAnnounce.politeAnnouncement": "<object>",
+				"multiTransform.pivotMode": "<object>",
+				"notifications": "<object>",
+				"notificationsUnread": "<changed>"
+			},
+			"storage": [
+				"notifications",
+				"pivotMode"
+			],
+			"dialogs": []
+		},
 		"Interact mode (I)": {
 			"title": "Interact mode (I)",
 			"stores": {
+				"a11yAnnounce.politeAnnouncement": "Nothing selected",
 				"editorMode": "interact",
-				"helperLayer.editorHelpersShown": false
+				"helperLayer.editorHelpersShown": false,
+				"selectedObjects": "<object>"
 			},
 			"storage": [],
 			"dialogs": []
@@ -262,6 +278,8 @@
 			"stores": {
 				"bottomDock.bottomDockActive": "flow",
 				"bottomDock.dockOccupants": "<object>",
+				"bottomDock.dockShownKeys": "<object>",
+				"bottomDock.dockStripTabs": "<object>",
 				"bottomDock.dockTabs": "<object>",
 				"bottomDock.flowTabs": "<object>",
 				"bottomDock.visibleDockKey": "flow",
@@ -277,6 +295,8 @@
 			"stores": {
 				"bottomDock.bottomDockActive": "explorer",
 				"bottomDock.dockOccupants": "<object>",
+				"bottomDock.dockShownKeys": "<object>",
+				"bottomDock.dockStripTabs": "<object>",
 				"bottomDock.dockTabs": "<object>",
 				"bottomDock.visibleDockKey": "explorer",
 				"explorerClose": false
@@ -292,6 +312,8 @@
 				"animationClose": false,
 				"bottomDock.bottomDockActive": "animation",
 				"bottomDock.dockOccupants": "<object>",
+				"bottomDock.dockShownKeys": "<object>",
+				"bottomDock.dockStripTabs": "<object>",
 				"bottomDock.dockTabs": "<object>",
 				"bottomDock.flowTabs": "<object>",
 				"bottomDock.visibleDockKey": "animation"

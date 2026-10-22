@@ -294,7 +294,7 @@
 					{/each}
 				</select>
 				<button id="music-preset-apply" class="tbx-primary" disabled={!presetPick} onclick={applyPickedPreset}>Apply</button>
-				<button id="music-preset-delete" class="tbx-btn tbx-danger" title="Delete preset" disabled={!presetPick} onclick={deletePickedPreset}>✕</button>
+				<button id="music-preset-delete" class="tbx-btn tbx-danger" title="Delete preset" aria-label="Delete preset" disabled={!presetPick} onclick={deletePickedPreset}>✕</button>
 			</div>
 			<div class="tbx-row music-presets">
 				<input id="music-preset-name" class="music-input" placeholder="Save as…" bind:value={presetName} onkeydown={(e) => { if (e.key === 'Enter') saveCurrentPreset(); }} />

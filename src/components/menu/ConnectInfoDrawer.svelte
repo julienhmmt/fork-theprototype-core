@@ -8,6 +8,7 @@
 	// cloud-plugin mount (drawerSlot — room/host settings render here, batch RM).
 	import { onMount } from 'svelte';
 	import { slide } from 'svelte/transition';
+	import { motionMs } from '$lib/motion'; // 53 A5: instant under reduced motion
 	import { cubicOut } from 'svelte/easing';
 	import {
 		peers,
@@ -20,7 +21,7 @@
 		connectDrawerPinned
 	} from '../../stores/appStore.js';
 	import { sessionHost, peerJoinedAt, signalingRetry } from '$lib/connectionState';
-	import { peerQuality, qColor } from '$lib/networkQuality';
+	import { peerQuality, qColor, qGlyph } from '$lib/networkQuality';
 	import { peerServerStatus, peerServerPingUrl, peerServerPeersUrl } from '$lib/peerServer';
 	import { cancelOutboundRequest } from '$lib/peerApproval';
 	import { drawerSlot, rolesInfo } from '$lib/cloudHooks';
@@ -176,7 +177,7 @@
 	class="ui-panel tp-ui cxd-panel"
 	data-testid="connect-info-drawer"
 	bind:this={panelEl}
-	transition:slide={{ duration: 200, easing: cubicOut }}
+	transition:slide={{ duration: motionMs(200), easing: cubicOut }}
 >
 	<div class="cxd-tabs" role="tablist">
 		<button class="cxd-tab" class:active={$connectDrawerOpen && $connectDrawerTab === 'info'} role="tab" aria-selected={$connectDrawerOpen && $connectDrawerTab === 'info'} onclick={() => setTab('info')}>Info</button>
@@ -302,7 +303,7 @@
 					<span class="cxd-peer-name">{nameOf(pid)}</span>
 					{#if q}
 						<span style="color: {qColor(q.level)}" title={q.rtt != null ? Math.round(q.rtt) + ' ms round-trip' : 'measuring…'}
-							>●{q.rtt != null ? ' ' + Math.round(q.rtt) + 'ms' : ''}</span
+							>{qGlyph(q.level)}{q.rtt != null ? ' ' + Math.round(q.rtt) + 'ms' : ''}</span
 						>
 						{#if q.relayed}<span class="cxd-relay" title="Relayed through a TURN server">relay</span>{/if}
 					{/if}
@@ -536,7 +537,7 @@
 		background: var(--text-faint);
 	}
 	.cxd-status[data-state='connected'] .cxd-sdot {
-		background: var(--ink-good, var(--speaking));
+		background: var(--status-good, var(--speaking));
 	}
 	.cxd-status[data-state='pending'] .cxd-sdot {
 		background: var(--warn-text);

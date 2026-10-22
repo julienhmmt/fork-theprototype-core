@@ -12,6 +12,7 @@
 	// `multiSelectMode` in the same two places it reads `event.shiftKey`, which is what
 	// keeps this from being a second selection implementation.
 	import Icon from '../ui/Icon.svelte';
+	import { roving } from '$lib/keyboardNav'; // 53 A3: one tab stop, arrows between the buttons
 	import { touchTools, multiSelectMode, connectDocked, connectBarHeight } from '../../stores/appStore';
 	import { undo, redo, canUndo, canRedo } from '$lib/history';
 	// 42 I9: the cluster is a layout region of the toolbar's record — which of these three are
@@ -173,7 +174,9 @@
 		class="touch-tools"
 		class:tt-stacked={stacked}
 		style="--tt-anchor: {$connectDocked ? $connectBarHeight + 8 : 20}px; --tt-slide: {slide}px"
+		role="toolbar"
 		aria-label="Touch tools"
+		use:roving={{ item: $toolbarSlots.editing ? ':not(*)' : '.tt-btn', axis: 'both' }}
 	>
 		{#if ttShown('undo')}
 		<button

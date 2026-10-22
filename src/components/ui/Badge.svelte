@@ -37,17 +37,24 @@
 		color: var(--badge-text);
 	}
 	.badge-ok .badge-dot {
-		background: var(--ink-good);
+		background: var(--status-good);
+		clip-path: var(--shape-ok);
 	}
+	/* 53 A2: a status is a shape as well as a colour (the theme's --shape-* tokens) */
 	.badge-warn .badge-dot {
-		background: var(--ink-warn);
+		background: var(--status-warn);
+		border-radius: 0;
+		clip-path: var(--shape-warn);
 		animation: badge-pulse 1.6s infinite;
 	}
 	.badge-bad .badge-dot {
-		background: var(--ink-bad);
+		background: var(--status-bad);
+		border-radius: 0;
+		clip-path: var(--shape-bad);
 	}
 	.badge-off .badge-dot {
-		background: var(--text-faint);
+		background: transparent;
+		box-shadow: inset 0 0 0 1.5px var(--text-faint);
 	}
 	.badge-live {
 		background: color-mix(in srgb, var(--live) 18%, transparent);
@@ -85,5 +92,11 @@
 		height: 6px;
 		border-radius: 50%;
 		background: currentColor;
+	}
+	/* a status mark needs the room for its shape (a 6 px triangle reads as a dot) */
+	:is(.badge-ok, .badge-warn, .badge-bad, .badge-off) .badge-dot {
+		flex: 0 0 auto;
+		width: 9px;
+		height: 9px;
 	}
 </style>

@@ -12,6 +12,7 @@
     import { playCursorFree } from '$lib/playCursor'
     // 31 K3: in a game, Escape (and any lock loss) opens the pause menu instead of leaving play
     import { shellMenu, shellMenuAvailable, openShellMenu, closeShellMenu } from '$lib/gameShell'
+    import { playCode } from '$lib/playerAccess' // 53 (A6): the player's key remap
     import { inputClaims, getGamepadAxes } from '$lib/inputRuntime'
     import { gamepadPrefs } from '$lib/gamepadPrefs'
     import { coarsePointer } from '$lib/inputDevice'
@@ -446,6 +447,8 @@
       setPlayMoveSpeed(current * factor)
     }
 
+    /** 53 (A6): physical key -> the game key its press meant @type {Map<string, string>} */
+    const heldAs = new Map()
     function onKeyDown( event ) {
       // 21-E3: keys pressed OVER the menu must not arm movement (the claim gates the
       // task, not this listener, so a held W would resume the instant the menu closed).
@@ -454,7 +457,14 @@
       // can be refused by the browser, and "close" is not even expressible for a
       // showWhile-bound screen. Games author a Resume button.
       if ($playPointerFree && event.code !== 'Escape') return
-      switch ( event.code ) {
+      // 53 (A6): the player's remap (Accessibility ▸ Controls) — the game key this press means
+      // (null = remapped away). Escape is never remappable. Remembered per physical key so the
+      // release ends what the press began even if the table changed in between.
+      // (a synthetic key — a touch action button — already speaks the game's code)
+      const code = event.code === 'Escape' || event.isTrusted === false ? event.code : playCode(event.code)
+      if (code === null) return
+      heldAs.set(event.code, code)
+      switch ( code ) {
         case 'KeyW': moveState.forward = 1; break;
         case 'KeyS': moveState.backward = 1; break;
         case 'KeyA': moveState.left = 1; break;
@@ -491,7 +501,9 @@
     }
 
     function onKeyUp( event ) {
-      switch ( event.code ) {
+      const code = heldAs.get(event.code) ?? (event.isTrusted === false ? event.code : playCode(event.code))
+      heldAs.delete(event.code)
+      switch ( code ) {
         case 'KeyW': moveState.forward = 0; break;
         case 'KeyS': moveState.backward = 0; break;
         case 'KeyA': moveState.left = 0; break;

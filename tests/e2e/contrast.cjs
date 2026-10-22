@@ -51,7 +51,9 @@ const CONTRAST_FN = `(rootSel) => {
 		if (r.width < 2 || r.height < 2) return false;
 		for (let e = el; e; e = e.parentElement) {
 			const cs = getComputedStyle(e);
-			if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return false;
+			// 53 A2: < 0.05, not === 0 -- a hover-reveal label caught mid-fade (the colour picker's "change to rgb",
+			// a 0.5 s opacity transition) read 1:1 at opacity 0.0001
+			if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) < 0.05) return false;
 			if (e.getAttribute && e.getAttribute('aria-hidden') === 'true') return false;
 		}
 		return true;

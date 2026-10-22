@@ -15,14 +15,15 @@
 	import { dockSplitView, dockHeight, setSplitRatio, activateDock, visibleDockKey, SPLIT_MIN } from '$lib/bottomDock';
 	import { dockAddMenuAt } from '$lib/dockMenu';
 	import Icon from './ui/Icon.svelte';
+	import { cssPx } from '$lib/uiScale'; // 53 A1: a px token may read back as calc(...)
 
 	const split = $derived($dockSplitView);
 
 	/** the dock's usable span in viewport px (the sidebars' pinned columns excluded) */
 	function span() {
 		const css = getComputedStyle(document.documentElement);
-		const left = parseFloat(css.getPropertyValue('--sb-dock-left')) || 0;
-		const right = parseFloat(css.getPropertyValue('--sb-dock-right')) || 0;
+		const left = cssPx(css.getPropertyValue('--sb-dock-left')) || 0;
+		const right = cssPx(css.getPropertyValue('--sb-dock-right')) || 0;
 		return { left, width: Math.max(1, window.innerWidth - left - right) };
 	}
 

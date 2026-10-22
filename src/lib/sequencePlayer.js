@@ -45,6 +45,8 @@ import {
 import * as anim from './animationPreview';
 import { clipInfo, setAnimationState } from './animatedImports';
 import { fireSequenceEvent } from './flowRuntime';
+// 53 (A6/A5): an audio clip's caption line (the shared caption bus)
+import { showCaption } from './captions';
 
 /** flow seconds of day — the unit trigger stamps use (flowRuntime / animationPreview) */
 function syncedNow() {
@@ -294,8 +296,11 @@ function startAnim(run, seq, item) {
 
 /** @param {Run} run @param {any} seq @param {any} item */
 function startAudio(run, seq, item) {
-	if (!item.sound) return;
 	const moment = itemMoment(run, seq, item);
+	// 53 (A6/A5): the clip's caption for the rest of its window (a caption with no sound yet is
+	// still a subtitle); the player's / 53-scale's Captions switch decides whether it shows
+	if (item.caption) showCaption({ text: item.caption, source: 'timeline', seconds: Math.max(1, Math.min(15, item.dur - Math.max(0, syncedNow() - moment))) });
+	if (!item.sound) return;
 	void Promise.all([import('./soundRuntime'), import('./audioEngine')])
 		.then(async ([sr, ae]) => {
 			const buffer = await sr.sampleBuffer(item.sound, { timeoutMs: 10000 });

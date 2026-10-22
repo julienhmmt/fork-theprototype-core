@@ -66,12 +66,21 @@ const geometry = (page) =>
 		const win = el?.getBoundingClientRect();
 		const pill = document.getElementById('controls-pill')?.getBoundingClientRect();
 		const cs = getComputedStyle(document.documentElement);
+		// 1.41 (53 A1): px tokens are calc(Npx * var(--ui-scale, 1)) — resolve them through a probe, as uiScale.cssPx does
+		const px = (/** @type {string} */ name) => {
+			const probe = document.createElement('div');
+			probe.style.cssText = `position:absolute;visibility:hidden;width:var(${name}, 0px)`;
+			document.body.appendChild(probe);
+			const w = probe.getBoundingClientRect().width;
+			probe.remove();
+			return w;
+		};
 		return {
 			innerHeight: window.innerHeight,
 			innerWidth: window.innerWidth,
 			coarse: window.matchMedia('(pointer: coarse)').matches,
-			controlsInset: parseFloat(cs.getPropertyValue('--controls-inset')) || 0,
-			viewportInset: parseFloat(cs.getPropertyValue('--viewport-inset')) || 0,
+			controlsInset: px('--controls-inset'),
+			viewportInset: px('--viewport-inset'),
 			header: header ? { top: header.top, bottom: header.bottom, left: header.left, right: header.right } : null,
 			win: win ? { top: win.top, bottom: win.bottom, left: win.left, right: win.right, height: win.height } : null,
 			pill: pill && pill.height > 0 ? { top: pill.top, left: pill.left, right: pill.right } : null,

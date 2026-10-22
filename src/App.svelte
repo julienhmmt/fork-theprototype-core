@@ -17,6 +17,8 @@
   import { PCFShadowMap } from 'three'
   import Scene from './components/Scene.svelte'
   import Menu from './components/Menu.svelte'
+  // 53 A3: the skip link, Esc out of the viewport, F6 between regions
+  import KeyboardNav from './components/KeyboardNav.svelte'
   import ConfirmModal from './components/menu/ConfirmModal.svelte'
   // loose-scenes fix (bug 2a): importing something you already have. Importing this
   // module is ALSO what registers explorer.js's duplicate-resolver seam, which is why
@@ -157,8 +159,11 @@ import { startMusicToolbox } from './lib/musicToolbox'
   import ShortcutSheet from './components/menu/ShortcutSheet.svelte' // 36 I3
   import HudLayer from './components/hud/HudLayer.svelte'
   import PickCycleHint from './components/menu/PickCycleHint.svelte' // 36 F22 / S6 / S12
+  import LiveRegions from './components/ui/LiveRegions.svelte' // 53-reader: toasts, errors, selection read aloud
   // 31 K3: the game shell — the pause menu + its wiring
   import GameShellMenu from './components/hud/GameShellMenu.svelte'
+  import CaptionOverlay from './components/play/CaptionOverlay.svelte' // 53 (A6): captions over a game
+  import PlayerColorFilter from './components/play/PlayerColorFilter.svelte' // 53 (A6): the colour-blind filter
   import FpsCounter from './components/hud/FpsCounter.svelte'
   import { startGameShell } from '$lib/gameShellWire'
   // 33 (L2-L4): keep/unload modules on a scene switch, and the scope a kept module lives in
@@ -395,6 +400,8 @@ import { startMusicToolbox } from './lib/musicToolbox'
 </script>
 
 <svelte:window on:dragover|preventDefault on:drop|preventDefault={handleDrop} />
+<!-- 53 A3: FIRST in the document, so it is the first thing Tab reaches -->
+<KeyboardNav />
 
 {#if !$isLocked && !$embedMode}
 <Flow />
@@ -484,6 +491,9 @@ import { startMusicToolbox } from './lib/musicToolbox'
      new tier: it beats the camera PiP and loses to modal/toast/menu. -->
 <HudLayer />
 <PickCycleHint />
+<!-- 53-reader (A4): the polite + assertive live regions — outside every gate, so a toast hidden
+     from the viewport and a selection made in any mode are still read aloud -->
+<LiveRegions />
 <!-- 30 P1: the game chip — "Game · <state>" + ▶ Test play. Beside HudLayer because it is the
      editor's stand-in for a game's screens, which HudLayer no longer draws outside Play.
      Editor-only (it hides itself in Play, in VR and in embed mode). -->
@@ -494,6 +504,8 @@ import { startMusicToolbox } from './lib/musicToolbox'
 <CommandPalette />
 <!-- 31 K3: the pause menu every game shares (Esc / the corner Menu button) -->
 <GameShellMenu />
+<CaptionOverlay />
+<PlayerColorFilter />
 <FpsCounter />
 
 <!-- W9: THE VIEWPORT IS A LAYOUT REGION.
@@ -508,7 +520,9 @@ import { startMusicToolbox } from './lib/musicToolbox'
      already sits above the canvas at the default 0. No `transition` either: each
      step reallocates the composer's render targets, so animating the inset turns one
      realloc into one per frame. -->
-<div class="viewport" class:viewport-inset={$viewPrefs.dockPushesViewport && !$embedMode}>
+<!-- 53 A3: #viewport is the skip link's target; it takes focus only when the keyboard asks
+     (keyboardNav.focusViewport lends it a tabindex), so a mouse press still focuses <body> -->
+<div id="viewport" role="region" aria-label="3D viewport" class="viewport" class:viewport-inset={$viewPrefs.dockPushesViewport && !$embedMode}>
   <Canvas shadows={PCFShadowMap}>
     <Scene />
   </Canvas>
@@ -523,6 +537,11 @@ import { startMusicToolbox } from './lib/musicToolbox'
     bottom: 0;
   }
   /* the pref OFF keeps the pre-W9 behaviour: a full-window canvas the dock covers */
+  /* 53 A3: the keyboard is in the 3D view — an inset ring (the canvas fills the box) */
+  .viewport:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--focus-ring-width));
+  }
   .viewport-inset {
     bottom: var(--bottom-inset, 0px);
   }

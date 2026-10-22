@@ -70,7 +70,7 @@
 		<div class="flex h-[80vh] w-[640px] max-w-[95vw] flex-col gap-2 rounded-lg bg-surface-1 p-4 text-text shadow-xl">
 			<div class="flex items-center justify-between">
 				<span class="text-lg font-semibold">{editingId ? 'Edit node definition' : 'New custom node'}</span>
-				<button class="rounded-sm bg-surface-active px-2 hover:bg-border-strong" on:click={() => nodeDesignerOpen.set(null)}>✕</button>
+				<button class="rounded-sm bg-surface-active px-2 hover:bg-border-strong" title="Close" aria-label="Close the node designer" on:click={() => nodeDesignerOpen.set(null)}>✕</button>
 			</div>
 
 			<label class="flex items-center gap-2 text-sm">
@@ -103,7 +103,7 @@
 									placeholder="red,green,blue"
 								/>
 							{/if}
-							<button class="rounded-sm bg-surface-active px-1 hover:bg-border-strong" on:click={() => removeParam(index)}>✕</button>
+							<button class="rounded-sm bg-surface-active px-1 hover:bg-border-strong" title="Remove parameter" aria-label="Remove parameter" on:click={() => removeParam(index)}>✕</button>
 						</div>
 					{/each}
 				</div>

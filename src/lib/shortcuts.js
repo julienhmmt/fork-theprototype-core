@@ -47,8 +47,10 @@ import { toggleSidebar } from './sidebars'; // 44 M7 (a leaf: app stores + safeS
 // shortcuts sits inside history's import family and a cycle there TDZ-crashes the
 // SSR prerender.
 import { requestPlay } from './playMode';
-import { selectedObject } from '../stores/sceneStore';
+import { selectedObject, selectedObjects } from '../stores/sceneStore';
 import { safeStorage } from './safeStorage';
+// 53 A3: does a key press belong to the 3D view (a zero-import leaf)
+import { tabEditsMesh, trackViewClaim } from './keyboardNav';
 
 // Single source of truth for keyboard shortcuts: the same registry binds the keys
 // and renders the list in Settings -> Shortcuts. Other modules push entries via
@@ -261,6 +263,26 @@ export const shortcuts = [
 		fixed: true,
 		fixedReason: 'movement keys, handled by fly navigation'
 	},
+	// 53 A3: keyboard navigation — listed so the cheat sheet and Settings ▸ Shortcuts say it exists;
+	// KeyboardNav.svelte handles both (F6 from a text field too, so it never reaches the registry)
+	{
+		id: 'navigation.next-region',
+		keys: 'F6',
+		group: 'Navigation',
+		scope: 'global',
+		label: 'Move focus to the next region — top bar, panels, toolbar, viewport (Shift+F6: back)',
+		fixed: true,
+		fixedReason: 'keyboard navigation'
+	},
+	{
+		id: 'navigation.leave-viewport',
+		keys: 'Escape',
+		group: 'Navigation',
+		scope: 'viewport',
+		label: 'Leave the 3D viewport (when it has the keyboard and nothing else wants Esc)',
+		fixed: true,
+		fixedReason: 'Escape belongs to a dozen handlers'
+	},
 	{
 		id: 'movement.fly-fast',
 		keys: 'Shift (hold)',
@@ -353,6 +375,9 @@ export const shortcuts = [
 		group: 'Objects',
 		scope: 'viewport',
 		label: 'Enter mesh edit mode (inside it Tab cycles Vertices/Edges/Faces; Esc exits) — on a measurement, edit its points',
+		// 53 A3: with nothing selected Tab has nothing to edit — leave it to focus navigation
+		// (declining here keeps the browser default: from a fresh load Tab reaches the skip link)
+		when: () => !!get(editingObject) || get(selectedObjects).length > 0,
 		action: () => {
 			const sel = get(selectedObject);
 			// 48 B2: a measurement has no mesh — Tab edits its points instead. DYNAMIC: measure.js
@@ -903,7 +928,9 @@ const OVERRIDES_KEY = 'shortcutOverrides';
  * handlers (mesh sessions, pick modes, modals, the isolation exit above), none of
  * which consults this registry — binding a command onto it would swallow one of
  * them silently, which is the failure nobody files as a shortcut bug. */
-const DENY_KEYS = ['Escape'];
+// 53 A3: F6 / Shift+F6 move between the app's regions (KeyboardNav.svelte takes them in the
+// capture phase), so a command bound to either would never fire
+const DENY_KEYS = ['Escape', 'F6', 'Shift+F6'];
 
 /** user rebinds, `{ id: keys }` @type {Record<string, string>} */
 let overrides = {};
@@ -1253,7 +1280,11 @@ function handleKeydown(event) {
 	// is the browser's focus navigation — the global Tab (enter Edit Mesh) left every
 	// menu row unreachable by keyboard
 	const target = /** @type {any} */ (event.target);
-	if ((combo === 'Tab' || combo === 'Shift+Tab') && target?.closest?.('[popover], [role="menu"], dialog')) return;
+	// 53 A3: …and on ANY focused control. Tab is Edit Mesh only on the 3D view itself (the
+	// viewport the skip link focuses, its canvas, or <body> after a press on the canvas);
+	// everywhere else it is how a keyboard user moves through the app — the global Tab used
+	// to swallow every press, so from a fresh load focus never left <body>
+	if ((combo === 'Tab' || combo === 'Shift+Tab') && (!tabEditsMesh(target) || target?.closest?.('[popover], [role="menu"], dialog'))) return;
 	// D3: while a mesh-edit session owns its hotkeys, bare mesh-edit keys never
 	// match the registry — F would ALSO focus the object mid-edit. Delete
 	// self-guards; 1/2/3 intentionally stay (gizmo mode on the proxy).
@@ -1303,6 +1334,7 @@ export function startShortcuts() {
 	overrides = loadOverrides();
 	applyOverrides();
 	startKeyScope();
+	trackViewClaim(); // 53 A3
 	setVrScopeProbe(() => !!get(isVRMode));
 	window.addEventListener('keydown', handleKeydown);
 }

@@ -56,6 +56,8 @@
 	import { phoneShell } from '$lib/ui/phoneShell.js';
 	import SimControls from './SimControls.svelte';
 	import { focusStack } from '$lib/windowFocus';
+	// 53 A3: one tab stop per toolbar (arrows between its buttons) + Enter/Space on the <p> cells
+	import { roving, pressOnKey } from '$lib/keyboardNav';
 	import { tabbable, groupRectOf, moveGroupOf, resizeGroup } from '$lib/windowTabs';
 	import { clampWinSize, clampResize, anchorOf, registerSizeReset } from '$lib/windowSize';
 	import { dockable } from '$lib/docking';
@@ -99,6 +101,7 @@
 	import { geometry as sidebarGeometry } from '$lib/sidebars';
 	import type { ToolbarLayout, LayoutConfig, Placements, Region } from '$lib/toolbarLayout';
 	import { pivotMode, pivotParentAvailable } from '$lib/multiTransform'; // 37 R1: the toolbar Pivot cell
+	import { cssPx, scaledPx } from '$lib/uiScale'; // 53 A1: hud.css px tokens read back as calc(...)
 	import { VRButton, XRButton } from '@threlte/xr'
 
 	// A panel is "shown" when it is open AND either the visible dock tab OR floating
@@ -779,7 +782,10 @@
 	// probe above (as an attachment) and the drop-to-root target
 	const objHeaderAttrs = {
 		[createAttachmentKey()]: fromAction(objHeaderWidth),
-		role: 'list',
+		// 53-reader: a GROUP (it is a drop target, so it needs a role) — `list` demanded listitem
+		// children the header's search box and buttons can never be (axe aria-required-children)
+		role: 'group',
+		'aria-label': 'Object list tools',
 		ondragover: (e: DragEvent) => {
 			if (e.dataTransfer?.types.includes('application/x-object-uuid')) {
 				e.preventDefault();
@@ -804,8 +810,8 @@
 		let moving = false;
 		let left = saved?.left ?? 350;
 		let top = saved?.top ?? 100;
-		let width = saved?.width ?? 300;
-		let height = saved?.height ?? 250;
+		let width = saved?.width ?? scaledPx(300); // 53 A1: the default size follows the UI scale
+		let height = saved?.height ?? scaledPx(250);
 
 		let startX = 0;
 		let startY = 0;
@@ -982,8 +988,8 @@
 			} catch {}
 			left = stored?.left ?? 350;
 			top = stored?.top ?? 100;
-			width = stored?.width ?? 300;
-			height = stored?.height ?? 250;
+			width = stored?.width ?? scaledPx(300);
+			height = stored?.height ?? scaledPx(250);
 			clampRect();
 		});
 	}
@@ -2047,7 +2053,7 @@
 		const g = get(sidebarGeometry);
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
-		const inset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bottom-inset')) || 0;
+		const inset = cssPx(getComputedStyle(document.documentElement).getPropertyValue('--bottom-inset')) || 0;
 		return {
 			left: g?.wide ? g.dockLeft : 0,
 			right: vw - (g?.wide ? g.dockRight : 0),
@@ -3269,7 +3275,7 @@
 		}
 		// the bar's ROW is its bottom bar-height: a wrapped edit bar is taller, and reading its whole box
 		// would let a corner button ABOVE the row narrow the band it wraps into (and so on)
-		const rowH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hud-bar-h')) || pill.height;
+		const rowH = cssPx(getComputedStyle(document.documentElement).getPropertyValue('--hud-bar-h')) || pill.height;
 		const rowTop = Math.max(pill.top, pill.bottom - rowH);
 		const found: HTMLElement[] = [];
 		for (const el of TOOLBAR_NEIGHBOURS.flatMap((sel) => [...document.querySelectorAll<HTMLElement>(sel)])) {
@@ -3332,8 +3338,8 @@
 		const root = getComputedStyle(document.documentElement);
 		const cs = getComputedStyle(nav);
 		const row = nav.querySelector('.hud-bar-row');
-		const cell = px(root.getPropertyValue('--hud-cell')) || 38;
-		const fab = px(root.getPropertyValue('--hud-fab')) || 44;
+		const cell = cssPx(root.getPropertyValue('--hud-cell')) || 38;
+		const fab = cssPx(root.getPropertyValue('--hud-fab')) || 44;
 		const gap = row ? px(getComputedStyle(row).columnGap) : 2;
 		const navGap = px(cs.columnGap);
 		const sep = nav.querySelector('.hud-sep');
@@ -3690,8 +3696,10 @@
 	class="tp-ui hud-glass hud-bar absolute -translate-x-1/2 rtl:translate-x-1/2 bottom-4 start-1/2 w-max min-w-max shrink-0 {pillZClass}"
 	class:hud-editing={editing !== null}
 	style={pillStyle}
+	aria-label="Scene tools"
 	use:toolbarDrag
 	use:cellMenu={BAR}
+	use:roving={{ item: editing ? ':not(*)' : '.hud-cell, .hud-play', axis: 'x' }}
 >
 	<div class="hud-bar-row">
 		{#if editing}
@@ -3733,6 +3741,9 @@
 				<div class="hud-play-well">
 					<p
 						id="play-button"
+						role="button"
+						tabindex="-1"
+						use:pressOnKey
 						title={$willEnterAR
 							? 'Enter AR — the scene composites over your room'
 							: $willEnterXR
@@ -3789,6 +3800,9 @@
 						class="hud-cell relative"
 						class:on={tint === ICON_ON}
 						title={btn.title}
+						role="button"
+						tabindex="-1"
+						use:pressOnKey
 						on:click={() => runCell(cell.id)}
 						use:cellMenu={cell.id}
 					>
@@ -3852,7 +3866,7 @@
      entries now, stacked bottom → top, at most three a side. Under the bottom dock's z-tier as
      before, so an open flow editor / Explorer covers them. -->
 {#snippet stack(side: 'left' | 'right', list: string[])}
-	<div id="hud-stack-{side}" class="tp-ui hud-stack hud-stack-{side}" class:hud-editing={editing !== null} role="group" aria-label="{side === 'left' ? 'Left' : 'Right'} corner buttons" use:cellMenu={BAR}>
+	<div id="hud-stack-{side}" class="tp-ui hud-stack hud-stack-{side}" class:hud-editing={editing !== null} role="toolbar" aria-label="{side === 'left' ? 'Left' : 'Right'} corner buttons" use:cellMenu={BAR} use:roving={{ item: editing ? ':not(*)' : '.hud-fab', axis: 'both' }}>
 		{#if editing}
 			{#each stackSlots(list) as id (id)}
 				{#if id.startsWith('__empty:')}
@@ -4204,6 +4218,7 @@
 			role="tree"
 			tabindex="0"
 			aria-label="Objects"
+			aria-multiselectable="true"
 			bind:this={treeEl}
 			use:treeKeys>
 			{#if viewMode === 'system'}
@@ -4215,6 +4230,8 @@
 						</span>
 						<button
 							class="rounded-sm bg-surface-active px-1 text-text hover:bg-border-strong"
+							title="Dismiss"
+							aria-label="Dismiss this notice"
 							on:click={() => {
 								systemNoticeDismissed = true;
 								safeStorage.setItem('systemNoticeDismissed', 'true');
@@ -4268,6 +4285,8 @@
 						</span>
 						<button
 							class="rounded-sm bg-surface-active px-1 text-text hover:bg-border-strong"
+							title="Dismiss"
+							aria-label="Dismiss this notice"
 							on:click={() => {
 								envNoticeDismissed = true;
 								safeStorage.setItem('envNoticeDismissed', 'true');

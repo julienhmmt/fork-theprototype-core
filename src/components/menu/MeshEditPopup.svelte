@@ -1,5 +1,6 @@
 <script>
 	import { viewportHasKeys } from '$lib/keyScope'; // 36 U11
+	import { tabEditsMesh } from '$lib/keyboardNav'; // 53 A3
 	// Desktop mesh-edit toolbar (135 -> 144 pinned strip -> CL-B B5 floating
 	// strip -> M0 TOOLBOX): a professional tool-palette window on the shared
 	// ToolboxWindow shell — header-drag, width-resize reflows the square icon
@@ -706,6 +707,8 @@
 		// Scale everywhere else in the app. Tab still enters Edit Mesh from outside
 		// (shortcuts.js); Esc/Done is still how you leave.
 		if (cmd === 'mesh.mode-next' || cmd === 'mesh.mode-prev') {
+			// 53 A3: Tab on a focused control (this toolbox's buttons) moves focus, never the mode
+			if (!tabEditsMesh(event.target)) return;
 			const order = /** @type {('vertices'|'edges'|'faces')[]} */ ([
 				'vertices',
 				'edges',

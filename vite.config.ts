@@ -62,6 +62,27 @@ function fixShaderfrogArrayVaryings(): Plugin {
 	};
 }
 
+// 53 (A1 + A5) — the accessibility CSS transform: every CSS px length becomes
+// `calc(Npx * var(--ui-scale, 1))` and every `@media (prefers-reduced-motion)` block is re-keyed onto
+// <html data-motion> (the why and the exceptions are in scripts/a11y-css.cjs). `enforce: 'pre'` +
+// listed AFTER tailwindcss() so it runs on Tailwind's GENERATED output too (same-enforce plugins run
+// in list order); the filter is Tailwind's own (plain .css files and svelte's `&lang.css` component
+// styles), minus ?raw / ?url.
+function a11yCss(): Plugin {
+	const { transformA11yCss } = createRequire(import.meta.url)('./scripts/a11y-css.cjs');
+	return {
+		name: 'tp:a11y-css',
+		enforce: 'pre',
+		transform: {
+			filter: { id: { include: [/\.css(?:\?.*)?$/, /&lang\.css/], exclude: [/[?&](?:raw|url)\b/, /\/\.vite\//] } },
+			handler(code: string) {
+				const next = transformA11yCss(code);
+				return next === code ? null : { code: next, map: null };
+			}
+		}
+	};
+}
+
 // Dev-only CORS relay for generated-asset CDNs (mirror of the peerjs box's /proxy
 // route — infra repo server.js): Meshy's assets.meshy.ai serves finished GLBs with
 // no Access-Control-Allow-Origin, so the browser can't fetch them directly. In dev
@@ -175,6 +196,7 @@ export default defineConfig({
 	plugins: [
 			fixShaderfrogArrayVaryings(),
 			tailwindcss(),
+			a11yCss(), // 53 A1/A5: after tailwindcss() — see the function
 			devAssetProxy(),
 			emitVersionJson(),
 			thirdPartyNotices(),

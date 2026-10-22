@@ -19,6 +19,7 @@
 	import { sheetDrag } from '$lib/ui/sheetDrag.js';
 	import Icon from './Icon.svelte';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
+	import { rememberFocus, trapTab, focusablesIn } from '$lib/keyboardNav.js';
 
 	/** @type {{open?: boolean, detent?: string, detents?: string[], dismissible?: boolean, modal?: boolean, title?: string, peek?: number, topInset?: number, onclose?: () => void, ondetent?: (d: string) => void, header?: import('svelte').Snippet, children?: import('svelte').Snippet} & Record<string, any>} */
 	let {
@@ -98,17 +99,32 @@
 		settle(up === resting ? allowed[0] : up);
 	}
 
-	/** Escape closes a dismissible sheet from anywhere inside it. @param {HTMLElement} node */
+	/** Escape closes a dismissible sheet from anywhere inside it. 53 A3: a MODAL sheet takes the
+	 *  keyboard when it opens and keeps Tab inside it; closing any sheet hands focus back to where
+	 *  it was before (when it was left inside the sheet). @param {HTMLElement} node */
 	function escape(node) {
+		const restoreFocus = rememberFocus(() => node);
 		/** @param {KeyboardEvent} e */
 		const key = (e) => {
 			if (e.key === 'Escape' && dismissible && open) {
 				e.stopPropagation();
 				close();
+				return;
 			}
+			if (modal && !e.defaultPrevented) trapTab(node, e);
 		};
 		node.addEventListener('keydown', key);
-		return { destroy: () => node.removeEventListener('keydown', key) };
+		if (modal)
+			queueMicrotask(() => {
+				const list = focusablesIn(node);
+				(list.find((el) => !el.matches('[data-sheet-grip]')) ?? list[0])?.focus({ preventScroll: true });
+			});
+		return {
+			destroy: () => {
+				node.removeEventListener('keydown', key);
+				queueMicrotask(restoreFocus);
+			}
+		};
 	}
 </script>
 

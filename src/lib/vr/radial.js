@@ -109,6 +109,7 @@ import { boxSelectEnd, beginStretch, commitStretch } from './tools.js';
 import { handleAiAction } from './aiPanel.js';
 import { closeDollhouse } from './dollhouse.js';
 import { startVRSculpt } from './sculpt.js';
+import { pointerHand } from './bindings.js'; // 53 (A7): the one controller when one-handed
 // 36 X4: the collider session, PRIMED (colliderEdit reaches faceEdit/history — a static
 // edge from here is the documented cycle family); every use below is null-safe
 /** @type {any} */ let colliderEditRef = null;
@@ -756,7 +757,7 @@ export function firePingIfArmed(index) {
  * pings fire from the hand that ACTED (stick click / armed trigger), D10.
  * Exported for tests + panel work. */
 export function pointerHandIndex() {
-	return controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+	return controllerIndexFor(pointerHand());
 }
 
 /** Right-stick click / radial Ping: ping where the controller ray lands. When

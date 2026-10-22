@@ -1143,6 +1143,21 @@
 								onchange={(v: number) => patchItem({ gain: v })}
 							/>
 						</div>
+						<!-- 53 (A6/A5): the clip's caption — shown to players with Captions on while it plays -->
+						<input
+							class="tl-event-name"
+							id="timeline-item-caption"
+							value={it.caption ?? ''}
+							maxlength="200"
+							placeholder="Caption"
+							aria-label="Caption"
+							title="A caption shown while this clip plays, to players who switched Captions on"
+							onkeydown={(e) => {
+								if (e.key === 'Enter') e.currentTarget.blur();
+								e.stopPropagation();
+							}}
+							onchange={(e) => patchItem({ caption: e.currentTarget.value.trim() })}
+						/>
 					{:else}
 						<input
 							class="tl-event-name"

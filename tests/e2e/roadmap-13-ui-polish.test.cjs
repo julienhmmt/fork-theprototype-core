@@ -273,7 +273,15 @@ h.run(async () => {
 	// toast plays its outro before it leaves the DOM — still there at 300 ms, gone by 1.8 s
 	// (logs/p1-probe1.log). So wait for it to go, bounded: a seam that never removes it stays red.
 	await h.eventually(
-		() => A.page.getByText('local, open-source version', { exact: false }).count(),
+		// 1.41: the screen-reader live regions (#a11y-live-*, sr-only) keep the last toast's words — count the rest
+		() =>
+			A.page.evaluate(() => {
+				const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+				let n = 0;
+				for (let t = w.nextNode(); t; t = w.nextNode())
+					if (t.textContent?.includes('local, open-source version') && !t.parentElement?.closest('[id^="a11y-live-"]')) n++;
+				return n;
+			}),
 		(n) => n === 0,
 		'appNotice.set(null) removes the banner (cloud override seam)',
 		5000

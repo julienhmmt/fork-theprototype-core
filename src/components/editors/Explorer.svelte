@@ -360,6 +360,7 @@
 	import WindowShell from '../shared/WindowShell.svelte';
 	import { clampWinSize, clampResize, anchorOf } from '$lib/windowSize';
 	import { fly } from 'svelte/transition';
+	import { motionMs } from '$lib/motion'; // 53 A5: instant under reduced motion
 	import { safeStorage } from '$lib/safeStorage';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
 	import { beginPlaceDrag, isPlaceable } from '$lib/placeDrag';
@@ -8124,7 +8125,7 @@
 							<div class="flex items-center gap-2">
 								<span class="w-14 shrink-0 text-text-faint">Hash</span>
 								<span class="min-w-0 flex-1 truncate font-mono text-[10px]" title={selItem.hash}>{selItem.hash.slice(0, 16)}…</span>
-								<button class="ui-button-quiet shrink-0" title="Copy full hash" onclick={() => navigator.clipboard?.writeText(selItem.hash)}>⧉</button>
+								<button class="ui-button-quiet shrink-0" title="Copy full hash" aria-label="Copy full hash" onclick={() => navigator.clipboard?.writeText(selItem.hash)}>⧉</button>
 							</div>
 						{/if}
 						{#if itemDetails}
@@ -8346,7 +8347,7 @@
 	{#if docked}
 		<div
 			id="explorer-list"
-			transition:fly={{ y: 300, duration: 200 }}
+			transition:fly={{ y: 300, duration: motionMs(200) }}
 			class="tp-ui tp-dock-panel fixed inset-x-0 bottom-0 p-2 {dockVisible ? '' : 'hidden'}"
 			data-dock-pane={$dockPaneOf['explorer']}
 			style="z-index: var(--z-dock); height: {$dockHeight}px"

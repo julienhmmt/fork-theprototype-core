@@ -2,6 +2,7 @@ import { get } from 'svelte/store';
 import { sidebarTabs, sidebarVisible } from './sidebars';
 import { canDockFloating, bottomInset } from './bottomDock';
 import { dockStripTarget, dockPaneAt, inBottomBand, overEmptyDock, showDockCaret } from './bottomDockDrop';
+import { cssPx } from './uiScale'; // 53 A1: a px token may read back as calc(...)
 
 // 43 J4 — ONE DROP-TARGET MODEL for a panel on the move: a SIDEBAR TAB dragged out of its strip
 // and a FLOATING WINDOW dragged by its header ask the same question here — where would this land —
@@ -33,9 +34,9 @@ export const EDGE = 44;
 /** a side's column on screen, from the sidebars' CSS bus @param {Side} side */
 export function columnBox(side) {
 	const root = getComputedStyle(document.documentElement);
-	const w = parseFloat(root.getPropertyValue(`--sb-${side}-w`)) || 320;
-	const x0 = side === 'left' ? parseFloat(root.getPropertyValue('--sb-left-x')) || 0 : window.innerWidth - w;
-	const top = parseFloat(root.getPropertyValue(`--sb-${side}-top`)) || 0;
+	const w = cssPx(root.getPropertyValue(`--sb-${side}-w`)) || 320;
+	const x0 = side === 'left' ? cssPx(root.getPropertyValue('--sb-left-x')) || 0 : window.innerWidth - w;
+	const top = cssPx(root.getPropertyValue(`--sb-${side}-top`)) || 0;
 	return { x0, w, top };
 }
 

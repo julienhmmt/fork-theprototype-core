@@ -1,0 +1,16 @@
+/* 53 A3 — A VISIBLE FOCUS RING ON EVERY CONTROL, from one token set (tokens.css:
+   --focus-ring / --focus-ring-width / --focus-ring-offset; the High contrast theme may retune them).
+
+   UNLAYERED and !important on purpose: dozens of components draw their keyboard focus as a fill or
+   switch the outline off (`outline: none`, `outline-hidden`), and a component's scoped style beats
+   any layered utility. `:focus-visible` is keyboard focus only, so a mouse press paints nothing new.
+   Only the outline itself is forced — a component's own `outline-offset` (an inset ring inside a
+   clipped tab strip) still wins over the default offset below, which sits in :where() at zero
+   specificity. Typing fields keep their own focus style (the input border), the code editor its
+   cursor, and the 3D viewport its inset ring (App.svelte). */
+:where(:focus-visible) {
+	outline-offset: var(--focus-ring-offset);
+}
+:focus-visible:not(input:is(:not([type]), [type='text'], [type='search'], [type='url'], [type='tel'], [type='email'], [type='password'], [type='number'], [type='date'], [type='datetime-local'], [type='month'], [type='time'], [type='week']), textarea, [contenteditable]:not([contenteditable='false']), .cm-editor *, canvas, #viewport, dialog, [role='dialog'], [role='menu']) {
+	outline: var(--focus-ring-width) solid var(--focus-ring) !important;
+}

@@ -67,10 +67,17 @@
 	} = $props();
 
 	const iconSize = $derived(size === 'tool' ? 16 : 20);
+	// 53-reader (A4): a floating window is NAMED by its title — a region a screen reader can jump
+	// to and hears as "Explorer, region". Not for a modal (its dialog is named already), not for a
+	// custom `heading` (no title element to point at — such a window names its own wrapper), and a
+	// caller's own role/name wins.
+	const uid = $props.id();
+	const headingId = $derived(titleId ?? 'wc-title-' + uid);
+	const named = $derived(size !== 'modal' && !heading && !!title && rest.role === undefined && rest['aria-label'] === undefined && rest['aria-labelledby'] === undefined);
 	const hasCount = $derived(count !== undefined && count !== null && count !== '');
 </script>
 
-<div class="tp-ui wc wc-{size}" class:wc-elevated={elevated} class:wc-headless-body={!body} class:wc-bare={bare} {...rest}>
+<div class="tp-ui wc wc-{size}" class:wc-elevated={elevated} class:wc-headless-body={!body} class:wc-bare={bare} role={named ? 'region' : undefined} aria-labelledby={named ? headingId : undefined} {...rest}>
 	<header class="wc-head {headerClass}" class:wc-nav={!!onback} data-docked-head={dockedHead} bind:this={headerEl} {...headerAttrs}>
 		{#if onback}
 			<button type="button" class="wc-back" onclick={onback}>
@@ -84,7 +91,7 @@
 			{#if icon && size === 'panel' && !onback}
 				<span class="wc-icon" aria-hidden="true"><Icon name={icon} size={16} /></span>
 			{/if}
-			<h2 class="wc-title" id={titleId} use:fullName={title}>{title}</h2>
+			<h2 class="wc-title" id={headingId} use:fullName={title}>{title}</h2>
 		{/if}
 		{#if hasCount}<span class="wc-count">{count}</span>{/if}
 		{#if actions}<div class="wc-actions">{@render actions()}</div>{/if}
@@ -188,6 +195,18 @@
 		font-size: var(--fs-panel-title);
 		font-weight: 600;
 		color: var(--text);
+	}
+	/* 53 A1: at a large UI scale a narrow panel (a phone sheet, a slim column) cannot hold the title
+	   AND every header button at full size: the title keeps a readable width and the buttons wrap to
+	   a second row instead of squeezing it to one letter — the close button stays on screen either way */
+	:global(:root[data-ui-large]) .wc-head {
+		flex-wrap: wrap;
+		height: auto;
+		min-height: 48px;
+		row-gap: 2px;
+	}
+	:global(:root[data-ui-large]) .wc-title {
+		min-width: min(6.5em, 100%);
 	}
 	.wc-modal .wc-title {
 		font-size: var(--fs-modal-title);

@@ -40,7 +40,7 @@
 					{#if RUNNING.has(job.status)}
 						<button class="ui-button-quiet text-[11px]" onclick={() => cancelMeshJob(job.id)}>Cancel</button>
 					{:else}
-						<button class="ui-button-quiet text-[11px]" onclick={() => dismissMeshJob(job.id)}>✕</button>
+						<button class="ui-button-quiet text-[11px]" title="Dismiss" aria-label="Dismiss this job" onclick={() => dismissMeshJob(job.id)}>✕</button>
 					{/if}
 				</div>
 				<div class="mt-1 flex items-center gap-2">

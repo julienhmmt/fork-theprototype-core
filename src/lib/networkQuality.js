@@ -23,10 +23,17 @@ export function classifyRtt(ms) {
 	return 'bad';
 }
 
-/** Band -> dot color (shared by Users popover + the Connect info drawer).
+/** Band -> dot color (shared by Users popover + the Connect info drawer). 53 A2: the theme's
+ * colour-blind safe status inks (a CSS value — both callers paint it through `style`).
  * @param {string} level */
 export function qColor(level) {
-	return level === 'good' ? '#4ade80' : level === 'ok' ? '#fbbf24' : level === 'bad' ? '#f87171' : '#9ca3af';
+	return level === 'good' ? 'var(--ink-good)' : level === 'ok' ? 'var(--ink-warn)' : level === 'bad' ? 'var(--ink-bad)' : 'var(--text-faint)';
+}
+
+/** Band -> its SHAPE, so the band never rides on colour alone: disc / triangle / cross / ring (53 A2).
+ * @param {string} level */
+export function qGlyph(level) {
+	return level === 'good' ? '●' : level === 'ok' ? '▲' : level === 'bad' ? '✕' : '○';
 }
 
 /** @param {number[]} arr */

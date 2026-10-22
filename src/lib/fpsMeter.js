@@ -43,7 +43,11 @@ export function callsTier(calls) {
 }
 
 /** the colour each tier is drawn in (desktop CSS and the VR canvas share it) */
-export const TIER_COLORS = { ok: '#d1d5db', warn: '#fbbf24', over: '#f87171' };
+// 53 A2: the dark theme's colour-blind safe careful / over pair (theme.css --ink-warn / --ink-bad);
+// TIER_MARKS is the shape that goes with each, so a tier never rides on colour alone
+export const TIER_COLORS = { ok: '#d1d5db', warn: '#f7c948', over: '#f05068' };
+/** @type {Record<string, string>} */
+export const TIER_MARKS = { ok: '', warn: '▲ ', over: '✕ ' };
 
 /** A reading as its parts, for a counter that colours the calls. @param {FpsReading} r */
 export function perfParts(r) {

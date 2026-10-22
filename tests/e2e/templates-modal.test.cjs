@@ -272,7 +272,8 @@ h.run(async () => {
 	});
 	h.check(viewerResult === false, 'viewer loadRemoteScene is gated');
 	h.check(
-		await A.page.getByText('View-only — ask an editor to load a scene.').isVisible(),
+		// 53-reader: the polite live region repeats the toast's words — the toast card is the one on screen
+		await A.page.locator('.tp-toast-text', { hasText: 'View-only — ask an editor to load a scene.' }).first().isVisible(),
 		'viewer sees the read-only toast'
 	);
 	await A.page.evaluate(() => window.__stores.cloudHooks.rolesInfo.set(null));

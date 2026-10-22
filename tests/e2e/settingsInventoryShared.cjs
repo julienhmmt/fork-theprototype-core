@@ -142,7 +142,7 @@ const PAGES = {
 		{ id: 'vr-set-turning', kind: 'seg', set: 'smooth', key: 'vrSmoothTurn', want: 'true', def: absentOr('false') },
 		{ id: 'vr-set-smoothSpeed', kind: 'seg', set: '135', key: 'vrSmoothTurnSpeed', want: '135', def: absentOr('90') },
 		{ id: 'vr-set-mirror', kind: 'toggle', key: 'vrMirrorSnapTurn', want: 'true', def: absentOr('false') },
-		{ id: 'vr-set-vignette', kind: 'toggle', key: 'vrComfortVignette', want: 'true', def: absentOr('false') },
+		{ id: 'vr-set-vignette', kind: 'seg', set: 'low', key: 'vrComfortVignette', want: 'low', def: absentOr('off') }, // 53 (A7): Off / Low / High
 		{ id: 'vr-set-teleport', kind: 'toggle', key: 'vrTeleportEnabled', want: 'false', def: absentOr('true') },
 		{ id: 'vr-set-flying', kind: 'toggle', key: 'vrFlying', want: 'true', def: absentOr('false') },
 		{ id: 'vr-set-stance', kind: 'seg', set: 'seated', key: 'vrStance', want: 'seated', def: absentOr('standing') },

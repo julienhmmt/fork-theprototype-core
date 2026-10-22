@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { cameraPreviews, joinPeerPreview, previewLabel } from '$lib/cameraPreview';
 	import Icon from '../ui/Icon.svelte';
+	import { roving } from '$lib/keyboardNav'; // 53 A3: the top-right group is one tab stop
 	import * as THREE from 'three';
 	import { onMount, untrack } from 'svelte';
 	import { fade } from 'svelte/transition';
+	import { motionMs } from '$lib/motion'; // 53 A5: instant under reduced motion
 	import { sineIn } from 'svelte/easing';
 	import ModalDialog from '../ui/ModalDialog.svelte';
 	import NavRow from '../ui/NavRow.svelte';
@@ -102,7 +104,7 @@
 	import { gameState } from '$lib/gameState';
 	import { sessionHost } from '$lib/connectionState';
 	import { mutedPeers, toggleMutePeer } from '$lib/voiceChat';
-	import { peerQuality } from '$lib/networkQuality';
+	import { peerQuality, qGlyph } from '$lib/networkQuality';
 	import ContextMenu from '../ContextMenu.svelte';
 	import NotificationCenter from './NotificationCenter.svelte';
 	// 42 I9: which of the group's own buttons are placed here, in what order (Controls' layout)
@@ -117,6 +119,7 @@
 	// N3: latency-band dot color for a peer's network-quality indicator
 	const qColor = (level: string) =>
 		level === 'good' ? 'var(--ink-good)' : level === 'ok' ? 'var(--ink-warn)' : level === 'bad' ? 'var(--ink-bad)' : 'var(--text-faint)';
+	// 53 A2: and its SHAPE, so the band never rides on colour alone ($lib/networkQuality)
 
     let openDropdown = $state(false);
 	let muteMenu = $state(null);
@@ -674,7 +677,7 @@
 					{@const q = $peerQuality[user[0]]}
 					<span
 						title={q.rtt != null ? `${Math.round(q.rtt)} ms round-trip` : 'measuring…'}
-						style="color: {qColor(q.level)}">●{q.rtt != null ? ` ${Math.round(q.rtt)}ms` : ''}</span
+						style="color: {qColor(q.level)}">{qGlyph(q.level)}{q.rtt != null ? ` ${Math.round(q.rtt)}ms` : ''}</span
 					>
 					{#if q.relayed}<span class="text-ink-warn" title="Relayed through a TURN server">relayed</span>{/if}
 				{/if}
@@ -781,7 +784,7 @@
 <div class="top-right-chrome" style="position: fixed; right: var(--sb-dock-right, 0px); z-index: var(--z-chrome-top); top: {$connectDocked ? $connectBarHeight + 'px' : '0px'};">
 	<!-- 38 R8: one glass group (styles/hud.css) — notes, notifications, peers — sitting just
 	     left of the profile circle, which keeps its own place (its dropdown is anchored to it) -->
-	<div id="hud-tr" class="tp-ui hud-glass hud-tr" style="position: absolute; top: 10px; right: 76px; z-index: 2;">
+	<div id="hud-tr" class="tp-ui hud-glass hud-tr" style="position: absolute; top: 10px; right: 76px; z-index: 2;" role="toolbar" aria-label="Notes, notifications and people" use:roving={{ item: '.hud-cell:not(.hud-edit-item):not(.hud-edit-add)', axis: 'x' }}>
 	<!-- E2: scene-notes drawer toggle -->
 	{#if trShown('notes')}
 	<button
@@ -1018,6 +1021,7 @@
 				bind:this={triggerEl}
 				role="button"
 				tabindex="0"
+				aria-label="Profile and account"
 				aria-haspopup="true"
 				aria-expanded={openDropdown}
 				style="position: absolute; top: 8px; right: 20px; cursor: pointer; z-index: 4; line-height: 0;"
@@ -1042,7 +1046,7 @@
 			popover={$phoneShellActive ? undefined : 'manual'}
 			role="tooltip"
 			{@attach dropdownAttach}
-			in:fade|global={{ duration: 100, easing: sineIn }}
+			in:fade|global={{ duration: motionMs(100), easing: sineIn }}
 			onfocusout={dropdownFocusOut}
 			class="tp-ui w-72 overflow-visible rounded-lg border border-border bg-surface-2 text-text shadow-sm"
 			style="position: fixed; bottom: auto; left: auto; border-top-right-radius: 1.5rem; padding-right: 0px; z-index: 1; margin-top: -50px;{$phoneShellActive && profileH ? ` --profile-sheet-h: ${profileH}px;` : ''}"
