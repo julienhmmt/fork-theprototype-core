@@ -64,7 +64,7 @@ import {
 import { hapticPulse } from './haptics.js';
 import { navSuppressors, vrFrameHooks, stickOwned } from './hooks.js';
 import { controllerIndexFor, axesForSlot } from './input.js';
-import { actionPressed, handOf, CONTROL_INDEX } from './bindings.js';
+import { actionPressed, handOf, CONTROL_INDEX, pointerHand, oneHandedHand } from './bindings.js';
 import { settingsPanelRows, vrSettingsPage, vrSettingsCursor, neighbourTab, activateVRSetting } from './settingsSchema.js';
 import {
 	hideArc,
@@ -428,7 +428,7 @@ export function updateVRControls() {
 
 	// prefab placement ghost (115) rides the pointer-hand ray
 	if (get(vrPrefabGhost))
-		updatePrefabGhost(controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right'));
+		updatePrefabGhost(controllerIndexFor(pointerHand()));
 
 	// 193: stretch mode — drag a W/H/D slider handle (trigger held on the pointer),
 	// horizontal controller motion scales that axis live (an infinite slider)
@@ -446,7 +446,7 @@ export function updateVRControls() {
 		vrDragHandleTo(controllerPos.add(vgrab.offset), step);
 	} else if (get(editingObject)) {
 		// vertex hover (119): the pointer ray tints the handle under it
-		const pointerIndex = controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+		const pointerIndex = controllerIndexFor(pointerHand());
 		const hit = pointerIndex >= 0 ? vrRaycastHandle(controllerRay(pointerIndex)) : -1;
 		if (setHoveredHandle(hit) && hit >= 0) hapticPulse(0.1, 12);
 	}
@@ -491,7 +491,7 @@ export function updateVRControls() {
 			if (dAmount || sx) adjustFaceGesture(dAmount, sx * 0.01);
 		} else {
 			// idle: the pointer ray highlights the face under it (121)
-			const pointerIndex = controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+			const pointerIndex = controllerIndexFor(pointerHand());
 			if (pointerIndex >= 0) {
 				const edited = lookupEditable(get(faceEditObject) ?? '') /* 36 X4: the collider proxy too */;
 				if (edited) {
@@ -535,7 +535,7 @@ export function updateVRControls() {
 	if (get(vrKeyboardTarget)) {
 		// keyboard is modal on top (116): the pointer ray highlights keys, either
 		// stick nudges through them left-to-right / row-to-row via the raycast
-		const pointerIndex = controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+		const pointerIndex = controllerIndexFor(pointerHand());
 		const hovered = pointerIndex >= 0 ? raycastKeyboard(pointerIndex) : null;
 		if (hovered !== get(vrHovered)) {
 			if (hovered) hapticPulse(0.1, 12);
@@ -544,8 +544,10 @@ export function updateVRControls() {
 	} else if (get(vrMenuOpen)) {
 		const sources = [...session.inputSources];
 		const menuHand = get(vrMenuHand);
-		const pointerHand = menuHand === 'right' ? 'left' : 'right';
-		const pointerIndex = controllerIndexFor(pointerHand);
+		const otherHand = menuHand === 'right' ? 'left' : 'right';
+		// 53 (A7): one-handed, the menu rides the same controller that would point at it — its stick
+		// picks the sector (and its trigger / stick press takes it), no ray
+		const pointerIndex = oneHandedHand() ? -1 : controllerIndexFor(otherHand);
 		let hovered = pointerIndex >= 0 ? raycastMenu(pointerIndex) : null;
 		S.radialStickHover = null;
 		if (!hovered) {
@@ -553,7 +555,7 @@ export function updateVRControls() {
 			// 31 R1: each stick is read from ITS OWN inputSource, found by handedness — the
 			// pointer's used to be `sources[<controller slot>]`, which is the other hand's
 			// source after a hands<->controllers swap (the 194/210 divergence)
-			for (const hand of [menuHand, pointerHand]) {
+			for (const hand of [menuHand, otherHand]) {
 				const axes = sources.find((s) => s.handedness === hand)?.gamepad?.axes ?? [];
 				const sector = sectorFromStick(axes[2] ?? 0, axes[3] ?? 0, entries.length);
 				if (sector !== null) {
@@ -574,7 +576,7 @@ export function updateVRControls() {
 		// objects panel (101/109): ray highlights rows; EITHER stick moves a row
 		// cursor (scrolls with it), stick-press/trigger selects the cursored row
 		const sources = [...session.inputSources];
-		const pointerIndex = controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+		const pointerIndex = controllerIndexFor(pointerHand());
 		const menuIndex = sources.findIndex((s) => s.handedness === get(vrMenuHand));
 		const hovered = pointerIndex >= 0 ? raycastPanel(pointerIndex) : null;
 		if (hovered !== get(vrHovered)) {
@@ -603,7 +605,7 @@ export function updateVRControls() {
 		// props panel (112): ray highlights controls; EITHER stick moves the row
 		// cursor, stick left/right nudges the cursored row, press activates it
 		const sources = [...session.inputSources];
-		const pointerIndex = controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+		const pointerIndex = controllerIndexFor(pointerHand());
 		const menuIndex = sources.findIndex((s) => s.handedness === get(vrMenuHand));
 		const hovered = pointerIndex >= 0 ? raycastProps(pointerIndex) : null;
 		if (hovered !== get(vrHovered)) {
@@ -646,7 +648,7 @@ export function updateVRControls() {
 		// prefabs window (115): ray highlights cells; EITHER stick moves the
 		// cell cursor, press arms the cursored prefab's ghost
 		const sources = [...session.inputSources];
-		const pointerIndex = controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+		const pointerIndex = controllerIndexFor(pointerHand());
 		const menuIndex = sources.findIndex((s) => s.handedness === get(vrMenuHand));
 		const hovered = pointerIndex >= 0 ? raycastPrefabs(pointerIndex) : null;
 		if (hovered !== get(vrHovered)) {
@@ -666,7 +668,7 @@ export function updateVRControls() {
 		}
 	} else if (get(vrChatPanelOpen)) {
 		// chat panel (117): the pointer ray highlights close / input
-		const pointerIndex = controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+		const pointerIndex = controllerIndexFor(pointerHand());
 		const hovered = pointerIndex >= 0 ? raycastChat(pointerIndex) : null;
 		if (hovered !== get(vrHovered)) {
 			if (hovered) hapticPulse(0.12, 14);
@@ -674,7 +676,7 @@ export function updateVRControls() {
 		}
 	} else if (get(vrAiPanelOpen)) {
 		// 36-vr-ai: the AI panel, lit like the chat panel
-		const pointerIndex = controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+		const pointerIndex = controllerIndexFor(pointerHand());
 		const hovered = pointerIndex >= 0 ? raycastAi(pointerIndex) : null;
 		if (hovered !== get(vrHovered)) {
 			if (hovered) hapticPulse(0.12, 14);
@@ -685,7 +687,7 @@ export function updateVRControls() {
 		// cursor (the Objects/Props panel pattern) — up/down moves it, left/right changes the cursored
 		// choice (or the page, on the tab strip); a stick press presses (the chain above)
 		const sources = [...session.inputSources];
-		const pointerIndex = controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+		const pointerIndex = controllerIndexFor(pointerHand());
 		const hovered = pointerIndex >= 0 ? raycastSettings(pointerIndex) : null;
 		if (hovered !== get(vrHovered)) {
 			if (hovered) hapticPulse(0.12, 14);
@@ -719,7 +721,7 @@ export function updateVRControls() {
 		}
 	} else if (get(vrApprovePanelOpen)) {
 		// VR peer-approval panel (211): the pointer ray highlights Approve / Deny
-		const pointerIndex = controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+		const pointerIndex = controllerIndexFor(pointerHand());
 		const hovered = pointerIndex >= 0 ? raycastApprove(pointerIndex) : null;
 		if (hovered !== get(vrHovered)) {
 			if (hovered) hapticPulse(0.12, 14);
@@ -727,7 +729,7 @@ export function updateVRControls() {
 		}
 	} else if (get(vrEditMenuOpen)) {
 		// Edit Mesh side-menu (137): the pointer ray highlights its rows
-		const pointerIndex = controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+		const pointerIndex = controllerIndexFor(pointerHand());
 		const hovered = pointerIndex >= 0 ? raycastEdit(pointerIndex) : null;
 		if (hovered !== get(vrHovered)) {
 			if (hovered) hapticPulse(0.12, 14);
@@ -735,7 +737,7 @@ export function updateVRControls() {
 		}
 	} else if (get(vrSnapMenuOpen)) {
 		// Snap side-menu (156): the pointer ray highlights its rows
-		const pointerIndex = controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+		const pointerIndex = controllerIndexFor(pointerHand());
 		const hovered = pointerIndex >= 0 ? raycastSnap(pointerIndex) : null;
 		if (hovered !== get(vrHovered)) {
 			if (hovered) hapticPulse(0.12, 14);

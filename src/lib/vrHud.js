@@ -31,6 +31,7 @@ import { touchSpec } from './touchSpec';
 import { bindingOf, controlName } from './vr/bindings.js';
 import { vrJumpHeight } from './vrControls';
 import { vrHudPlacement, vrHudSize, vrHudHints, vrHudShownNow } from './vrHudPrefs';
+import { accessValues } from './playerAccess'; // 53 (A6): a HUD text size change redraws the band
 import {
 	STAGE_W,
 	STAGE_H,
@@ -303,7 +304,7 @@ export function vrHudFrame(opts) {
 		buildLayout(elements, hints);
 	}
 	// a module kind's headset text (its clock ticks with no runtime write) is part of the content
-	const csig = JSON.stringify([elements, opts.runtime, hints, imageTick(), elements.map((el) => moduleVrText(el, opts.runtime?.[el.id]))]);
+	const csig = JSON.stringify([elements, opts.runtime, hints, imageTick(), elements.map((el) => moduleVrText(el, opts.runtime?.[el.id])), get(accessValues).hudText]);
 	if (csig !== contentSig) {
 		contentSig = csig;
 		if (groups.length && groups[groups.length - 1].members[0]?.el?.id === '__vrhints') groups[groups.length - 1].members[0].el.label = hints.join('     ·     ');

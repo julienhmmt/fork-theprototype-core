@@ -49,5 +49,16 @@
 			<span class="text-text-muted">pulse (s)</span>
 			<DragRow nodrag step={0.01} decimals={2} min={0.1} value={data.pulse ?? 0.3} onchange={(/** @type {number} */ v) => setNodeData(id, { pulse: v })} />
 		</label>
+		<!-- 53 (A6): what this key DOES, in words — the player's Accessibility ▸ Controls list shows it -->
+		<label class="flex w-full flex-col">
+			<span class="text-text-muted">action (for players)</span>
+			<input
+				class="nodrag nopan rounded-sm border border-border-input bg-transparent px-1 py-0.5 text-xs"
+				maxlength="40"
+				placeholder="e.g. Jump"
+				value={data.action ?? ''}
+				on:change={(e) => setNodeData(id, { action: e.currentTarget.value })}
+			/>
+		</label>
 	</div>
 </NodeWrapper>

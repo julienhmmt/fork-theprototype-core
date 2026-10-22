@@ -3,6 +3,8 @@ import { anyModalOpen, showToast } from '../stores/appStore';
 import { GAMEPAD_BUTTONS, applyDeadzone, gamepadPrefsNow } from './gamepadPrefs';
 import { registerShortcut, unregisterShortcutGroup } from './shortcuts';
 import { touchMove } from './touchControls';
+// 53 (A6): the player's remap (Accessibility ▸ Controls) — a leaf
+import { playCode, playPadCode, remapActive } from './playerAccess';
 
 // Module SDK input layer (K-C). STORE-ONLY module (the peerApproval.js pattern):
 // imports nothing from peerHandler/vrControls, so vrControls can feed it VR
@@ -38,6 +40,16 @@ let padId = null;
 
 /** @type {Set<(kind: 'down'|'up', code: string) => void>} */
 const listeners = new Set();
+
+// 53 (A6): THE REMAP SEAM. Every consumer of this channel — Key Press and Gamepad Button nodes,
+// Move Input, the Character Controller's code, every module's onInput / getInput — reads GAME
+// codes, so the translation happens once, here, at the edge: a physical press becomes the game
+// code it is bound to (or nothing, when that key was remapped away). Each press remembers what it
+// meant, so its release ends exactly that, even if the table changed while it was held.
+/** physical key code -> the game code its press meant @type {Map<string, string>} */
+const keyDownAs = new Map();
+/** physical pad button code -> the game code its press meant @type {Map<string, string>} */
+const padDownAs = new Map();
 
 /** Dispatch one edge to every subscriber. ONE copy of the try/catch, and the ONE
  * place that documents the contract: listeners are called POSITIONALLY, fn(kind, code)
@@ -199,6 +211,7 @@ function activePad() {
  * full deflection because the pad went away (or the feature was switched off) would
  * drive the camera forever, and a button left down would hold a node's level high. */
 function quietPad() {
+	padDownAs.clear();
 	for (const code of [...padCodes]) {
 		padCodes.delete(code);
 		emit('up', code);
@@ -246,7 +259,7 @@ export function pollGamepads() {
 	}
 	const buttons = pad.buttons ?? [];
 	for (let i = 0; i < GAMEPAD_BUTTONS.length; i++) {
-		const code = GAMEPAD_BUTTONS[i];
+		const physical = GAMEPAD_BUTTONS[i];
 		const button = buttons[i];
 		// a trigger is an ANALOG button on most pads: `pressed` is the engine's own verdict,
 		// `value` the fallback for a pad that reports the axis and never sets the flag
@@ -254,10 +267,23 @@ export function pollGamepads() {
 			button &&
 			(button.pressed || (typeof button.value === 'number' && button.value > 0.5))
 		);
-		if (down === padCodes.has(code)) continue;
-		if (down) padCodes.add(code);
-		else padCodes.delete(code);
-		emit(down ? 'down' : 'up', code);
+		// 53 (A6): edges per PHYSICAL button, published as the game code the press meant
+		if (down === padDownAs.has(physical)) continue;
+		if (down) {
+			const code = remapActive() ? playPadCode(physical) : physical;
+			if (code === null) continue; // remapped away
+			padDownAs.set(physical, code);
+			if (padCodes.has(code)) continue;
+			padCodes.add(code);
+			emit('down', code);
+		} else {
+			const code = /** @type {string} */ (padDownAs.get(physical));
+			padDownAs.delete(physical);
+			let still = false;
+			for (const held of padDownAs.values()) if (held === code) still = true;
+			if (still || !padCodes.delete(code)) continue;
+			emit('up', code);
+		}
 	}
 	const axes = pad.axes ?? [];
 	const dz = prefs.deadzone;
@@ -297,19 +323,30 @@ function onKeyDown(event) {
 		return;
 	// 15-B6: module bindings stay quiet behind an open (non-modal) app modal
 	if (get(anyModalOpen)) return;
-	if (!codes.has(event.code)) {
-		codes.add(event.code);
-		emit('down', event.code);
+	if (keyDownAs.has(event.code)) return; // a key-repeat
+	// a SYNTHETIC key (a touch action button dispatches the game's own code) is never remapped
+	const code = remapActive() && event.isTrusted !== false ? playCode(event.code) : event.code;
+	if (code === null) return; // remapped away (53 A6)
+	keyDownAs.set(event.code, code);
+	if (!codes.has(code)) {
+		codes.add(code);
+		emit('down', code);
 	}
 }
 
 /** @param {KeyboardEvent} event */
 function onKeyUp(event) {
-	if (codes.delete(event.code)) emit('up', event.code);
+	const code = keyDownAs.get(event.code);
+	if (code === undefined) return;
+	keyDownAs.delete(event.code);
+	// another physical key still holding the same game code keeps it down
+	for (const held of keyDownAs.values()) if (held === code) return;
+	if (codes.delete(code)) emit('up', code);
 }
 
 function onBlur() {
 	// keys stuck down across a focus loss would run a possessed object forever
+	keyDownAs.clear();
 	for (const code of [...codes]) {
 		codes.delete(code);
 		emit('up', code);

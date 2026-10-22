@@ -32,6 +32,9 @@
 	import { gameAnnouncement } from '$lib/gameAnnounce';
 	// 31 K3: the game shell's pause menu frees the pointer through the SAME single writer
 	import { shellMenu } from '$lib/gameShell';
+	// 53 (A6): the player's HUD text size (per game, LOCAL) — boxes and type grow together
+	import { accessValues } from '$lib/playerAccess';
+	import { hudTextScale } from '$lib/playerAccessCore';
 
 	// 21-D5: WHICH documents are on screen — the scene HUD, plus the one keyed by the
 	// camera being looked through (attaching a HUD to a camera IS keying it by that
@@ -337,8 +340,11 @@
 	 * would stretch text and borders on resize. @param {any} el */
 	function place(el) {
 		const { v, h } = axes(el.anchor);
+		// 53 (A6): a text-carrying element grows with the player's HUD text size (box and type
+		// together, so the words still fit); the anchor offsets stay where the author put them
+		const f = textScaled(el.kind) ? textScale : 1;
 		/** @type {string[]} */
-		const out = [`width: ${el.w}px`, `height: ${el.h}px`, `z-index: ${el.z}`];
+		const out = [`width: ${el.w * f}px`, `height: ${el.h * f}px`, `z-index: ${el.z}`, `--hud-text-scale: ${f}`];
 		if (v === 'top') out.push(`top: ${el.y}px`);
 		else if (v === 'bottom') out.push(`bottom: ${el.y}px`);
 		else out.push('top: 50%', `--hud-ty: ${el.y}px`);
@@ -346,6 +352,13 @@
 		else if (h === 'right') out.push(`right: ${el.x}px`);
 		else out.push('left: 50%', `--hud-tx: ${el.x}px`);
 		return out.join('; ');
+	}
+	const textScale = $derived(playing ? hudTextScale($accessValues.hudText) : 1);
+	/** kinds with no text to grow (pictures, plots, the crosshair, a flash, module DOM) */
+	const NO_TEXT = new Set(['image', 'minimap', 'crosshair', 'damageflash', 'custom']);
+	/** @param {string} kind */
+	function textScaled(kind) {
+		return !NO_TEXT.has(kind);
 	}
 	/** @param {any} el */
 	function centering(el) {

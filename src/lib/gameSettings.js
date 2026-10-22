@@ -30,7 +30,8 @@ import { leftBehindModules, ownerInScope } from './sceneScope';
 /**
  * @typedef {{id: string, label: string, type: 'toggle' | 'choice' | 'range', options?: string[],
  *   optionLabels?: string[], min?: number, max?: number, step?: number, default: any,
- *   help?: string, vrOnly?: boolean, onLevels?: boolean, onChange?: (value: any) => void, owner?: string}} SettingRow
+ *   help?: string, vrOnly?: boolean, onLevels?: boolean, onChange?: (value: any) => void, owner?: string,
+ *   aliases?: Record<string, string>}} SettingRow
  */
 
 /** The rows every game gets, in panel order. `vrOnly` rows are drawn only in a headset
@@ -60,7 +61,18 @@ export const CORE_SETTINGS = [
 		default: 'default',
 		vrOnly: true
 	},
-	{ id: 'vignette', label: 'Comfort vignette', type: 'toggle', default: false, vrOnly: true },
+	// 53 (A7): Default (the device's Settings ▸ VR level) / Off / Low / High; an older stored or set
+	// `true` means High, `false` Default (aliases)
+	{
+		id: 'vignette',
+		label: 'Comfort vignette',
+		type: 'choice',
+		options: ['default', 'off', 'low', 'high'],
+		optionLabels: ['Default', 'Off', 'Low', 'High'],
+		aliases: { true: 'high', false: 'default' },
+		default: 'default',
+		vrOnly: true
+	},
 	{
 		id: 'quality',
 		label: 'Quality',
@@ -158,7 +170,9 @@ export function coerceSettingValue(row, value, forDefault = false) {
 		return fallback;
 	}
 	if (row.type === 'choice') {
-		const s = value === undefined || value === null ? '' : String(value);
+		let s = value === undefined || value === null ? '' : String(value);
+		// 53 (A7): a row that was a toggle once still reads its old values (vignette: true = High)
+		if (row.aliases && s in row.aliases) s = row.aliases[s];
 		return (row.options ?? []).includes(s) ? s : fallback;
 	}
 	const n = typeof value === 'number' ? value : value === '' || value === null || value === undefined ? NaN : Number(value);

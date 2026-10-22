@@ -6,7 +6,6 @@ import {
 	objectsGroup,
 	globalCamera,
 	globalScene,
-	vrMenuHand,
 	vrMenuOpen,
 	vrSettingsPanelOpen,
 	isVRMode,
@@ -48,6 +47,7 @@ import {
 	vrKeyboardGroup
 } from './panels.js';
 import { vrPingArmed } from './radial.js';
+import { pointerHand } from './bindings.js'; // 53 (A7): the one controller when one-handed
 
 // --- clarity pack: controller rays, hover highlight, snap turn ---
 /** @type {any[]} */ let rayLines = []; // fat beam meshes, one per controller
@@ -375,7 +375,7 @@ export function updateRaysAndHover(presenting) {
 		return;
 	}
 	updatePanelOverlay();
-	const pointerIndex = controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+	const pointerIndex = controllerIndexFor(pointerHand());
 	// D6: an armed one-shot ping tints the beam + reticle with YOUR ping color
 	// so the arm state is visible in-headset
 	const pingTint = get(vrPingArmed)
@@ -465,7 +465,7 @@ export function safeIntersect(ray, root) {
  */
 export function pointerHandRay() {
 	if (!get(isVRMode) || !renderer?.xr) return null;
-	const index = controllerIndexFor(get(vrMenuHand) === 'right' ? 'left' : 'right');
+	const index = controllerIndexFor(pointerHand());
 	if (index < 0) return null;
 	const controller = renderer.xr.getController(index);
 	if (!controller) return null;

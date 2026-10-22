@@ -36,23 +36,34 @@ import { leftBehindModules, ownerInScope } from './sceneScope';
 import { perfMark } from './perf/perfMarks.js';
 // 36 U8: the touch layout editor is a leaf too (svelte/store + safeStorage)
 import { touchControlsVisible, openTouchLayoutEditor } from './touchActions';
+// 53 (A6): the player's Accessibility page (a leaf: per-game LOCAL prefs)
+import { accessValues, stepAccessSetting } from './playerAccess';
+import { ACCESS_ROWS, accessDisplay } from './playerAccessCore';
 
-/** @typedef {'main' | 'levels' | 'settings' | 'help'} ShellPage */
+/** @typedef {'main' | 'levels' | 'settings' | 'help' | 'access'} ShellPage */
 
 /** The menu: open, which page, and (33) the headset's page of the level grid — null = the page
- * holding the current level. LOCAL. @type {import('svelte/store').Writable<{open: boolean, page: ShellPage, levelPage?: number | null}>} */
-export const shellMenu = writable({ open: false, page: /** @type {ShellPage} */ ('main'), levelPage: /** @type {number | null} */ (null) });
+ * holding the current level. 53 (A6): `standalone` = the Accessibility page opened on its own from
+ * a play link's / export's start card, before play (no game menu around it; Back closes it).
+ * LOCAL. @type {import('svelte/store').Writable<{open: boolean, page: ShellPage, levelPage?: number | null, standalone?: boolean}>} */
+export const shellMenu = writable({ open: false, page: /** @type {ShellPage} */ ('main'), levelPage: /** @type {number | null} */ (null), standalone: false });
 
 /** @param {ShellPage} [page] */
 export function openShellMenu(page = 'main') {
 	if (!shellMenuAvailable()) return false;
-	shellMenu.set({ open: true, page: normalizePage(page), levelPage: null });
+	shellMenu.set({ open: true, page: normalizePage(page), levelPage: null, standalone: false });
 	debug.opens++;
 	perfMark('menu', { page: normalizePage(page) }); // 34 PF: a profiler marker
 	return true;
 }
 export function closeShellMenu() {
-	if (get(shellMenu).open) shellMenu.set({ open: false, page: 'main', levelPage: null });
+	if (get(shellMenu).open) shellMenu.set({ open: false, page: 'main', levelPage: null, standalone: false });
+}
+/** 53 (A6): the Accessibility page on its own — the start card's button, before play. */
+export function openAccessCard() {
+	shellMenu.set({ open: true, page: 'access', levelPage: null, standalone: true });
+	debug.opens++;
+	return true;
 }
 /** @returns {boolean} open after the toggle */
 export function toggleShellMenu() {
@@ -64,12 +75,14 @@ export function toggleShellMenu() {
 }
 /** @param {ShellPage} page */
 export function showShellPage(page) {
+	// the standalone Accessibility card has no main page to go back to: Back closes it
+	if (get(shellMenu).standalone && page !== 'access') return closeShellMenu();
 	shellMenu.update((m) => ({ ...m, page: normalizePage(page), levelPage: null }));
 }
 /** @param {any} page @returns {ShellPage} */
 function normalizePage(page) {
 	if (page === 'levels' && !get(gameLevels)) return 'main';
-	return page === 'levels' || page === 'settings' || page === 'help' ? page : 'main';
+	return page === 'levels' || page === 'settings' || page === 'help' || page === 'access' ? page : 'main';
 }
 
 /* ---------------------------------------------------------------- is it a game? --- */
@@ -320,7 +333,7 @@ export function shellMenuItems(opts = {}) {
 		{ id: 'restart', label: 'Restart' }
 	];
 	if (get(gameLevels)) items.push({ id: 'levels', label: 'Levels' });
-	items.push({ id: 'settings', label: 'Settings' }, { id: 'help', label: 'How to play' });
+	items.push({ id: 'settings', label: 'Settings' }, { id: 'access', label: 'Accessibility' }, { id: 'help', label: 'How to play' });
 	if (!opts.vr && get(touchControlsVisible)) items.push({ id: 'touchlayout', label: 'Touch controls' });
 	items.push({ id: 'mainmenu', label: 'Main menu' });
 	if (!opts.vr) items.push({ id: 'editor', label: 'Back to editor' });
@@ -339,6 +352,7 @@ export function runShellItem(id) {
 			return true;
 		case 'levels':
 		case 'settings':
+		case 'access':
 		case 'help':
 			showShellPage(/** @type {ShellPage} */ (id));
 			return true;
@@ -366,7 +380,7 @@ export const gameDescription = writable(null);
 
 /**
  * @typedef {{id: string, label: string, type: string, value: any, options?: string[], optionLabels?: string[],
- *   min?: number, max?: number, step?: number, vrOnly?: boolean, game?: boolean, display: string}} ShellSettingView
+ *   min?: number, max?: number, step?: number, vrOnly?: boolean, game?: boolean, access?: boolean, display: string}} ShellSettingView
  */
 
 /** A row's value as the menu shows it. @param {any} row @param {any} value */
@@ -398,6 +412,23 @@ export function shellSettingViews(opts = {}) {
 		out.push({ ...plain, game: true, value: values[row.id], display: settingDisplay(row, values[row.id]) });
 	}
 	return out;
+}
+
+/**
+ * 53 (A6): the Accessibility page's rows, each with its value and display text (the same view
+ * shape as the settings page, so both renderers draw them with the settings row). `access: true`
+ * routes a press to playerAccess. @param {{vr?: boolean}} [opts] @returns {ShellSettingView[]}
+ */
+export function shellAccessViews(opts = {}) {
+	const values = get(accessValues);
+	return ACCESS_ROWS.map((row) => ({
+		...row,
+		// a headset has no compositor step for the colour filter (PlayerColorFilter): say so there
+		label: opts.vr && row.flat ? row.label + ' (2D only)' : row.label,
+		access: true,
+		value: values[row.id],
+		display: accessDisplay(row, values[row.id])
+	}));
 }
 
 /**
@@ -442,7 +473,7 @@ export function stepGameSetting(id, dir = 1) {
 
 /** The title a page wears. @param {ShellPage} page */
 export function shellPageTitle(page) {
-	return page === 'levels' ? 'Levels' : page === 'settings' ? 'Settings' : page === 'help' ? 'How to play' : 'Paused';
+	return page === 'levels' ? 'Levels' : page === 'settings' ? 'Settings' : page === 'access' ? 'Accessibility' : page === 'help' ? 'How to play' : 'Paused';
 }
 
 /** The game's name for the menu's subtitle. */
@@ -487,6 +518,11 @@ export function pressShellHit(hitId) {
 	if (parts[1] === 'lvpage') {
 		showLevelPage(Number(parts[2]));
 		return true;
+	}
+	// 53 (A6): an Accessibility row (acc:<id>:<prev|next>)
+	if (parts[1] === 'acc') {
+		const dir = parts[parts.length - 1] === 'prev' ? -1 : 1;
+		return stepAccessSetting(parts.slice(2, parts.length - 1).join(':'), dir) !== undefined;
 	}
 	if (parts[1] === 'set') {
 		const dir = parts[parts.length - 1] === 'prev' ? -1 : 1;

@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { ensureAudioContext, bus } from './audioEngine';
 import { itemByHash, itemBlob } from './explorer';
 import { requestAsset } from './assetShare';
+// 53 (A6): a starting sound says its caption (the player's Captions switch decides if it shows)
+import { captionSound } from './captions';
 
 // Sound node runtime (97): flowRuntime hands over (sound node, target uuid)
 // pairs each tick. Every playing pair keeps an AudioBufferSource ->
@@ -131,6 +133,7 @@ function playOnce(entry, data) {
 	src.connect(entry.gain);
 	src.start(0);
 	entry.fired = (entry.fired ?? 0) + 1;
+	captionSound(data.caption, { source: 'sound' });
 }
 
 /** @param {any} entry @param {any} data @param {number} time */
@@ -193,7 +196,11 @@ export function updateSounds(pairs, sceneObjects, time) {
 		// key change tears the source down and restarts it — so every fader drag clicked
 		// and every one-shot restarted from zero. They are live params; set them below.
 		const key = [!!data.playing, data.loop !== false].join('|');
-		if (data.playing && (!entry.src || entry.key !== key)) startSource(entry, data, time);
+		if (data.playing && (!entry.src || entry.key !== key)) {
+			// 53 (A6): a sound that STARTS (not a loop re-keyed while it plays) says its caption
+			if (!entry.src) captionSound(data.caption, { source: 'sound' });
+			startSource(entry, data, time);
+		}
 		else if (!data.playing && entry.src) stopSource(entry);
 		// live, without a restart — the sceneMusic.reconcile precedent
 		if (entry.gain) entry.gain.gain.value = data.volume ?? 0.8;

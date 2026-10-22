@@ -6,6 +6,8 @@ import { playGameMusic, stopGameMusic, gameMusicState, MUSIC_PRESET_IDS } from '
 import { isGameSound, playGameSound } from '../gameSfx';
 import { get } from 'svelte/store';
 import { pingAudioRef, effectsRef } from './refs.js';
+// 53 (A6): the caption bus — a game sound says its line, a module can say its own
+import { captionSound, showCaption, captionsShown } from '../captions';
 
 /** the ping chimes `api.playSound` still reaches (pingAudio's PING_SOUNDS ids) */
 const PING_NAMES = new Set(['ding', 'chime', 'pluck', 'bell']);
@@ -24,10 +26,13 @@ export function sdkSound(ctx) {
 		 * 'sparkle', 'hurt', 'portal'; plus the ping chimes 'ding' (the default),
 		 * 'chime', 'pluck', 'bell'. An unknown name is a quiet no-op. `position`
 		 * spatialises it. Returns whether a sound started.
-		 * @param {string=} sound @param {number[]=} position @returns {boolean}
+		 * 53 (A6): a game-set sound shows a caption ("[coin]") to a player with Captions on;
+		 * `{caption: 'The gate opens'}` says it your way, `{caption: '-'}` says nothing.
+		 * @param {string=} sound @param {number[]=} position @param {{caption?: string}=} options @returns {boolean}
 		 */
-		playSound(sound = 'ding', position = undefined) {
+		playSound(sound = 'ding', position = undefined, options = undefined) {
 			const name = String(sound ?? 'ding');
+			if (isGameSound(name) || options?.caption) captionSound(options?.caption, { source: moduleId, sound: isGameSound(name) ? name : undefined });
 			if (isGameSound(name)) return playGameSound(name, position ?? null);
 			if (!PING_NAMES.has(name)) return false;
 			pingAudioRef?.playPing(name, position ?? null);
@@ -64,6 +69,18 @@ export function sdkSound(ctx) {
 		announce(text, options = {}) {
 			return announceBanner(text, options ?? {});
 		},
+		/**
+		 * 53 (A6): CAPTIONS — a line of text for something the player hears (a voice, a sound
+		 * you play yourself). Shown only to players who switched Captions on (the game menu's
+		 * Accessibility page), at their caption size, on a flat screen and in a headset. LOCAL.
+		 * `seconds` 0.5..15 (default 3). `shown()` = are captions on for this player now.
+		 */
+		captions: {
+			/** @param {string} text @param {{seconds?: number}=} options @returns {string} the line shown ('' = nothing) */
+			show: (text, options = {}) => showCaption({ text, source: moduleId, seconds: options?.seconds }),
+			/** @returns {boolean} */
+			shown: () => !!get(captionsShown)
+		},
 		// 33 (L4): the track is OWNED by this module — `stop` only stops ours, the module's
 		// teardown stops it ("music from waves stays" after Waves was unloaded), and a module a
 		// scene switch left behind cannot start one (gameMusic + sceneScope)
@@ -92,6 +109,8 @@ sdkSound.surface = {
 	'effects.burst': 'action',
 	'effects.kinds': 'read',
 	announce: 'action',
+	'captions.show': 'action',
+	'captions.shown': 'read',
 	'music.play': 'registers',
 	'music.stop': 'action',
 	'music.current': 'read',

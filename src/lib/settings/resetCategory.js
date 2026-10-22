@@ -240,7 +240,7 @@ const RESETS = {
 		vrSnapAngleLast.set(45);
 		vrSmoothTurnSpeed.set(90);
 		put(vrMirrorSnapTurn, 'vrMirrorSnapTurn', false);
-		vrComfortVignette.set(false);
+		vrComfortVignette.set('off');
 		put(vrTeleportEnabled, 'vrTeleportEnabled', true);
 		put(vrFlying, 'vrFlying', false);
 		vrStance.set('standing');

@@ -16,6 +16,8 @@
 	// 36-community (C6): the published scene's heart on the start card (a cloud plugin sets it)
 	import { sceneHeart } from '$lib/cloudHooks';
 	import HeartButton from '../ui/HeartButton.svelte';
+	// 53 (A6): captions / colour filter / text size / controls, set before pressing Play
+	import { openAccessCard } from '$lib/gameShell';
 
 	const vrAllowed = exportConfig ? exportConfig.vrButton : true;
 	const title = exportConfig?.title || '';
@@ -83,6 +85,7 @@
 					<HeartButton id="embed-heart" size="md" count={$sceneHeart.count} liked={$sceneHeart.liked} label="Like this game" ontoggle={() => $sceneHeart.toggle()} />
 				{/if}
 			</div>
+			<button id="embed-access" type="button" class="embed-access" onclick={() => openAccessCard()}>Accessibility</button>
 			<div class="embed-hint">Click to look around · Esc to pause</div>
 		</div>
 	{/if}
@@ -168,6 +171,22 @@
 	}
 	.embed-play:hover {
 		filter: brightness(1.1);
+	}
+	.embed-access {
+		min-height: 32px;
+		padding: 0 12px;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: transparent;
+		color: var(--text-2);
+		font: 600 12px/1 system-ui, sans-serif;
+		cursor: pointer;
+		touch-action: manipulation;
+	}
+	.embed-access:hover,
+	.embed-access:focus-visible {
+		border-color: var(--accent);
+		outline: none;
 	}
 	.embed-hint {
 		font: 500 11px/1.3 system-ui, sans-serif;
