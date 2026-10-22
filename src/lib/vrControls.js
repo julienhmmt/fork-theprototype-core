@@ -123,7 +123,8 @@ export {
 	registerVRFrameHook,
 	registerWorldGrabDivert,
 	registerStickOwner,
-	stickOwned
+	stickOwned,
+	registerGripHooks
 } from './vr/hooks.js';
 export {
 	computeMoveOffset,

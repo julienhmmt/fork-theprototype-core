@@ -60,7 +60,7 @@ import { safeStorage } from '../safeStorage';
 import { S } from './state.js';
 import { renderer, tempVector } from './core.js';
 import { hapticPulse, hapticPattern } from './haptics.js';
-import { gripDropHooks, worldGrabDiverts, worldGestureDiverted } from './hooks.js';
+import { gripDropHooks, worldGrabDiverts, worldGestureDiverted, vrModuleGripStart, vrModuleGripEnd } from './hooks.js';
 import { controllerIndexFor, axesForSlot } from './input.js';
 import { STANDING_HEAD, vrLocomotionNow, viewerNow } from './locomotion.js';
 import {
@@ -428,6 +428,8 @@ export function vertexTriggerActive() {
 
 /** @param {number} index */
 export function onSqueezeStart(index) {
+	// 52-browser: a feature took this squeeze (a VR placement ghost cancels, a wrist panel lifts off)
+	if (vrModuleGripStart(index)) return;
 	// an armed prefab ghost cancels on grip (115) — nothing else grabs
 	if (get(vrPrefabGhost)) {
 		cancelPrefabGhost();
@@ -687,6 +689,8 @@ export function lastGripRefusalDebug() {
 
 /** @param {number} index */
 export function onSqueezeEnd(index) {
+	// 52-browser: the release of a squeeze a feature took
+	if (vrModuleGripEnd(index)) return;
 	// face grab (122): release commits the reshape as one meshgeo + undo entry
 	if (faceGrabHand?.index === index) {
 		faceGrabHand = null;

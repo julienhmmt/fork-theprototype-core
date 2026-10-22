@@ -1473,7 +1473,7 @@
 			if (Date.now() - pinchMenuToggledAt < 250) return;
 			// K1: a sleeve ghost pick/place just handled this trigger — the release
 			// must not fall through to raycastSelect
-			if (vrModuleSelectSwallowed()) return;
+			if (vrModuleSelectSwallowed(xrControllers.indexOf(controller))) return; // 52-browser: per controller
 			// the keyboard is modal on top of any panel (116)
 			if ($vrKeyboardTarget) {
 				const key = raycastKeyboard(xrControllers.indexOf(controller));
