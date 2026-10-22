@@ -1,6 +1,7 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
+	import { rebaseEdit } from '$lib/sharedTextCore.js';
 
 	// Lazy CodeMirror 6 wrapper: loads the editor bundle on first mount.
 	// One-way flow: `value` seeds/refreshes the doc, edits go out via onChange.
@@ -80,16 +81,18 @@
 			// (a shared editor's lock lives in its lock slot, so it can lift again)
 			if ((readOnly || readonly) && !shareKey) more.push(state.EditorState.readOnly.of(true));
 			// 50 Y1: two slots a shared buffer fills once its document is ready — the binding, and
-			// a read-only lock that holds until then (a key typed before the room answered would
-			// land in a buffer about to be replaced by the shared one)
+			// the read-only lock (a viewer's, from the start). The editor takes keys before the room
+			// has answered; `bindShared` carries them into the shared document (`preBase`).
 			if (shareKey) {
 				collabSlot = new state.Compartment();
 				lockSlot = new state.Compartment();
-				more.push(collabSlot.of([]), lockSlot.of(state.EditorState.readOnly.of(true)));
+				lockedNow = !!(readOnly || readonly);
+				more.push(collabSlot.of([]), lockSlot.of(lockedNow ? [state.EditorState.readOnly.of(true), viewMod.EditorView.editable.of(false)] : []));
 				stateMod = state;
 				viewModule = viewMod;
 			}
 		}
+		preBase = String(value ?? '');
 		view = new EditorView({
 			doc: value,
 			parent: host,
@@ -135,6 +138,9 @@
 	/** @type {any} */ let lockSlot = null;
 	/** @type {any} */ let stateMod = null;
 	/** @type {any} */ let viewModule = null;
+	/** 50 Y1: the text the editor had before its shared document was ready (keys typed since
+	 * are an edit against it) */
+	let preBase = '';
 
 	/**
 	 * 50 Y1: hold the shared document, show ITS text (the room's buffer may be ahead of the
@@ -144,7 +150,7 @@
 	 */
 	async function bindShared(key) {
 		const st = await import('$lib/sharedText');
-		await st.openShared(key, String(shareSeed ?? value ?? ''));
+		await st.openShared(key, String(shareSeed ?? preBase));
 		sharedHeld = true;
 		if (destroyed || !view) {
 			st.release(key);
@@ -154,7 +160,11 @@
 		const binding = st.editorBinding(key);
 		if (!binding) return;
 		shared = binding;
-		if (binding.text !== view.state.doc.toString()) {
+		const locked = !!(readOnly || readonly);
+		const local = view.state.doc.toString();
+		// (against the latest prop text: a prop refresh during the wait is not typing)
+		const typed = locked ? null : rebaseEdit(preBase, local, binding.text);
+		if (binding.text !== local) {
 			applyingSeed = true;
 			try {
 				view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: binding.text } });
@@ -162,7 +172,6 @@
 				applyingSeed = false;
 			}
 		}
-		const locked = !!(readOnly || readonly);
 		lockedNow = locked;
 		view.dispatch({
 			effects: [
@@ -170,6 +179,15 @@
 				lockSlot.reconfigure(locked ? [stateMod.EditorState.readOnly.of(true), viewModule.EditorView.editable.of(false)] : [])
 			]
 		});
+		// the keys typed while the room was answering: typed again, now INTO the shared buffer
+		if (typed) {
+			const at = Math.min(typed.index, view.state.doc.length);
+			view.dispatch({
+				changes: { from: at, to: Math.min(at + typed.remove, view.state.doc.length), insert: typed.insert },
+				selection: { anchor: at + typed.insert.length },
+				userEvent: 'input.type'
+			});
+		}
 	}
 
 	// 36: basicSetup's default highlight style is for a LIGHT editor — identifiers came out dark
@@ -198,9 +216,9 @@
 	let highlighted = false;
 
 	// 50 Y1: a shared editor's lock follows `readOnly` live — a peer demoted to viewer mid-edit
-	// stops typing into the shared buffer without the tab being reopened
+	// stops typing into the shared buffer without the tab being reopened (bound or not yet)
 	let lockedNow = false;
-	$: if (view && shared && lockSlot) {
+	$: if (view && lockSlot) {
 		const want = !!(readOnly || readonly);
 		if (want !== lockedNow) {
 			lockedNow = want;
@@ -233,6 +251,7 @@
 		if (shared) return;
 		if (next === lastEmitted || next === view.state.doc.toString()) return;
 		lastEmitted = next;
+		preBase = next;
 		view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next } });
 	}
 

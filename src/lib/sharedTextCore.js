@@ -86,6 +86,28 @@ export function minimalEdit(from, to) {
 }
 
 /**
+ * Keys typed before the shared document was ready: `base` is what the editor opened with,
+ * `local` what it holds now, `shared` what the room's document says. Returns the edit to make
+ * in `shared` so the typing survives (null = nothing typed). An edit beside the room's own
+ * change is moved past it; one overlapping it keeps the room's text and lands just after it
+ * — both people keep what they typed, the same promise the live buffer makes.
+ * @param {string} base @param {string} local @param {string} shared
+ * @returns {{index: number, remove: number, insert: string} | null}
+ */
+export function rebaseEdit(base, local, shared) {
+	const mine = minimalEdit(base, local);
+	if (!mine) return null;
+	const b = String(base ?? '');
+	const s = String(shared ?? '');
+	const theirs = minimalEdit(b, s);
+	if (!theirs) return mine;
+	const end = theirs.index + theirs.remove;
+	if (mine.index >= end) return { ...mine, index: mine.index + theirs.insert.length - theirs.remove };
+	if (mine.index + mine.remove <= theirs.index) return mine;
+	return { index: theirs.index + theirs.insert.length, remove: 0, insert: mine.insert };
+}
+
+/**
  * Does THIS peer write a change that arrived through the source? The lowest id among the
  * peers holding the document (us included) — every peer computes it from the same roster.
  * @param {Iterable<string>} holders @param {string} me

@@ -12,6 +12,7 @@ import {
 	sharedDocKey,
 	isDocKey,
 	minimalEdit,
+	rebaseEdit,
 	isExternalWriter,
 	lineAt,
 	presenceLabel,
@@ -75,6 +76,21 @@ describe('sharedTextCore', () => {
 		expect(minimalEdit('aaa', 'aaaa')).toEqual({ index: 3, remove: 0, insert: 'a' });
 		expect(minimalEdit('hello world', 'hello')).toEqual({ index: 5, remove: 6, insert: '' });
 		expect(minimalEdit('', 'new')).toEqual({ index: 0, remove: 0, insert: 'new' });
+	});
+	it('keeps keys typed before the shared document was ready, beside or after the room\'s change', () => {
+		const apply = (s, e) => s.slice(0, e.index) + e.insert + s.slice(e.index + e.remove);
+		// nothing typed
+		expect(rebaseEdit('let a;', 'let a;', 'let b;')).toBe(null);
+		// the room still holds the opening text: the typing goes in as typed
+		expect(apply('let a;', rebaseEdit('let a;', 'let a = 1;', 'let a;'))).toBe('let a = 1;');
+		// typing AFTER the room's change moves past it
+		expect(apply('// x\nlet a;', rebaseEdit('let a;', 'let a = 1;', '// x\nlet a;'))).toBe('// x\nlet a = 1;');
+		// typing BEFORE the room's change stays put
+		expect(apply('ab;\nend!', rebaseEdit('ab;\nend', 'abc;\nend', 'ab;\nend!'))).toBe('abc;\nend!');
+		// both rewrote the same span: the room's text stays, ours lands right after it
+		expect(apply('let theirs;', rebaseEdit('let x;', 'let mine;', 'let theirs;'))).toBe('let theirsmine;');
+		// the probe's case: select-all + retype against a room that moved the whole line
+		expect(apply('b = 7;', rebaseEdit('b = 1;', 'b = 9; // mine', 'b = 7;'))).toContain('// mine');
 	});
 	it('picks ONE writer for a change that arrived through the source: the lowest peer id', () => {
 		expect(isExternalWriter(['b', 'c'], 'a')).toBe(true);
