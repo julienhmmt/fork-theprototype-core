@@ -75,7 +75,9 @@ const rt = {
 	nearBefore: 0.1,
 	/** frame timings for the budget readout (ms between XR frames, a ring) */
 	frameGaps: /** @type {number[]} */ ([]),
-	lastFrameAt: 0
+	lastFrameAt: 0,
+	/** the last tap's outcome (the suites read it) */
+	lastTap: /** @type {string | null} */ (null)
 };
 
 /** @param {Partial<import('./arTableState.js').ArTableState>} patch */
@@ -198,6 +200,7 @@ function cleanup() {
 	rt.at = null;
 	rt.frameGaps = [];
 	rt.lastFrameAt = 0;
+	rt.lastTap = null;
 	if (rt.reticle) {
 		rt.reticle.parent?.remove(rt.reticle);
 		rt.reticle.traverse((/** @type {any} */ o) => {
@@ -372,6 +375,13 @@ export function stopPlayingOnTable() {
  * @returns {'placed' | 'click' | 'module-group' | 'module-handler' | 'miss' | 'none'}
  */
 export function arTap(x, y) {
+	const kind = tapKind(x, y);
+	rt.lastTap = kind;
+	return kind;
+}
+
+/** @param {number} x @param {number} y @returns {'placed' | 'click' | 'module-group' | 'module-handler' | 'miss' | 'none'} */
+function tapKind(x, y) {
 	const st = get(arTable);
 	if (st.phase === 'finding') return placeAtReticle() ? 'placed' : 'none';
 	if (st.phase !== 'placed' || !st.playing) return 'none';
@@ -450,6 +460,7 @@ export function arTableDebug() {
 	return {
 		...get(arTable),
 		hasSession: !!rt.session,
+		lastTap: rt.lastTap,
 		hasHitSource: !!rt.hitSource,
 		hitAt: rt.hit ? rt.hit.toArray() : null,
 		at: rt.at,

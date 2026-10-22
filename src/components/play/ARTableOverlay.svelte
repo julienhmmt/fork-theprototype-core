@@ -133,7 +133,10 @@
 		-webkit-user-select: none;
 		pointer-events: auto;
 	}
+	/* above the HUD slot: the way out and the status always win over a game's screens */
 	.ar-top {
+		position: relative;
+		z-index: 1;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -172,6 +175,7 @@
 	}
 	.ar-actions {
 		position: relative;
+		z-index: 1;
 		display: flex;
 		justify-content: center;
 		flex-wrap: wrap;
