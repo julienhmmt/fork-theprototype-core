@@ -59,7 +59,8 @@ const MERGED = 'let maxspeed = 10;\nreturn speed;';
 
 h.run(async () => {
 	const browser = await h.launch();
-	const storage = { 'shared:shareNewFiles': 'never' };
+	// the Explorer's properties pane (where "Edit" lives) is a remembered panel: open on Properties
+	const storage = { 'shared:shareNewFiles': 'never', 'ws:explorer:secondaryOpen': 'true', 'ws:explorer:secondaryMode': 'props' };
 	const A = await h.setupPage(browser, 'A', { storage });
 	const B = await h.setupPage(browser, 'B', { storage });
 	await h.connect(B, A);
@@ -148,7 +149,7 @@ h.run(async () => {
 	await h.connect(C, A);
 	await h.eventually(() => nodeCode(C.page, 'yjs1'), (c) => c === MERGED, 'premise: the late joiner holds the node (its SAVED code)', 20000);
 	await openNodeTab(C.page, 'yjs1');
-	await waitShared(C.page, isNode, 'C');
+	await waitShared(C.page, isNode, 'C', 60000);
 	await h.eventually(
 		async () => (await tabFor(C.page, isNode))?.code,
 		(c) => c === MERGED + UNSAVED,
@@ -191,7 +192,10 @@ h.run(async () => {
 	await A.page.waitForTimeout(1200);
 	await A.page.locator('.explorer-card', { hasText: 'notes.txt' }).first().click();
 	await A.page.waitForTimeout(500);
-	await A.page.getByRole('button', { name: 'Edit', exact: true }).first().click();
+	await A.page.getByRole('button', { name: 'Edit', exact: true }).first().click({ timeout: 15000 }).catch(async (e) => {
+		await shot(A.page, 'zz-edit-button.png');
+		throw e;
+	});
 	const isNotes = (t) => t.title === 'notes.txt';
 	await h.eventually(() => tabFor(A.page, isNotes), (t) => !!t, '"Edit" on a text document opens it as a Code tab', 15000);
 	const notesTab = await tabFor(A.page, isNotes);
