@@ -299,7 +299,8 @@ h.run(async () => {
 		const win = document.querySelector('#image-preview-window');
 		return win ? win.className.includes('pv-through') : null;
 	});
-	h.check(carried === false, 'a window taking a NEW target comes back solid, not click-through');
+	const carriedWhy = await page.evaluate(() => ({ windows: [...document.querySelectorAll('[id^="image-preview-window"]')].map((w) => w.id + ':' + w.className.includes('pv-through')), active: document.activeElement?.tagName + '#' + document.activeElement?.id }));
+	h.check(carried === false, `a window taking a NEW target comes back solid, not click-through (${carried} ${JSON.stringify(carriedWhy)})`);
 	await page.locator('#preview-cog').first().click();
 	await page.waitForTimeout(300);
 

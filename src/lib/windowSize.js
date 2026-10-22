@@ -16,7 +16,16 @@
 // In both, the viewport cap WINS over the minimum size: a 360px minimum on a
 // 320px-wide screen would otherwise reinstate the very thing being prevented.
 
-import { cssPx } from './uiScale'; // 53 A1: a px token may read back as calc(...)
+// 53 A1: a px token may read back as calc(Npx * var(--ui-scale, 1)) (the a11y-css transform).
+// Resolved here, the simple form uiScale's cssPx reads, so this module keeps NO imports: it is
+// DOM-free and loads straight into node (window-size-clamp).
+/** @param {CSSStyleDeclaration} cs @param {string} name */
+function tokenPx(cs, name) {
+	const s = cs.getPropertyValue(name).trim();
+	const calc = /^calc\(\s*(-?[\d.]+)px\s*\*\s*(?:(-?[\d.]+)|var\(--ui-scale(?:,\s*[\d.]+)?\))\s*\)$/.exec(s);
+	if (calc) return Number(calc[1]) * (calc[2] != null ? Number(calc[2]) : parseFloat(cs.getPropertyValue('--ui-scale')) || 1);
+	return parseFloat(s);
+}
 
 /** px of breathing room kept between a window edge and the viewport edge */
 export const WIN_MARGIN = 8;
@@ -65,8 +74,8 @@ export function bottomReserve({ dock: withDock = true } = {}) {
 	let dock = 0;
 	try {
 		const cs = getComputedStyle(document.documentElement);
-		inset = cssPx(cs.getPropertyValue('--controls-inset')) || 0;
-		dock = cssPx(cs.getPropertyValue('--viewport-inset')) || 0;
+		inset = tokenPx(cs, '--controls-inset') || 0;
+		dock = tokenPx(cs, '--viewport-inset') || 0;
 	} catch {}
 	const vv = window.visualViewport;
 	const overlay =

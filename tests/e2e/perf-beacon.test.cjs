@@ -113,7 +113,8 @@ h.run(async () => {
 		h.check(on.running && on.url === 'https://perf.mock.test/api/collections/perf_reports/records?fields=id', 'B5 the Settings toggle turns reports on');
 		h.check((await page.locator('#perf-report-dot').getAttribute('data-state')) === 'idle', 'B6 the reporting dot is on the FPS counter (idle until a send)');
 		const strip = await page.evaluate(() => window.__stores.gameKit.vrPerfStrip.perfSegments({ fps: 72, ms: 13.9, calls: 100, tris: 1000, source: 'xr' }));
-		h.check(strip[0].text === '●' && strip[1].text === '72 fps', 'B6b the headset FPS strip carries the same dot');
+		// 53 A2: idle / sent / failed are a ring / disc / triangle (never colour alone); idle here, like B6
+		h.check(strip[0].text === '○' && strip[1].text === '72 fps', `B6b the headset FPS strip carries the same dot, idle = a ring (${strip[0].text})`);
 		// a real stall inside the first window
 		await page.waitForTimeout(2500);
 		await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => {

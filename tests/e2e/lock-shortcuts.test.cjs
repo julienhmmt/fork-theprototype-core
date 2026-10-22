@@ -236,7 +236,11 @@ h.run(async () => {
 				let menu = false;
 				s.addMenu.subscribe((v) => (menu = menu || !!v))();
 				s.viewportMenu.subscribe((v) => (menu = menu || !!v))();
-				return !typing && !menu && !document.querySelector('[role=menu]') && s.keyScope.lastScope() === scope;
+				// 53 A3: F6 can move focus onto a toolbar while the pane keeps its key scope — a key pressed
+				// there is the toolbar's (arrows / Home / End walk it), so that is not this scope any more.
+				// (#controls-pill is a <nav>, which may not take role=toolbar, but walks the same way)
+				const onToolbar = !!a?.closest?.('[role=toolbar], #controls-pill');
+				return !typing && !menu && !onToolbar && !document.querySelector('[role=menu]') && s.keyScope.lastScope() === scope;
 			}, scope);
 		for (const combo of combos) {
 			// re-enter whenever the last key moved the keyboard (an editor's own key can move
