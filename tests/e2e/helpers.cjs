@@ -5,6 +5,8 @@
 const { chromium } = require('playwright');
 
 const URL = process.env.APP_URL || 'https://theprototype.app:5173/';
+/** 49 J2: a cloud plugin URL loaded into every page (a dev server run as a cloud build) */
+const CLOUD_PLUGIN = process.env.E2E_CLOUD_PLUGIN || '';
 
 // Optional: seed the peer-server Settings for every test context. Needed when
 // the app is served from a hostname the peerHandler treats as LOCAL DEV
@@ -163,6 +165,10 @@ async function setupPage(browser, name, options = {}) {
 	// options.init = fn or [fn, arg]: a listener the suite needs from the FIRST frame (44 L5's ResizeObserver
 	// guard) — installed before the first navigation, so no extra reload (reloads are scarce on 1.32+)
 	if (options.init) await ctx.addInitScript(...(Array.isArray(options.init) ? options.init : [options.init]));
+	// E2E_CLOUD_PLUGIN=<url> (49 J2): load a cloud plugin into a DEV server, so a suite runs against a
+	// cloud build's roles/rooms with the lane's code (production's https://theprototype.pages.dev/
+	// cloud-plugin.js is CORS-open). setupPage then also waits for the plugin's capability gate.
+	if (CLOUD_PLUGIN) await ctx.addInitScript((url) => localStorage.setItem('cloudPluginUrl', url), CLOUD_PLUGIN);
 	// caller overrides last, so a test can replace any of the defaults above
 	if (options.storage) {
 		await ctx.addInitScript((extra) => {
@@ -214,6 +220,10 @@ async function setupPage(browser, name, options = {}) {
 	// the THIRD argument: passed second (as this line did) they are the page-function's `arg`, and
 	// Playwright's default 30 s applied whatever the number said.
 	await page.waitForFunction(() => window.__stores && !!window.__stores.moduleSDK, null, { timeout: 90000 });
+	if (CLOUD_PLUGIN)
+		await page
+			.waitForFunction(() => window.__stores.cloudHooks?.hasCapabilityProvider?.(), null, { timeout: 30000 })
+			.catch(() => console.log(`[${name}] E2E_CLOUD_PLUGIN set, but no plugin registered within 30 s`));
 	const id = await page.evaluate(
 		() => new Promise((r) => window.__stores.peers.subscribe((p) => r(p?.peer?.id))())
 	);

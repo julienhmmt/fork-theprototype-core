@@ -5,7 +5,9 @@
 //   {op:'step', id, dt, gravity, viscosity, surfaceTension, colliders, spec, buffer?,
 //        walls? (36-fb: 6 booleans), lifetime? (s), spawn? [x,y,z,vx,vy,vz]*, sinks? [{min,max}],
 //        shift? [dx,dy,dz], flows? CompiledFlow[] (36-fb F23/F24 emitters; spec null = no tank emitter/drain)}
-//        -> {op:'frame', id, count, positions (transferred), impulses, ms, escaped? (transferred), sunk? [x,y,z]*}
+//        surfaces? TankSurface[] (49-water W1: W1 water surfaces in the tank frame)}
+//        -> {op:'frame', id, count, positions (transferred), impulses, ms, escaped? (transferred), sunk? [x,y,z]*,
+//            splashes? [x,y,z,speed,surfaceIndex]* (49-water W1, transferred)}
 //   {op:'drop', id}
 import { FluidSolver, pourAndDrain } from './fluidCore.js';
 import { spawnBatch, applySinks } from './fluidEmitterCore.js';
@@ -47,9 +49,14 @@ self.onmessage = (/** @type {MessageEvent} */ e) => {
 		out.set(tank.solver.x.subarray(0, n * 3));
 		// 36-fb: particles that left through a missing wall (opts.walls), transferred
 		const escaped = tank.solver.escapedCount ? tank.solver.takeEscaped() : null;
+		// 49-water W1: what landed on a W1 surface, on the same frame (no second readback)
+		const splashes = tank.solver.splashCount ? tank.solver.takeSplashes() : null;
+		const transfer = [out.buffer];
+		if (escaped) transfer.push(escaped.buffer);
+		if (splashes) transfer.push(splashes.buffer);
 		/** @type {any} */ (self).postMessage(
-			{ op: 'frame', id: m.id, gen: tank.gen, count: n, positions: out, impulses: tank.solver.impulses, ms: performance.now() - t0, ...(escaped ? { escaped } : {}), ...(sunk?.length ? { sunk } : {}) },
-			escaped ? [out.buffer, escaped.buffer] : [out.buffer]
+			{ op: 'frame', id: m.id, gen: tank.gen, count: n, positions: out, impulses: tank.solver.impulses, ms: performance.now() - t0, ...(escaped ? { escaped } : {}), ...(sunk?.length ? { sunk } : {}), ...(splashes ? { splashes } : {}) },
+			transfer
 		);
 	}
 };

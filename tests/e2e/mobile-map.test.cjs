@@ -38,7 +38,9 @@ h.run(async () => {
 			s.notesDrawerOpen.set(false);
 			s.inspectorClose.set(true);
 			s.closeMenu.set(true);
-			s.settingsOpen.set(null);
+			// closed the way the app closes it (false): `false` also drops a deep-linked section (row 18's
+			// Settings ▸ AI) — `null` left it standing, and the next Settings opened on AI, not the list
+			s.settingsOpen.set(false);
 			s.connectDrawerOpen.set(false);
 			s.explorerClose.set(true);
 			s.flowGraphClose.set(true);
@@ -286,7 +288,7 @@ h.run(async () => {
 	await tap('#ps-more');
 	await tap('#ps-tile-ai');
 	row(18, (await read(store('aiAssistantHidden'))) === '' || (await read(store('settingsOpen'))) === true, 'AI assistant: More › Windows › AI assistant (or Settings › AI when none is set up)');
-	await P.evaluate(() => window.__stores.settingsOpen.set(null));
+	await P.evaluate(() => window.__stores.settingsOpen.set(false));
 
 	// ---- row 19: the mic rides the chip while connected ------------------------------
 	await rest();
@@ -397,7 +399,7 @@ h.run(async () => {
 	h.check(otherDet === 'half', `another window keeps its own height (notifications: ${otherDet})`);
 	const saved = await read(() => JSON.parse(localStorage.getItem('phoneSheetDetents') || '{}'));
 	h.check(saved.chat === 'full', `the heights are saved on this device (${JSON.stringify(saved)})`);
-	await P.evaluate(() => window.__stores.settingsOpen.set(null));
+	await P.evaluate(() => window.__stores.settingsOpen.set(false));
 
 	// ---- rows 34-35: Settings ---------------------------------------------------------
 	await rest();
