@@ -4,7 +4,7 @@
 	// accent, so you can see what connects where. Unmigrated handles keep the
 	// --node-accent fallback (flow.css). Legacy-mode like every sibling node file.
 	import { Handle, Position } from '@xyflow/svelte';
-	import { outputType, inputType, typeColor } from '$lib/flowSockets';
+	import { outputType, inputType, typeColor, socketShape } from '$lib/flowSockets';
 
 	export let kind: 'source' | 'target' = 'source';
 	export let nodeType: string; // the NODE type (slider, math, ...)
@@ -20,7 +20,8 @@
 	const LEFT = Position.Left;
 	$: socketType = forceType ?? (kind === 'source' ? outputType(nodeType) : inputType(nodeType, id ?? 'a'));
 	$: pos = position ?? (kind === 'source' ? RIGHT : LEFT);
-	$: css = `--socket-color: ${typeColor(socketType)};${top !== undefined ? ` top: ${top}px;` : ''}${style}`;
+	// 53 A2: + the type's shape, so the socket never says its type by colour alone
+	$: css = `--socket-color: ${typeColor(socketType)}; --socket-shape: ${socketShape(socketType)};${top !== undefined ? ` top: ${top}px;` : ''}${style}`;
 </script>
 
-<Handle type={kind} position={pos} {id} class="socket-typed" style={css} />
+<Handle type={kind} position={pos} {id} class="socket-typed" style={css} data-socket-type={socketType} />

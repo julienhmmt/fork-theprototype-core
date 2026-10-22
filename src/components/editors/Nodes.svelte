@@ -90,7 +90,7 @@
 	import { defDefaults } from '$lib/customNodes';
 	import { findNodeSpec, nodeCatalog } from '$lib/nodeCatalog';
 	import { nodeDoc } from '$lib/nodeDocs';
-	import { isValidFlowConnection, typeColor, replaceableInputEdges, groupSocketType } from '$lib/flowSockets';
+	import { isValidFlowConnection, typeColor, socketShape, SOCKET_TYPES, replaceableInputEdges, groupSocketType } from '$lib/flowSockets';
 	import { variadicSocketExists, switcherItems, MAX_SWITCHER_ITEMS, SWITCHER_TYPES, switcherVType } from '$lib/variadicNodes.js'; // 37 (R6)
 	import { removeVariadicSocket, setSwitcherType, addSwitcherItem } from '$lib/variadicEdit.js'; // 37 (R6)
 	import KitButton from '../ui/Button.svelte'; // 37: the Switcher ⓘ rows on the redesign kit
@@ -2221,12 +2221,12 @@
 					<button id="flow-fit" class="rounded-sm bg-surface-active px-2 py-1 hover:bg-border-strong" onclick={() => fitView()}>Fit</button>
 					<button id="flow-reset-view" class="rounded-sm bg-surface-active px-2 py-1 hover:bg-border-strong" onclick={() => setViewport({ x: 0, y: 0, zoom: 1 })}>Reset view</button>
 				</div>
-				<!-- B4.2: socket type -> color legend (sockets are painted by TYPE now) -->
+				<!-- B4.2: socket type -> color legend (sockets are painted by TYPE now); 53 A2: and shaped by it -->
 				<p class="ui-section-label mt-1">Socket types</p>
 				<div id="socket-legend" class="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-text-2">
-					{#each ['number', 'vector3', 'boolean', 'color', 'object', 'event', 'effect'] as t}
+					{#each SOCKET_TYPES as t}
 						<span class="flex items-center gap-1">
-							<span class="inline-block h-2 w-2 rounded-full" style="background: {typeColor(t)}"></span>{t}
+							<span class="socket-swatch inline-block h-2.5 w-2.5" data-socket-type={t} style="background: {typeColor(t)}; clip-path: {socketShape(t)}"></span>{t}
 						</span>
 					{/each}
 				</div>

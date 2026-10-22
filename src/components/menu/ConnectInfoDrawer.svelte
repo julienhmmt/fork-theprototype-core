@@ -21,7 +21,7 @@
 		connectDrawerPinned
 	} from '../../stores/appStore.js';
 	import { sessionHost, peerJoinedAt, signalingRetry } from '$lib/connectionState';
-	import { peerQuality, qColor } from '$lib/networkQuality';
+	import { peerQuality, qColor, qGlyph } from '$lib/networkQuality';
 	import { peerServerStatus, peerServerPingUrl, peerServerPeersUrl } from '$lib/peerServer';
 	import { cancelOutboundRequest } from '$lib/peerApproval';
 	import { drawerSlot, rolesInfo } from '$lib/cloudHooks';
@@ -303,7 +303,7 @@
 					<span class="cxd-peer-name">{nameOf(pid)}</span>
 					{#if q}
 						<span style="color: {qColor(q.level)}" title={q.rtt != null ? Math.round(q.rtt) + ' ms round-trip' : 'measuring…'}
-							>●{q.rtt != null ? ' ' + Math.round(q.rtt) + 'ms' : ''}</span
+							>{qGlyph(q.level)}{q.rtt != null ? ' ' + Math.round(q.rtt) + 'ms' : ''}</span
 						>
 						{#if q.relayed}<span class="cxd-relay" title="Relayed through a TURN server">relay</span>{/if}
 					{/if}
@@ -537,7 +537,7 @@
 		background: var(--text-faint);
 	}
 	.cxd-status[data-state='connected'] .cxd-sdot {
-		background: var(--ink-good, var(--speaking));
+		background: var(--status-good, var(--speaking));
 	}
 	.cxd-status[data-state='pending'] .cxd-sdot {
 		background: var(--warn-text);

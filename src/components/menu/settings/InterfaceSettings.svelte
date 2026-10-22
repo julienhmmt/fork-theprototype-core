@@ -116,7 +116,7 @@
 
 <div class="settings-page-body" data-keywords="appearance toolbar menu">
 	<Section variant="card" label="Appearance" badge="This device">
-		<SettingRow id="row-theme" label="Theme" description="The 3D viewport follows the scene environment, not the theme." keywords="dark light colour color contrast appearance">
+		<SettingRow id="row-theme" label="Theme" description="The 3D viewport follows the scene environment, not the theme. High contrast also thickens the selection outline and brightens the move/rotate/scale handles." keywords="dark light colour color contrast high contrast accessibility a11y low vision colour blind color blind appearance">
 			<ThemedSelect id="theme-select" items={themeItems} bind:value={$theme} />
 		</SettingRow>
 		<SettingRow id="row-density" label="Density" description="Compact tightens rows and controls to 32 px on a desktop screen.">

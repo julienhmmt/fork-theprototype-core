@@ -250,8 +250,9 @@ h.run(async () => {
 	const warn = await tierAt(131);
 	const over = await tierAt(163);
 	h.check(ok.tier === 'ok' && warn.tier === 'warn' && over.tier === 'over', 'Q1.5 98 / 131 / 163 calls read ok / warn / over (' + [ok, warn, over].map((t) => t.text + '=' + t.tier).join(', ') + ')');
-	h.check(warn.color === 'rgb(251, 191, 36)', 'Q1.6 past 120 the calls are AMBER (' + warn.color + ')');
-	h.check(over.color === 'rgb(248, 113, 113)', 'Q1.7 past 150 they are RED (' + over.color + ')');
+	// 53 A2: the colour-blind safe careful / over inks (theme.css), and a ▲ / ✕ mark before the number
+	h.check(warn.color === 'rgb(247, 201, 72)', 'Q1.6 past 120 the calls are AMBER (' + warn.color + ')');
+	h.check(over.color === 'rgb(240, 80, 104)', 'Q1.7 past 150 they are RED (' + over.color + ')');
 	h.check(ok.color !== warn.color && ok.color !== over.color, 'Q1.8 and in budget they are neither (' + ok.color + ')');
 	// it persists (LOCAL)
 	await h.freshReload(A);
@@ -285,8 +286,8 @@ h.run(async () => {
 	h.check(strip.on.visible && strip.on.parent === 'Scene', 'Q1.10 in a headset the strip shows — in EDIT too (' + strip.mode + ')');
 	h.check(strip.p && strip.p[1] > 1.9 && strip.p[2] < -1, 'Q1.11 ...head-locked, ahead and above the gaze (' + strip.p + ')');
 	const callSeg = strip.on.segments.find((x) => /calls/.test(x.text));
-	h.check(strip.on.segments.map((x) => x.text).join(' · ') === '72 fps · 13.9 ms · 163 calls · 248k tris', 'Q1.12 the strip reads fps, ms, calls, tris (' + strip.on.segments.map((x) => x.text).join(' · ') + ')');
-	h.check(callSeg?.color === '#f87171', 'Q1.13 163 calls are drawn RED on the strip (' + callSeg?.color + ')');
+	h.check(strip.on.segments.map((x) => x.text).join(' · ') === '72 fps · 13.9 ms · ✕ 163 calls · 248k tris', 'Q1.12 the strip reads fps, ms, calls, tris (' + strip.on.segments.map((x) => x.text).join(' · ') + ')');
+	h.check(callSeg?.color === '#f05068', 'Q1.13 163 calls are drawn RED on the strip (' + callSeg?.color + ')');
 	h.check(strip.inBudget.find((x) => /calls/.test(x.text))?.color === '#d1d5db', 'Q1.14 98 calls are drawn plain');
 	h.check(strip.off === false, 'Q1.15 the Settings toggle takes it down in the headset too');
 	h.check(strip.notPresenting === false, 'Q1.16 and nothing shows outside a session');
