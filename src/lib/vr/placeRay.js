@@ -66,7 +66,7 @@ function swallowSelect(index) {
 	return !!laser && !beamTarget(laser).panel;
 }
 /** the suites' view */
-const debug = { placed: 0, cancelled: 0, rotations: 0, onPanelFrames: 0, lastEnd: /** @type {string | null} */ (null) };
+const debug = { placed: 0, cancelled: 0, rotations: 0, onPanelFrames: 0, lastEnd: /** @type {string | null} */ (null), frames: 0, frameMs: 0 };
 
 /** the laser of `hand` as a world raycaster, or null (not tracked) @param {'left' | 'right'} hand */
 function laserOf(hand) {
@@ -173,6 +173,14 @@ function placingSlot() {
 
 /** One frame: the ghost follows the placing hand's laser; on a panel there is no ghost. */
 function frame() {
+	if (!current) return;
+	const t0 = performance.now();
+	frameBody();
+	debug.frames++;
+	debug.frameMs += performance.now() - t0;
+}
+
+function frameBody() {
 	if (!current) return;
 	if (!rayPlaceActive()) {
 		// placeDrag ended underneath us (a scene clear, another drag): let go too

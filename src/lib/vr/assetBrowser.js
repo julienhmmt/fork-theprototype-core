@@ -626,20 +626,56 @@ function isWristSlot(index) {
 }
 
 // ---- per frame -----------------------------------------------------------------------------------------
+/**
+ * Repaint when what the panel shows could have changed. The INPUTS are compared first (a few numbers and
+ * strings, every frame) — building the view walks whole lists (400 free models, the library), which is not
+ * a per-frame cost at 72-90 Hz.
+ */
 function redraw() {
-	const v = currentView();
-	const sig = JSON.stringify([v, hover[0], hover[1], imagesLoaded, data.rev, Object.keys(jobs).length]);
-	if (sig === drawnSig) return;
-	drawnSig = sig;
+	const placing = get(vrPlacing);
+	const inputs = [
+		data.rev,
+		data.loading,
+		view.tab,
+		view.pack?.name ?? '',
+		view.query,
+		view.page,
+		hover[0],
+		hover[1],
+		imagesLoaded,
+		JSON.stringify(jobs),
+		status.text && Date.now() < status.until ? status.text : '',
+		placing ? placing.label + '|' + placing.hand + '|' + placing.armed : '',
+		placingKey,
+		mode === 'wrist'
+	].join('\u0001');
+	if (inputs === drawnSig) return;
+	drawnSig = inputs;
 	const g = /** @type {CanvasRenderingContext2D} */ (canvas?.getContext('2d'));
 	if (!g) return;
-	hits = drawAssetPanel(g, v, { images: (url) => imageFor(url), hover: hover[0] ?? hover[1] });
+	const t0 = performance.now();
+	hits = drawAssetPanel(g, currentView(), { images: (url) => imageFor(url), hover: hover[0] ?? hover[1] });
 	texture.needsUpdate = true;
+	perf.paintMs += performance.now() - t0;
 	debug.draws++;
 }
 
+/** the suites' cost reading: frame-hook time (ms, summed), frames, repaints and their paint time */
+const perf = { frames: 0, frameMs: 0, paintMs: 0 };
+/** this frame's laser-on-panel per slot (the stick owner asks every frame; one raycast per slot) */
+const onPanelNow = [false, false];
+
 function frame() {
 	if (!mesh) return;
+	const t0 = performance.now();
+	frameBody();
+	if (mesh.visible) {
+		perf.frames++;
+		perf.frameMs += performance.now() - t0;
+	}
+}
+
+function frameBody() {
 	const r = /** @type {any} */ (get(globalRenderer));
 	const live = get(vrAssetBrowserOpen) && !!r?.xr?.isPresenting && get(isVRMode);
 	if (!live) {
@@ -656,9 +692,11 @@ function frame() {
 	mesh.updateMatrixWorld(true);
 	jobs = cc0ImportRef ? get(cc0ImportRef.cc0Jobs) : {};
 	for (const i of [0, 1]) {
-		hover[i] = isWristSlot(i) ? null : (buttonAt(i)?.id ?? null);
+		const hit = isWristSlot(i) || !mesh.visible ? null : laserHit(i);
+		hover[i] = hit?.uv ? (hitAtUv(hits, hit.uv)?.id ?? null) : null;
 		// the laser on the panel: that hand's stick pages (up = back, down = forward)
-		const onPanel = !isWristSlot(i) && !!laserHit(i);
+		const onPanel = !!hit;
+		onPanelNow[i] = onPanel;
 		const y = onPanel ? (axesForSlot(i)[3] ?? 0) : 0;
 		if (stickArmed[i] && Math.abs(y) > STICK_FLICK) {
 			stickArmed[i] = false;
@@ -672,7 +710,7 @@ function frame() {
 
 /** which slots' lasers are on the panel (their sticks page instead of turning) */
 function stickHand() {
-	for (const i of [0, 1]) if (mesh?.visible && !isWristSlot(i) && laserHit(i)) return handOfSlot(i);
+	for (const i of [0, 1]) if (mesh?.visible && onPanelNow[i]) return handOfSlot(i);
 	return null;
 }
 
@@ -821,6 +859,7 @@ export function vrAssetBrowserDebug() {
 		presses: debug.presses.slice(),
 		lastPress: debug.lastPress,
 		loading: data.loading,
-		freeCount: data.free?.length ?? null
+		freeCount: data.free?.length ?? null,
+		perf: { ...perf }
 	};
 }

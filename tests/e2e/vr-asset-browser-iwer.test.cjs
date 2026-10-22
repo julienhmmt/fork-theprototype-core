@@ -17,6 +17,10 @@
 //      pinch held while the hand moves drops the item where the pinch lets go, a pinch-click arms it and the
 //      next pinch places; a PRECISE tool (the sculpt brush) answers a pinch with "Pick up a controller" at
 //      that hand and does nothing
+//   P. the cost on the Quest 3 profile (IWER metaQuest3, CPU x4 like perf-games): the panel's frame hook,
+//      its repaints while the laser sweeps the cards, and the laser ghost's frame hook, per XR frame — and
+//      the meshes they add (the panel 1, a box ghost 3, the hand note 1). Headless says nothing about the
+//      Quest GPU; the ms are the CPU side, which is what these hooks add.
 // Run: APP_URL=https://theprototype.app:5484/ node tests/e2e/vr-asset-browser-iwer.test.cjs   (ONLY=G,… to pick rows)
 const h = require('./helpers.cjs');
 const iwer = require('./iwer.cjs');
@@ -526,6 +530,82 @@ h.run(async () => {
 		await g(() => window.__stores.vrControls.executeVRMenuAction('sculpt:done'));
 		await g(() => (window.__iwer.device.primaryInputMode = 'controller'));
 		await settle(10);
+	}
+
+
+	// ---- P. the cost on the Quest 3 profile -------------------------------------------------------------
+	if (want('P')) {
+		console.log('\n=== P. frame cost (IWER Quest 3 profile, CPU x4) ===');
+		await iwer.pose(page, 'head', [0, 1.6, 0]);
+		await iwer.pose(page, menuHand, [menuHand === 'left' ? -0.18 : 0.18, 1.25, -0.3], { pitch: 0.3 });
+		const from = [pointer === 'left' ? -0.12 : 0.12, 1.3, -0.15];
+		await iwer.pose(page, pointer, from);
+		await g(() => {
+			const ab = window.__stores.vrAssetBrowser;
+			if (!ab.vrAssetBrowserDebug().open) ab.openVRAssetBrowser();
+		});
+		await settle(6);
+		await g(() => window.__stores.vrAssetBrowser.pressAssetButton('tab:free'));
+		await h.eventually(() => g(() => window.__stores.vrAssetBrowser.vrAssetBrowserDebug().cards.length), (n) => n > 0, 'premise: the Free tab lists models', 10000);
+		const aimAtCtl = async (id) => {
+			const pt = await g((cid) => window.__stores.vrAssetBrowser.assetControlPoint(cid), id);
+			const dd = [pt[0] - from[0], pt[1] - from[1], pt[2] - from[2]];
+			await iwer.pose(page, pointer, from, { yaw: Math.atan2(-dd[0], -dd[2]), pitch: Math.atan2(dd[1], Math.hypot(dd[0], dd[2])) });
+		};
+		const cards = (await g(() => window.__stores.vrAssetBrowser.vrAssetBrowserDebug())).cards;
+		const cdp = await page.context().newCDPSession(page);
+		await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+		const p0 = await g(() => window.__stores.vrAssetBrowser.vrAssetBrowserDebug().perf);
+		const t0 = Date.now();
+		const draws0 = (await g(() => window.__stores.vrAssetBrowser.vrAssetBrowserDebug())).draws;
+		// the laser sweeps the cards: every hop is a hover change = a repaint + a texture upload
+		for (let k = 0; k < 12; k++) {
+			await aimAtCtl('card:' + cards[k % cards.length]);
+			await settle(5);
+		}
+		const p1 = await g(() => window.__stores.vrAssetBrowser.vrAssetBrowserDebug().perf);
+		const draws1 = (await g(() => window.__stores.vrAssetBrowser.vrAssetBrowserDebug())).draws;
+		// the ghost on the laser (a library model armed), the laser on the floor
+		await g(() => window.__stores.vrAssetBrowser.pressAssetButton('tab:library'));
+		await settle(4);
+		const lib = (await g(() => window.__stores.vrAssetBrowser.vrAssetBrowserDebug())).cards.find((k) => k.startsWith('lib:') || k.startsWith('prefab:'));
+		await g((k) => window.__stores.vrAssetBrowser.pressAssetButton('card:' + k), lib);
+		await iwer.pose(page, pointer, [from[0], 1.2, -0.3], { pitch: -0.75 });
+		const r0 = await g(() => window.__stores.vrPlace.vrPlaceDebug());
+		await settle(60);
+		const r1 = await g(() => window.__stores.vrPlace.vrPlaceDebug());
+		await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+		const meshes = await g(() => {
+			let sc;
+			window.__stores.globalScene.subscribe((v) => (sc = v))();
+			const count = (o) => {
+				let n = 0;
+				o?.traverse((x) => ((x.isMesh || x.isLineSegments) && x.visible ? n++ : 0));
+				return n;
+			};
+			return { panel: count(sc.getObjectByName('vr-asset-browser')), ghost: count(window.__stores.placeGhost.ghostRoot()) };
+		});
+		await g(() => window.__stores.vrPlace.cancelVRPlace('test'));
+		const panelMs = (p1.frameMs - p0.frameMs) / Math.max(1, p1.frames - p0.frames);
+		const paintMs = (p1.paintMs - p0.paintMs) / Math.max(1, draws1 - draws0);
+		const ghostMs = (r1.frameMs - r0.frameMs) / Math.max(1, r1.frames - r0.frames);
+		const result = {
+			profile: 'IWER metaQuest3, CPU x4 (Emulation.setCPUThrottlingRate)',
+			panelFrameMs: +panelMs.toFixed(3),
+			panelFrames: p1.frames - p0.frames,
+			repaints: draws1 - draws0,
+			paintMsPerRepaint: +paintMs.toFixed(3),
+			ghostFrameMs: +ghostMs.toFixed(3),
+			ghostFrames: r1.frames - r0.frames,
+			meshes,
+			wallSeconds: (Date.now() - t0) / 1000
+		};
+		console.log('PERF ' + JSON.stringify(result));
+		if (SHOTS) fs.writeFileSync(path.join(SHOTS, 'perf-quest3-cpu4.json'), JSON.stringify(result, null, 2));
+		h.check(result.panelFrames > 20 && panelMs < 1.5, `the panel's frame hook costs ${panelMs.toFixed(3)} ms/frame at CPU x4 (budget 13.9 / 11.1 ms per frame at 72 / 90 Hz)`);
+		h.check(result.repaints >= 6 && paintMs < 8, `a repaint (the laser moving card to card) costs ${paintMs.toFixed(2)} ms at CPU x4, only when the view changes (${result.repaints} repaints)`);
+		h.check(result.ghostFrames > 20 && ghostMs < 3, `the laser ghost costs ${ghostMs.toFixed(3)} ms/frame at CPU x4`);
+		h.check(meshes.panel === 1 && meshes.ghost <= 4, `draw calls added: the panel ${meshes.panel}, the ghost ${meshes.ghost}`);
 	}
 
 	await iwer.exit(page);
