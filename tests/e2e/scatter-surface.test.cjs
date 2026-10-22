@@ -178,18 +178,23 @@ h.run(async () => {
 	await h.eventually(() => drawn(B.page, uuid), (d) => samePlaces(d, moved, 2e-3), 'B: the instances followed the move too', 15000);
 
 	// ---- E3 fill: density, spacing, masks ------------------------------------------------------------
-	await editSet(A.page, uuid, set.id, { gen: { ...set.gen, count: undefined, density: 20 } });
+	await editSet(A.page, uuid, set.id, { gen: { ...set.gen, count: undefined, density: 4 } });
 	const dens = await drawn(A.page, uuid);
-	// sphere area ~ 4π (12.5 m² local): 20 / m² ~ 250 attempts, all placed (no mask, no spacing)
-	h.check(dens.length > 230 && dens.length < 260, `DENSITY 20/m² over the whole surface (${dens.length})`);
-	await editSet(A.page, uuid, set.id, { gen: { ...set.gen, count: 150, spacing: 0.25 } });
+	// sphere area ~ 4π (~12.3 m² for the 32x16 chord sphere): 4 / m² (the format's cap) ~ 49 attempts,
+	// all placed (no mask, no spacing)
+	h.check(dens.length >= 45 && dens.length <= 51, `DENSITY 4/m² over the whole surface (${dens.length})`);
+	await editSet(A.page, uuid, set.id, { gen: { ...set.gen, count: 150, spacing: 0.2 } });
 	const spaced = await drawn(A.page, uuid);
 	let minD = Infinity;
 	for (let i = 0; i < spaced.length; i++)
 		for (let j = i + 1; j < spaced.length; j++)
 			minD = Math.min(minD, Math.hypot(...spaced[i].local.map((v, k) => v - spaced[j].local[k])));
 	h.check(spaced.length === 150, `COUNT with spacing still places the count (${spaced.length})`);
-	h.check(minD >= 0.25 - 1e-3, `minimum spacing: no two instances closer than 0.25 m (min ${minD.toFixed(3)})`);
+	h.check(minD >= 0.2 - 1e-3, `minimum spacing: no two instances closer than 0.2 m (min ${minD.toFixed(3)})`);
+	// past saturation (0.25 m packs ~120-140 on this sphere) COUNT places what fits, never overlaps
+	await editSet(A.page, uuid, set.id, { gen: { ...set.gen, count: 400, spacing: 0.25 } });
+	const full = await drawn(A.page, uuid);
+	h.check(full.length > 80 && full.length < 400, `past saturation COUNT places what fits and stops (${full.length} of 400)`);
 	await editSet(A.page, uuid, set.id, { gen: { ...set.gen, count: 120, slope: [0, 40] } });
 	const top = await drawn(A.page, uuid);
 	h.check(top.length === 120 && top.every((p) => p.local[1] > Math.cos((42 * Math.PI) / 180) * 0.97), `SLOPE 0..40°: only the cap of the sphere (${top.length})`);
@@ -281,7 +286,15 @@ h.run(async () => {
 		await new Promise((r) => setTimeout(r, 300));
 		const g = await new Promise((r) => w.objectsGroup.subscribe(r)());
 		const kids = g.children.slice(-2);
-		kids.forEach((o, i) => o.position.set(8 + i * 3, 0.5, 8));
+		let peer;
+		w.peers.subscribe((v) => (peer = v))();
+		// placed the replicated way, or B builds the group around boxes still at the origin
+		kids.forEach((o, i) => {
+			o.position.set(8 + i * 3, 0.5, 8);
+			o.updateMatrixWorld(true);
+			peer?.send({ type: 'move', uuid: o.uuid, pos: o.position.toArray(), rot: [0, 0, 0], scale: [1, 1, 1] });
+		});
+		await new Promise((r) => setTimeout(r, 800));
 		w.objectActions.applySelectionSet(kids.map((o) => o.uuid));
 		const uuid = w.objectActions.groupSelection();
 		await new Promise((r) => setTimeout(r, 300));
@@ -297,6 +310,11 @@ h.run(async () => {
 		`the fill lies on both children's top faces (${gDrawn.length})`
 	);
 	await h.eventually(() => drawn(B.page, grp.uuid), (d) => samePlaces(d, gDrawn, 2e-3), 'B draws the group fill identically', 15000);
+	{
+		const bd = await drawn(B.page, grp.uuid);
+		if (!samePlaces(bd, gDrawn, 2e-3))
+			console.log('  group diag: A', gDrawn.length, JSON.stringify(gDrawn.slice(0, 3)), '\n  B', bd.length, JSON.stringify(bd.slice(0, 3)), '\n  blocks equal:', (await blockOf(A.page, grp.uuid)) === (await blockOf(B.page, grp.uuid)));
+	}
 
 	await h.finish(browser);
 });

@@ -606,15 +606,28 @@ function groupSurfaceOf(object) {
 	if (!meshes.length) return null;
 	object.updateWorldMatrix(true, true);
 	_inv.copy(object.matrixWorld).invert();
+	// ORDER: the merged triangle order decides which triangle a slot's draw lands on, so it must be
+	// the same on every peer — and a group's children are NOT in one order everywhere (a peer that
+	// built the group from messages adds them as they arrive). Sort by what every peer agrees on:
+	// the child's pose in the group, its vertex count, its name (never a uuid — a parsed model's
+	// child uuids are minted per peer).
+	const sorted = meshes
+		.map((m) => {
+			const rel = new THREE.Matrix4().multiplyMatrices(_inv, m.matrixWorld);
+			const pose = rel.elements.map((e) => Math.round(e * 1e4));
+			return { m, rel, sortKey: pose.join(',') + '|' + m.geometry.attributes.position.count + '|' + (m.name ?? '') };
+		})
+		.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0));
+	meshes.length = 0;
 	/** @type {string[]} */
 	const parts = [];
 	/** @type {any[]} */
 	const rels = [];
-	for (const m of meshes) {
+	for (const { m, rel, sortKey } of sorted) {
 		const g = m.geometry;
-		const rel = new THREE.Matrix4().multiplyMatrices(_inv, m.matrixWorld);
+		meshes.push(m);
 		rels.push(rel);
-		parts.push(uuidTag(g.attributes.position) + '.' + g.attributes.position.version + '.' + (g.index ? uuidTag(g.index) : '-') + '.' + rel.elements.map((e) => Math.round(e * 1e5)).join(','));
+		parts.push(uuidTag(g.attributes.position) + '.' + g.attributes.position.version + '.' + (g.index ? uuidTag(g.index) : '-') + '.' + sortKey);
 	}
 	const key = 'g|' + parts.join('|');
 	let entry = surfaces.get(object);
