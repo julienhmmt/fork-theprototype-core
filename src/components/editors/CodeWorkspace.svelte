@@ -50,8 +50,13 @@
 		dirtyTabs,
 		saveAllCodeTabs,
 		discardAllCodeTabs,
-		currentProjectTree
+		currentProjectTree,
+		sharedKeyOfTab
 	} from '$lib/codeWorkspace';
+	// 50 Y1/Y2: shared buffers — who else is in the active tab's document, and the viewer rule
+	import { sharedDocKey, presenceLabel } from '$lib/sharedTextCore';
+	import { sharedPresence, sharedDocs } from '$lib/sharedText';
+	import { rolesInfo } from '$lib/cloudHooks';
 	import { codeLeftOpen, codeLeftWidth, codeRightOpen, codeRightWidth, sidebarKey, focusFind, clampSidebarWidth } from '$lib/codeSidebars';
 	import { dragReorder } from '$lib/dragReorder';
 	import { minimalScroll } from '$lib/ui/minimalScroll.js';
@@ -125,6 +130,18 @@
 
 	const tabs = $derived($codeTabs);
 	const active = $derived(tabs.find((t) => t.id === $activeCodeTab) ?? tabs[0] ?? null);
+	// 50 Y1: a viewer (a roles plugin's read-only peer) sees the shared text move and cannot type
+	const viewer = $derived(/** @type {any} */ ($rolesInfo)?.myRole === 'viewer');
+	/** the other people in the active tab's shared document */
+	const here = $derived.by(() => {
+		void $sharedDocs;
+		const key = active ? sharedDocKey(active) : null;
+		return key ? ($sharedPresence[key] ?? []) : [];
+	});
+	const activeShared = $derived.by(() => {
+		void $sharedDocs;
+		return !!(active && sharedKeyOfTab(active));
+	});
 	/** the nodes the active tab feeds (go-to-node, badges); re-read when the graphs move */
 	const bound = $derived.by(() => {
 		void $flowGraphs;
@@ -286,6 +303,7 @@
 	/** @param {any} tab */
 	function kindLabel(tab) {
 		if (tab.nodeType) return BUILTIN_CODE[tab.nodeType]?.title + ' code';
+		if (tab.kind === 'file' && tab.lang === 'text') return 'Text document'; // 50 Y2
 		return { node: 'Script node', behaviour: 'Behaviour node', file: 'Script file', module: 'Module source (read-only)', graph: 'Graph JSON' }[/** @type {string} */ (tab.kind)] ?? tab.kind;
 	}
 	/** @param {any} tab */
@@ -585,7 +603,7 @@
 					<label class="code-live" title="Apply inline node edits as you type (otherwise Ctrl+S)"><input id="code-ws-live" type="checkbox" class="tp-check" bind:checked={$codeApplyLive} />Live</label>
 				{/if}
 				{#if active.stale || isDirty(active)}
-					<button id="code-ws-reload" class="ui-button-quiet" title="Throw away your edits and show the source as it is now" onclick={() => reloadCodeTab(active.id)}><Icon name="rotate-ccw" size={16} aria-hidden="true" />Revert</button>
+					<button id="code-ws-reload" class="ui-button-quiet" title={activeShared ? 'Throw away the unsaved edits — everyone\'s in this shared file — and show the source as it is now' : 'Throw away your edits and show the source as it is now'} onclick={() => reloadCodeTab(active.id)}><Icon name="rotate-ccw" size={16} aria-hidden="true" />Revert</button>
 				{/if}
 				<button id="code-ws-save" class="ui-button-quiet" class:code-save-armed={isDirty(active)} title={active.kind === 'graph' ? 'Apply the JSON to the graph (Ctrl+S)' : 'Save and reload what runs it (Ctrl+S)'} onclick={save}><Icon name="save" size={16} aria-hidden="true" />{active.kind === 'graph' ? 'Apply' : 'Save'}</button>
 			{/if}
@@ -598,6 +616,21 @@
 
 {#snippet body()}
 	{@render toolbar()}
+	{#if active && here.length}
+		<!-- 50 Y1: who else has this source open — the caret in the editor carries their colour,
+		     this strip carries their name and line for everyone, screen readers included -->
+		<div id="code-ws-presence" class="code-presence" data-count={here.length}>
+			<span class="code-muted">Editing with you:</span>
+			<ul class="code-presence-list" aria-label="People editing this file">
+				{#each here as p (p.peerId)}
+					<li class="code-presence-peer" data-peer={p.peerId} data-line={p.line ?? ''} aria-label={presenceLabel(p)} title={presenceLabel(p)}>
+						<span class="code-presence-dot" style:background-color={p.color} aria-hidden="true"></span>
+						<span aria-hidden="true">{p.name || 'A peer'}{p.line ? ' · line ' + p.line : ''}</span>
+					</li>
+				{/each}
+			</ul>
+		</div>
+	{/if}
 	{#if active?.stale}
 		<div id="code-ws-stale" class="code-banner code-banner-warn">
 			<span class="flex-1">This source changed somewhere else while you were editing it.</span>
@@ -647,12 +680,16 @@
 		</div>
 	{/if}
 	<div class="relative min-h-0 flex-1 p-1">
-		{#each tabs as tab (tab.id)}
+		<!-- 50 Y1: keyed by the shared document too — a tab that changes identity (Save as file, a
+		     rename) remounts its editor on the RIGHT document instead of staying bound to the old one -->
+		{#each tabs as tab (tab.id + '|' + (sharedDocKey(tab) ?? ''))}
 			<div class="code-pane h-full" class:hidden={active?.id !== tab.id} id="code-pane-{tab.id}" role="tabpanel" aria-labelledby="code-tab-{tab.id}" data-pane={tab.id} data-readonly={!!tab.readOnly}>
 				<CodeEditor
 					value={tab.code}
-					readOnly={!!tab.readOnly}
-					onChange={(/** @type {string} */ c) => setTabCode(tab.id, c)}
+					readOnly={!!tab.readOnly || viewer}
+					lang={tab.lang}
+					shareKey={sharedDocKey(tab)}
+					onChange={(/** @type {string} */ c, /** @type {{remote: boolean}} */ meta) => setTabCode(tab.id, c, meta)}
 					onSave={() => saveCodeTab(tab.id).then((r) => r.ok && r.nodes && r.nodes > 1 && showToast('Saved — ' + r.nodes + ' nodes reloaded'))}
 					reveal={jump && jump.tabId === tab.id ? jump : revealLineOf(tab)}
 					diagnostic={tab.error ? { line: tab.error.line, message: tab.error.message } : null}
@@ -996,6 +1033,33 @@
 	.code-muted {
 		color: var(--text-muted);
 		font-size: 11px;
+	}
+	/* 50 Y1: the people sharing the active buffer */
+	.code-presence {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+		flex-shrink: 0;
+		margin: 0 4px 4px;
+		font-size: 11px;
+	}
+	.code-presence-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 10px;
+	}
+	.code-presence-peer {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		color: var(--text);
+	}
+	.code-presence-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		flex-shrink: 0;
 	}
 	.code-warn {
 		color: var(--ink-warn);
