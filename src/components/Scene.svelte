@@ -869,7 +869,7 @@
 			if ($sculptObject && !$isLocked && !$isVRMode) {
 				const terrain = $objectsGroup?.getObjectByProperty('uuid', $sculptObject);
 				setRayFromEvent(event);
-				const hit = terrain ? selectionRaycaster.intersectObject(terrain, false)[0] : null;
+				const hit = terrain ? selectionRaycaster.intersectObject(terrain, !terrain.isMesh)[0] : null; // 51-surface: a group host's children
 				if (hit) {
 					sculptActive = true;
 					lastSculptAt = performance.now();
@@ -1017,10 +1017,10 @@
 			if ($sculptObject) {
 				const terrain = $objectsGroup?.getObjectByProperty('uuid', $sculptObject);
 				setRayFromEvent(event);
-				const hit = terrain ? selectionRaycaster.intersectObject(terrain, false)[0] : null;
+				const hit = terrain ? selectionRaycaster.intersectObject(terrain, !terrain.isMesh)[0] : null; // 51-surface: a group host's children
 				if (hit) {
 					// mesh sculpt: orient the brush ring to the surface
-					const worldNormal = hit.face ? hit.face.normal.clone().transformDirection(terrain.matrixWorld) : null;
+					const worldNormal = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : null;
 					showCursorAt(hit.point, worldNormal);
 					if (sculptActive) {
 						const now = performance.now();

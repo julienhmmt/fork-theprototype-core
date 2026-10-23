@@ -4,6 +4,7 @@ import { get } from 'svelte/store';
 import { objectsGroup, globalScene, sceneRevision, pokeScene } from '../stores/sceneStore';
 import { decodeSplatBlock, encodeSplatBlock, normalizeLayers, baseIsMaterial, base64ToBytes, LAYER_COUNT } from './terrainPaintCore';
 import { normalizeScatter, instancesOf, blockVersion, buildHeightGrid, sampleHeight, MAX_INSTANCES } from './terrainScatterCore';
+import { buildSurface, surfaceInstancesOf, maskOf, maskIsEmpty, passesMask, splatWeightAt } from './scatterSurfaceCore';
 import { lodObject, releaseOwner } from './lod';
 import { EXPLICIT_MIN_TRIANGLES } from './lodCore';
 import { registerThinMesh, unregisterThinMesh } from './scatterThin';
@@ -41,7 +42,7 @@ const splats = new WeakMap();
 /** @type {WeakMap<any, {obc: any, key: any, uniforms: any, fn: any}>} */
 const patched = new WeakMap();
 /** object -> {holder, key, gridKey} */
-/** @type {Map<any, {holder: any, key: string, layoutKey: string, terrain: any}>} */
+/** @type {Map<any, {holder: any, key: string, layoutKey: string, terrain: any, splatRef?: string, counts?: Record<string, number>}>} */
 const scatters = new Map();
 
 /** a 1×1 white texture: the identity for colour × texture while an image is missing */
@@ -61,7 +62,13 @@ function objectOf(uuid) {
 /** Local XZ bounds of a terrain's geometry (the splat + scatter frame). @param {any} object */
 export function terrainBounds(object) {
 	const geo = object?.geometry;
-	if (!geo?.attributes?.position) return null;
+	if (!geo?.attributes?.position) {
+		// 51-surface: a GROUP host (a placed model) has no geometry of its own — its children's
+		// surface, in its frame, is the scatter frame
+		const S = object && !object.isMesh ? surfaceOf(object) : null;
+		if (!S) return null;
+		return { minX: S.min[0], minZ: S.min[2], sizeX: Math.max(S.max[0] - S.min[0], 1e-3), sizeZ: Math.max(S.max[2] - S.min[2], 1e-3) };
+	}
 	if (!geo.boundingBox) geo.computeBoundingBox();
 	const b = geo.boundingBox;
 	const sizeX = b.max.x - b.min.x;
@@ -466,7 +473,8 @@ function clearHolder(holder) {
 	}
 }
 
-/** Make an object's scatter holder match its `terrainScatter` block. @param {any} object */
+/** Make an object's scatter holder match its `terrainScatter` block. @param {any} object
+ * @returns {boolean} true when it re-laid the instances (51-surface: the Inspector's counts follow) */
 function reconcileScatter(object) {
 	const block = object.userData?.terrainScatter;
 	let entry = scatters.get(object);
@@ -476,23 +484,39 @@ function reconcileScatter(object) {
 			clearHolder(entry.holder);
 			entry.holder.parent?.remove(entry.holder);
 			scatters.delete(object);
+			return true;
 		}
-		return;
+		return false;
 	}
 	const scene = /** @type {any} */ (get(globalScene));
-	if (!scene) return;
+	if (!scene) return false;
 	if (!entry) {
 		entry = { holder: makeHolder(object), key: '', layoutKey: '', terrain: object };
 		scatters.set(object, entry);
 	}
 	if (entry.holder.parent !== scene) scene.add(entry.holder);
 	const pos = object.geometry?.attributes?.position;
-	const layoutKey = (pos ? pos.version + ':' + pos.count + ':' + (pos.array?.length ?? 0) : '') + ':' + uuidTag(pos);
-	const key = JSON.stringify(sets.map((s) => [s.id, s.data, s.align, s.seed, s.gen, s.ov, s.sources, s.pick, s.tint, s.sink, setSources(s).map(sourceReady)]));
-	if (entry.key === key && entry.layoutKey === layoutKey) return;
+	// 51-surface: a group host re-lays when any child's geometry or pose changes (its surface key)
+	const layoutKey = pos
+		? pos.version + ':' + pos.count + ':' + (pos.array?.length ?? 0) + ':' + uuidTag(pos)
+		: 'g:' + (surfaceOf(object) ? surfaces.get(object)?.key ?? '' : '');
+	const key = JSON.stringify(sets.map((s) => [s.id, s.data, s.align, s.seed, s.gen, s.ov, s.sources, s.pick, s.tint, s.sink, s.host, s.box, setSources(s).map(sourceReady)]));
+	// 51-surface: a layer-masked fill follows the PAINT, so a new splat re-lays it (compared by
+	// reference — the block's data string is replaced on every commit, never mutated)
+	const splatRef = sets.some((s) => /** @type {any} */ (s.gen)?.layer) ? object.userData.terrainSplat?.data ?? '' : '';
+	if (entry.key === key && entry.layoutKey === layoutKey && entry.splatRef === splatRef) return false;
+	entry.splatRef = splatRef;
 	entry.key = key;
 	entry.layoutKey = layoutKey;
-	layoutScatter(object, entry.holder, sets);
+	entry.counts = layoutScatter(object, entry.holder, sets);
+	return true;
+}
+
+/** 51-surface: how many instances each set DRAWS (painted + generated, after masks, spacing and the
+ * shared cap) — the Inspector's numbers, read from the last layout. @param {any} object
+ * @returns {Record<string, number>} */
+export function scatterCounts(object) {
+	return scatters.get(object)?.counts ?? {};
 }
 
 /** attribute identity (a meshgeo swap replaces it with a fresh one at version 0) */
@@ -520,25 +544,200 @@ function setSources(set) {
 }
 
 /** Every set's instances, the MAX_INSTANCES cap shared across the block in set order (the
- * same arithmetic on every peer). @param {any[]} sets @param {any} b */
-function blockInstances(sets, b) {
+ * same arithmetic on every peer). @param {any} object @param {any[]} sets @param {any} b */
+function blockInstances(object, sets, b) {
 	let room = MAX_INSTANCES;
 	for (const set of sets) room -= set.count;
 	return sets.map((set) => {
-		const list = instancesOf(set, b, base64ToBytes, { room: Math.max(0, room) });
+		const list = setInstances(object, set, b, Math.max(0, room));
 		room -= list.length - set.count;
 		return list;
 	});
 }
 
-/** @param {any} object @param {any} holder @param {any[]} sets */
+// ---- 51-surface: the one instance list per set, on a terrain OR any mesh ------------------
+
+/** object -> its cached surface (a mesh host's triangles + area CDF), keyed by geometry identity
+ * @type {WeakMap<any, {key: string, surface: any, index: any}>} */
+const surfaces = new WeakMap();
+
+/** The host's local surface for fills and the mesh brush, rebuilt only when its geometry
+ * changes (a 100k-triangle mesh builds in ~20 ms). @param {any} object */
+export function surfaceOf(object) {
+	const geo = object?.geometry;
+	const pos = geo?.attributes?.position;
+	if (!pos) return object ? groupSurfaceOf(object) : null;
+	const nrm = geo.attributes.normal ?? null;
+	const key = uuidTag(pos) + ':' + pos.version + ':' + (geo.index ? uuidTag(geo.index) + ':' + geo.index.version : '-') + ':' + (nrm ? uuidTag(nrm) + ':' + nrm.version : '-');
+	let entry = surfaces.get(object);
+	if (!entry || entry.key !== key) {
+		entry = { key, surface: buildSurface(pos.array, geo.index?.array ?? null, nrm?.array ?? null), index: null };
+		surfaces.set(object, entry);
+	}
+	return entry.surface;
+}
+
+/** The meshes a GROUP host's surface is made of: every plain, visible-or-not descendant mesh in tree
+ * order (the order a model's file gives, the same on every peer) — never an InstancedMesh, a skinned
+ * mesh, or anything scatter/LOD made. @param {any} object */
+function surfaceMeshes(object) {
+	/** @type {any[]} */
+	const out = [];
+	object.traverse((/** @type {any} */ m) => {
+		if (m === object || !m.isMesh || m.isInstancedMesh || m.isSkinnedMesh) return;
+		if (!m.geometry?.attributes?.position) return;
+		out.push(m);
+	});
+	return out;
+}
+
+const _rel = new THREE.Matrix4();
+const _inv = new THREE.Matrix4();
+const _nm = new THREE.Matrix3();
+const _v = new THREE.Vector3();
+
+/**
+ * 51-surface: a GROUP host — a placed Library model, a kit piece — merges its child meshes into
+ * ONE surface in the group's own frame (each child's transform relative to the group baked in), so
+ * a fill covers the whole model and moving the group carries it. The key names every child's
+ * geometry and its relative pose, so a refilled kit piece or an edited child re-lays.
+ * @param {any} object
+ */
+function groupSurfaceOf(object) {
+	const meshes = surfaceMeshes(object);
+	if (!meshes.length) return null;
+	object.updateWorldMatrix(true, true);
+	_inv.copy(object.matrixWorld).invert();
+	// ORDER: the merged triangle order decides which triangle a slot's draw lands on, so it must be
+	// the same on every peer — and a group's children are NOT in one order everywhere (a peer that
+	// built the group from messages adds them as they arrive). Sort by what every peer agrees on:
+	// the child's pose in the group, its vertex count, its name (never a uuid — a parsed model's
+	// child uuids are minted per peer).
+	const sorted = meshes
+		.map((m) => {
+			const rel = new THREE.Matrix4().multiplyMatrices(_inv, m.matrixWorld);
+			const pose = rel.elements.map((e) => Math.round(e * 1e4));
+			return { m, rel, sortKey: pose.join(',') + '|' + m.geometry.attributes.position.count + '|' + (m.name ?? '') };
+		})
+		.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0));
+	meshes.length = 0;
+	/** @type {string[]} */
+	const parts = [];
+	/** @type {any[]} */
+	const rels = [];
+	for (const { m, rel, sortKey } of sorted) {
+		const g = m.geometry;
+		meshes.push(m);
+		rels.push(rel);
+		parts.push(uuidTag(g.attributes.position) + '.' + g.attributes.position.version + '.' + (g.index ? uuidTag(g.index) : '-') + '.' + sortKey);
+	}
+	const key = 'g|' + parts.join('|');
+	let entry = surfaces.get(object);
+	if (entry && entry.key === key) return entry.surface;
+	let tris = 0;
+	for (const m of meshes) tris += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3;
+	const pos = new Float32Array(Math.floor(tris) * 9);
+	const nrm = new Float32Array(Math.floor(tris) * 9);
+	let o = 0;
+	meshes.forEach((m, k) => {
+		const g = m.geometry;
+		const p = g.attributes.position;
+		const n = g.attributes.normal ?? null;
+		const idx = g.index;
+		_rel.copy(rels[k]);
+		_nm.getNormalMatrix(_rel);
+		const count = idx ? idx.count : p.count;
+		for (let i = 0; i < count - (count % 3); i++) {
+			const vi = idx ? idx.getX(i) : i;
+			_v.fromBufferAttribute(p, vi).applyMatrix4(_rel);
+			pos[o] = _v.x;
+			pos[o + 1] = _v.y;
+			pos[o + 2] = _v.z;
+			if (n) _v.fromBufferAttribute(n, vi).applyMatrix3(_nm).normalize();
+			else _v.set(0, 0, 0);
+			nrm[o] = _v.x;
+			nrm[o + 1] = _v.y;
+			nrm[o + 2] = _v.z;
+			o += 3;
+		}
+	});
+	// a child without normals: face normals for all (a zero normal would interpolate to nothing)
+	const anyMissing = meshes.some((m) => !m.geometry.attributes.normal);
+	entry = { key, surface: buildSurface(pos.subarray(0, o), null, anyMissing ? null : nrm.subarray(0, o)), index: null };
+	surfaces.set(object, entry);
+	return entry.surface;
+}
+
+/** object -> its terrain height grid, cached the same way @type {WeakMap<any, {key: string, grid: any}>} */
+const grids = new WeakMap();
+/** @param {any} object */
+function heightGridOf(object) {
+	const pos = object?.geometry?.attributes?.position;
+	if (!pos) return null;
+	const key = uuidTag(pos) + ':' + pos.version;
+	let entry = grids.get(object);
+	if (!entry || entry.key !== key) {
+		entry = { key, grid: buildHeightGrid(pos.array) };
+		grids.set(object, entry);
+	}
+	return entry.grid;
+}
+
+/**
+ * A terrain set's fill mask as the generator's `accept(x, z)`: slope + height from the terrain's
+ * own grid (the drawn surface), the paint layer from its splat map — so painting layer 2 moves the
+ * "only on layer 2" rocks with the paint, on every peer. undefined = no mask.
+ * @param {any} object @param {any} set @param {any} b
+ */
+function terrainAccept(object, set, b) {
+	const mask = maskOf(set.gen);
+	if (maskIsEmpty(mask)) return undefined;
+	const grid = heightGridOf(object);
+	const splat = mask.layer ? liveSplat(object) : null;
+	return (/** @type {number} */ x, /** @type {number} */ z) => {
+		const h = grid ? sampleHeight(grid, x, z) : { y: 0, ny: 1 };
+		return passesMask(mask, h, mask.layer ? (i) => (splat ? splatWeightAt(splat.bytes, splat.res, b, x, z, i) : 0) : null);
+	};
+}
+
+/**
+ * EVERY instance one set draws on its host — a terrain's (instancesOf + its mask) or a mesh's
+ * (surfaceInstancesOf on the host's own triangles). The renderer, the colliders, the brush and the
+ * edit tools all read this one function, so they cannot disagree about where a rock is.
+ * @param {any} object @param {any} set @param {any} b @param {number} [room]
+ */
+function setInstances(object, set, b, room = MAX_INSTANCES) {
+	if (set.host === 'mesh') {
+		const S = set.gen ? surfaceOf(object) : null;
+		// a mesh's paint layer is not a thing (no splat map): a layer mask rejects everything there
+		const mask = set.gen ? maskOf(set.gen) : {};
+		return surfaceInstancesOf(set, S, base64ToBytes, { room, accept: mask.layer ? () => false : null });
+	}
+	return instancesOf(set, b, base64ToBytes, { room, accept: set.gen ? terrainAccept(object, set, b) : undefined });
+}
+
+/**
+ * The instances of one set on a host, exactly as they are drawn (the block's shared cap
+ * included) — what the brush and the edit tools read. @param {any} object @param {string} setId
+ */
+export function scatterSetInstances(object, setId) {
+	const b = terrainBounds(object);
+	const sets = normalizeScatter(object?.userData?.terrainScatter, base64ToBytes)?.sets ?? [];
+	const at = sets.findIndex((s) => s.id === setId);
+	if (!b || at < 0) return [];
+	return blockInstances(object, sets, b)[at];
+}
+
+/** @param {any} object @param {any} holder @param {any[]} sets @returns {Record<string, number>} drawn per set */
 function layoutScatter(object, holder, sets) {
 	clearHolder(holder);
 	const b = terrainBounds(object);
-	const pos = object.geometry?.attributes?.position;
-	const grid = pos ? buildHeightGrid(pos.array) : null;
-	if (!b) return;
-	const lists = blockInstances(sets, b);
+	const grid = object.userData?.terrain ? heightGridOf(object) : null;
+	/** @type {Record<string, number>} */
+	const counts = {};
+	if (!b) return counts;
+	const lists = blockInstances(object, sets, b);
+	sets.forEach((set, si) => (counts[set.id] = lists[si].length));
 	sets.forEach((set, si) => {
 		const all = lists[si];
 		const matrices = instanceMatrices(all, set.align, grid, set.sink ?? 0);
@@ -582,6 +781,7 @@ function layoutScatter(object, holder, sets) {
 			}
 		});
 	});
+	return counts;
 }
 
 /** 51 E1 tint variation: an instance's draw in [-1, 1] times the set's amount, as a multiplier on
@@ -594,12 +794,18 @@ function tintColor(t, amount) {
 }
 
 /** Terrain-LOCAL instance matrices — the drawn pose, and (48 B1) the collider pose. `sink` (51)
- * pushes each instance into the ground by sink x its scale.
- * @param {{x: number, z: number, yaw: number, scale: number}[]} list @param {boolean} align
+ * pushes each instance into the ground by sink x its scale. 51-surface: an instance that carries its
+ * own `y` (a mesh host's) stands where it says, on its own normal; a terrain's reads the grid.
+ * @param {{x: number, y?: number, z: number, nx?: number, ny?: number, nz?: number, yaw: number, scale: number}[]} list @param {boolean} align
  * @param {ReturnType<typeof buildHeightGrid>} grid @param {number} [sink] @returns {any[]} */
 function instanceMatrices(list, align, grid, sink = 0) {
 	return list.map((inst) => {
-		const h = grid ? sampleHeight(grid, inst.x, inst.z) : { y: 0, nx: 0, ny: 1, nz: 0 };
+		const h =
+			inst.y != null
+				? { y: inst.y, nx: inst.nx ?? 0, ny: inst.ny ?? 1, nz: inst.nz ?? 0 }
+				: grid
+					? sampleHeight(grid, inst.x, inst.z)
+					: { y: 0, nx: 0, ny: 1, nz: 0 };
 		_qy.setFromAxisAngle(UP, inst.yaw);
 		if (align) _q.setFromUnitVectors(UP, _n.set(h.nx, h.ny, h.nz)).multiply(_qy);
 		else _q.copy(_qy);
@@ -628,9 +834,8 @@ export function scatterPhysicsSets(object) {
 	if (!b) return out;
 	const sets = normalizeScatter(block, base64ToBytes)?.sets ?? [];
 	if (!sets.some((s) => s.collider)) return out;
-	const pos = object.geometry?.attributes?.position;
-	const grid = pos ? buildHeightGrid(pos.array) : null;
-	const lists = blockInstances(sets, b);
+	const grid = object.userData?.terrain ? heightGridOf(object) : null;
+	const lists = blockInstances(object, sets, b);
 	sets.forEach((set, si) => {
 		if (!set.collider) return;
 		const all = lists[si];
@@ -720,15 +925,19 @@ function scheduleReconcile(force = false) {
 export function reconcileAll() {
 	const group = /** @type {any} */ (get(objectsGroup));
 	const live = new Set();
+	let laid = false;
 	group?.traverse((/** @type {any} */ o) => {
 		const ud = o.userData;
 		if (!ud) return;
 		if (ud.terrainSplat || splats.get(o)) reconcileSplat(o);
 		if (ud.terrainScatter || scatters.has(o)) {
-			reconcileScatter(o);
+			if (reconcileScatter(o)) laid = true;
 			live.add(o);
 		}
 	});
+	// a layout that a load / a joiner's sync / a model arriving made: tell the Inspector (the next
+	// reconcile finds every key equal, so this settles in one round)
+	if (laid) pokeScene();
 	for (const [object, entry] of [...scatters]) {
 		if (live.has(object)) continue;
 		clearHolder(entry.holder);

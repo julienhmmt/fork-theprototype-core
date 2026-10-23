@@ -87,7 +87,10 @@ describe('51 set format: determinism', () => {
 	test('a mask rejecting one slot moves no other slot', () => {
 		const all = generateSlots(seeded(), B);
 		const masked = generateSlots(seeded(), B, { accept: (_x, _z, k) => k !== 10 });
-		expect(masked.length).toBe(all.length - 1);
+		// 51-surface: COUNT mode = count PLACED, so the rejected slot's place goes to the next draw
+		expect(masked.length).toBe(all.length);
+		expect(masked.find((i) => i.slot === 10)).toBeUndefined();
+		expect(masked.at(-1)?.slot).toBe(all.length);
 		expect(masked.find((i) => i.slot === 11)).toEqual(all.find((i) => i.slot === 11));
 	});
 

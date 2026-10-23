@@ -9,7 +9,6 @@ import {
 	decodeInstances,
 	encodeInstances,
 	scatterInCircle,
-	instancesOf,
 	withOverrides,
 	withSeed,
 	withSourceAdded,
@@ -27,8 +26,11 @@ import {
 	applyTerrainSplat,
 	applyTerrainLayers,
 	applyTerrainScatter,
-	terrainBounds
+	terrainBounds,
+	surfaceOf,
+	scatterSetInstances
 } from './terrainSurface';
+import { surfaceDab, eraseInSphere, triangleIndex, surfaceRecords } from './scatterSurfaceCore';
 
 // 47 T1 + T2 — THE WRITE SIDE of terrain paint and scatter: the brushes, their strokes,
 // the undo kinds and the wire. The sculpt stroke pattern verbatim (terrainSculpt.js):
@@ -80,10 +82,10 @@ function sendSplat(uuid, bytes, res) {
 	send({ type: 'objectParameters', parameter: 'terrainSplat', uuid, res, bytes: bytes ? bytes.slice().buffer : null });
 }
 
-/** @param {any} object */
-function writable_(object) {
-	if (!object?.userData?.terrain) {
-		showToast('Paint and scatter work on a Terrain');
+/** @param {any} object @param {boolean} [anyMesh] 51-surface: scatter works on ANY mesh, paint stays terrain-only */
+function writable_(object, anyMesh = false) {
+	if (!object?.userData?.terrain && !(anyMesh && isMeshHost(object))) {
+		showToast(anyMesh ? 'Scatter works on a mesh object' : 'Paint and scatter work on a Terrain');
 		return false;
 	}
 	if (!canEditObject(object)) {
@@ -91,6 +93,42 @@ function writable_(object) {
 		return false;
 	}
 	return true;
+}
+
+/** 51-surface: a non-terrain object that can carry scatter — a mesh (its own triangles are the
+ * surface) or a GROUP with meshes under it (a placed model: its children's surface, in its frame).
+ * @param {any} object */
+export function isMeshHost(object) {
+	if (!object || object.userData?.terrain || object.isLight || object.isCamera) return false;
+	if (object.isMesh) return !!object.geometry?.attributes?.position;
+	let found = false;
+	object.traverse?.((/** @type {any} */ m) => {
+		if (!found && m !== object && m.isMesh && !m.isInstancedMesh && m.geometry?.attributes?.position) found = true;
+	});
+	return found;
+}
+
+/** the host's largest world scale — the brush ring is in world metres, the instances live in the
+ * host's LOCAL frame @param {any} object */
+function hostScale(object) {
+	const e = object?.matrixWorld?.elements;
+	if (!e) return 1;
+	const s = Math.max(Math.hypot(e[0], e[1], e[2]), Math.hypot(e[4], e[5], e[6]), Math.hypot(e[8], e[9], e[10]));
+	return s > 1e-6 ? s : 1;
+}
+
+/** object -> the brush's triangle grid over its surface (rebuilt with the surface) @type {WeakMap<any, {surface: any, index: any}>} */
+const brushIndex = new WeakMap();
+/** @param {any} object */
+function brushIndexOf(object) {
+	const surface = surfaceOf(object);
+	if (!surface) return null;
+	let entry = brushIndex.get(object);
+	if (!entry || entry.surface !== surface) {
+		entry = { surface, index: triangleIndex(surface) };
+		brushIndex.set(object, entry);
+	}
+	return entry;
 }
 
 // ---- paint -----------------------------------------------------------------------------
@@ -226,7 +264,7 @@ export function clearTerrainPaint(uuid) {
 // ---- scatter ----------------------------------------------------------------------------
 
 /** @type {{uuid: string, before: any, key: string, list: any[], set: any, others: any[], changed: boolean, seed: number,
- *   generated: any[], erased: Set<string>} | null} */
+ *   generated: any[], erased: Set<string>, mesh?: boolean} | null} */
 let scatterStroke = null;
 let lastScatterPreview = 0;
 
@@ -238,7 +276,8 @@ function scatterBlockOf(object) {
 /** @param {string} uuid */
 export function beginScatterStroke(uuid) {
 	const object = objectOf(uuid);
-	if (!writable_(object)) return false;
+	if (!writable_(object, true)) return false;
+	const mesh = isMeshHost(object);
 	const b = terrainBounds(object);
 	if (!b) return false;
 	const block = scatterBlockOf(object);
@@ -249,7 +288,7 @@ export function beginScatterStroke(uuid) {
 		return false;
 	}
 	const sets = block?.sets ?? [];
-	const set = sets.find((s) => sourceKey(s.source) === key) ?? null;
+	const set = sets.find((s) => sourceKey(s.source) === key && !s.host === !mesh) ?? null;
 	if (!set && sets.length >= MAX_SETS && !get(scatterErase)) {
 		showToast('A terrain holds up to ' + MAX_SETS + ' scatter models');
 		return false;
@@ -259,7 +298,9 @@ export function beginScatterStroke(uuid) {
 	if (set?.count) {
 		// 51: a painted record keeps the source it picked (a mixed set) through every erase
 		const pick = set.pick ? base64ToBytes(set.pick) : null;
-		list = decodeInstances(/** @type {Uint8Array} */ (base64ToBytes(set.data)), b).map((inst, j) => ({ ...inst, src: pick?.[j] ?? 0 }));
+		const bytes = /** @type {Uint8Array} */ (base64ToBytes(set.data));
+		// 51-surface: a mesh host's records are 16 bytes (xyz + normal) over the set's stored box
+		list = (mesh ? surfaceRecords.decode(bytes, set) : decodeInstances(bytes, b)).map((inst, j) => ({ ...inst, src: pick?.[j] ?? 0 }));
 	}
 	scatterStroke = {
 		uuid,
@@ -268,14 +309,16 @@ export function beginScatterStroke(uuid) {
 		list,
 		// the align toggle is a property of the SET (heights are derived at render time), so
 		// the brush's current setting re-stamps it
-		set: { ...(set ?? { id: key, source, data: '', count: 0, collider: get(scatterCollider) }), align: get(scatterAlign) },
+		set: { ...(set ?? { id: key, source, data: '', count: 0, collider: get(scatterCollider), ...(mesh ? { host: 'mesh' } : {}) }), align: get(scatterAlign) },
 		others: sets.filter((s) => s !== set),
 		changed: false,
 		seed: (Math.random() * 2 ** 32) >>> 0,
 		// 51: the set's GENERATED instances count toward the brush's density (painting over a
 		// filled patch adds nothing) and an erase deletes them as hand edits
-		generated: set?.gen ? instancesOf(set, b, base64ToBytes).filter((i) => i.slot != null) : [],
-		erased: new Set()
+		// (51-surface: read exactly as drawn — the fill's mask and the block's shared cap included)
+		generated: set?.gen ? scatterSetInstances(object, set.id).filter((i) => i.slot != null) : [],
+		erased: new Set(),
+		mesh
 	};
 	return true;
 }
@@ -284,14 +327,19 @@ export function beginScatterStroke(uuid) {
 function strokeBlock(st, b) {
 	const sets = [...st.others];
 	/** @type {any} */
-	let set = { ...st.set, data: st.list.length ? bytesToBase64(encodeInstances(st.list, b)) : '', count: st.list.length };
+	let set = { ...st.set, data: '', count: st.list.length };
+	if (st.mesh) {
+		const enc = surfaceRecords.encode(st.list);
+		if (st.list.length) (set.data = bytesToBase64(enc.bytes)), (set.box = enc.box);
+		else delete set.box;
+	} else if (st.list.length) set.data = bytesToBase64(encodeInstances(st.list, b));
 	if (set.sources && st.list.length) set.pick = bytesToBase64(new Uint8Array(st.list.map((i) => i.src ?? 0)));
 	else delete set.pick;
 	if (st.erased.size) {
 		/** @type {Record<string, any>} */
 		const patch = {};
 		for (const id of st.erased) patch[id] = { del: true };
-		set = withOverrides(set, patch, { bounds: b, decode: base64ToBytes, encode: bytesToBase64 });
+		set = withOverrides(set, patch, { bounds: b, decode: base64ToBytes, encode: bytesToBase64, records: surfaceRecords });
 	}
 	if (set.count || set.gen) sets.push(set);
 	return sets.length ? { v: blockVersion(sets), sets } : null;
@@ -313,14 +361,17 @@ function strokeRng() {
  * One scatter application at a LOCAL (x, z), exported for the suite. Paint adds up to the
  * density inside the circle; erase removes the active source's instances in it (a generated
  * one becomes a deleted hand edit, so a re-roll does not bring it back).
- * @param {string} uuid @param {number} x @param {number} z @param {number} radius
+ * 51-surface: on a MESH host the point is a local (x, y, z) on its surface and the brush is a sphere
+ * (meshScatterAt); `y` is ignored on a terrain.
+ * @param {string} uuid @param {number} x @param {number} z @param {number} radius @param {number} [y]
  * @returns {number} instances added (negative = removed)
  */
-export function scatterAt(uuid, x, z, radius) {
+export function scatterAt(uuid, x, z, radius, y = 0) {
 	const st = scatterStroke;
 	const object = objectOf(uuid);
 	const b = object ? terrainBounds(object) : null;
 	if (!st || st.uuid !== uuid || !b) return 0;
+	if (st.mesh) return meshScatterAt(st, object, b, x, y, z, radius);
 	let delta = 0;
 	if (get(scatterErase)) {
 		const next = st.list.filter((p) => Math.hypot(p.x - x, p.z - z) > radius);
@@ -359,9 +410,60 @@ export function scatterAt(uuid, x, z, radius) {
 	return delta;
 }
 
-/** @param {string} uuid @param {number} x @param {number} z @param {number} radius */
-export function scatterStrokeMove(uuid, x, z, radius) {
-	if (!scatterAt(uuid, x, z, radius)) return;
+/**
+ * 51-surface: the brush on a mesh — a SPHERE around the surface point (local), its radius the ring's
+ * world radius over the host's scale; paint fills the patch up to the density (what is already there,
+ * painted or generated, counts), erase removes inside the sphere (a generated one = a deleted edit).
+ * @param {NonNullable<typeof scatterStroke>} st @param {any} object @param {any} b
+ * @param {number} x @param {number} y @param {number} z @param {number} worldRadius
+ */
+function meshScatterAt(st, object, b, x, y, z, worldRadius) {
+	const radius = worldRadius / hostScale(object);
+	const r2 = radius * radius;
+	const inside = (/** @type {any} */ p) => (p.x - x) ** 2 + (p.y - y) ** 2 + (p.z - z) ** 2 <= r2;
+	let delta = 0;
+	if (get(scatterErase)) {
+		const next = eraseInSphere(st.list, x, y, z, radius);
+		delta = next.length - st.list.length;
+		st.list = next;
+		for (const g of st.generated)
+			if (!st.erased.has(g.id) && inside(g)) {
+				st.erased.add(g.id);
+				delta--;
+			}
+	} else {
+		const brush = brushIndexOf(object);
+		if (!brush) return 0;
+		const othersCount = st.others.reduce((sum, s) => sum + s.count + (s.gen?.count ?? 0), 0);
+		const live = st.generated.filter((g) => !st.erased.has(g.id));
+		const rng = strokeRng();
+		const added = surfaceDab([...st.list, ...live], brush.surface, brush.index, {
+			cx: x,
+			cy: y,
+			cz: z,
+			radius,
+			density: get(scatterDensity),
+			scaleMin: get(scatterScaleMin),
+			scaleMax: get(scatterScaleMax),
+			randomRotation: get(scatterRandomRotation),
+			rng,
+			room: MAX_INSTANCES - othersCount - st.list.length - live.length,
+			spacing: st.set.gen?.spacing
+		});
+		for (const inst of added) /** @type {any} */ (inst).src = pickSource(st.set.sources, rng());
+		st.list.push(...added);
+		delta = added.length;
+	}
+	if (delta) {
+		st.changed = true;
+		applyTerrainScatter(st.uuid, strokeBlock(st, b));
+	}
+	return delta;
+}
+
+/** @param {string} uuid @param {number} x @param {number} z @param {number} radius @param {number} [y] the mesh host's local y */
+export function scatterStrokeMove(uuid, x, z, radius, y = 0) {
+	if (!scatterAt(uuid, x, z, radius, y)) return;
 	const now = performance.now();
 	if (now - lastScatterPreview > PREVIEW_MS) {
 		lastScatterPreview = now;
@@ -446,7 +548,7 @@ export function editScatterInstances(uuid, setId, patch, opts) {
 		(block) => {
 			const set = block.sets.find((s) => s.id === setId);
 			if (!set) return null;
-			const next = withOverrides(set, patch, { bounds: b, decode: base64ToBytes, encode: bytesToBase64 });
+			const next = withOverrides(set, patch, { bounds: b, decode: base64ToBytes, encode: bytesToBase64, records: surfaceRecords });
 			return block.sets.map((s) => (s === set ? next : s)).filter((s) => s.count || s.gen);
 		},
 		opts
@@ -468,15 +570,30 @@ export function rerollScatterSet(uuid, setId, seed = newSeed()) {
 export function addScatterSet(uuid, set) {
 	/** @type {string | null} */
 	let id = null;
+	// 51-surface: a set added to a non-terrain mesh lives on its triangles (and stands on their
+	// normals unless asked otherwise — upright rocks on a sphere's side look wrong)
+	const meshHost = isMeshHost(objectOf(uuid));
+	if (!meshHost && !objectOf(uuid)?.userData?.terrain) {
+		showToast('Scatter works on a mesh object');
+		return null;
+	}
 	const ok = writeScatter(uuid, (block) => {
 		if (block.sets.length >= MAX_SETS) {
-			showToast('A terrain holds up to ' + MAX_SETS + ' scatter sets');
+			showToast((meshHost ? 'An object' : 'A terrain') + ' holds up to ' + MAX_SETS + ' scatter sets');
 			return null;
 		}
 		const base = String(set.id || sourceKey(set.source) || 'set').slice(0, 34);
 		id = base;
 		for (let n = 2; block.sets.some((s) => s.id === id); n++) id = base + '~' + n;
-		const next = { data: '', count: 0, align: false, ...set, id, ...(set.gen && set.seed == null ? { seed: newSeed() } : {}) };
+		const next = {
+			data: '',
+			count: 0,
+			align: meshHost,
+			...set,
+			id,
+			...(meshHost ? { host: 'mesh' } : {}),
+			...(set.gen && set.seed == null ? { seed: newSeed() } : {})
+		};
 		return [...block.sets, next];
 	});
 	return ok ? id : null;
@@ -486,7 +603,7 @@ export function addScatterSet(uuid, set) {
 function rewriteSet(uuid, setId, fn) {
 	const b = terrainBounds(objectOf(uuid));
 	if (!b) return false;
-	const io = { bounds: b, decode: base64ToBytes, encode: bytesToBase64 };
+	const io = { bounds: b, decode: base64ToBytes, encode: bytesToBase64, records: surfaceRecords };
 	return writeScatter(uuid, (block) => {
 		const set = block.sets.find((s) => s.id === setId);
 		if (!set) return null;
@@ -526,8 +643,8 @@ export function scatterBlockNow(uuid) {
 export function scatterInstancesOf(uuid, setId) {
 	const object = objectOf(uuid);
 	const b = terrainBounds(object);
-	const set = scatterBlockOf(object)?.sets.find((s) => s.id === setId);
-	return set && b ? instancesOf(set, b, base64ToBytes) : [];
+	// 51-surface: the drawn list (a fill's mask, a mesh host's surface, the block's shared cap)
+	return b ? scatterSetInstances(object, setId) : [];
 }
 
 /** True while a paint or scatter stroke is open (terrainSculpt's endStroke asks). */
