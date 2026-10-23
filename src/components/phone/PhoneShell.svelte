@@ -86,6 +86,7 @@
 	import { phoneBarTap, openPhoneTab, closePhoneTab, phoneDockShown, phoneTabsOpen } from '$lib/phoneDock';
 	import { toggleViewportFocus } from '$lib/focusMode';
 	import { requestPlay, willEnterXR, willEnterAR, playAsItems } from '$lib/playMode';
+	import { playHere, playHereItems } from '$lib/playHere'; // 60 Q1
 	import { visibleDockKey, DOCK_TITLES, dockMinimized, dockHeight } from '$lib/bottomDock';
 	import { micActive, pttActive, toggleMic } from '$lib/voiceChat';
 	import { aiReady } from '$lib/ai/providers';
@@ -441,6 +442,7 @@
 		const at = list.indexOf('play');
 		return [
 			...playAsItems(),
+			...playHereItems(), // 60 Q1
 			...($hudIsGame
 				? [
 						{ section: 'Game' },
@@ -496,6 +498,8 @@
 	 * @type {Record<string, {label: string, short?: string, hint?: string, icon: string, run: () => void, pressed?: () => boolean, disabled?: () => boolean, badge?: () => number, dot?: () => string}>} */
 	const ACTIONS = {
 		play: { label: 'Play', icon: 'play', run: fromMore(() => requestPlay()) },
+		// 60 Q1: Play from where the camera is (More ▸ Tools & View; placeable on the bar)
+		playhere: { label: 'Play here', short: 'Here', hint: 'Play here — start from this view', icon: 'map-pin', run: fromMore(() => playHere()) },
 		add: { label: 'Add', icon: 'plus', run: () => add() },
 		// 41b H1/H5: Objects, Configure Scene and Notes are dock tabs — the bar shows / minimizes them
 		objects: { label: 'Objects', icon: 'list', run: fromMore(() => phoneBarTap('objects')), pressed: () => $visibleDockKey === 'objects' && !$dockMinimized },

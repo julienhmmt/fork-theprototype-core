@@ -371,6 +371,8 @@ export const DEBUG_HOOKS = [
 	['touchActions', () => import('./touchActions')],
 	['touchSpec', () => import('./touchSpec')],
 	['playMode', () => import('./playMode')],
+	// 60 Q1: Play here
+	['playHere', () => import('./playHere')],
 	// 36-export: the export builder, its stores, the export boot + runtime state
 	['exportBuilder', () => import('./export/exportBuilder.js')],
 	['exportStores', () => import('./export/exportStores.js')],
