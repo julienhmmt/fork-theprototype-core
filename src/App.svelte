@@ -296,6 +296,9 @@ import { startMusicToolbox } from './lib/musicToolbox'
     startShortcuts()
     startSnapping()
     startAutosave()
+    // 60 Q4: files shared into the app (share_target → sw.js inbox) or opened from the OS
+    // (file_handlers → launchQueue); they wait for the restore question (launchInbox.js)
+    if (!exportMode) import('$lib/launchInbox').then((m) => m.startLaunchInbox()).catch(() => {})
     startSceneAssets()
     startCodeWorkspace() // 36-code: scriptEditorOpen -> a workspace tab, file follow
     startNetworkQuality()
