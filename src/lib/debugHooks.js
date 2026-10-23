@@ -373,6 +373,9 @@ export const DEBUG_HOOKS = [
 	['playMode', () => import('./playMode')],
 	// 60 Q1: Play here
 	['playHere', () => import('./playHere')],
+	// 60 Q5: reference image underlays
+	['underlays', () => import('./underlays')],
+	['underlayPose', () => import('./underlayPose')],
 	// 36-export: the export builder, its stores, the export boot + runtime state
 	['exportBuilder', () => import('./export/exportBuilder.js')],
 	['exportStores', () => import('./export/exportStores.js')],

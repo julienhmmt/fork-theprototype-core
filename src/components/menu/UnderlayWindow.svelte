@@ -23,7 +23,9 @@
 	import { peers } from '../../stores/appStore';
 
 	const open = $derived($underlayWindowOpen && $isLocked !== true && !$isVRMode);
-	const connected = $derived((/** @type {any} */ ($peers)?.openedPeers?.size ?? 0) > 0);
+	/** @type {any} */
+	const peerConn = $derived($peers);
+	const connected = $derived((peerConn?.openedPeers?.size ?? 0) > 0);
 	/** the placement a new image takes ("Add image…" in this window) */
 	let addMode = $state(/** @type {'ground' | 'view'} */ ('ground'));
 	/** @type {HTMLInputElement | null} */
@@ -186,7 +188,11 @@
 {/if}
 
 <style>
+	/* one image's block: a full-width cell of the toolbox body's button grid (the .tbx-row rule) —
+	   without it the block took one 36px cell and every slider in it measured 0px */
 	.ul-item {
+		grid-column: 1 / -1;
+		min-width: 0;
 		border-top: 1px solid var(--border);
 		padding-top: 4px;
 	}
