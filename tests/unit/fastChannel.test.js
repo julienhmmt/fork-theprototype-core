@@ -8,7 +8,8 @@ import {
 	createKeyframer,
 	createFastLinks,
 	FAST_CHANNEL_ID,
-	FAST_MAX_BYTES
+	FAST_MAX_BYTES,
+	FAST_MAX_BUFFERED
 } from '../../src/lib/fastChannel.js';
 
 // 60 Q2: the fast movement channel's pure parts — keys, sequence numbers, the stale filter,
@@ -197,6 +198,16 @@ describe('createFastLinks', () => {
 		expect(links.trySend('B', 'x'.repeat(FAST_MAX_BYTES + 1))).toBe(false);
 		expect(links.trySend('Z', '{}')).toBe(false); // no channel to that peer
 		expect(links.stats.tooBig).toBe(1);
+	});
+	it('skips (true, not sent) behind a send backlog — a stale pose must not queue', () => {
+		const links = createFastLinks();
+		const pc = fakePc();
+		links.open('B', { peerConnection: pc }, () => {});
+		pc.made[0].readyState = 'open';
+		pc.made[0].bufferedAmount = FAST_MAX_BUFFERED + 1;
+		expect(links.trySend('B', '{}')).toBe(true);
+		expect(pc.made[0].sent).toEqual([]);
+		expect(links.stats.congested).toBe(1);
 	});
 	it('a newer connection replaces the old channel; a conn without an RTCPeerConnection is refused', () => {
 		const links = createFastLinks();

@@ -39,6 +39,9 @@ export const FAST_CHANNEL_LABEL = 'tp-fast';
 /** above this a message goes reliable: one unreliable message should fit a few datagrams, and a
  * lost fragment loses the whole message */
 export const FAST_MAX_BYTES = 12000;
+/** past this many queued bytes a pose is SKIPPED, not queued: behind a backlog it would only arrive
+ * stale, and the next pose (or the trailing keyframe) replaces it anyway */
+export const FAST_MAX_BUFFERED = 256 * 1024;
 /** how long a key must be quiet before its trailing keyframe goes out */
 export const KEYFRAME_MS = 250;
 
@@ -199,7 +202,7 @@ export function createKeyframer(resend, opts = {}) {
 export function createFastLinks() {
 	/** peerId -> {dc, pc} @type {Map<string, {dc: any, pc: any}>} */
 	const links = new Map();
-	const stats = { opened: 0, sent: 0, received: 0, tooBig: 0, sendErrors: 0, parseErrors: 0 };
+	const stats = { opened: 0, sent: 0, received: 0, tooBig: 0, congested: 0, sendErrors: 0, parseErrors: 0 };
 	/** @param {string} peerId */
 	function close(peerId) {
 		const link = links.get(peerId);
@@ -265,6 +268,11 @@ export function createFastLinks() {
 			if (text.length > FAST_MAX_BYTES) {
 				stats.tooBig++;
 				return false;
+			}
+			// a backlog: skip this pose (it counts as sent unreliably — a datagram lost early)
+			if (link.dc.bufferedAmount > FAST_MAX_BUFFERED) {
+				stats.congested++;
+				return true;
 			}
 			try {
 				link.dc.send(text);
