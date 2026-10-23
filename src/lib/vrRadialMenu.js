@@ -6,7 +6,8 @@ import {
 	vrWireframeSelection,
 	vrEditMenuOpen,
 	vrSnapMenuOpen,
-	vrToolMode
+	vrToolMode,
+	worldRig
 } from '../stores/sceneStore';
 import { environment, setEnvironment, ENVIRONMENT_PRESETS } from './environment';
 import { simulating, remoteSimulating, toggleSimulation } from './physics';
@@ -36,6 +37,14 @@ export function archCatalogItems() {
 /** @param {string} label */
 function archIcon(label) {
 	return label.startsWith('Wall') ? 'brick-wall' : label.includes('oor') ? 'door-open' : label.includes('indow') ? 'grid-2x2' : 'door-stairwell';
+}
+
+/** 52 (V5): is the local world rig off life size (scaled, turned or moved by the two-grip gesture)? */
+export function worldOffLifeSize() {
+	const rig = /** @type {any} */ (get(worldRig));
+	if (!rig) return false;
+	const q = rig.quaternion;
+	return Math.abs(rig.scale.x - 1) > 1e-3 || rig.position.lengthSq() > 1e-6 || Math.abs(Math.abs(q.w) - 1) > 1e-6;
 }
 
 /** 37 R9: is the lone selection a Terrain (its Selected ring offers Sculpt terrain instead of Edit mesh)? */
@@ -287,6 +296,8 @@ function registerBuiltins() {
 	registerVRMenuEntry({ id: 'undo', label: 'Undo', icon: 'undo-2', order: 5 });
 	registerVRMenuEntry({ id: 'chat', label: 'Chat', icon: 'message-square', order: 6 });
 	registerVRMenuEntry({ id: 'nav:settings', label: 'Settings', icon: 'settings', order: 7, ring: 'settings' });
+	// 52 (V5): the way back from a miniature, one press from the root — only while the world is off 1:1
+	registerVRMenuEntry({ id: 'world:back', label: 'Back to 1:1', icon: 'maximize', order: 8, closes: true, visible: () => worldOffLifeSize() });
 
 	// Tools ▸ (214 + 36) — the trigger tool mode, Ping, the simulation (desktop: Tools ▸ Simulate physics)
 	// and the profiler
