@@ -140,6 +140,7 @@ export function viewportThumbnail(maxW = 256) {
 	if (!renderer || !scene || !camera || renderer.xr?.isPresenting) return null;
 	try {
 		// 50-window (C2): the scene, not the editor — no gizmo, grid or helpers in the picture
+		// (60 Q5: reference images sit on the helper layer, which withCleanView switches off)
 		withCleanView(scene, camera, () => renderer.render(scene, camera));
 		const source = renderer.domElement;
 		const sw = source.width || maxW;

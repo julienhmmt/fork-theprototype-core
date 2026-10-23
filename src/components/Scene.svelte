@@ -107,6 +107,7 @@
 	// 36 A2: the headset browser's own "Enter VR" offer — decided by us, not threlte's default
 	import { xrOfferMode } from '$lib/xrOffer';
 	import MeasureOverlay from './MeasureOverlay.svelte';
+	import UnderlayLayer from './UnderlayLayer.svelte'; // 60 Q5
 	import AnnotationPins from './AnnotationPins.svelte';
 	import PingMarkers from './PingMarkers.svelte';
 	import PingHighlights from './PingHighlights.svelte';
@@ -1818,6 +1819,10 @@
      its transform is LOCAL-only (identity on desktop, reset on VR exit) -->
 <T.Group bind:ref={$worldRig} name="world-grab-rig">
 	<T.Group bind:ref={$objectsGroup} name="sceneObjects" />
+
+	<!-- 60 Q5: reference images — under the world rig (a VR world grab carries them), never in
+	     sceneObjects (never picked, synced, saved or exported) -->
+	<UnderlayLayer />
 
 	<CameraPreview />
 

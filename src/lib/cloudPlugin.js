@@ -1,4 +1,5 @@
 import { get } from 'svelte/store';
+import { HELPER_LAYER } from './helperLayer'; // 60 Q5
 import { showToast, appNotice, peers, cloudIdentity, userdata } from '../stores/appStore';
 import { globalScene, globalCamera, globalRenderer, orbitControls, cameraClaim, isLocked, isVRMode } from '../stores/sceneStore';
 import { requestConnect } from './peerApproval';
@@ -309,7 +310,10 @@ export function makeCloudApi() {
 			const scene = get(globalScene);
 			const cam = get(globalCamera);
 			if (!r || !scene || !cam || r.xr?.isPresenting) return null;
+			// 60 Q5: no editor scaffolding (light helpers, reference images) in a room/publish picture
+			const mask = /** @type {any} */ (cam).layers?.mask;
 			try {
+				/** @type {any} */ (cam).layers?.disable(HELPER_LAYER);
 				r.render(scene, cam);
 				const src = r.domElement;
 				const sw = src.width || maxW;
@@ -326,6 +330,8 @@ export function makeCloudApi() {
 			} catch (e) {
 				console.warn('thumbnail capture failed', e);
 				return null;
+			} finally {
+				if (/** @type {any} */ (cam).layers && mask != null) /** @type {any} */ (cam).layers.mask = mask;
 			}
 		},
 

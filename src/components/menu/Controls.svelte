@@ -65,6 +65,8 @@
 	import { dockShownKeys, dockOccupants, bottomInset, FLOW_FAMILY, armDockMode, DOCK_TITLES } from '$lib/bottomDock';
 	import { togglePanel } from '$lib/panelToggles';
 	import { requestPlay, willEnterXR, willEnterAR, xrSessionFailed, playAsItems } from '$lib/playMode';
+	// 60 Q1: Play here — a roster button (Customize), a row in Play's own menu, Ctrl+Shift+Enter
+	import { playHere, playHereItems, playingHere } from '$lib/playHere';
 	// 30 P2: Test play — the play button's right-click row beside the game chip's button
 	import { testPlay } from '$lib/gamePresence';
 	import { hudIsGame } from '$lib/hudDocs';
@@ -1035,6 +1037,8 @@
 			// 41b H7: the "Play as" rows live in $lib/playMode (`playAsItems`) — the phone bar's Play
 			// opens the same ones, so the two buttons write the same choice the same way
 			...playAsItems(),
+			// 60 Q1: Play here (the phone's Play menu carries the same row)
+			...playHereItems(),
 			// 30 P2: TEST PLAY — back to the menu, into Play, the Start screen. Offered only
 			// where it means something: a scene with no game shell has no menu to start from.
 			...($hudIsGame
@@ -1344,6 +1348,18 @@
 			tint: () => ICON_OFF,
 			run: () => redo()
 		},
+		// 60 Q1: PLAY HERE — an OPTIONAL roster button (Customize toolbar / the "+" list place it):
+		// Play with the player where the editor camera is, and the view comes back on Stop. Not on
+		// the default bar, so a profile that never asks for it is byte-identical; the same act is
+		// Play's right-click row and Ctrl+Shift+Enter.
+		playhere: {
+			title: 'Play here — start from this view (Ctrl+Shift+Enter)',
+			label: 'Play here',
+			slot: 'play-here-button',
+			icon: 'map-pin',
+			tint: () => ($playingHere ? ICON_ON : ICON_OFF),
+			run: () => playHere()
+		},
 		multiselect: {
 			get title() {
 				return $multiSelectMode
@@ -1366,7 +1382,9 @@
 	/** 42 I9: the bell and the peers trigger open their panels from the top-right corner, so they
 	 *  may only live in the top-right group (moved, removed, re-added there — never elsewhere) */
 	const HOME_ONLY: Record<string, Region> = { notifications: 'top', peers: 'top' };
-	const ROSTER_IDS = [...DEFAULT_ORDER, ...OPTIONAL_VIEWS, ...CORNER_LEFT, ...CORNER_RIGHT, ...TOP_DEFAULT, ...TOUCH_DEFAULT];
+	/** 60 Q1: optional tool buttons (listed in Customize unchecked, like the optional views) */
+	const OPTIONAL_TOOLS = ['playhere'];
+	const ROSTER_IDS = [...DEFAULT_ORDER, ...OPTIONAL_VIEWS, ...OPTIONAL_TOOLS, ...CORNER_LEFT, ...CORNER_RIGHT, ...TOP_DEFAULT, ...TOUCH_DEFAULT];
 	/** 42 I7: the name a MENU prints for a button (its short label, else its title) */
 	function labelOf(id: string) {
 		return id === SPACER ? 'Play' : (BUTTONS[id]?.label ?? BUTTONS[id]?.title ?? id);

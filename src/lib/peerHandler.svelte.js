@@ -93,6 +93,8 @@ import {
 	sendHudValues
 } from '$lib/hudSync';
 import { applyRemoteGameState, sendGameState, gameStatePayload } from '$lib/gameSync';
+// 60 Q5: shared reference images (a leaf: stores + idb)
+import { applyRemoteUnderlay, applyRemoteUnderlayDelete, sendUnderlays, dropPeerUnderlays } from '$lib/underlays';
 // 48 S2: sequences (Timeline) — scene data, latest-wins per sequence (sequenceSync.js)
 import { applyRemoteSequence, applyRemoteSequenceDelete, applyRemoteSequences, sendSequences } from '$lib/sequenceSync';
 // 50 Y1/Y2: shared text in the Code tab (Yjs, loaded lazily with the editor)
@@ -1060,6 +1062,13 @@ export class PeerConnection {
 					applyRemoteGameState(data);
 				} else if(data.type == 'getgame') {
 					if (sameRoomOrUnknown(conn.peer)) sendGameState(data.sender);
+				} else if(data.type == 'underlay') {
+					// 60 Q5: a peer's shared reference image (owner = this conn, never a field)
+					applyRemoteUnderlay(data, conn.peer);
+				} else if(data.type == 'underlaydelete') {
+					applyRemoteUnderlayDelete(data, conn.peer);
+				} else if(data.type == 'getunderlays') {
+					if (sameRoomOrUnknown(conn.peer)) sendUnderlays(conn.peer);
 				} else if(data.type == 'kit' || data.type == 'kitreq') {
 					// 34 R2: the kit document (authority-written, latest-wins) and a request
 					// to the authority; the shapes were checked by wireValidate
@@ -1496,6 +1505,7 @@ export class PeerConnection {
 		conn.send({type: 'gethuds', sender: this.peer.id})
 		conn.send({type: 'gethudvalues', sender: this.peer.id})
 		conn.send({type: 'getseqs', sender: this.peer.id}) // 48 S2
+		conn.send({type: 'getunderlays', sender: this.peer.id}) // 60 Q5
 	}
 
 	// Send the initial handshake (locks, known hosts, whitelist, object/node sync requests).
@@ -1883,6 +1893,7 @@ export class PeerConnection {
 		dropPeerEnvPresets(peerId);
 		dropPeerMaterialPresets(peerId);
 		dropPeerHandModel(peerId);
+		dropPeerUnderlays(peerId); // 60 Q5
 		if (relay) this.broadcast({ type: 'disconnected', peerId });
 		checkLocks();
 		peers.update((value) => value);
@@ -1900,6 +1911,7 @@ export class PeerConnection {
 		// reconnect redials our still-registered peer id and every attempt lands
 		// here as a fresh approval request
 		this.broadcast({ type: 'disconnected', peerId: this.peer.id });
+		dropPeerUnderlays(null); // 60 Q5: every peer's shared reference images go with the session
 		this.reconnecting.clear(); // pending retry timers see a cleared map and no-op
 		this.gracefulLeft.clear();
 		this.wantsStateFrom.clear();
