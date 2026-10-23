@@ -6,7 +6,8 @@ import {
 	vrWireframeSelection,
 	vrEditMenuOpen,
 	vrSnapMenuOpen,
-	vrToolMode
+	vrToolMode,
+	worldRig
 } from '../stores/sceneStore';
 import { environment, setEnvironment, ENVIRONMENT_PRESETS } from './environment';
 import { simulating, remoteSimulating, toggleSimulation } from './physics';
@@ -15,7 +16,8 @@ import { duplicateSelection, deleteSelection, groupSelection, selectionUuids } f
 import { savePrefab, savePrefabSelection } from './prefabs';
 import { perfContext } from './perf/perfMarks.js'; // 34 PF: an import-free leaf
 import { vrDollhouseOpen, vrSculptActive } from './vr/worldStores.js'; // 37: a leaf
-import { sculptOp } from './terrainSculpt';
+import { sculptOp, sculptMode } from './terrainSculpt';
+import { paintLayer } from './terrainPaint';
 import { registerMeasureRings, registerArrangeRings } from './vr/buildRings.js'; // 52 V1/V2
 import { primitivesCatalog } from './primitivesCatalog';
 
@@ -37,6 +39,14 @@ export function archCatalogItems() {
 /** @param {string} label */
 function archIcon(label) {
 	return label.startsWith('Wall') ? 'brick-wall' : label.includes('oor') ? 'door-open' : label.includes('indow') ? 'grid-2x2' : 'door-stairwell';
+}
+
+/** 52 (V5): is the local world rig off life size (scaled, turned or moved by the two-grip gesture)? */
+export function worldOffLifeSize() {
+	const rig = /** @type {any} */ (get(worldRig));
+	if (!rig) return false;
+	const q = rig.quaternion;
+	return Math.abs(rig.scale.x - 1) > 1e-3 || rig.position.lengthSq() > 1e-6 || Math.abs(Math.abs(q.w) - 1) > 1e-6;
 }
 
 /** 37 R9: is the lone selection a Terrain (its Selected ring offers Sculpt terrain instead of Edit mesh)? */
@@ -289,6 +299,8 @@ function registerBuiltins() {
 	registerVRMenuEntry({ id: 'undo', label: 'Undo', icon: 'undo-2', order: 5 });
 	registerVRMenuEntry({ id: 'chat', label: 'Chat', icon: 'message-square', order: 6 });
 	registerVRMenuEntry({ id: 'nav:settings', label: 'Settings', icon: 'settings', order: 7, ring: 'settings' });
+	// 52 (V5): the way back from a miniature, one press from the root — only while the world is off 1:1
+	registerVRMenuEntry({ id: 'world:back', label: 'Back to 1:1', icon: 'maximize', order: 8, closes: true, visible: () => worldOffLifeSize() });
 
 	// Tools ▸ (214 + 36) — the trigger tool mode, Ping, the simulation (desktop: Tools ▸ Simulate physics)
 	// and the profiler
@@ -600,6 +612,67 @@ function registerBuiltins() {
 		closes: true,
 		action: () => void import('./vr/sculpt.js').then((m) => m.stopVRSculpt())
 	});
+	// 52 (V3): the brush WHEELS — Paint ▸ (the terrain's four layers), Scatter ▸ (the tools + Source ▸)
+	// the primed module when it has landed (a sector press acts at once), else the import
+	const vrSculpt = () => (sculptRef ? Promise.resolve(sculptRef) : import('./vr/sculpt.js'));
+	/** @param {(m: any) => any} fn */
+	const withSculpt = (fn) => (sculptRef ? void fn(sculptRef) : void vrSculpt().then(fn));
+	registerVRMenuEntry({
+		id: 'nav:sculpt-paint',
+		group: 'sculpt',
+		label: 'Paint',
+		icon: 'palette',
+		order: 3.5,
+		ring: 'sculpt-paint',
+		active: () => get(sculptOp) === 'paint',
+		visible: () => get(sculptMode) === 'terrain'
+	});
+	registerVRMenuEntry({ id: 'nav:sculpt-scatter', group: 'sculpt', label: 'Scatter', icon: 'sparkles', order: 3.7, ring: 'sculpt-scatter', active: () => get(sculptOp) === 'scatter' });
+	[0, 1, 2, 3].forEach((i) =>
+		registerVRMenuEntry({
+			id: 'sculpt:layer:' + i,
+			group: 'sculpt-paint',
+			label: 'Layer ' + (i + 1),
+			icon: 'layers',
+			order: i,
+			closes: true,
+			active: () => get(sculptOp) === 'paint' && get(paintLayer) === i,
+			action: () => withSculpt((m) => m.setVRPaintLayer(i))
+		})
+	);
+	/** @type {[string, string, string][]} */ ([
+		['paint', 'Paint', 'pencil'],
+		['erase', 'Erase', 'x'],
+		['rotate', 'Rotate', 'rotate-cw'],
+		['scale', 'Scale', 'maximize'],
+		['relax', 'Relax', 'waves-horizontal']
+	]).forEach(([tool, label, icon], order) =>
+		registerVRMenuEntry({
+			id: 'sculpt:tool:' + tool,
+			group: 'sculpt-scatter',
+			label,
+			icon,
+			order,
+			closes: true,
+			// a mesh host keeps Paint + Erase (51-surface); the edit tools read a terrain's instances
+			visible: () => tool === 'paint' || tool === 'erase' || get(sculptMode) === 'terrain',
+			active: () => get(sculptOp) === 'scatter' && vrScatterToolNow === tool,
+			action: () => withSculpt((m) => m.setVRScatterTool(tool))
+		})
+	);
+	registerVRMenuEntry({ id: 'nav:sculpt-source', group: 'sculpt-scatter', label: 'Source', icon: 'package', order: 5, ring: 'sculpt-source', value: () => vrSourceNow });
+	for (let i = 0; i < 7; i++)
+		registerVRMenuEntry({
+			id: 'sculpt:src:' + i,
+			group: 'sculpt-source',
+			label: () => vrSourceSlotsNow()[i]?.label ?? '',
+			icon: 'package',
+			order: i,
+			closes: true,
+			visible: () => !!vrSourceSlotsNow()[i],
+			active: () => vrSourceSlotsNow()[i]?.label === vrSourceNow,
+			action: () => withSculpt((m) => m.setVRScatterSource(i))
+		});
 
 	// Face ops (118/137): ids the side-menu arms via setFaceOp; the 'faces' group stays registered so
 	// those ids resolve (no longer a ring)
@@ -613,10 +686,32 @@ function registerBuiltins() {
 	registerArrangeRings(registerVRMenuEntry);
 }
 
+// 52 (V3): the brush wheels read vr/sculpt.js, which is a STATIC import away from this leaf's importers only
+// through the radial; it is primed here (the colliderEdit pattern) so the sectors' label / visible / active
+// stay synchronous — and every read is null-safe until it lands
+/** @type {any} */ let sculptRef = null;
+let vrScatterToolNow = 'paint';
+let vrSourceNow = '';
+if (typeof window !== 'undefined')
+	import('./vr/sculpt.js').then((m) => {
+		sculptRef = m;
+		refreshBrushReadouts();
+	});
+/** @returns {{value: string, label: string}[]} */
+function vrSourceSlotsNow() {
+	return sculptRef ? sculptRef.vrSourceSlots() : [];
+}
+function refreshBrushReadouts() {
+	if (!sculptRef) return;
+	vrScatterToolNow = sculptRef.vrScatterTool();
+	vrSourceNow = sculptRef.vrSourceLabel();
+}
+
 registerBuiltins();
 
 // closing the menu (any path) resets navigation to the base ring
 vrMenuOpen.subscribe((open) => {
+	refreshBrushReadouts(); // 52 (V3): the Scatter ▸ / Source ▸ sectors read the brush as it is now
 	if (!open) resetRings();
 	// 37 R9: a sculpt session opens the menu on its own ring (Back pops to the base ring)
 	else if (get(vrSculptActive) && get(activeRing) === 'root') pushRing('sculpt');
