@@ -9,7 +9,14 @@ import {
 	decodeInstances,
 	encodeInstances,
 	scatterInCircle,
-	eraseInCircle,
+	instancesOf,
+	withOverrides,
+	withSeed,
+	withSourceAdded,
+	withSourceRemoved,
+	newSeed,
+	pickSource,
+	blockVersion,
 	sourceKey,
 	MAX_INSTANCES,
 	MAX_SETS
@@ -218,7 +225,8 @@ export function clearTerrainPaint(uuid) {
 
 // ---- scatter ----------------------------------------------------------------------------
 
-/** @type {{uuid: string, before: any, key: string, list: any[], set: any, others: any[], changed: boolean, seed: number} | null} */
+/** @type {{uuid: string, before: any, key: string, list: any[], set: any, others: any[], changed: boolean, seed: number,
+ *   generated: any[], erased: Set<string>} | null} */
 let scatterStroke = null;
 let lastScatterPreview = 0;
 
@@ -246,17 +254,28 @@ export function beginScatterStroke(uuid) {
 		showToast('A terrain holds up to ' + MAX_SETS + ' scatter models');
 		return false;
 	}
+	/** @type {any[]} */
+	let list = [];
+	if (set?.count) {
+		// 51: a painted record keeps the source it picked (a mixed set) through every erase
+		const pick = set.pick ? base64ToBytes(set.pick) : null;
+		list = decodeInstances(/** @type {Uint8Array} */ (base64ToBytes(set.data)), b).map((inst, j) => ({ ...inst, src: pick?.[j] ?? 0 }));
+	}
 	scatterStroke = {
 		uuid,
 		before: block && block.sets.length ? block : null,
 		key,
-		list: set ? decodeInstances(/** @type {Uint8Array} */ (base64ToBytes(set.data)), b) : [],
+		list,
 		// the align toggle is a property of the SET (heights are derived at render time), so
 		// the brush's current setting re-stamps it
 		set: { ...(set ?? { id: key, source, data: '', count: 0, collider: get(scatterCollider) }), align: get(scatterAlign) },
 		others: sets.filter((s) => s !== set),
 		changed: false,
-		seed: (Math.random() * 2 ** 32) >>> 0
+		seed: (Math.random() * 2 ** 32) >>> 0,
+		// 51: the set's GENERATED instances count toward the brush's density (painting over a
+		// filled patch adds nothing) and an erase deletes them as hand edits
+		generated: set?.gen ? instancesOf(set, b, base64ToBytes).filter((i) => i.slot != null) : [],
+		erased: new Set()
 	};
 	return true;
 }
@@ -264,8 +283,18 @@ export function beginScatterStroke(uuid) {
 /** The block the stroke has built so far. @param {NonNullable<typeof scatterStroke>} st @param {any} b */
 function strokeBlock(st, b) {
 	const sets = [...st.others];
-	if (st.list.length) sets.push({ ...st.set, data: bytesToBase64(encodeInstances(st.list, b)), count: st.list.length });
-	return sets.length ? { v: 1, sets } : null;
+	/** @type {any} */
+	let set = { ...st.set, data: st.list.length ? bytesToBase64(encodeInstances(st.list, b)) : '', count: st.list.length };
+	if (set.sources && st.list.length) set.pick = bytesToBase64(new Uint8Array(st.list.map((i) => i.src ?? 0)));
+	else delete set.pick;
+	if (st.erased.size) {
+		/** @type {Record<string, any>} */
+		const patch = {};
+		for (const id of st.erased) patch[id] = { del: true };
+		set = withOverrides(set, patch, { bounds: b, decode: base64ToBytes, encode: bytesToBase64 });
+	}
+	if (set.count || set.gen) sets.push(set);
+	return sets.length ? { v: blockVersion(sets), sets } : null;
 }
 
 /** A tiny seeded rng per stroke (Math.random would do; a seed makes a suite replayable). */
@@ -282,7 +311,8 @@ function strokeRng() {
 
 /**
  * One scatter application at a LOCAL (x, z), exported for the suite. Paint adds up to the
- * density inside the circle; erase removes the active source's instances in it.
+ * density inside the circle; erase removes the active source's instances in it (a generated
+ * one becomes a deleted hand edit, so a re-roll does not bring it back).
  * @param {string} uuid @param {number} x @param {number} z @param {number} radius
  * @returns {number} instances added (negative = removed)
  */
@@ -293,12 +323,19 @@ export function scatterAt(uuid, x, z, radius) {
 	if (!st || st.uuid !== uuid || !b) return 0;
 	let delta = 0;
 	if (get(scatterErase)) {
-		const next = eraseInCircle(st.list, x, z, radius);
+		const next = st.list.filter((p) => Math.hypot(p.x - x, p.z - z) > radius);
 		delta = next.length - st.list.length;
 		st.list = next;
+		for (const g of st.generated)
+			if (!st.erased.has(g.id) && Math.hypot(g.x - x, g.z - z) <= radius) {
+				st.erased.add(g.id);
+				delta--;
+			}
 	} else {
-		const othersCount = st.others.reduce((sum, s) => sum + s.count, 0);
-		const added = scatterInCircle(st.list, {
+		const othersCount = st.others.reduce((sum, s) => sum + s.count + (s.gen?.count ?? 0), 0);
+		const live = st.generated.filter((g) => !st.erased.has(g.id));
+		const rng = strokeRng();
+		const added = scatterInCircle([...st.list, ...live], {
 			cx: x,
 			cz: z,
 			radius,
@@ -307,9 +344,11 @@ export function scatterAt(uuid, x, z, radius) {
 			scaleMax: get(scatterScaleMax),
 			randomRotation: get(scatterRandomRotation),
 			bounds: b,
-			rng: strokeRng(),
-			room: MAX_INSTANCES - othersCount - st.list.length
+			rng,
+			room: MAX_INSTANCES - othersCount - st.list.length - live.length
 		});
+		// 51 E1: a mixed set's new instance draws its source by weight
+		for (const inst of added) /** @type {any} */ (inst).src = pickSource(st.set.sources, rng());
 		st.list.push(...added);
 		delta = added.length;
 	}
@@ -350,21 +389,145 @@ registerHistoryKind('terrainScatter', (entry, state) => {
 });
 
 /**
- * Inspector: change one set (align toggle) or remove it (`patch` null). One undo entry.
- * @param {string} uuid @param {string} setId @param {{align?: boolean, collider?: string} | null} patch
+ * THE ONE WRITE PATH for a terrain's scatter block outside a brush stroke: apply, send, ONE undo
+ * entry. A gesture previews with `{record: false}` (and `{send: false}` while it streams faster
+ * than the wire wants) and commits with `{before}` on release — one entry per drag.
+ * @param {string} uuid @param {(block: {v: number, sets: any[]}) => any[] | null} edit returns the new sets (null = no change)
+ * @param {{before?: any, record?: boolean, send?: boolean}} [opts]
  */
-export function editScatterSet(uuid, setId, patch) {
+export function writeScatter(uuid, edit, opts = {}) {
 	const object = objectOf(uuid);
-	if (!object || !canEditObject(object)) return false;
-	const block = scatterBlockOf(object);
-	if (!block) return false;
-	const sets = patch ? block.sets.map((s) => (s.id === setId ? { ...s, ...patch } : s)) : block.sets.filter((s) => s.id !== setId);
-	const next = sets.length ? { v: 1, sets } : null;
-	applyTerrainScatter(uuid, next);
+	if (!object) return false;
+	if (!canEditObject(object)) {
+		warnViewerReadOnly();
+		return false;
+	}
+	const block = scatterBlockOf(object) ?? { v: 1, sets: [] };
+	const sets = edit(block);
+	if (!sets) return false;
+	const before = opts.before !== undefined ? opts.before : block.sets.length ? block : null;
+	applyTerrainScatter(uuid, sets.length ? { v: blockVersion(sets), sets } : null);
 	const after = object.userData.terrainScatter ?? null;
-	send({ type: 'objectParameters', parameter: 'terrainScatter', uuid, terrainScatter: after });
-	recordEntry({ kind: 'terrainScatter', uuid, before: { block }, after: { block: after } });
+	if (opts.send !== false) send({ type: 'objectParameters', parameter: 'terrainScatter', uuid, terrainScatter: after });
+	if (opts.record !== false && JSON.stringify(before) !== JSON.stringify(after))
+		recordEntry({ kind: 'terrainScatter', uuid, before: { block: before }, after: { block: after } });
 	return true;
+}
+
+/**
+ * Inspector: change one set (align, collider, and since 51 any set field — gen, seed, sources,
+ * tint, sink; a null value clears it) or remove it (`patch` null). One undo entry.
+ * @param {string} uuid @param {string} setId @param {Record<string, any> | null} patch
+ * @param {{before?: any, record?: boolean, send?: boolean}} [opts]
+ */
+export function editScatterSet(uuid, setId, patch, opts) {
+	return writeScatter(
+		uuid,
+		(block) => {
+			if (!block.sets.some((s) => s.id === setId)) return null;
+			return patch ? block.sets.map((s) => (s.id === setId ? { ...s, ...patch } : s)) : block.sets.filter((s) => s.id !== setId);
+		},
+		opts
+	);
+}
+
+/**
+ * 51: hand edits on single instances — `patch` = {[id]: {x?, z?, yaw?, scale?, del?: true} | null}
+ * (ids 'g<k>' / 'p<j>' from `scatterInstancesOf`; null clears a generated slot's edit). The
+ * write path 51-edit's gizmo, box ops and brushes go through. One undo entry (see writeScatter).
+ * @param {string} uuid @param {string} setId @param {Record<string, any>} patch
+ * @param {{before?: any, record?: boolean, send?: boolean}} [opts]
+ */
+export function editScatterInstances(uuid, setId, patch, opts) {
+	const b = terrainBounds(objectOf(uuid));
+	if (!b) return false;
+	return writeScatter(
+		uuid,
+		(block) => {
+			const set = block.sets.find((s) => s.id === setId);
+			if (!set) return null;
+			const next = withOverrides(set, patch, { bounds: b, decode: base64ToBytes, encode: bytesToBase64 });
+			return block.sets.map((s) => (s === set ? next : s)).filter((s) => s.count || s.gen);
+		},
+		opts
+	);
+}
+
+/** 51: re-roll a seeded set (a new seed; hand edits kept). @param {string} uuid @param {string} setId @param {number} [seed] */
+export function rerollScatterSet(uuid, setId, seed = newSeed()) {
+	const set = scatterBlockOf(objectOf(uuid))?.sets.find((s) => s.id === setId);
+	if (!set?.gen) return false;
+	return editScatterSet(uuid, setId, { seed: withSeed(set, seed).seed });
+}
+
+/**
+ * 51: add a set (a seeded fill, or a source picked from a pack / prefab / the selection). The id
+ * is made unique on this terrain; returns it (null when refused).
+ * @param {string} uuid @param {Record<string, any>} set
+ */
+export function addScatterSet(uuid, set) {
+	/** @type {string | null} */
+	let id = null;
+	const ok = writeScatter(uuid, (block) => {
+		if (block.sets.length >= MAX_SETS) {
+			showToast('A terrain holds up to ' + MAX_SETS + ' scatter sets');
+			return null;
+		}
+		const base = String(set.id || sourceKey(set.source) || 'set').slice(0, 34);
+		id = base;
+		for (let n = 2; block.sets.some((s) => s.id === id); n++) id = base + '~' + n;
+		const next = { data: '', count: 0, align: false, ...set, id, ...(set.gen && set.seed == null ? { seed: newSeed() } : {}) };
+		return [...block.sets, next];
+	});
+	return ok ? id : null;
+}
+
+/** @param {string} uuid @param {string} setId @param {(set: any, io: any) => any} fn one set, rewritten */
+function rewriteSet(uuid, setId, fn) {
+	const b = terrainBounds(objectOf(uuid));
+	if (!b) return false;
+	const io = { bounds: b, decode: base64ToBytes, encode: bytesToBase64 };
+	return writeScatter(uuid, (block) => {
+		const set = block.sets.find((s) => s.id === setId);
+		if (!set) return null;
+		const next = fn(set, io);
+		if (next === set) return null;
+		return block.sets.map((s) => (s === set ? next : s)).filter((s) => s.count || s.gen);
+	});
+}
+
+/** 51 E1: add a model to a set (it becomes a weighted mix). @param {string} uuid @param {string} setId @param {any} source @param {number} [w] */
+export function addScatterSource(uuid, setId, source, w = 1) {
+	return rewriteSet(uuid, setId, (set, io) => withSourceAdded(set, source, w, io));
+}
+
+/** 51 E1: drop model i from a mix (its painted instances go with it). @param {string} uuid @param {string} setId @param {number} i */
+export function removeScatterSource(uuid, setId, i) {
+	return rewriteSet(uuid, setId, (set, io) => withSourceRemoved(set, i, io));
+}
+
+/** 51 E1: one model's weight in a mix (a scrub previews with {record: false} and commits with {before}).
+ * @param {string} uuid @param {string} setId @param {number} i @param {number} w @param {{before?: any, record?: boolean, send?: boolean}} [opts] */
+export function setScatterSourceWeight(uuid, setId, i, w, opts) {
+	const set = scatterBlockOf(objectOf(uuid))?.sets.find((s) => s.id === setId);
+	if (!set?.sources?.[i]) return false;
+	const sources = set.sources.map((e, k) => (k === i ? { ...e, w: Math.max(0.01, w) } : e));
+	return editScatterSet(uuid, setId, { sources }, opts);
+}
+
+/** The block as it stands (a gesture's `before`). @param {string} uuid */
+export function scatterBlockNow(uuid) {
+	const block = scatterBlockOf(objectOf(uuid));
+	return block?.sets.length ? block : null;
+}
+
+/** 51: every instance a terrain's set draws, with ids — what an edit tool reads.
+ * @param {string} uuid @param {string} setId */
+export function scatterInstancesOf(uuid, setId) {
+	const object = objectOf(uuid);
+	const b = terrainBounds(object);
+	const set = scatterBlockOf(object)?.sets.find((s) => s.id === setId);
+	return set && b ? instancesOf(set, b, base64ToBytes) : [];
 }
 
 /** True while a paint or scatter stroke is open (terrainSculpt's endStroke asks). */

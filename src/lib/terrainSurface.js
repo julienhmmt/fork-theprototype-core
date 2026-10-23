@@ -3,9 +3,10 @@ import * as THREE from 'three';
 import { get } from 'svelte/store';
 import { objectsGroup, globalScene, sceneRevision, pokeScene } from '../stores/sceneStore';
 import { decodeSplatBlock, encodeSplatBlock, normalizeLayers, baseIsMaterial, base64ToBytes, LAYER_COUNT } from './terrainPaintCore';
-import { normalizeScatter, decodeInstances, buildHeightGrid, sampleHeight } from './terrainScatterCore';
+import { normalizeScatter, instancesOf, blockVersion, buildHeightGrid, sampleHeight, MAX_INSTANCES } from './terrainScatterCore';
 import { lodObject, releaseOwner } from './lod';
 import { EXPLICIT_MIN_TRIANGLES } from './lodCore';
+import { registerThinMesh, unregisterThinMesh } from './scatterThin';
 
 // 47 T1 + T2 — HOW A PAINTED / SCATTERED TERRAIN LOOKS, on every peer. A LEAF: three, the
 // scene store and the two pure cores; no history, no peers (terrainPaint.js is the write
@@ -364,17 +365,7 @@ function libraryParts(hash) {
 			if (!blob) throw new Error('no bytes');
 			const ext = String(item.name ?? '').split('.').pop()?.toLowerCase() ?? 'glb';
 			const root = await explorer.parseObjectFile(await blob.arrayBuffer(), ext);
-			root.updateMatrixWorld(true);
-			const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
-			/** @type {{geometry: any, material: any}[]} */
-			const parts = [];
-			root.traverse((/** @type {any} */ m) => {
-				if (!m.isMesh || !m.geometry?.attributes?.position || m.isSkinnedMesh) return;
-				const geometry = m.geometry.clone();
-				geometry.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld));
-				parts.push({ geometry, material: Array.isArray(m.material) ? m.material[0] : m.material });
-			});
-			models.set(hash, { parts, state: 'ready' });
+			models.set(hash, { parts: bakeParts(root), state: 'ready' });
 		} catch (error) {
 			console.log('scatter: model ' + hash + ' failed to load', error);
 			models.set(hash, { parts: [], state: 'ready' });
@@ -384,9 +375,53 @@ function libraryParts(hash) {
 	return null;
 }
 
+/** url -> parts (null while loading) — 51 E1: a pack item, fetched from the pack CDN by every peer
+ * @type {Map<string, {parts: {geometry: any, material: any}[] | null, state: 'loading'|'ready'}>} */
+const packModels = new Map();
+
+/** A pack item as instanceable parts (the same bake as a Library model). @param {any} source */
+function packParts(source) {
+	const key = source.path;
+	const entry = packModels.get(key);
+	if (entry) return entry.parts;
+	packModels.set(key, { parts: null, state: 'loading' });
+	void (async () => {
+		/** @type {{geometry: any, material: any}[]} */
+		let parts = [];
+		try {
+			const refs = await import('./packRefs');
+			const { scene } = await refs.loadPackTemplate(refs.packRefUrl({ pack: source.pack, item: source.item, path: source.path }));
+			parts = bakeParts(scene);
+		} catch (error) {
+			console.log('scatter: pack item ' + key + ' failed to load', error);
+		}
+		packModels.set(key, { parts, state: 'ready' });
+		scheduleReconcile(true);
+	})();
+	return null;
+}
+
+/** every mesh of a parsed model, its transform relative to the root baked into a geometry clone
+ * (the model's look; skinned meshes left out) @param {any} root */
+function bakeParts(root) {
+	root.updateMatrixWorld(true);
+	const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+	/** @type {{geometry: any, material: any}[]} */
+	const parts = [];
+	root.traverse((/** @type {any} */ m) => {
+		if (!m.isMesh || !m.geometry?.attributes?.position || m.isSkinnedMesh) return;
+		const geometry = m.geometry.clone();
+		geometry.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld));
+		parts.push({ geometry, material: Array.isArray(m.material) ? m.material[0] : m.material });
+	});
+	return parts;
+}
+
 /** @param {any} source */
 function partsOf(source) {
-	return source.kind === 'primitive' ? primitiveParts(source.type) : libraryParts(source.hash);
+	if (source.kind === 'primitive') return primitiveParts(source.type);
+	if (source.kind === 'pack') return packParts(source);
+	return libraryParts(source.hash);
 }
 
 const _m = new THREE.Matrix4();
@@ -425,6 +460,7 @@ function makeHolder(terrain) {
 function clearHolder(holder) {
 	releaseOwner(holder); // 47-int: the cells' LOD entries (lod.js holds them until their owner lets go)
 	for (const child of [...holder.children]) {
+		unregisterThinMesh(child);
 		holder.remove(child);
 		child.dispose?.();
 	}
@@ -452,7 +488,7 @@ function reconcileScatter(object) {
 	if (entry.holder.parent !== scene) scene.add(entry.holder);
 	const pos = object.geometry?.attributes?.position;
 	const layoutKey = (pos ? pos.version + ':' + pos.count + ':' + (pos.array?.length ?? 0) : '') + ':' + uuidTag(pos);
-	const key = JSON.stringify(sets.map((s) => [s.id, s.data, s.align, sourceReady(s.source)]));
+	const key = JSON.stringify(sets.map((s) => [s.id, s.data, s.align, s.seed, s.gen, s.ov, s.sources, s.pick, s.tint, s.sink, setSources(s).map(sourceReady)]));
 	if (entry.key === key && entry.layoutKey === layoutKey) return;
 	entry.key = key;
 	entry.layoutKey = layoutKey;
@@ -473,7 +509,26 @@ function uuidTag(attr) {
 
 /** @param {any} source */
 function sourceReady(source) {
-	return source.kind === 'primitive' || models.get(source.hash)?.state === 'ready';
+	if (source.kind === 'primitive') return true;
+	if (source.kind === 'pack') return packModels.get(source.path)?.state === 'ready';
+	return models.get(source.hash)?.state === 'ready';
+}
+
+/** every source a set draws (a mixed set's list, else its one source) @param {any} set @returns {any[]} */
+function setSources(set) {
+	return set.sources ? set.sources.map((/** @type {any} */ e) => e.source) : [set.source];
+}
+
+/** Every set's instances, the MAX_INSTANCES cap shared across the block in set order (the
+ * same arithmetic on every peer). @param {any[]} sets @param {any} b */
+function blockInstances(sets, b) {
+	let room = MAX_INSTANCES;
+	for (const set of sets) room -= set.count;
+	return sets.map((set) => {
+		const list = instancesOf(set, b, base64ToBytes, { room: Math.max(0, room) });
+		room -= list.length - set.count;
+		return list;
+	});
 }
 
 /** @param {any} object @param {any} holder @param {any[]} sets */
@@ -483,52 +538,87 @@ function layoutScatter(object, holder, sets) {
 	const pos = object.geometry?.attributes?.position;
 	const grid = pos ? buildHeightGrid(pos.array) : null;
 	if (!b) return;
-	for (const set of sets) {
-		const parts = partsOf(set.source);
-		if (!parts || !parts.length) continue;
-		const list = decodeInstances(/** @type {Uint8Array} */ (base64ToBytes(set.data)), b);
-		const matrices = instanceMatrices(list, set.align, grid);
-		for (const part of parts) {
-			// 47-int (46 LOD): a dense model takes levels. One centre for instances spread over a
-			// whole terrain means nothing, so a LOD'd part is split into cells — each cell picks
-			// its level by its NEAREST instance (lod.js) and is culled on its own. A light part
-			// (a primitive, a low-poly rock) stays ONE draw call per set, as the lane built it.
-			const lodded = trianglesOfGeo(part.geometry) >= EXPLICIT_MIN_TRIANGLES;
-			for (const ids of lodded ? cellsOf(list, b) : [list.map((_, k) => k)]) {
-				const mesh = new THREE.InstancedMesh(part.geometry, part.material, ids.length);
-				mesh.name = 'terrain-scatter:' + set.id;
-				mesh.castShadow = true;
-				mesh.receiveShadow = true;
-				mesh.userData.scatterSet = set.id;
-				ids.forEach((id, k) => mesh.setMatrixAt(k, matrices[id]));
-				mesh.instanceMatrix.needsUpdate = true;
-				mesh.computeBoundingSphere();
-				holder.add(mesh);
-				if (lodded) lodObject(mesh, {}, holder);
+	const lists = blockInstances(sets, b);
+	sets.forEach((set, si) => {
+		const all = lists[si];
+		const matrices = instanceMatrices(all, set.align, grid, set.sink ?? 0);
+		const colors = set.tint ? all.map((inst) => tintColor(inst.tint, set.tint)) : null;
+		// 51 E1: a MIXED set draws each source from the instances that picked it
+		setSources(set).forEach((source, src) => {
+			const parts = partsOf(source);
+			if (!parts || !parts.length) return;
+			/** @type {number[]} */
+			const mine = [];
+			all.forEach((inst, k) => {
+				if (inst.src === src) mine.push(k);
+			});
+			if (!mine.length) return;
+			for (const part of parts) {
+				// 47-int (46 LOD): a dense model takes levels. One centre for instances spread over a
+				// whole terrain means nothing, so a LOD'd part is split into cells — each cell picks
+				// its level by its NEAREST instance (lod.js) and is culled on its own. A light part
+				// (a primitive, a low-poly rock) stays ONE draw call per source, as the lane built it.
+				const lodded = trianglesOfGeo(part.geometry) >= EXPLICIT_MIN_TRIANGLES;
+				for (const cell of lodded ? cellsOf(mine.map((k) => all[k]), b).map((ids) => ids.map((i) => mine[i])) : [mine]) {
+					const mesh = new THREE.InstancedMesh(part.geometry, part.material, cell.length);
+					mesh.name = 'terrain-scatter:' + set.id;
+					mesh.castShadow = true;
+					mesh.receiveShadow = true;
+					mesh.userData.scatterSet = set.id;
+					// 51: which instance each slot of this mesh draws ('g12' / 'p3') — the edit tools pick by it
+					mesh.userData.instanceIds = cell.map((k) => all[k].id);
+					cell.forEach((k, i) => {
+						mesh.setMatrixAt(i, matrices[k]);
+						if (colors) mesh.setColorAt(i, colors[k]);
+					});
+					mesh.instanceMatrix.needsUpdate = true;
+					if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+					mesh.computeBoundingSphere();
+					holder.add(mesh);
+					if (lodded) lodObject(mesh, {}, holder);
+					// 51: far instances thin to this device's budget (draws only — colliders read the set)
+					registerThinMesh(mesh, trianglesOfGeo(part.geometry));
+				}
 			}
-		}
-	}
+		});
+	});
 }
 
-/** Terrain-LOCAL instance matrices — the drawn pose, and (48 B1) the collider pose.
+/** 51 E1 tint variation: an instance's draw in [-1, 1] times the set's amount, as a multiplier on
+ * its material colour — lighter/darker with a slight warm/cool lean, never a new hue.
+ * @param {number} t @param {number} amount */
+function tintColor(t, amount) {
+	const a = t * amount;
+	const f = Math.max(0.3, 1 + a * 0.35);
+	return new THREE.Color(f * (1 + a * 0.06), f, f * (1 - a * 0.06));
+}
+
+/** Terrain-LOCAL instance matrices — the drawn pose, and (48 B1) the collider pose. `sink` (51)
+ * pushes each instance into the ground by sink x its scale.
  * @param {{x: number, z: number, yaw: number, scale: number}[]} list @param {boolean} align
- * @param {ReturnType<typeof buildHeightGrid>} grid @returns {any[]} */
-function instanceMatrices(list, align, grid) {
+ * @param {ReturnType<typeof buildHeightGrid>} grid @param {number} [sink] @returns {any[]} */
+function instanceMatrices(list, align, grid, sink = 0) {
 	return list.map((inst) => {
 		const h = grid ? sampleHeight(grid, inst.x, inst.z) : { y: 0, nx: 0, ny: 1, nz: 0 };
 		_qy.setFromAxisAngle(UP, inst.yaw);
 		if (align) _q.setFromUnitVectors(UP, _n.set(h.nx, h.ny, h.nz)).multiply(_qy);
 		else _q.copy(_qy);
-		return new THREE.Matrix4().compose(_p.set(inst.x, h.y, inst.z), _q, _s.setScalar(inst.scale));
+		const m = new THREE.Matrix4().compose(_p.set(inst.x, h.y, inst.z), _q, _s.setScalar(inst.scale));
+		// down the instance's own up axis, so a tilted rock sinks into the slope it leans on
+		if (sink) m.multiplyMatrices(m, _sinkM.makeTranslation(0, -sink, 0));
+		return m;
 	});
 }
+const _sinkM = new THREE.Matrix4();
 
 /**
  * 48 B1: what a simulation needs to give a terrain's scatter its colliders — every set that
  * asks for one (`collider` box / sphere / hull), with the parts it draws and its instances'
- * TERRAIN-LOCAL matrices, computed exactly as the render does (same heights, same tilt), so
- * a ball rests on the rock it sees. A set whose Library model is still loading is left out
+ * TERRAIN-LOCAL matrices, computed exactly as the render does (same heights, same tilt, same
+ * sink), so a ball rests on the rock it sees. A set whose model is still loading is left out
  * (it is not drawn either); `pending` says so, and the physics side rebuilds when it lands.
+ * 51: one entry per SOURCE of a mixed set, and EVERY instance — device thinning only ever
+ * hides far DRAWS, never a collider, so gameplay is the same on a phone and a desktop.
  * @param {any} object a terrain @returns {{sets: {id: string, collider: string, parts: {geometry: any}[], matrices: any[]}[], pending: boolean}}
  */
 export function scatterPhysicsSets(object) {
@@ -536,20 +626,26 @@ export function scatterPhysicsSets(object) {
 	const block = object?.userData?.terrainScatter;
 	const b = block ? terrainBounds(object) : null;
 	if (!b) return out;
-	const wanted = (normalizeScatter(block, base64ToBytes)?.sets ?? []).filter((s) => s.collider);
-	if (!wanted.length) return out;
+	const sets = normalizeScatter(block, base64ToBytes)?.sets ?? [];
+	if (!sets.some((s) => s.collider)) return out;
 	const pos = object.geometry?.attributes?.position;
 	const grid = pos ? buildHeightGrid(pos.array) : null;
-	for (const set of wanted) {
-		const parts = partsOf(set.source);
-		if (!parts) {
-			out.pending = true;
-			continue;
-		}
-		if (!parts.length) continue;
-		const list = decodeInstances(/** @type {Uint8Array} */ (base64ToBytes(set.data)), b);
-		out.sets.push({ id: set.id, collider: /** @type {string} */ (set.collider), parts, matrices: instanceMatrices(list, set.align, grid) });
-	}
+	const lists = blockInstances(sets, b);
+	sets.forEach((set, si) => {
+		if (!set.collider) return;
+		const all = lists[si];
+		const matrices = instanceMatrices(all, set.align, grid, set.sink ?? 0);
+		setSources(set).forEach((source, src) => {
+			const parts = partsOf(source);
+			if (!parts) {
+				out.pending = true;
+				return;
+			}
+			if (!parts.length) return;
+			const mine = matrices.filter((_, k) => all[k].src === src);
+			if (mine.length) out.sets.push({ id: set.id, collider: /** @type {string} */ (set.collider), parts, matrices: mine });
+		});
+	});
 	return out;
 }
 
@@ -582,7 +678,7 @@ export function applyTerrainScatter(uuid, block) {
 	const object = objectOf(uuid);
 	if (!object) return false;
 	const sets = block ? normalizeScatter(block, base64ToBytes)?.sets ?? [] : [];
-	if (sets.length) object.userData.terrainScatter = { v: 1, sets };
+	if (sets.length) object.userData.terrainScatter = { v: blockVersion(sets), sets };
 	else delete object.userData.terrainScatter;
 	reconcileScatter(object);
 	pokeScene();
