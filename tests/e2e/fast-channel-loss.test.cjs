@@ -110,7 +110,7 @@ const quantile = (xs, q) => {
 };
 
 h.run(async () => {
-	const browser = await h.launch();
+	const browser = await h.launch({ args: h.GPU_ARGS });
 	const A = await h.setupPage(browser, 'A', {
 		init: [lossShim, { base: BASE_MS, jitter: JITTER_MS, rtx: RTX_MS, seed: 6001 }]
 	});
@@ -134,6 +134,13 @@ h.run(async () => {
 		return !!p.connections[id]?.peerConnection;
 	}, B.id);
 	h.check(hasPc, 'the PeerJS connection exposes its RTCPeerConnection');
+
+	// A headless peer renders at a few fps and every frame blocks its main thread for hundreds of
+	// ms — a 20 Hz timer then fires at ~1 Hz and every gap measures the RENDERER, not the wire (run2:
+	// 17 sends in 20 s, p50 1.2 s). Both pages stop drawing through the app's own overload pause
+	// for the measurement; the data channels, the stale filter and the keyframe timer do not draw.
+	for (const peer of [A, B])
+		await peer.page.evaluate(() => window.__stores.overloadGuard.pauseRendering('e2e: timing the wire'));
 
 	// B's tap: arrival times of A's applied camera poses, and the chat edits in arrival order
 	await B.page.evaluate((aid) => {
@@ -187,7 +194,8 @@ h.run(async () => {
 			let msgs = [];
 			window.__stores.messages?.subscribe?.((m) => (msgs = m))();
 			const edits = (msgs || [])
-				.map((m) => String(m?.message ?? ''))
+				.filter((m) => m?.type === 'received')
+				.map((m) => String(m?.text ?? ''))
 				.filter((m) => m.startsWith('edit ' + tag + ' '))
 				.map((m) => Number(m.split(' ').pop()));
 			return { poses: window.__poses, edits, loss: window.__loss };
@@ -211,6 +219,11 @@ h.run(async () => {
 			finalPoseLanded: Math.abs(lastX - sent.lastX) < 1e-9
 		};
 		console.log(JSON.stringify(row));
+		// a phase whose sender could not keep the cadence measured the page, not the channel
+		h.check(
+			sent.n >= ((PHASE_MS / 1000) * HZ) * 0.8,
+			`${tag}: A kept the ${HZ} Hz cadence (${sent.n} sends in ${PHASE_MS / 1000} s)`
+		);
 		return row;
 	}
 
