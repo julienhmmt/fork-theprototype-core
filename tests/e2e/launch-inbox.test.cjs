@@ -115,7 +115,9 @@ async function until(fn, timeout) {
 const inboxCacheExists = (page) => page.evaluate(() => caches.has('tp-share-inbox'));
 
 h.run(async () => {
-	const browser = await h.launch();
+	// the dev server's certificate is self-signed: pages load past it, but a service worker
+	// script fetch is refused unless the browser itself ignores certificate errors
+	const browser = await h.launch({ args: ['--ignore-certificate-errors'] });
 	const peer = await h.setupPage(browser, 'A');
 	const { page } = peer;
 
@@ -154,14 +156,20 @@ h.run(async () => {
 	// ---- 2. share an image, then a model ------------------------------------------------------
 	await share(page, [{ name: 'shared-photo.png', mimeType: 'image/png', buffer: PNG }]);
 	await h.answerRestore(peer);
-	await page
-		.waitForFunction(async () => (await window.__stores.launchInbox)?.lastLaunch?.value, null, {
-			timeout: 30000
-		})
-		.catch(() => {});
+	await until(() => lastLaunch(page), 60000);
 	const img = await lastLaunch(page);
-	h.check(img?.source === 'share' && img?.images === 1, 'a shared image was received once', img);
-	h.check((await libraryNames(page)).includes('shared-photo.png'), 'it is in the Explorer Library');
+	h.check(
+		img?.source === 'share' && img?.images === 1,
+		'a shared image was received once: ' +
+			JSON.stringify(img) +
+			' stage ' +
+			(await page.evaluate(async () => (await window.__stores.launchInbox)?.lastLaunch?.stage))
+	);
+	const lib = await libraryNames(page);
+	h.check(
+		lib.includes('shared-photo.png'),
+		'it is in the Explorer Library: ' + JSON.stringify(lib)
+	);
 	h.check(!/[?&]shared=/.test(page.url()), '?shared= left the address bar: ' + page.url());
 	h.check(!(await inboxCacheExists(page)), 'the share inbox cache is gone');
 	h.check(
@@ -271,6 +279,15 @@ h.run(async () => {
 		);
 	await launch('fluid-tank-toy.tpscene', fs.readFileSync(SCENE));
 	await until(async () => (await lastLaunch(lq.page))?.scene === 'fluid-tank-toy.tpscene', 30000);
+	await until(
+		() =>
+			lq.page.evaluate(async () => {
+				let v = null;
+				(await window.__stores.levels).currentLevel.subscribe((x) => (v = x))();
+				return v?.name;
+			}),
+		10000
+	);
 	const level = await lq.page.evaluate(async () => {
 		const m = await window.__stores.levels;
 		let v = null;

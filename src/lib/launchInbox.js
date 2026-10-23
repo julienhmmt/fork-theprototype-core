@@ -78,7 +78,13 @@ async function bootReady() {
  * @returns {Promise<{scene: string | null, models: number, images: number, skipped: string[]}>}
  */
 export function receiveLaunchFiles(files, source) {
-	const run = queue.then(() => route(files, source));
+	const run = queue.then(() =>
+		route(files, source).catch((e) => {
+			lastLaunch.value = { source, error: String(e?.message ?? e) };
+			showToast(`Could not open ${files.map((f) => f.name).join(', ')}: ${lastLaunch.value.error}`);
+			throw e;
+		})
+	);
 	queue = run.catch(() => {});
 	return run;
 }
@@ -105,12 +111,15 @@ async function route(files, source) {
 		lastLaunch.value = { source, ...result };
 		return result;
 	}
+	lastLaunch.stage = 'boot';
 	await bootReady();
-	const fh = await import('./fileHandler.svelte');
+	lastLaunch.stage = 'route';
+	// fileHandler is a heavy import; a lone image never needs it
+	const fh = c.scenes.length || c.models.length ? await import('./fileHandler.svelte') : null;
 	// the scene first: models shared WITH it land in it, not in the world it replaces
 	if (c.scenes.length) {
 		const scene = c.scenes[0];
-		await fh.load(scene);
+		await fh?.load(scene);
 		result.scene = scene.name;
 		if (c.scenes.length > 1)
 			showToast(
@@ -118,12 +127,19 @@ async function route(files, source) {
 			);
 	}
 	if (c.models.length) {
-		const r = fh.importModelFiles([...c.models, ...c.companions]);
-		result.models = r.models;
+		const r = fh?.importModelFiles([...c.models, ...c.companions]);
+		result.models = r?.models ?? 0;
 	}
 	if (c.images.length) {
-		const { importFiles, revealItem } = await import('./explorer');
+		lastLaunch.stage = 'images';
+		const { importFiles, loadExplorer, revealItem } = await import('./explorer');
+		// the library index must be in memory first, or the import's index write would
+		// replace the saved library with just this one file
+		lastLaunch.stage = 'images:load';
+		await loadExplorer();
+		lastLaunch.stage = 'images:import';
 		const created = await importFiles(c.images, null, { duplicates: 'reuse' });
+		lastLaunch.stage = 'images:toast';
 		result.images = created.length;
 		if (created.length) {
 			const first = created[0];
@@ -149,11 +165,12 @@ async function route(files, source) {
 	if (c.skipped.length)
 		showToast('Skipped ' + result.skipped.join(', ') + ' (not a scene, model or image)');
 	lastLaunch.value = { source, ...result };
+	lastLaunch.stage = 'done';
 	return result;
 }
 
-/** the last routed launch — read by the e2e debug hook */
-export const lastLaunch = { value: /** @type {any} */ (null) };
+/** the last routed launch, and how far the running one got — read by the e2e debug hook */
+export const lastLaunch = { value: /** @type {any} */ (null), stage: '' };
 
 /**
  * Collect what the service worker parked for a share, ONCE: every file in the inbox, then
