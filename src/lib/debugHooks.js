@@ -43,6 +43,8 @@ export const DEBUG_HOOKS = [
 	['placementPrefs', () => import('./placementPrefs.js')],
 	['placementDims', () => import('./placementDims.js')],
 	['packCache', () => import('./packCache.js')],
+	// 60 Q6: the local asset cache (OPFS) — index, stats, clear, persist
+	['assetCache', () => import('./assetCache.js')],
 	['placeGhost', () => import('./placeGhost.js')],
 	['tourVR', () => import('./tours/vrPanel.js')],
 	// 36-share (B13): the recorder + its stores
