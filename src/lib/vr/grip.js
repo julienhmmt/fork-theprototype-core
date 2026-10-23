@@ -60,7 +60,8 @@ import { safeStorage } from '../safeStorage';
 import { S } from './state.js';
 import { renderer, tempVector } from './core.js';
 import { hapticPulse, hapticPattern } from './haptics.js';
-import { gripDropHooks, worldGrabDiverts, worldGestureDiverted } from './hooks.js';
+import { gripDropHooks, worldGrabDiverts, worldGestureDiverted, vrModuleGripStart, vrModuleGripEnd } from './hooks.js';
+import { controllerRequired } from './handInput.js';
 import { controllerIndexFor, axesForSlot } from './input.js';
 import { STANDING_HEAD, vrLocomotionNow, viewerNow } from './locomotion.js';
 import {
@@ -339,6 +340,8 @@ export let faceGrabHand = null;
 export let faceAdjustHand = null;
 
 export function vrFaceTrigger() {
+	// 52 (H): editing faces is a precise tool — a tracked hand is asked to pick up a controller
+	if (controllerRequired('edit faces', controllerIndexFor(pointerHand()))) return;
 	// 212: Multi mode — the trigger ACCUMULATES the pointed unit; the op button
 	// applies to the whole set (no live adjust while multi-selecting)
 	if (get(faceEditMulti)) {
@@ -397,6 +400,8 @@ function endVertexCarry() {
 /** @param {number} index */
 export function vrVertexTrigger(index) {
 	if (!get(editingObject)) return;
+	// 52 (H): moving / picking a vertex is a precise tool — a tracked hand is asked to pick up a controller
+	if (controllerRequired('edit vertices', index ?? -1)) return;
 	// 183: in create-face mode a trigger click toggles the picked vertex into the
 	// selection (once per click — the 'select' event) instead of grabbing it
 	if (get(vrFaceCreateMode)) {
@@ -415,6 +420,7 @@ export function vrVertexTrigger(index) {
 export function vrVertexGrabStart(index) {
 	// create-face selection is driven by the 'select' click, not the press
 	if (!get(editingObject) || get(vrFaceCreateMode) || !get(vrVertexHold) || S.vertexTriggerGrab) return;
+	if (controllerRequired('edit vertices', index)) return; // 52 (H)
 	beginVertexCarry(index);
 }
 export function vrVertexGrabEnd() {
@@ -428,6 +434,8 @@ export function vertexTriggerActive() {
 
 /** @param {number} index */
 export function onSqueezeStart(index) {
+	// 52-browser: a feature took this squeeze (a VR placement ghost cancels, a wrist panel lifts off)
+	if (vrModuleGripStart(index)) return;
 	// an armed prefab ghost cancels on grip (115) — nothing else grabs
 	if (get(vrPrefabGhost)) {
 		cancelPrefabGhost();
@@ -687,6 +695,8 @@ export function lastGripRefusalDebug() {
 
 /** @param {number} index */
 export function onSqueezeEnd(index) {
+	// 52-browser: the release of a squeeze a feature took
+	if (vrModuleGripEnd(index)) return;
 	// face grab (122): release commits the reshape as one meshgeo + undo entry
 	if (faceGrabHand?.index === index) {
 		faceGrabHand = null;

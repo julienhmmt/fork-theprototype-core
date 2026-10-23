@@ -35,6 +35,7 @@ import { controllerIndexFor, axesForSlot } from './input.js';
 import { controllerRay } from './pointer.js';
 import { vrHovered } from './panels.js';
 import { registerVRFrameHook, registerVRTriggerHooks, registerStickOwner } from './hooks.js';
+import { controllerRequired } from './handInput.js';
 import { vrSculptActive } from './worldStores.js';
 
 export const SCULPT_OPS = /** @type {const} */ (['raise', 'lower', 'smooth', 'flatten']);
@@ -126,6 +127,8 @@ export function sculptTriggerStart(index) {
 	const uuid = get(sculptObject);
 	if (!hit || !uuid) return false; // off the terrain: an ordinary press (a panel, a ping)
 	swallowAt = Date.now();
+	// 52 (H): a brush is a precise tool — a tracked hand is asked to pick up a controller
+	if (controllerRequired('sculpt', index)) return true;
 	beginStroke(uuid);
 	stroke = { index, last: performance.now() };
 	stats.strokes++;
