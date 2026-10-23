@@ -282,6 +282,11 @@ h.run(async () => {
 		h.check(hudIn.there && hudIn.inSlot, `the scene's HUD is drawn in the AR overlay while playing (${JSON.stringify(hudIn)})`);
 		const boardHidden = await g(() => { let sc; window.__stores.globalScene.subscribe((v) => (sc = v))(); const b = sc.getObjectByName('vr-game-panel'); return !b || !b.visible; });
 		h.check(boardHidden, 'the headset VR board stays down on an AR table');
+		// 50-int (the 53 rules for new UI): the overlay a phone shows while playing passes the serious-only axe gate
+		const { AxeBuilder } = require('@axe-core/playwright');
+		const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice']).include('#ar-overlay').analyze();
+		const axeBad = axe.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical').map((v) => `${v.id}x${v.nodes.length}`);
+		h.check(axeBad.length === 0, `the AR overlay (status, toolbar, HUD) has no serious/critical axe violation (${axeBad.join(', ') || 'none'})`);
 
 		// ---- M. move -------------------------------------------------------------------------------------------
 		console.log('\n=== M. Move places it again, same size ===');
