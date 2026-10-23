@@ -188,8 +188,23 @@ h.run(async () => {
 				}),
 			{ ms: PHASE_MS, hz: HZ, tag }
 		);
-		// let retransmits drain and the trailing keyframe land
-		await B.page.waitForTimeout(1500);
+		// let retransmits drain and the trailing keyframe land: at 10 % the doubling back-off can stack past
+		// a second (run3: 1.3 s max gap), so wait for the last edit AND the final pose, not a fixed time —
+		// a late message would otherwise land in the NEXT phase's samples
+		await B.page
+			.waitForFunction(
+				({ tag, edits, lastX }) => {
+					let msgs = [];
+					window.__stores.messages?.subscribe?.((m) => (msgs = m))();
+					const n = (msgs || []).filter((m) => m?.type === 'received' && String(m?.text ?? '').startsWith('edit ' + tag + ' ')).length;
+					const last = window.__poses[window.__poses.length - 1];
+					return n >= edits && !!last && Math.abs(last.x - lastX) < 1e-9;
+				},
+				{ tag, edits: sent.edits, lastX: sent.lastX },
+				{ timeout: 10000 }
+			)
+			.catch(() => {});
+		await B.page.waitForTimeout(300);
 		const got = await B.page.evaluate((tag) => {
 			let msgs = [];
 			window.__stores.messages?.subscribe?.((m) => (msgs = m))();
