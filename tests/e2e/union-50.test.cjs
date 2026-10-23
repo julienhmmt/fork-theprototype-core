@@ -64,7 +64,10 @@ h.run(async () => {
 	);
 	await openNodeTab(A.page, 'u50');
 	await openNodeTab(B.page, 'u50');
-	h.check((await shared(A.page, A.page, 'u50')) && (await shared(B.page, B.page, 'u50')), 'premise: both docked editors are bound to the shared document');
+	const t0 = Date.now();
+	const bound = { A: await shared(A.page, A.page, 'u50'), B: await shared(B.page, B.page, 'u50'), ms: 0 };
+	bound.ms = Date.now() - t0;
+	h.check(bound.A && bound.B, `premise: both docked editors are bound to the shared document (${JSON.stringify(bound)})`);
 
 	// ---- U3: the presence strip passes the axe gate (docked) ------------------------------------------------------
 	await h.eventually(() => A.page.locator('#code-ws-presence li').count(), (n) => n >= 1, 'premise: A shows the "Editing with you" strip', 15000);
