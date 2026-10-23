@@ -339,13 +339,15 @@
 		// kept rendering finger spheres). shouldSendHands forces it on a rep flip.
 		const lens = [left?.joints?.length ?? 0, right?.joints?.length ?? 0];
 		if (!shouldSendHands({ moved, hasJoints, prevLens: lastSentJointLens, lens })) return;
+		// 60 Q2: a hands<->controllers switch is state (reliable); a pose of the same rep is stream
+		const sameRep = !!lastSentJointLens && lastSentJointLens[0] === lens[0] && lastSentJointLens[1] === lens[1];
 		lastSentJointLens = lens;
 		lastHandsSendAt = now;
 		for (let i = 0; i < 2; i++) {
 			const pose = poses[i];
 			if (pose) lastHandPositions[i].fromArray(pose.pos);
 		}
-		$peers.send({ type: 'vrhands', peerId: $peers.peer.id, left, right, active: true });
+		$peers.send({ type: 'vrhands', peerId: $peers.peer.id, left, right, active: true }, { fast: sameRep });
 	}
 
 	useTask((delta) => {
@@ -414,7 +416,9 @@
 				nowMs - lastCameraSendAt >= camGapMs) {
 				lastCameraSendAt = nowMs;
 				camContentEuler.setFromQuaternion(camContentQuat);
-				$peers.send({ type: 'camera', peerId: $peers.peer.id, position: camContentPos.toArray(), rotation: [camContentEuler.x, camContentEuler.y, camContentEuler.z], ...camExtras });
+				// 60 Q2: a pose of the stream rides the fast channel; a change of the extras (seat,
+				// feet, knocked…) is state and goes reliable, or a lost datagram could strand it
+				$peers.send({ type: 'camera', peerId: $peers.peer.id, position: camContentPos.toArray(), rotation: [camContentEuler.x, camContentEuler.y, camContentEuler.z], ...camExtras }, { fast: camExtrasKey === lastCameraExtras });
 				lastCameraExtras = camExtrasKey;
 				lastCameraPosition.copy(camContentPos);
 				lastCameraQuaternion.copy(camContentQuat);
@@ -1732,13 +1736,14 @@
 						dropToSurface($TControls.object, $objectsGroup);
 					}
 					$TControls.visible = true;
+					// 60 Q2: the gizmo drag is a stream (fast); its keyframe lands the last pose
 					$peers.send({
 						type: 'move',
 						uuid: $TControls.object.uuid,
 						pos: $TControls.object.position.toArray(),
 						rot: $TControls.object.rotation.toArray(),
 						scale: $TControls.object.scale.toArray()
-					});
+					}, { fast: true });
 				}
 	}
 

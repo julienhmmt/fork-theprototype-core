@@ -1935,13 +1935,17 @@ function stepInner(now) {
 				entry.lastSent ??= { pos: new THREE.Vector3(), quat: new THREE.Quaternion() };
 				entry.lastSent.pos.copy(object.position);
 				entry.lastSent.quat.copy(object.quaternion);
-				peer.send({
-					type: 'move',
-					uuid: object.uuid,
-					pos: object.position.toArray(),
-					rot: [object.rotation.x, object.rotation.y, object.rotation.z],
-					scale: object.scale.toArray()
-				});
+				// 60 Q2: a body's pose stream rides the fast channel
+				peer.send(
+					{
+						type: 'move',
+						uuid: object.uuid,
+						pos: object.position.toArray(),
+						rot: [object.rotation.x, object.rotation.y, object.rotation.z],
+						scale: object.scale.toArray()
+					},
+					{ fast: true }
+				);
 			}
 		}
 	});

@@ -30,6 +30,9 @@ import { canApply, getAuthProvider, dispatchCloudMessage, rolesInfo } from '$lib
 // dispatcher can reject a malformed message before any applier sees it.
 import { validateWireMessage } from '$lib/wireValidate';
 import { holdForWireBatch } from '$lib/wireBatch';
+// 60 Q2: the fast movement channel (an unordered, unreliable second channel for pose streams)
+import { createFastLinks, createStaleFilter, createKeyframer, stampPose, poseKey, fastChannelEnabled, setPoseTap, tapPose } from '$lib/fastChannel';
+import { registerDebugHook } from '$lib/debugHooks';
 import { routePerfLive, perfLivePeerGone } from '$lib/perf/liveWire.js'; // 34 PF: the live perf stream (an import-free leaf)
 import { noteWireError } from '$lib/wireErrors';
 import { noteWire } from '$lib/sceneBudget';
@@ -295,6 +298,20 @@ export class PeerConnection {
 		this.dialCloud = new Map();
 		/** 25-F: peers a refusal dial is out to — their `peer-unavailable` is not news @type {Set<string>} */
 		this.refusalDials = new Set();
+		// 60 Q2: the fast movement channel (fastChannel.js). `fastLinks` = one unreliable channel per
+		// peer that advertised `fc: 1`; `staleFilter` drops a pose older than the newest applied from
+		// its sender; `keyframer` re-sends a stream's last pose reliably once the stream goes quiet.
+		this.fastLinks = createFastLinks();
+		this.staleFilter = createStaleFilter();
+		this.keyframer = createKeyframer((payload, peerIds) => this.sendReliableTo(payload, peerIds));
+		registerDebugHook('fastChannel', {
+			links: this.fastLinks,
+			stale: this.staleFilter,
+			keyframes: this.keyframer,
+			enabled: fastChannelEnabled,
+			isOpen: (/** @type {string} */ peerId) => this.fastLinks.isOpen(peerId),
+			setPoseTap
+		});
 
 		// CN-3: an invite link can pin the signaling world (#A1B2C~srv=…). Parse it
 		// HERE, before resolvePeerOptions runs — the peer.on('open') hash flow below
@@ -834,6 +851,7 @@ export class PeerConnection {
 							noteWireError(conn.peer, 'invalid:' + item.type);
 							continue;
 						}
+						if (!this.staleFilter.accept(conn.peer, item)) continue; // 60 Q2, as for a bare message
 						try {
 							dispatch(item);
 						} catch (error) {
@@ -1284,8 +1302,14 @@ export class PeerConnection {
 					// 37 R1: `wb` is ADDITIVE — an older peer omits it and keeps getting bare messages
 					if (data.wb === 1) this.wireBatchPeers.add(conn.peer);
 					else this.wireBatchPeers.delete(conn.peer);
+					// 60 Q2: `fc` is ADDITIVE too — they can take a fast channel, so open ours on THIS
+					// conn and say so down it (`fastchan`), so both ends pick the same RTCPeerConnection
+					if (data.fc === 1 && this.openFastChannel(conn)) conn.send({ type: 'fastchan', v: 1 });
 					checkModuleVersions(data.versions);
 					checkPeerAppVersion(data.appVersion);
+				} else if(data.type == 'fastchan') {
+					// 60 Q2: the other end opened its fast channel on this conn's RTCPeerConnection
+					this.openFastChannel(conn);
 				} else if(data.type == 'getmodulestate') {
 					sendModuleStates(data.sender);
 					sendCameraPreviewState(); // 16-P5: ride the same late-joiner request
@@ -1375,7 +1399,9 @@ export class PeerConnection {
 				}
 			};
 
-			conn.on('data', (data) => {
+			// 60 Q2: ONE receive path for both channels — the reliable conn and the fast channel
+			// opened on its RTCPeerConnection (`openFastChannel` reads it off the conn)
+			const receive = (/** @type {any} */ data, /** @type {'fast' | 'reliable'} */ via = 'reliable') => {
 				// 27-A (audit H1): SHAPE FIRST, before any gate reads `data.type`. A null, a
 				// string or a number used to fall through the whole chain to
 				// `data.startsWith(...)` and throw out of the handler, where peerjs swallowed
@@ -1396,13 +1422,20 @@ export class PeerConnection {
 					noteWireError(conn.peer, 'invalid:' + data.type);
 					return;
 				}
+				// 60 Q2: a pose older than the newest one applied from this sender is stale — an
+				// unordered datagram overtaken by the next one, or a streamed move that lost the race
+				// to the committed (reliable, newer) move that ended the drag
+				if (!this.staleFilter.accept(conn.peer, data)) return;
+				tapPose(conn.peer, data, via);
 				try {
 					dispatch(data);
 				} catch (error) {
 					// One bad message must not take this connection's handler down with it.
 					noteWireError(conn.peer, data.type, error);
 				}
-			});
+			};
+			conn.__tpReceive = receive;
+			conn.on('data', (/** @type {any} */ data) => receive(data));
 		}
 	}
 
@@ -1525,7 +1558,7 @@ export class PeerConnection {
 		conn.send({type: 'userdata', userdata: users})
 		// V3: app version rides the modules handshake — old peers ignore the extras,
 		// old senders omit them (checkPeerAppVersion is silent on absence)
-		conn.send({type: 'modules', versions: moduleVersions(), appVersion: APP_VERSION, sha: COMMIT_SHA, wb: 1})
+		conn.send({type: 'modules', versions: moduleVersions(), appVersion: APP_VERSION, sha: COMMIT_SHA, wb: 1, ...(fastChannelEnabled() ? { fc: 1 } : {})})
 		// 37 R15: the chat so far. Chat is MESH-WIDE (not a room's content), so this goes out
 		// whatever the connect decision / privacy hold below decides about the scene.
 		conn.send({type: 'getchat', sender: this.peer.id})
@@ -1861,6 +1894,7 @@ export class PeerConnection {
 			try { conn.close(); } catch (e) { /* already dead */ }
 		}
 		this.openedPeers.delete(peerId);
+		this.dropFastPeer(peerId); // 60 Q2
 		handleDisconnected(peerId);
 		clearPeerPreview(peerId); // 16-P5
 		perfLivePeerGone(peerId); // 34 PF
@@ -1892,6 +1926,10 @@ export class PeerConnection {
 		this.reconnecting.clear(); // pending retry timers see a cleared map and no-op
 		this.gracefulLeft.clear();
 		this.wantsStateFrom.clear();
+		// 60 Q2: every fast channel, sequence and owed keyframe goes with the session
+		this.fastLinks.closeAll();
+		this.staleFilter.clear();
+		this.keyframer.clear();
 		for (const peerId of Object.keys(this.connections)) {
 			const conn = this.connections[peerId];
 			delete this.connections[peerId];
@@ -1927,8 +1965,15 @@ export class PeerConnection {
 	// Broadcast to every OPEN outgoing connection. Guards conn.open (peerjs
 	// silently drops pre-open sends) and isolates each send so one dead/half-open
 	// conn can't throw mid-loop and starve the rest of the mesh (172).
-	/** @param {any} payload */
-	broadcast(payload) {
+	/**
+	 * @param {any} payload
+	 * @param {{fast?: boolean}} [opts] 60 Q2: `fast` = a latest-wins pose of a STREAM (a drag, a held
+	 * object, a physics body, the avatar) that may ride the unreliable fast channel to peers that
+	 * have one. Only pose types honour it (`poseKey`); everything else is reliable whatever it says.
+	 */
+	broadcast(payload, opts) {
+		// 60 Q2: every pose carries its sequence number — batched, fast or reliable alike
+		stampPose(payload);
 		// 37 R1: inside a multi-object edit, room content is HELD and leaves as one envelope
 		// when the edit closes (wireBatch.js); anything else flushes the held edit first
 		if (holdForWireBatch(payload, ROOM_SCOPED.has(payload?.type), (out) => this.broadcast(out))) return;
@@ -1978,6 +2023,13 @@ export class PeerConnection {
 		// would ask round 35's question, which is why it is passed unconditionally.
 		const host = gated ? get(sessionHost) : null;
 		const secret = roomScoped && amPrivate();
+		// 60 Q2: which peers took it unreliably (they are owed the trailing keyframe)
+		const key = poseKey(payload);
+		const fast = !!opts?.fast && key !== null && fastChannelEnabled();
+		/** @type {string | null} */
+		let text = null;
+		/** @type {string[]} */
+		const fastPeers = [];
 		Object.keys(this.connections).forEach(peerId => {
 			const conn = this.connections[peerId];
 			if (!conn || !conn.open) return;
@@ -1985,6 +2037,19 @@ export class PeerConnection {
 			if (gated && elsewhereThan(where, mine, peerId, host)) return;
 			if (roomScoped && gateHolds(peerId)) return;
 			try {
+				if (fast && this.fastLinks.isOpen(peerId)) {
+					if (text === null) {
+						try {
+							text = JSON.stringify(payload);
+						} catch {
+							text = '';
+						}
+					}
+					if (text && this.fastLinks.trySend(peerId, text)) {
+						fastPeers.push(peerId);
+						return;
+					}
+				}
 				// 37 R1: a peer that never said `wb: 1` gets the envelope's items one by one
 				if (payload?.type === 'batch' && !this.wireBatchPeers.has(peerId))
 					for (const item of payload.items) conn.send(item);
@@ -1993,6 +2058,53 @@ export class PeerConnection {
 				log('error', 'net', 'send failed', { peer: peerId, error: String(err) });
 			}
 		});
+		if (key !== null) {
+			if (fastPeers.length) this.keyframer.noteFast(key, payload, fastPeers);
+			else this.keyframer.noteReliable(key);
+		}
+	}
+
+	/**
+	 * 60 Q2: the trailing keyframe — a stream's LAST pose, re-sent on the reliable conn to the peers
+	 * that got it unreliably, with its original `ps` (a duplicate where the datagram arrived).
+	 * Re-checks the gates `broadcast` applies: the peer may have walked into another scene since.
+	 * @param {any} payload @param {string[]} peerIds
+	 */
+	sendReliableTo(payload, peerIds) {
+		const mine = myScene()?.scene ?? '';
+		const where = get(peerScenes);
+		const host = get(sessionHost);
+		for (const peerId of peerIds) {
+			const conn = this.connections[peerId];
+			if (!conn || !conn.open) continue;
+			if (STREAM_TYPES.has(payload?.type) || ROOM_SCOPED.has(payload?.type)) {
+				if (elsewhereThan(where, mine, peerId, host)) continue;
+			}
+			if (ROOM_SCOPED.has(payload?.type) && (amPrivate() || gateHolds(peerId))) continue;
+			try {
+				conn.send(payload);
+			} catch (err) {
+				log('error', 'net', 'send failed', { peer: peerId, error: String(err) });
+			}
+		}
+	}
+
+	/**
+	 * 60 Q2: open the fast channel to `conn.peer` on `conn`'s RTCPeerConnection (idempotent).
+	 * Answers true when it created or already had one there; false when this device has the
+	 * channel switched off or the conn exposes no RTCPeerConnection (the reliable path carries on).
+	 * @param {any} conn @returns {boolean}
+	 */
+	openFastChannel(conn) {
+		if (!fastChannelEnabled() || !conn?.peer || typeof conn.__tpReceive !== 'function') return false;
+		return this.fastLinks.open(conn.peer, conn, conn.__tpReceive);
+	}
+
+	/** 60 Q2: forget a peer's fast channel, its sequence numbers and its owed keyframes @param {string} peerId */
+	dropFastPeer(peerId) {
+		this.fastLinks.close(peerId);
+		this.staleFilter.dropPeer(peerId);
+		this.keyframer.dropPeer(peerId);
 	}
 
 	/** @param {string} message @param {string} [type] */
@@ -2009,14 +2121,14 @@ export class PeerConnection {
 		}
 	}
 
-	/** @param {any} data */
-	send(data) {
+	/** @param {any} data @param {{fast?: boolean}} [opts] 60 Q2: see `broadcast` */
+	send(data, opts) {
 		// viewer perms: a viewer's object CREATIONS never leave this machine — mark
 		// them local-only + warn, and skip the broadcast (peers drop them anyway).
 		if (gateCreationBroadcast(data)) return;
 		if(data.type == 'create')
 		this.sendMessage('created a ' + data.command.split(' ')[1], 'info');
-		this.broadcast(data);
+		this.broadcast(data, opts);
 	}
 }
 
