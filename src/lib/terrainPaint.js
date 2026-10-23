@@ -3,7 +3,7 @@ import { objectsGroup } from '../stores/sceneStore';
 import { peers, showToast } from '../stores/appStore';
 import { recordEntry, registerHistoryKind } from './history';
 import { canEditObject, warnViewerReadOnly } from './objectPermissions';
-import { createSplat, paintSplatAt, normalizeLayers, base64ToBytes, bytesToBase64, SPLAT_RES } from './terrainPaintCore';
+import { createSplat, paintSplatAt, normalizeLayers, base64ToBytes, bytesToBase64, SPLAT_RES, SPLAT_RES_CHOICES, resampleSplat } from './terrainPaintCore';
 import {
 	normalizeScatter,
 	decodeInstances,
@@ -259,6 +259,35 @@ export function clearTerrainPaint(uuid) {
 	sendSplat(uuid, null, res);
 	recordEntry({ kind: 'terrainSplat', uuid, before: { bytes: before, res }, after: { bytes: null, res } });
 	return true;
+}
+
+/**
+ * 51 E4: PER-TERRAIN splat resolution (Inspector ▸ Terrain paint). A painted map is resampled
+ * (weights re-normalised, coverage kept); an unpainted terrain gets a fresh map at that size,
+ * all layer 1 — nothing changes on screen, the next stroke paints at the new detail. ONE undo
+ * entry + ONE message, the `terrainSplat` kind and wire as they are.
+ * @param {string} uuid @param {number} res one of SPLAT_RES_CHOICES
+ */
+export function setSplatResolution(uuid, res) {
+	const object = objectOf(uuid);
+	if (!object?.userData?.terrain || !SPLAT_RES_CHOICES.includes(res)) return false;
+	if (!canEditObject(object)) {
+		warnViewerReadOnly();
+		return false;
+	}
+	const s = liveSplat(object);
+	if (s && s.res === res) return false;
+	const before = s ? { bytes: s.bytes.slice(), res: s.res } : { bytes: null, res: SPLAT_RES };
+	const bytes = s ? resampleSplat(s.bytes, s.res, res) : createSplat(res);
+	applyTerrainSplat(uuid, bytes, res);
+	sendSplat(uuid, bytes, res);
+	recordEntry({ kind: 'terrainSplat', uuid, before, after: { bytes: bytes.slice(), res } });
+	return true;
+}
+
+/** The splat resolution a terrain paints at (its map's, else the default). @param {string} uuid */
+export function splatResolutionOf(uuid) {
+	return liveSplat(objectOf(uuid))?.res ?? SPLAT_RES;
 }
 
 // ---- scatter ----------------------------------------------------------------------------

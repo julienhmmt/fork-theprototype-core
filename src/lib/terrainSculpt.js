@@ -17,6 +17,17 @@ import {
 	endScatterStroke,
 	terrainStrokeOpen
 } from './terrainPaint';
+// 51 E4: the Scatter brush's edit tools (erase / rotate / scale / relax brushes, select)
+import {
+	scatterBrushArmed,
+	beginEditStroke,
+	editStrokeMove,
+	endEditStroke,
+	editStrokeOpen,
+	startScatterEditSession,
+	endScatterEditSession,
+	clearScatterSelection
+} from './scatterEdit';
 
 // Terrain sculpting (T-2): brush raise/lower/smooth/flatten on the Terrain
 // primitive, replicated through the EXISTING meshgeo channel — live strokes
@@ -319,6 +330,7 @@ export function enterSculpt(uuid, opts = {}) {
 	// paint has no meaning on a plain mesh (no splat map); scatter does since 51-surface
 	if (!isTerrain && get(sculptOp) === 'paint') sculptOp.set('raise');
 	sculptObject.set(uuid);
+	if (isTerrain) startScatterEditSession(() => get(sculptObject), () => get(sculptOp) === 'scatter' && get(sculptMode) === 'terrain');
 	return true;
 }
 
@@ -345,8 +357,9 @@ function enterMeshScatter(uuid, object) {
 }
 
 export function exitSculpt() {
-	if (strokeBefore || terrainStrokeOpen()) endStroke(); // commit a stroke in flight
+	if (strokeBefore || terrainStrokeOpen() || editStrokeOpen()) endStroke(); // commit a stroke in flight
 	sculptScatterOnly.set(false);
+	endScatterEditSession();
 	sculptObject.set(null);
 	weld = null;
 	meshWeld = null;
@@ -437,10 +450,12 @@ export function applyBrushAt(uuid, x, z, op, radius, strength, dt = 0.016) {
 	return touched;
 }
 
-/** 47: is the current op a terrainPaint stroke? Paint = a terrain only; scatter = any mesh (51-surface). */
+/** 47: is the current op a terrainPaint stroke? Paint = a terrain only; scatter = any mesh (51-surface).
+ * 51 E4: 'scatter-edit' = the Scatter brush with an edit tool armed (scatterEdit.js runs it) —
+ * on a terrain only (a mesh host keeps Paint + the 47 erase). */
 function paintOp() {
 	const op = get(sculptOp);
-	if (op === 'scatter') return op;
+	if (op === 'scatter') return get(sculptMode) === 'terrain' && scatterBrushArmed() ? 'scatter-edit' : op;
 	return get(sculptMode) === 'terrain' && op === 'paint' ? op : null;
 }
 
@@ -449,6 +464,7 @@ export function beginStroke(uuid) {
 	const op = paintOp();
 	if (op === 'paint') return void beginPaintStroke(uuid);
 	if (op === 'scatter') return void beginScatterStroke(uuid);
+	if (op === 'scatter-edit') return void beginEditStroke(uuid);
 	const object = objectOf(uuid);
 	if (!object?.geometry?.attributes?.position) return;
 	strokeBefore = object.geometry.attributes.position.array.slice();
@@ -461,6 +477,7 @@ export function strokeMove(uuid, x, z, dt = 0.016, y = 0) {
 	const paint = paintOp();
 	if (paint === 'paint') return paintStrokeMove(uuid, x, z, dt, get(sculptRadius), get(sculptStrength));
 	if (paint === 'scatter') return scatterStrokeMove(uuid, x, z, get(sculptRadius), y);
+	if (paint === 'scatter-edit') return editStrokeMove(uuid, x, z, get(sculptRadius), get(sculptStrength), dt);
 	if (!strokeBefore) return;
 	const op = /** @type {'raise'|'lower'|'smooth'|'flatten'} */ (get(sculptOp));
 	const changed =
@@ -492,9 +509,10 @@ export function strokeMove(uuid, x, z, dt = 0.016, y = 0) {
 
 /** Stroke end: flush the pending preview + ONE snapshot commit + undo entry. */
 export function endStroke() {
-	if (terrainStrokeOpen()) {
+	if (terrainStrokeOpen() || editStrokeOpen()) {
 		endPaintStroke();
 		endScatterStroke();
+		endEditStroke();
 		return;
 	}
 	const uuid = get(sculptObject);
@@ -546,3 +564,9 @@ export function showCursorAt(/** @type {any} */ worldPoint, /** @type {any} */ w
 export function hideCursor() {
 	if (cursor) cursor.visible = false;
 }
+
+// 51 E4: the instance selection belongs to the Scatter brush's Select tool — another brush
+// drops it (sits LAST: a module-level subscribe runs at once, the TDZ rule)
+sculptOp.subscribe((op) => {
+	if (op !== 'scatter') clearScatterSelection();
+});

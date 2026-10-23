@@ -132,6 +132,15 @@
 							<Checkbox label={terrain ? 'Align to slope' : 'Align to surface'} checked={s.align} onchange={(/** @type {boolean} */ v) => editScatterSet(uuid, s.id, { align: !!v })} />
 							Align
 						</label>
+						{#if terrain}
+							<!-- 51 E5: the edit tools (and so convert) read a terrain's instances -->
+							<button
+								class="ui-button-quiet"
+								data-scatter-to-objects={s.id}
+								title="Make every instance of this model a real object (one undo turns them back)"
+								onclick={() => import('$lib/scatterConvert').then((m) => m.instancesToObjects({ scope: 'set', uuid, setId: s.id }))}>To objects</button
+							>
+						{/if}
 						<button class="ui-button-quiet" title="Remove every instance of this set" onclick={() => editScatterSet(uuid, s.id, null)}>Remove</button>
 					</div>
 					<ul class="flex flex-col gap-0.5" aria-label={`Models in ${setName(s)}`} data-scatter-sources={s.id}>
