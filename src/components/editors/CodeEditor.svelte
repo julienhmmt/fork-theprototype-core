@@ -23,6 +23,9 @@
 	export let shareKey = null;
 	/** @type {string | null} the text to seed with — absent = this buffer's own text */
 	export let shareSeed = null;
+	// 50-int (the 53 rules): the name a screen reader gives the editable text — CodeMirror's
+	// role=textbox had none (axe aria-input-field-name, in the app and in the pop-out window)
+	export let label = 'Code editor';
 	// 50 Y2: 'text' = a plain document (no JavaScript highlighting); anything else reads as code
 	export let lang = 'js';
 	// 36 (G1): a module's source is shown, never edited in place; `line` scrolls to a line
@@ -102,6 +105,7 @@
 				// 36: a module's source is read, never typed into
 				...more,
 				...((readonly || readOnly) && !shareKey ? [EditorView.editable.of(false)] : []),
+				EditorView.contentAttributes.of({ 'aria-label': label }),
 				EditorView.updateListener.of((update) => {
 					if (!update.docChanged) return;
 					lastEmitted = update.state.doc.toString();

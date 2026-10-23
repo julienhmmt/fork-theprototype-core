@@ -560,6 +560,7 @@
 				tabindex={active?.id === tab.id ? 0 : -1}
 				aria-selected={active?.id === tab.id}
 				aria-controls="code-pane-{tab.id}"
+				aria-keyshortcuts="Delete"
 				data-tab-id={tab.id}
 				data-kind={tab.kind}
 				data-dirty={dirty}
@@ -573,7 +574,9 @@
 				<span class="code-tab-name">{tab.title}</span>
 				{#if bad}<span class="code-tab-bad" aria-label="has errors">!</span>{/if}
 				{#if dirty}<span class="code-tab-dirty" aria-label="unsaved">●</span>{/if}
-				<button class="code-tab-close" tabindex="-1" aria-label="Close {tab.title}" onclick={(e) => { e.stopPropagation(); requestClose(tab.id); }}>✕</button>
+				<!-- 50-int (axe nested-interactive): a role=tab may hold no control, so the ✕ is a pointer
+				     affordance only; the keyboard closes the focused tab with Delete (aria-keyshortcuts) -->
+				<span class="code-tab-close" aria-hidden="true" onclick={(e) => { e.stopPropagation(); requestClose(tab.id); }}>✕</span>
 			</div>
 		{/each}
 	</div>
@@ -708,6 +711,7 @@
 					value={tab.code}
 					readOnly={!!tab.readOnly || viewer}
 					lang={tab.lang}
+					label={tab.title + ' — ' + kindLabel(tab)}
 					shareKey={sharedDocKey(tab)}
 					onChange={(/** @type {string} */ c, /** @type {{remote: boolean}} */ meta) => setTabCode(tab.id, c, meta)}
 					onSave={() => saveCodeTab(tab.id).then((r) => r.ok && r.nodes && r.nodes > 1 && showToast('Saved — ' + r.nodes + ' nodes reloaded'))}
@@ -1044,6 +1048,7 @@
 		padding: 0 3px;
 		border-radius: 3px;
 		color: var(--text-muted);
+		cursor: pointer;
 	}
 	.code-tab-close:hover {
 		color: var(--ink-bad);

@@ -47,6 +47,25 @@ const objX = (page, uuid) =>
 
 const mainWorkspaceShown = (page) => page.locator('#code-ws-dock:visible, #code-ws-window:visible').count();
 
+/** write a tab's text the way the app does: a tab bound to a shared document (50 Y1, 1.42) is the
+ *  document's to change (sharedText.replaceText — a store write no longer reaches its editor), any
+ *  other tab takes codeWorkspace.setTabCode */
+const writeTab = (page, id, code) =>
+	page.evaluate(
+		({ id, code }) =>
+			new Promise((r) =>
+				window.__stores.codeWorkspace.codeTabs.subscribe((tabs) => {
+					const s = window.__stores;
+					const t = tabs.find((x) => x.id === id);
+					const key = t && (t.kind === 'node' || t.kind === 'behaviour') && t.nodeId ? 'n:' + (t.graphId || 'scene') + ':' + t.nodeId : null;
+					if (key && s.sharedText?.holds(key)) s.sharedText.replaceText(key, code);
+					else s.codeWorkspace.setTabCode(id, code);
+					r(null);
+				})()
+			),
+		{ id, code }
+	);
+
 async function popOut(page) {
 	const [pop] = await Promise.all([page.context().waitForEvent('page', { timeout: 20000 }), page.locator('#code-ws-popout').first().click()]);
 	await pop.waitForSelector('#code-ws-popped .cm-content', { timeout: 30000 });
@@ -123,7 +142,7 @@ h.run(async () => {
 	let tabs = await read(page, 'codeWorkspace.codeTabs');
 	h.check(tabs.find((t) => t.id === activeId)?.code === 'object.position.x = 3;', 'typing in the popup lands in the shared code tab store');
 	h.check(await pop.locator('.code-tab[data-dirty="true"]').count() === 1, 'the popup tab shows the unsaved ● marker');
-	await S(page, (id) => window.__stores.codeWorkspace.setTabCode(id, 'object.position.x = 4;'), activeId);
+	await writeTab(page, activeId, 'object.position.x = 4;');
 	await pop.waitForTimeout(400);
 	h.check((await pop.locator(`[data-pane="${activeId}"] .cm-content`).innerText()).includes('x = 4'), 'a write from the main window shows in the popup editor');
 
@@ -140,7 +159,7 @@ h.run(async () => {
 	h.check(await pop.locator('#code-ws-error').isVisible(), 'a parse error shows its banner IN the popup');
 	h.check((await nodeCode(page, 'pop1')) === 'object.position.x = 4;', 'and nothing broken applies (the node keeps x = 4)');
 	await shot(pop, '02-popout-error.png');
-	await S(page, (id) => window.__stores.codeWorkspace.setTabCode(id, 'object.position.x = 4;'), activeId);
+	await writeTab(page, activeId, 'object.position.x = 4;');
 
 	// ---------------------------------------------------------------- 5 delegated events, tabs, menus
 	await pop.locator('#code-ws-open-graph').click();
