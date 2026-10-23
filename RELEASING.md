@@ -45,6 +45,51 @@ The toolchain is pinned too: `.nvmrc` / `.mise.toml` (Node) and `packageManager`
 `devEngines` in package.json (npm). Bump them together — ci.yml's "toolchain pins agree"
 step fails when they disagree.
 
+## Dependency updates: the `deps` branch
+
+Dependabot's version updates never open against `main`. They open against the long-lived **`deps`**
+branch (`.github/dependabot.yml`, `target-branch: deps`; monthly, npm at the root and in `tools/agent`,
+plus GitHub Actions), and `.github/workflows/deps.yml` decides what happens to each one:
+
+1. **The gate.** ci.yml and perf-budget.yml run as reusable workflows (build, the svelte-check ratchet,
+   vitest, scene-lint, kit-diff, a11y, supply chain, the perf budget), then the e2e battery in shards on
+   GitHub-hosted runners (SwiftShader, no GPU). The battery is `tests/e2e/battery.json`; the shard runner
+   is `scripts/ci/battery.cjs`. One check sums it all up: **`deps-gate`**.
+2. **The GPU half.** `pc-battery` is a commit status posted from a desktop with a real GPU
+   (`scripts/ci/pc-battery.sh`: /kit, the app surfaces, the level shots and frame time, base vs head).
+   Nothing on GitHub can reach that machine and the repo registers no self-hosted runner (it is
+   public): a timer there runs `scripts/ci/pc-battery.sh --poll`, which picks up open PRs into `deps`
+   whose `deps-gate` is green, from a branch of this repo, by Dependabot or the maintainer, and still
+   without a `pc-battery` status. For a PR that changes nothing the app ships, deps.yml posts
+   `pc-battery` itself as "not needed".
+3. **The policy** (`scripts/ci/deps-policy.cjs`, unit-tested in `tests/unit/depsCi.test.js`):
+
+   | update | once green |
+   |---|---|
+   | patch, a development-only package, any GitHub Action | GitHub auto-merge into `deps` |
+   | a minor of something that ships (a `dependency`, or svelte / vite / kit / tailwind / flowbite) | label `deps-ready`; the monthly deps lane merges it after the release notes + a visual review |
+   | any Playwright bump | `deps-ready`: the e2e hosts outside GitHub must serve the same browser first |
+   | a major | `needs-migration` + a comment; a planned migration, never automation |
+
+   The ruleset on `deps` requires `deps-gate` and `pc-battery`, so an auto-merge of a runtime patch waits
+   for the desktop. The ruleset also forbids deleting `deps`: it is never cleaned up with merged branches.
+
+**Integrators:** at union time, `git merge origin/deps` into `feat/<n>` before the battery, so the bumps
+ship with a tested union and `main` never takes a dependency change on its own. After the release, bring
+`deps` up to the released `main` (`git push origin main:deps` when it fast-forwards, else merge `main`
+into `deps`).
+
+**Security updates** are GitHub's exception: they always target `main`, whatever `target-branch` says.
+deps.yml runs the same battery and labels on them there; nothing auto-merges into `main`, a person does.
+
+**When the battery list moves** (an integrator's battery added or dropped suites), refresh it from that
+run: `node scripts/ci/battery.cjs refresh --list <battery list>... --summary <battery summary>...`
+(names come from the lists, seconds from the summaries). `--results <dir>` takes seconds measured on the
+runners instead (deps.yml's `battery-durations` artifact). A suite goes into `optional` (runs, reported,
+does not gate) only when it is red or flaky on the unchanged base too, with that reason on its line;
+`skip` is for what a public runner cannot do at all. The shard count follows the recorded seconds
+(`shards.target_minutes`, at most `shards.max`).
+
 ## Recreate `release/next` after the tag push
 
 The repo has `delete_branch_on_merge: true`, so merging the release PR DELETES

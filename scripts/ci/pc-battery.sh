@@ -30,6 +30,8 @@
 #   PC_BATTERY_WRAP     a command prefix that serialises GPU use with other jobs on the machine, e.g. an
 #                       exclusive e2e slot; the measuring part runs inside it (default: none)
 #   PC_BATTERY_FPS_MAX  allowed head/base p50 frame-time ratio (default: 1.15)
+#   PC_BATTERY_STALE    seconds after which a `pending` status of ours counts as abandoned (default: 10800)
+# Needs git, gh (logged in: repo status + gist), node/npm at the repo's .nvmrc, curl, flock.
 set -uo pipefail
 
 REPO=${PC_BATTERY_REPO:-theprototype-app/core}
@@ -57,14 +59,13 @@ ALLOWED=" dependabot[bot] app/dependabot $ME ${PC_BATTERY_AUTHORS:-} "
 # --- the filter: decided from GitHub's metadata, before anything is checked out
 # eligible <pr> -> prints "ok <head-sha> <base-ref>" or "no <reason>"
 eligible() {
-	local j
-	j=$(gh pr view "$1" -R "$REPO" --json state,isCrossRepository,headRepository,headRepositoryOwner,author,headRefOid,baseRefName) || { echo "no unreadable"; return; }
-	local state cross owner name author sha base
-	state=$(jq -r .state <<<"$j"); cross=$(jq -r .isCrossRepository <<<"$j")
-	owner=$(jq -r .headRepositoryOwner.login <<<"$j"); name=$(jq -r .headRepository.name <<<"$j")
-	author=$(jq -r .author.login <<<"$j"); sha=$(jq -r .headRefOid <<<"$j"); base=$(jq -r .baseRefName <<<"$j")
+	local row
+	row=$(gh pr view "$1" -R "$REPO" --json state,isCrossRepository,headRepository,headRepositoryOwner,author,headRefOid,baseRefName \
+		-q '[.state, .isCrossRepository, .headRepositoryOwner.login + "/" + .headRepository.name, .author.login, .headRefOid, .baseRefName] | @tsv') || { echo "no unreadable"; return; }
+	local state cross head author sha base
+	IFS=$'\t' read -r state cross head author sha base <<<"$row"
 	[ "$state" = OPEN ] || { echo "no not open ($state)"; return; }
-	[ "$cross" = false ] && [ "$owner/$name" = "$REPO" ] || { echo "no head is not a branch of $REPO ($owner/$name)"; return; }
+	[ "$cross" = false ] && [ "$head" = "$REPO" ] || { echo "no head is not a branch of $REPO ($head)"; return; }
 	case "$ALLOWED" in *" $author "*) ;; *) echo "no author $author is not allowed"; return ;; esac
 	echo "ok $sha $base"
 }
@@ -73,7 +74,16 @@ eligible() {
 gate_green() {
 	[ "$(gh api "repos/$REPO/commits/$1/check-runs?check_name=deps-gate" -q '[.check_runs[] | select(.conclusion == "success")] | length')" -gt 0 ]
 }
-has_status() {
+# settled <sha>: a final pc-battery status, or a pending one younger than PC_BATTERY_STALE seconds. An older
+# pending one is a run this machine never finished (it slept or rebooted mid-run): run it again.
+settled() {
+	local row; row=$(gh api "repos/$REPO/commits/$1/statuses" -q '[.[] | select(.context == "pc-battery")][0] | [.state, .updated_at] | @tsv')
+	[ -n "$row" ] || return 1
+	local st at; IFS=$'\t' read -r st at <<<"$row"
+	[ "$st" != pending ] && return 0
+	[ $(($(date +%s) - $(date -d "$at" +%s))) -lt "${PC_BATTERY_STALE:-10800}" ]
+}
+status() {
 	[ "$(gh api "repos/$REPO/commits/$1/status" -q '[.statuses[] | select(.context == "pc-battery")] | length')" -gt 0 ]
 }
 status() { # <sha> <state> <description> [url]
@@ -104,12 +114,12 @@ run_pr() {
 	# the sibling content at the refs the head's battery pins
 	local B="$DIR/head/tests/e2e/battery.json"
 	for sib in scenes modules; do
-		local repo ref; repo=$(jq -r ".refs.$sib.repo" "$B"); ref=$(jq -r ".refs.$sib.ref" "$B")
+		local repo ref; repo=$(node -p "require('$B').refs.$sib.repo"); ref=$(node -p "require('$B').refs.$sib.ref")
 		[ -d "$DIR/$sib/.git" ] || git clone -q "https://github.com/$repo.git" "$DIR/$sib"
 		git -C "$DIR/$sib" fetch -q origin && git -C "$DIR/$sib" checkout -q --detach "$ref" || return 1
 	done
 	(cd "$DIR/modules" && npm ci --no-audit --no-fund > "$W/npm-modules.log" 2>&1 && node scripts/pack.cjs --all --force > "$W/pack.log" 2>&1) || { log "module pack failed"; return 1; }
-	local games levels; games=$(jq -r '.pc.games | join(",")' "$B"); levels=$(jq -r '.pc.levels | join(",")' "$B")
+	local games levels; games=$(node -p "require('$B').pc.games.join(',')"); levels=$(node -p "require('$B').pc.levels.join(',')")
 
 	# servers: base on PORT, head on PORT+1, started one after the other (a cold boot is the slow part)
 	local pids=()
@@ -196,7 +206,16 @@ fi
 for pr in $(gh pr list -R "$REPO" --base deps --state open --json number -q 'sort_by(.number) | .[].number'); do
 	read -r verdict sha base <<<"$(eligible "$pr")"
 	if [ "$verdict" != ok ]; then log "#$pr skipped: $sha $base"; continue; fi
-	has_status "$sha" && continue
+	# settled <sha>: a final pc-battery status, or a pending one younger than PC_BATTERY_STALE seconds. An older
+# pending one is a run this machine never finished (it slept or rebooted mid-run): run it again.
+settled() {
+	local row; row=$(gh api "repos/$REPO/commits/$1/statuses" -q '[.[] | select(.context == "pc-battery")][0] | [.state, .updated_at] | @tsv')
+	[ -n "$row" ] || return 1
+	local st at; IFS=$'\t' read -r st at <<<"$row"
+	[ "$st" != pending ] && return 0
+	[ $(($(date +%s) - $(date -d "$at" +%s))) -lt "${PC_BATTERY_STALE:-10800}" ]
+}
+status "$sha" && continue
 	gate_green "$sha" || { log "#$pr: deps-gate not green on ${sha:0:7} (yet)"; continue; }
 	run_pr "$pr" "$sha" "$base"
 done
