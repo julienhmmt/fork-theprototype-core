@@ -71,15 +71,35 @@ function lossShim(cfg) {
 					at += rtx;
 				}
 			}
-			let s = state.get(dc);
-			if (!s) state.set(dc, (s = { last: 0 }));
-			if (!unreliable) {
-				// ordered: nothing overtakes the message before it
-				at = Math.max(at, s.last);
-				s.last = at;
-			}
 			const self = this;
-			setTimeout(() => fn.call(self, event), Math.max(0, at - performance.now()));
+			if (unreliable) {
+				setTimeout(() => fn.call(self, event), Math.max(0, at - performance.now()));
+				return;
+			}
+			// ordered: nothing overtakes the message before it. ONE FIFO per channel drained by ONE
+			// pump — a timer per message does not keep order: Chrome rounds each delay to whole ms, so
+			// two messages released by the same retransmit swapped (run4: reliable@10 % applied 201 of
+			// 400 poses through the stale filter, and the in-order edit check failed)
+			let s = state.get(dc);
+			if (!s) state.set(dc, (s = { last: 0, queue: [], timer: 0 }));
+			at = Math.max(at, s.last);
+			s.last = at;
+			s.queue.push({ at, run: () => fn.call(self, event) });
+			const pump = () => {
+				s.timer = 0;
+				while (s.queue.length && s.queue[0].at <= performance.now()) {
+					try {
+						s.queue.shift().run();
+					} catch (e) {
+						setTimeout(() => {
+							throw e;
+						});
+					}
+				}
+				if (s.queue.length)
+					s.timer = setTimeout(pump, Math.max(0, s.queue[0].at - performance.now()));
+			};
+			if (!s.timer) s.timer = setTimeout(pump, Math.max(0, s.queue[0].at - performance.now()));
 		};
 	}
 	const proto = RTCDataChannel.prototype;
@@ -140,7 +160,9 @@ h.run(async () => {
 	// 17 sends in 20 s, p50 1.2 s). Both pages stop drawing through the app's own overload pause
 	// for the measurement; the data channels, the stale filter and the keyframe timer do not draw.
 	for (const peer of [A, B])
-		await peer.page.evaluate(() => window.__stores.overloadGuard.pauseRendering('e2e: timing the wire'));
+		await peer.page.evaluate(() =>
+			window.__stores.overloadGuard.pauseRendering('e2e: timing the wire')
+		);
 
 	// B's tap: arrival times of A's applied camera poses, and the chat edits in arrival order
 	await B.page.evaluate((aid) => {
@@ -196,7 +218,9 @@ h.run(async () => {
 				({ tag, edits, lastX }) => {
 					let msgs = [];
 					window.__stores.messages?.subscribe?.((m) => (msgs = m))();
-					const n = (msgs || []).filter((m) => m?.type === 'received' && String(m?.text ?? '').startsWith('edit ' + tag + ' ')).length;
+					const n = (msgs || []).filter(
+						(m) => m?.type === 'received' && String(m?.text ?? '').startsWith('edit ' + tag + ' ')
+					).length;
 					const last = window.__poses[window.__poses.length - 1];
 					return n >= edits && !!last && Math.abs(last.x - lastX) < 1e-9;
 				},
@@ -236,7 +260,7 @@ h.run(async () => {
 		console.log(JSON.stringify(row));
 		// a phase whose sender could not keep the cadence measured the page, not the channel
 		h.check(
-			sent.n >= ((PHASE_MS / 1000) * HZ) * 0.8,
+			sent.n >= (PHASE_MS / 1000) * HZ * 0.8,
 			`${tag}: A kept the ${HZ} Hz cadence (${sent.n} sends in ${PHASE_MS / 1000} s)`
 		);
 		return row;
@@ -258,7 +282,14 @@ h.run(async () => {
 				r.viaFast > r.received * 0.8,
 				`${name}: poses rode the fast channel (${r.viaFast}/${r.received})`
 			);
-		else h.check(r.viaFast === 0, `${name}: the channel switched off sends every pose reliable`);
+		else {
+			h.check(r.viaFast === 0, `${name}: the channel switched off sends every pose reliable`);
+			// the shim's own control: an ORDERED channel never trips the stale filter
+			h.check(
+				r.received >= r.sent,
+				`${name}: the ordered channel applied every pose (${r.received}/${r.sent})`
+			);
+		}
 	}
 	const at = (mode, loss) => rows.find((r) => r.mode === mode && r.loss === loss);
 	h.check(
