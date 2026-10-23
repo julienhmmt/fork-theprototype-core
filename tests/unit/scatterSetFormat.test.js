@@ -210,6 +210,17 @@ describe('51 set format: mixed sets, tint, sink, sources, validation', () => {
 		expect(sourceOf({ kind: 'library', hash: 'abc', name: 'Rock', note: 'Prefab "Gate" — look only' }).note).toBe('Prefab "Gate" — look only');
 	});
 
+	test('51 union: a prefab look keeps its prefab id (To objects brings the prefab back), keyed by its look', () => {
+		const id = '3f0c1a52-9b7e-4d2a-8c11-0a6b5f1e2d34';
+		const s = sourceOf({ kind: 'library', hash: 'abc', name: 'Gate', note: 'look only', prefab: id });
+		expect(s).toEqual({ kind: 'library', hash: 'abc', name: 'Gate', note: 'look only', prefab: id });
+		expect(sourceKey(s)).toBe('l:abc');
+		expect(sourceOf({ kind: 'library', hash: 'abc', name: 'Rock' })).toEqual({ kind: 'library', hash: 'abc', name: 'Rock' });
+		expect(sourceOf({ kind: 'library', hash: 'abc', prefab: '<script>' })).not.toHaveProperty('prefab');
+		const set = normalizeScatter({ sets: [seeded({ source: s })] }, unb64).sets[0];
+		expect(set.source.prefab).toBe(id);
+	});
+
 	test('bad overrides are dropped, not guessed at', () => {
 		const set = normalizeScatter({ sets: [seeded({ ov: { 1: { x: 'a' }, nope: { del: 1 }, 99999: { del: 1 }, 2: { scale: 1e6 }, 3: { del: true } } })] }, unb64).sets[0];
 		expect(set.ov).toEqual({ 2: { scale: 20 }, 3: { del: 1 } });

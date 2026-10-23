@@ -18,9 +18,9 @@ import { showConfirm } from './confirmDialog';
 // becomes a real object at exactly the pose it was drawn with — same base on the ground, same
 // turn, same tilt when the set aligns to slope, same size. The way every object is made is
 // one the session already replicates: ONE template (a `/create` of the primitive, an import
-// of the Library model, or — a logic prefab source — `instantiatePrefab`, which brings the
-// prefab WITH its logic), then `duplicateObject` per instance (the small `duplicate`
-// message + a `move`), then the template goes. The instances leave the set. All of it is ONE
+// of the Library model or the pack item, or — a prefab's look that remembers its prefab —
+// `instantiatePrefab`, which brings the prefab WITH its logic), then `duplicateObject` per
+// instance (the small `duplicate` message + a `move`), then the template goes. The instances leave the set. All of it is ONE
 // history batch, so one undo puts the instances back and takes the objects away on every
 // peer. More than CONVERT_CONFIRM_ABOVE asks first.
 //
@@ -73,8 +73,9 @@ function poseAt(object, world) {
 	send({ type: 'move', uuid: object.uuid, pos: object.position.toArray(), rot: object.rotation.toArray(), scale: object.scale.toArray() });
 }
 
-/** Make the ONE template object for a source. Resolves {uuid, offset} (offset = how far the
- * object's own origin sits above the instance base), or null. @param {any} source */
+/** Make the ONE template object for a source. Resolves {uuid, offset} (offset = where the
+ * object's own transform relative to the instance base, a matrix in the instance's frame), or null.
+ * @param {any} source */
 async function makeTemplate(source) {
 	const commands = await import('./commandsHandler.svelte');
 	const group = /** @type {any} */ (get(objectsGroup));
@@ -88,7 +89,15 @@ async function makeTemplate(source) {
 		const materials = await import('./materialsHandler');
 		materials.setObjectColor(object.uuid, spec.color);
 		materials.setMaterialParam(object.uuid, 'roughness', spec.roughness);
-		return { uuid: object.uuid, offset: spec.offset };
+		return { uuid: object.uuid, offset: new THREE.Matrix4().makeTranslation(0, spec.offset, 0) };
+	}
+	if (source.kind === 'library' && source.prefab) {
+		// a logic prefab scatters its LOOK only (51-sources); a real object is the FULL prefab with
+		// its logic (the user's rule) — when this machine's prefab library still holds it
+		const { prefabById, instantiatePrefab } = await import('./prefabs');
+		const prefab = prefabById(source.prefab);
+		const object = prefab ? instantiatePrefab(prefab) : null;
+		if (object) return { uuid: object.uuid, offset: lookOffset(object) };
 	}
 	if (source.kind === 'library') {
 		const explorer = await import('./explorer');
@@ -97,16 +106,48 @@ async function makeTemplate(source) {
 		if (!item || !blob) return null;
 		const { importFile } = await import('./fileHandler.svelte');
 		const uuid = await importFile(new File([blob], item.name), String(item.name).replace(/\.\w+$/, ''), undefined, [0, 0, 0]);
-		return uuid ? { uuid, offset: 0 } : null;
+		return uuid ? { uuid, offset: new THREE.Matrix4() } : null;
 	}
-	if (source.kind === 'prefab') {
-		// a logic prefab scatters its LOOK only (51-sources); a real object is the FULL prefab
-		const { prefabs, instantiatePrefab } = await import('./prefabs');
-		const prefab = /** @type {any[]} */ (get(prefabs)).find((p) => p.id === source.id);
-		const object = prefab ? instantiatePrefab(prefab) : null;
-		return object ? { uuid: object.uuid, offset: 0 } : null;
+	if (source.kind === 'pack') {
+		// 51 union: a pack item is placed the way the Explorer places one (its file from the pack
+		// cache, the packRef stamped so a save writes the small reference)
+		const refs = await import('./packRefs');
+		const url = refs.packRefUrl(source);
+		const name = source.item || String(source.path.split('/').pop() ?? 'model').replace(/\.\w+$/, '');
+		let buffer;
+		try {
+			const { fetchPackBuffer } = await import('./packCache');
+			buffer = await fetchPackBuffer(url);
+		} catch {
+			return null;
+		}
+		const { importFile } = await import('./fileHandler.svelte');
+		const uuid = await importFile(new File([buffer], name + '.glb'), name, 'glb', [0, 0, 0], undefined, {
+			packRef: refs.packRefFromUrl(url, { pack: source.pack, item: name })
+		});
+		return uuid ? { uuid, offset: new THREE.Matrix4() } : null;
 	}
 	return null;
+}
+
+/** Where an object sits relative to the base of its LOOK, as a matrix in the instance's frame:
+ * scatterSources.lookSource stands the look centred on x/z with its lowest point at y 0, unturned,
+ * with the root's own scale baked in — so the real object is that offset, then its own scale.
+ * @param {any} object */
+function lookOffset(object) {
+	const saved = { p: object.position.clone(), q: object.quaternion.clone() };
+	object.position.set(0, 0, 0);
+	object.quaternion.identity();
+	object.updateMatrixWorld(true);
+	const box = new THREE.Box3();
+	object.traverse((/** @type {any} */ n) => {
+		if (n.isMesh) box.expandByObject(n);
+	});
+	object.position.copy(saved.p);
+	object.quaternion.copy(saved.q);
+	object.updateMatrixWorld(true);
+	const at = box.isEmpty() ? new THREE.Vector3() : new THREE.Vector3(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
+	return new THREE.Matrix4().compose(at, new THREE.Quaternion(), object.scale.clone());
 }
 
 /**
@@ -169,11 +210,11 @@ export async function instancesToObjects(what, opts = {}) {
 				const source = set.sources?.[src]?.source ?? set.source;
 				const template = await makeTemplate(source);
 				if (!template) {
-					showToast('Could not make ' + (source.name || source.type || source.item || 'the model') + ' — it is not in your Library');
+					showToast('Could not make ' + (source.name || source.type || source.item || 'the model') + (source.kind === 'pack' ? ' — its pack could not be reached' : ' — it is not in your Library'));
 					continue;
 				}
 				// the set's sink pushes each instance down its own up axis (terrainSurface.instanceMatrices)
-				const lift = new THREE.Matrix4().makeTranslation(0, template.offset - (set.sink ?? 0), 0);
+				const lift = new THREE.Matrix4().makeTranslation(0, -(set.sink ?? 0), 0).multiply(template.offset);
 				for (const i of list) {
 					const inst = set.list[i];
 					if (!inst) continue;
