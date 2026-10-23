@@ -83,10 +83,18 @@ jobs:
     if: needs.scope.outputs.gate_ci == 'true'
     uses: ./.github/workflows/ci.yml
 
+  # the budget gate in three parallel parts (~20 min each instead of ~60 in one)
   perf:
     needs: scope
     if: needs.scope.outputs.gate_ci == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2, 3]
     uses: ./.github/workflows/perf-budget.yml
+    with:
+      part: ${{ matrix.part }}
+      parts: 3
 
   plan:
     needs: scope

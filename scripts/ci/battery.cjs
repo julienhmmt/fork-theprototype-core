@@ -181,7 +181,8 @@ async function run(argv) {
 	const only = opt(argv, '--only');
 	fs.mkdirSync(path.join(out, 'logs'), { recursive: true });
 	const mine = only ? only.split(',') : assign(b, of)[shard - 1].suites;
-	const url = process.env.APP_URL || `https://localhost:${port}/`;
+	// the suites' own default is a hosts-file origin: say where the app is
+	const url = (process.env.APP_URL ||= `https://localhost:${port}/`);
 	let server = argv.includes('--serve') ? await serve(port, path.join(out, 'logs', 'dev-server.log')) : null;
 	/** @type {SuiteResult[]} */
 	const results = [];
