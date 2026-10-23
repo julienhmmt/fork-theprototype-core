@@ -177,6 +177,11 @@ export const DEBUG_HOOKS = [
 	['vrDollhouse', () => import('./vr/dollhouse.js')],
 	['vrWorldSnap', () => import('./vr/worldSnap.js')],
 	['vrSculpt', () => import('./vr/sculpt.js')],
+	// 52 V1/V2: VR measure (the laser tool + its leaf) and the build-tool radial entries (Arrange's runArrange)
+	['vrMeasure', () => import('./vr/measure.js')],
+	['vrMeasureCore', () => import('./vrMeasureCore')],
+	['vrBuildRings', () => import('./vr/buildRings.js')],
+	['align', () => import('./align')],
 	['vrTourTargets', () => import('./vr/tourTargets.js')],
 	['vrPrefs', () => import('./vr/prefs.js')],
 	// 53 (A7): recenter + the lift / recenter counts
