@@ -67,7 +67,9 @@ const ALWAYS_ALLOWED = new Set([
 	'getshadergraphs',
 	'getanim',
 	'getscenepost',
-	'getroomanchor'
+	'getroomanchor',
+	// 60 Q5: the shared reference images REQUEST (the `underlay` replies stay gateable)
+	'getunderlays'
 ]);
 
 /** @type {((peerId: string, msgType: string) => boolean) | null} */

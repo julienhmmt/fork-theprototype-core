@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { HELPER_LAYER } from './helperLayer'; // 60 Q5: thumbnails leave the helper layer out
 import './threeFixes.js'; // 36-fb-water F14: transmissive materials survive a JSON trip (the export runtime loads scenes here too)
 import { writable, get } from 'svelte/store';
 import { objectsGroup, globalCamera, globalScene, globalRenderer, orbitControls, TControls, pokeScene, beginSceneBatch, endSceneBatch } from '../stores/sceneStore';
@@ -137,7 +138,11 @@ export function viewportThumbnail(maxW = 256) {
 	const scene = get(globalScene);
 	const camera = get(globalCamera);
 	if (!renderer || !scene || !camera || renderer.xr?.isPresenting) return null;
+	// 60 Q5: the picture is the scene, not the editor's scaffolding — the helper layer (light
+	// helpers, reference images) is off for this one render (gallerySubmit's rule)
+	const mask = camera.layers?.mask;
 	try {
+		camera.layers?.disable(HELPER_LAYER);
 		renderer.render(scene, camera);
 		const source = renderer.domElement;
 		const sw = source.width || maxW;
@@ -154,6 +159,8 @@ export function viewportThumbnail(maxW = 256) {
 	} catch (error) {
 		console.log('viewport thumbnail failed', error);
 		return null;
+	} finally {
+		if (camera.layers && mask != null) camera.layers.mask = mask;
 	}
 }
 

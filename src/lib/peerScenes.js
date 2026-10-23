@@ -645,6 +645,9 @@ ROOM_SCOPED.add('bhv');
 // 37 R1: a multi-object edit's ONE envelope (wireBatch.js) — its items are all room content,
 // and each one is gated again on arrival
 ROOM_SCOPED.add('batch');
+// 60 Q5: a shared reference image belongs to the scene it was laid in (its request rides the floor)
+ROOM_SCOPED.add('underlay');
+ROOM_SCOPED.add('underlaydelete');
 
 /**
  * THE ONE PREDICATE, used on both sides of the wire: `broadcast` will not SEND a

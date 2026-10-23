@@ -160,6 +160,12 @@ export const VALIDATORS = {
 	seq: (d) => typeof d.id === 'string' && d.id.length <= 64 && !!d.doc && typeof d.doc === 'object' && !Array.isArray(d.doc),
 	seqdelete: (d) => typeof d.id === 'string' && d.id.length <= 64,
 	seqs: (d) => !!d.seqs && typeof d.seqs === 'object' && !Array.isArray(d.seqs),
+	// 60 Q5: a shared reference image (normalized again on apply); the image is a data URL, capped
+	// at what a 2048 px picture can be (the sender downscales to that)
+	underlay: (d) =>
+		typeof d.id === 'string' && d.id.length <= 64 && !!d.rec && typeof d.rec === 'object' && !Array.isArray(d.rec) &&
+		(d.src === undefined || (typeof d.src === 'string' && d.src.startsWith('data:image/') && d.src.length <= 12 * 1024 * 1024)),
+	underlaydelete: (d) => typeof d.id === 'string' && d.id.length <= 64,
 	userdata: (d) => isArray(d.userdata),
 	locked: (d) => isArray(d.lockeditems),
 	lock: (d) => isUuid(d.uuid) && (d.uuids === undefined || isArray(d.uuids)),
