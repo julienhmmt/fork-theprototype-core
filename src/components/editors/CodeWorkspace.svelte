@@ -74,7 +74,28 @@
 	import { bottomDockable } from '$lib/bottomDockDrop';
 	import { safeStorage } from '$lib/safeStorage';
 	import { keyOf } from '$lib/keyOf';
-	import { popOutAvailable, popOutCode } from '$lib/codePopout';
+	import { popOutSupported, popOutCode, codePoppedOut, dockCodeBack, focusCodePopout } from '$lib/codePopout';
+
+	// 50-window (C1): `popped` = THIS instance lives in the code window ($lib/codePopout mounts
+	// it there). It shares every store with the main window's instance, so it only skips the
+	// main window's chrome duties: the dock slot, the layouts, the dock closer.
+	let { popped = false } = $props();
+	/** @type {HTMLElement | null} */
+	let poppedEl = $state(null);
+	/** the document this instance renders into (the popup's, when popped) */
+	const hostDoc = () => poppedEl?.ownerDocument ?? document;
+	// the main window's instance never shows while the code window is open: it hands the
+	// request (openCode, the dock's Code entry) to that window and closes itself
+	$effect(() => {
+		if (popped || !$codePoppedOut) return;
+		untrack(() => {
+			focusCodePopout();
+			codeWorkspaceClose.set(true);
+		});
+	});
+	function popOut() {
+		void popOutCode();
+	}
 
 	let docked = $state(true);
 	let winW = $state(900);
@@ -87,7 +108,7 @@
 	// 37 R14: a named workspace layout was applied — re-read the mode + floating size
 	// this panel read ONCE above (it stays mounted while closed, so nothing else would)
 	$effect(() =>
-		onLayoutRestore(() => {
+		popped ? undefined : onLayoutRestore(() => {
 			const stored = storedPanelLayout(safeStorage.getItem, 'code', 900, 500);
 			docked = !!(stored.docked);
 			winW = stored.w;
@@ -104,7 +125,7 @@
 	// the shared dock-mode arm (tab strip menu, drag a tab out, the "+" menu)
 	$effect(() => {
 		const arm = $dockModeArm;
-		if (!arm || arm.key !== 'code') return;
+		if (popped || !arm || arm.key !== 'code') return;
 		dockModeArm.set(null);
 		untrack(() => {
 			if (arm.docked !== docked) setDocked(arm.docked);
@@ -112,6 +133,7 @@
 		});
 	});
 	$effect(() => {
+		if (popped) return;
 		setDockOccupant('code', docked, $dockHeight);
 		return () => setDockOccupant('code', false);
 	});
@@ -119,7 +141,7 @@
 	// a repeat open RAISES (the previewRaise shape): a docked view becomes the dock tab
 	$effect(() => {
 		if (!$codeWorkspaceRaise) return;
-		untrack(() => (docked ? activateDock('code') : raiseWindow('code')));
+		untrack(() => (popped ? hostDoc().defaultView?.focus() : docked ? activateDock('code') : raiseWindow('code')));
 	});
 
 	const myGroup = $derived($tabGroups.find((g) => g.members.includes('code')) ?? null);
@@ -360,12 +382,13 @@
 	function toggleSide(side) {
 		// closing the sidebar that holds the focus would drop it to <body>, where the workspace's
 		// own keys (Ctrl+Alt+B to bring it back) no longer reach — hand it to the editor first
-		const panel = document.getElementById(side === 'left' ? 'code-ws-left' : 'code-ws-right');
-		if (panel?.contains(document.activeElement) && active) {
+		const doc = hostDoc();
+		const panel = doc.getElementById(side === 'left' ? 'code-ws-left' : 'code-ws-right');
+		if (panel?.contains(doc.activeElement) && active) {
 			// a read-only source's editor is not focusable (contenteditable=false): its tab in the
 			// strip is, and it is the strip's one tab stop anyway
-			const editor = /** @type {HTMLElement | null} */ (document.querySelector(`[data-pane="${active.id}"] .cm-content[contenteditable="true"]`));
-			(editor ?? /** @type {HTMLElement | null} */ (document.querySelector(`.code-tab[data-tab-id="${active.id}"]`)))?.focus();
+			const editor = /** @type {HTMLElement | null} */ (doc.querySelector(`[data-pane="${active.id}"] .cm-content[contenteditable="true"]`));
+			(editor ?? /** @type {HTMLElement | null} */ (doc.querySelector(`.code-tab[data-tab-id="${active.id}"]`)))?.focus();
 		}
 		if (narrow) narrowSide = narrowSide === side ? null : side;
 		else (side === 'left' ? codeLeftOpen : codeRightOpen).update((v) => !v);
@@ -436,7 +459,7 @@
 	}
 	// 40 F8: a docked workspace closes from its TAB's ✕ — which takes this same path, so the
 	// unsaved-tabs question still comes first
-	onMount(() => registerDockCloser('code', requestCloseWorkspace));
+	onMount(() => (popped ? undefined : registerDockCloser('code', requestCloseWorkspace)));
 	async function closeSavingAll() {
 		const failed = await saveAllCodeTabs();
 		if (failed.length) {
@@ -607,9 +630,6 @@
 				{/if}
 				<button id="code-ws-save" class="ui-button-quiet" class:code-save-armed={isDirty(active)} title={active.kind === 'graph' ? 'Apply the JSON to the graph (Ctrl+S)' : 'Save and reload what runs it (Ctrl+S)'} onclick={save}><Icon name="save" size={16} aria-hidden="true" />{active.kind === 'graph' ? 'Apply' : 'Save'}</button>
 			{/if}
-			{#if $popOutAvailable}
-				<button id="code-ws-popout" class="ui-button-quiet" title="Open this tab in its own browser window (experimental)" onclick={() => popOutCode(active.id)}>⧉ Window</button>
-			{/if}
 		</div>
 	{/if}
 {/snippet}
@@ -715,6 +735,12 @@
 	</div>
 {/snippet}
 
+{#snippet popOutButton()}
+	{#if $popOutSupported}
+		<button id="code-ws-popout" class="ui-button-quiet" title="Open the code editor in its own browser window (drag it to another monitor)" aria-label="Pop out" onclick={popOut}><Icon name="external-link" size={16} aria-hidden="true" /></button>
+	{/if}
+{/snippet}
+
 {#snippet sideToggle(/** @type {'left' | 'right'} */ side)}
 	<button
 		id="code-ws-toggle-{side}"
@@ -776,7 +802,27 @@
 	</div>
 {/snippet}
 
-{#if docked}
+{#if popped}
+	<!-- 50-window (C1): the whole window is the workspace -->
+	<div
+		bind:this={poppedEl}
+		id="code-ws-popped"
+		class="code-ws code-ws-popped tp-ui flex flex-col p-1"
+		role="region"
+		aria-label="Code (own window)"
+		use:keys
+	>
+		<div class="flex shrink-0 items-center gap-1 pb-1">
+			{@render sideToggle('left')}
+			<span class="tp-dock-title">Code</span>
+			<span class="flex-1"></span>
+			{@render openGraph()}
+			{@render sideToggle('right')}
+			<button id="code-ws-dock-back" class="ui-button-quiet" title="Close this window and put the code editor back in the app" onclick={dockCodeBack}><Icon name="panel-bottom" size={16} aria-hidden="true" />Dock back</button>
+		</div>
+		{@render main()}
+	</div>
+{:else if docked}
 	<div
 		id="code-ws-dock"
 		data-tour="code-workspace"
@@ -803,6 +849,7 @@
 			<span class="tp-dock-title">Code</span>
 			<span class="flex-1"></span>
 			{@render openGraph()}
+			{@render popOutButton()}
 			{@render sideToggle('right')}
 		</div>
 		{@render main()}
@@ -830,6 +877,7 @@
 			title="Code"
 			headerClass="ui-panel-header move-handle cursor-move select-none"
 			onclose={requestCloseWorkspace}
+			onpopout={$popOutSupported ? popOut : null}
 			closeLabel="Close the code workspace"
 			closeAttrs={{ id: 'code-ws-close', title: 'Close the code workspace' }}
 		>
@@ -869,6 +917,12 @@
 	}
 	/* 38 R6: the surface is the shared window / dock panel (src/styles/windows.css) and the
 	   header is WindowChrome — this file paints neither any more */
+	.code-ws-popped {
+		position: fixed;
+		inset: 0;
+		color: var(--text);
+		background: var(--surface-1);
+	}
 	.code-main {
 		position: relative;
 		display: flex;

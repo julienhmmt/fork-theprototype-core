@@ -447,6 +447,8 @@ export const DEBUG_HOOKS = [
 	['codeWorkspace', () => import('./codeWorkspace')],
 	// 50 Y1/Y2: the shared code/text buffers
 	['sharedText', () => import('./sharedText')],
+	// 50-window (C1): the code workspace in its own browser window
+	['codePopout', () => import('./codePopout')],
 	['codeSidebars', () => import('./codeSidebars')],
 	['scriptAssets', () => import('./scriptAssets')],
 	['codeTabs', () => import('./codeTabs')],
