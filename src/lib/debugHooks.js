@@ -62,6 +62,8 @@ export const DEBUG_HOOKS = [
 	['perfLiveWire', () => import('./perf/liveWire')],
 	['vrControls', () => import('./vrControls')],
 	['autosave', () => import('./autosave')],
+	// 60 Q4: files shared into the app / opened from the OS (lastLaunch, receiveLaunchFiles, readShareInbox)
+	['launchInbox', () => import('./launchInbox.js')],
 	// 36 B14: named checkpoints / the version timeline (checkpoints, checkpointsDebug, saveCheckpoint…)
 	['checkpoints', () => import('./checkpoints')],
 	['voiceChat', () => import('./voiceChat')],
