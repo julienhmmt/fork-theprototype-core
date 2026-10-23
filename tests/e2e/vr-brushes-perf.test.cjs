@@ -18,20 +18,21 @@ h.run(async () => {
 	const browser = await h.launch({ args: h.GPU_ARGS });
 	const A = await h.setupPage(browser, 'A', { init: iwer.initScript(), context: { viewport: { width: 1280, height: 720 } }, storage: { budgetTarget: 'quest' } });
 	const page = A.page;
-	// time every XR frame callback (the whole frame: VR input, the brush, the scene update, the render submit)
+	// time every XR frame callback, summed PER FRAME (the frame's timestamp keys it: several callbacks — three's
+	// loop, IWER's, the app's — share one XR frame; most are empty, so timing them one by one reads 0 ms)
 	await g(page, () => {
 		const proto = window.XRSession?.prototype;
 		if (!proto || proto.__timed) return;
 		const raf = proto.requestAnimationFrame;
-		window.__xrFrames = [];
+		window.__xrFrames = new Map();
 		proto.requestAnimationFrame = function (cb) {
 			return raf.call(this, (t, f) => {
 				const t0 = performance.now();
 				try {
 					cb(t, f);
 				} finally {
-					window.__xrFrames.push(performance.now() - t0);
-					if (window.__xrFrames.length > 4000) window.__xrFrames.shift();
+					const m = window.__xrFrames;
+					m.set(t, (m.get(t) ?? 0) + performance.now() - t0);
 				}
 			});
 		};
@@ -96,7 +97,7 @@ h.run(async () => {
 
 	/** XR frame times over n frames, optionally with a trigger stroke sweeping the hand */
 	const sample = async (n, stroking) => {
-		await g(page, () => (window.__xrFrames = []));
+		await g(page, () => window.__xrFrames.clear());
 		if (stroking) await iwer.button(page, pointer, 'trigger', true);
 		for (let i = 0; i < n; i++) {
 			if (stroking) await aim(-1 + (2 * i) / n);
@@ -104,7 +105,7 @@ h.run(async () => {
 		}
 		if (stroking) await iwer.button(page, pointer, 'trigger', false);
 		await iwer.frames(page, 4);
-		const list = await g(page, () => window.__xrFrames.slice());
+		const list = await g(page, () => [...window.__xrFrames.values()]);
 		const sorted = [...list].sort((a, b) => a - b);
 		const q = (p) => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))] ?? 0;
 		return { n: list.length, med: q(0.5), p95: q(0.95) };
