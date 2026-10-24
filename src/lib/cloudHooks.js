@@ -76,7 +76,16 @@ const ALWAYS_ALLOWED = new Set([
 	// reply and every update stay gateable, which is what keeps a viewer read-only.
 	'getytext',
 	// 60 Q5: the shared reference images REQUEST (the `underlay` replies stay gateable)
-	'getunderlays'
+	'getunderlays',
+	// fix-live (plans review #5, roadmap 49 follow-up): the last three `get*` requests off the
+	// floor. A viewer asking for the project manifest, a missing asset's bytes (or thumbnail) or
+	// one big material preset was DROPPED, so a cloud viewer's Explorer never filled in and a
+	// shared texture or preset stayed missing. Each only asks; the answerer sends what it already
+	// shares, and the replies (`manifest`, `assetfile`/`assetstart`/`assetchunk`/`assetmissing`,
+	// `matpresetpart`) stay gateable.
+	'getproject',
+	'getasset',
+	'getmatpreset'
 ]);
 
 /** @type {((peerId: string, msgType: string) => boolean) | null} */
