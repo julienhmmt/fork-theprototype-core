@@ -659,7 +659,7 @@
 			>
 		{/if}
 
-		{#if $connectBadge && !squeezedView && !compact}
+		{#if $connectBadge && !squeezedView}
 			<!-- F-5: a standing setting the host must never forget (the cloud plugin's "Public ·
 				 guests join" while a listed room auto-admits guests). A press opens what it names. -->
 			<button
