@@ -7,6 +7,7 @@
 //     the name and keeps pointing at the same item; Save still writes that item
 //   5 delete (Del → confirm) reaches B and closes the clean tab; Ctrl+Z restores it on both
 //   6 a viewer: the header buttons are disabled with the reason, the verbs refuse, F2 opens nothing
+//   7 the pop-out window: the tree's context menu opens there and New folder works from it
 //   screenshots dark + light (CF_SHOTS=<dir>)
 const h = require('./helpers.cjs');
 const path = require('path');
@@ -232,6 +233,18 @@ h.run(async () => {
 	h.check(JSON.stringify(after) === JSON.stringify(before), 'nothing changed in the library');
 	await shot(page, '05-viewer-dark.png');
 	await page.evaluate(() => window.__stores.cloudHooks.rolesInfo.set(null));
+
+	// ------------------------------------------------------------ 7 the same tree in the pop-out window
+	const [pop] = await Promise.all([page.context().waitForEvent('page', { timeout: 20000 }), page.locator('#code-ws-popout').first().click()]);
+	const popFiles = pop.locator('#code-ws-popped [data-tree-key="grp:files"]');
+	await popFiles.waitFor({ state: 'visible', timeout: 30000 });
+	await popFiles.click({ button: 'right' });
+	h.check(await menuItem(pop, 'New folder').isVisible(), "in the pop-out window, the tree's menu opens there (New folder)");
+	await menuItem(pop, 'New folder').click();
+	await nameIt(pop, 'Popped');
+	h.check(!!(await folderNamed(page, 'Popped')), '…and New folder from it makes the folder');
+	await shot(pop, '06-popout-menu-dark.png');
+	await pop.close();
 
 	h.check(h.pageErrors(A).length === 0 && h.pageErrors(B).length === 0, 'no page errors on either peer');
 	await h.finish(browser);
