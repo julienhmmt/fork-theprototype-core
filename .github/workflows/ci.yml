@@ -180,14 +180,20 @@ jobs:
           # Deliberately NOT added: net-stress and signaling-reconnect are multi-peer and
           # meet on the self-hosted signaling box, which a public runner cannot reach and
           # should not be pointed at (see the header) — they stay a manual gate.
-          for s in net-backoff net-mesh wire-hardening runtime-resilience diagnostics mesh-budget script-guard dispose approval-timeout; do
-            echo "::group::$s"
-            npm run e2e -- "$s" || echo "SUITE FAILED: $s"
-            echo "::endgroup::"
-          done
+          # test-health-1: through the battery runner, so a red is a red (the old loop's
+          # `|| echo SUITE FAILED` could never fail the step), a failed suite runs once more
+          # (green on the retry = flaky, reported) and tests/e2e/quarantine.json applies.
+          node scripts/ci/battery.cjs run --only net-backoff,net-mesh,wire-hardening,runtime-resilience,diagnostics,mesh-budget,script-guard,dispose,approval-timeout --port 5173 --out /tmp/smoke
       - name: dev server log on failure
         if: failure()
         run: tail -40 /tmp/dev.log
+      - name: suite logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-smoke-logs
+          path: /tmp/smoke/logs
+          if-no-files-found: ignore
 
   # 53-reader (A4): THE ACCESSIBILITY GATE. axe-core over the main surfaces (editor shell, object
   # list, Inspector, Settings, Asset Browser on recorded fixtures, phone shell) FAILS on serious and
@@ -230,6 +236,13 @@ jobs:
       - name: dev server log on failure
         if: failure()
         run: tail -40 /tmp/dev.log
+      - name: suite logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-smoke-logs
+          path: /tmp/smoke/logs
+          if-no-files-found: ignore
 
   # 38 (NOTES-38 #18): THE TOKEN SCREENSHOT DIFF. /kit renders every redesign primitive in every
   # state; this job shoots it in the dark, light and custom themes on the PR's BASE ref and on its
