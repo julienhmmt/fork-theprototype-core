@@ -18,8 +18,9 @@
 // the OPTIONAL ones run in their own shards AFTER the required ones (the free-plan runner cap is 20 jobs), are
 // reported, and gate nothing. Sharding is longest-first onto the least-loaded shard, by name on ties: every shard
 // computes the same assignment from the same file, so the plan job only says how many shards there are.
-// A failed required suite runs once more; green on the retry = `flaky` (reported, not a red). An optional red is
-// not retried, and its run is cut at the deadline (they are the slow ones: a red waits out its timeouts).
+// A required red is NOT retried on its shard: the CONFIRM step re-runs every required red (and whatever the deadline
+// left unrun) on fresh runners, two tries; green there = `flaky` (reported, not a red). An optional red is never
+// retried, and its run is cut at the deadline (they are the slow ones: a red waits out its timeouts).
 
 const fs = require('fs');
 const path = require('path');
@@ -226,8 +227,9 @@ async function run(argv) {
 	/** @type {SuiteResult[]} */
 	const results = [];
 	const par = Number(opt(argv, '--par') || b.shards.par || 1);
-	// --no-retry: a classification run (what is red on this runner at all), not a gate
-	const retry = !argv.includes('--no-retry');
+	// a second try only in the confirm step: on a FRESH runner it says something a same-shard retry does not (a
+	// loaded shard fails the same suite twice), and a shard without retries stays inside its estimate
+	const retry = set === 'confirm' || argv.includes('--retry');
 	// past the deadline no suite starts: the rest report `notrun` instead of the job being killed with nothing said
 	const deadline = Date.now() + Number(opt(argv, '--deadline') || 0) * 60000 || Infinity;
 	const save = () => fs.writeFileSync(path.join(out, `${set === 'confirm' ? 'confirm' : 'results'}-${shard}.json`), JSON.stringify({ shard, of, set, results }, null, 1));

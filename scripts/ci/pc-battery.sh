@@ -123,7 +123,10 @@ run_pr() {
 
 	# servers: base on PORT, head on PORT+1, started one after the other (a cold boot is the slow part)
 	local pids=()
-	serve() { (cd "$1" && setsid npm run dev -- --port "$2" --strictPort --host localhost > "$W/dev-$2.log" 2>&1 & echo $! > "$W/dev-$2.pid"); pids+=("$(cat "$W/dev-$2.pid")")
+	# exec'd, so $! IS the server (a session leader: one kill takes vite with it), and without fd 9 — a server
+	# holding the lock's descriptor would keep every later poll out
+	serve() { (cd "$1" && exec setsid npm run dev -- --port "$2" --strictPort --host localhost > "$W/dev-$2.log" 2>&1 9>&-) &
+		pids+=("$!")
 		for _ in $(seq 1 120); do curl -sk --max-time 300 -o /dev/null "https://localhost:$2/" && break; sleep 2; done
 		curl -sk --max-time 300 -o /dev/null "https://localhost:$2/"; curl -sk --max-time 300 -o /dev/null "https://localhost:$2/kit"; }
 	stop_servers() { for p in "${pids[@]}"; do kill -- -"$p" 2>/dev/null; done; }
