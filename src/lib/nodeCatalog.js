@@ -154,6 +154,10 @@ export const nodeCatalog = [
 				type: 'setgamestate',
 				label: 'Set Game State',
 				defaults: { state: 'playing', outcome: '' },
+				// fix-batch-1 (docs-1 Q1): the runtime always read a `trigger` wire (flowSockets
+				// types it, hudActions wires it) but the card drew no socket, so it could not be
+				// wired by hand and a built binding's wire had nowhere to land
+				inputs: ['trigger'],
 				params: [
 					{ key: 'state', kind: 'select', options: [...GAME_STATES] },
 					{ key: 'outcome', kind: 'text', placeholder: 'won / lost', maxLength: 40 },
@@ -243,6 +247,9 @@ export const nodeCatalog = [
 				type: 'setvariable',
 				label: 'Set Variable',
 				defaults: { name: 'score', value: 0, op: 'set', scope: 'shared' },
+				// fix-batch-1 (docs-1 Q1): sockets for what the runtime reads (the setgamestate note)
+				inputs: ['trigger', 'value'],
+				inputLabels: { value: 'value — wire a number (else the value below)' },
 				params: [
 					{ key: 'name', kind: 'text', placeholder: 'score', maxLength: 40 },
 					{ key: 'op', kind: 'select', options: ['set', 'add', 'subtract'] },
@@ -1353,14 +1360,17 @@ export const nodeCatalog = [
 			// writes ONE param of the device this graph belongs to (or the object a Selector
 			// names) — LOCAL per peer, the setcolor rule: the value already arrives through the
 			// replicated graph, so it is never broadcast again
-			{ type: 'deviceparam', label: 'Device Param', defaults: { key: 'level', value: 0 }, params: [{ key: 'key', kind: 'text', placeholder: 'param key (level, freq, ...)', maxLength: 40 }] },
+			// fix-batch-1: `value` is what the runtime writes (flowSockets types it) and had no
+			// socket — found by the audit's undrawn-input guard, the docs-1 Q1 class
+			{ type: 'deviceparam', label: 'Device Param', defaults: { key: 'level', value: 0 }, inputs: ['value'], inputLabels: { value: 'value — wire an LFO, a slider' }, params: [{ key: 'key', kind: 'text', placeholder: 'param key (level, freq, ...)', maxLength: 40 }] },
 			// the device's live output level, 0..1 — feeds core nodes and the HUD
 			{ type: 'devicelevel', label: 'Device Level', defaults: {} },
 			// the shared transport as a number: beat, bar, phase (0..1 of the loop), bpm, playing
 			{ type: 'transportbeat', label: 'Transport', defaults: { read: 'beat' }, params: [{ key: 'read', kind: 'select', options: ['beat', 'bar', 'phase', 'bpm', 'playing', 'loopBeats'] }] },
 			// a note-on per trigger pulse: the pulse is already the replicated event, so every
 			// peer synthesizes the note itself (once per pulse per peer)
-			{ type: 'notetrigger', label: 'Note Trigger', defaults: { note: 60, velocity: 0.9 } }
+			// fix-batch-1: it drew NO socket, so a note could not be triggered by hand (the audit guard)
+			{ type: 'notetrigger', label: 'Note Trigger', defaults: { note: 60, velocity: 0.9 }, inputs: ['trigger', 'note', 'velocity'] }
 		]
 	},
 	// 34 R2 (T3): the game kit — one group per piece, GENERATED from the piece specs

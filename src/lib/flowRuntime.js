@@ -1218,7 +1218,9 @@ function updateHudRuntime(time, ctx, now) {
  * @param {any} node @param {any} data @param {number} time @param {any} ctx */
 function hudTimerRemaining(node, data, time, ctx) {
 	const duration = Math.max(0, num(data.duration));
-	const stamp = triggerStampFor(node.id, ctx);
+	// fix-batch-1 (docs-1 Q1): the card's socket is `start` (flowSockets types it), and only an
+	// unnamed / `trigger` wire counted — a Start wired by hand was ignored
+	const stamp = triggerStampFor(node.id, ctx, 'start');
 	if (stamp === null) return data.autostart === false ? duration : Math.max(0, duration - time);
 	// a synced stamp can sit AHEAD of `time` by a frame; clamp both ends
 	return Math.max(0, Math.min(duration, duration - (time - stamp)));
@@ -2081,12 +2083,13 @@ function updateDerivedPulses(ctx, fired = scheduledFired) {
 }
 
 /** The shared timestamp of whatever event is wired into this node's `trigger`
- * (the newest, with several sources fanned in). @param {string} nodeId @param {any} ctx */
-function triggerStampFor(nodeId, ctx) {
+ * (the newest, with several sources fanned in). `alias` = a second handle name that counts as
+ * the trigger (HUD Timer's `start`). @param {string} nodeId @param {any} ctx @param {string} [alias] */
+function triggerStampFor(nodeId, ctx, alias = '') {
 	if (!ctx?.triggers) return null;
 	let newest = null;
 	for (const edge of edgesInto(edges, nodeId)) {
-		if (edge.targetHandle && edge.targetHandle !== 'trigger') continue;
+		if (edge.targetHandle && edge.targetHandle !== 'trigger' && edge.targetHandle !== alias) continue;
 		// 21-E4: a Delay/Sequence source has NO entry in the trigger log - its stamp is
 		// derived - so reading the log directly here left those nodes unable to drive
 		// anything that acts on a trigger edge (hudscreen, setgamestate, playanim).
