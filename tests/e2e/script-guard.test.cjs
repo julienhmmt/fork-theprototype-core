@@ -140,8 +140,10 @@ h.run(async () => {
 	// script at a million iterations, so it cannot buy time by looping MORE, it has to do
 	// more work per iteration. 900k plain additions measured about a millisecond here and
 	// the check failed for the fixture's sake rather than the feature's.
+	// (the counter on window is test-health-1's: when the badge never comes, it tells "the node did
+	// not run" from "it ran and was never paused")
 	const SLOW_SRC =
-		'let s = 0; for (let i = 0; i < 500000; i++) { s += Math.sin(i) * Math.cos(i); } data.s = s;';
+		'let s = 0; for (let i = 0; i < 500000; i++) { s += Math.sin(i) * Math.cos(i); } data.s = s; globalThis.__slowRuns = (globalThis.__slowRuns || 0) + 1;';
 	const bodyMs = await A.page.evaluate((src) => {
 		const fn = new Function('data', src);
 		const t0 = performance.now();
@@ -166,7 +168,20 @@ h.run(async () => {
 		)
 		.then((r) => r.jsonValue())
 		.catch(() => null);
-	h.check(!!slowBadge, `a slow node is paused rather than left to eat the frame (${slowBadge})`);
+	const slowWhy = slowBadge
+		? slowBadge
+		: JSON.stringify(
+				await A.page
+					.evaluate(() => {
+						/** @type {any} */ let errs = {};
+						/** @type {any} */ let paused = null;
+						window.__stores.scriptErrors.subscribe((/** @type {any} */ m) => (errs = m))();
+						window.__stores.flowPaused.subscribe((/** @type {any} */ p) => (paused = p))();
+						return { runs: /** @type {any} */ (globalThis).__slowRuns ?? 0, errs, paused, visible: document.visibilityState };
+					})
+					.catch((/** @type {any} */ e) => String(e))
+			);
+	h.check(!!slowBadge, `a slow node is paused rather than left to eat the frame (${slowWhy})`);
 	h.check(
 		await A.page.evaluate(() => 1 + 1).then((v) => v === 2),
 		'and the page is still responsive after it'
