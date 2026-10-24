@@ -244,14 +244,18 @@ h.run(async () => {
 	console.log('\n=== 2. Set Velocity ===');
 
 	await page.evaluate(() => window.__stores.physics.stopSimulation());
+	// test-health-1: a TOGGLE holds the trigger, as 1.4 does. A held Key Press is re-stamped AFTER
+	// the physics actions read it in runTick, so on a page slower than its 0.3 s pulse (~3 fps,
+	// software GL) the key read 0 every frame and this section measured -0.00 m/s; what 2.x is
+	// about is Set Velocity's continuous mode, not the key (the key path stays in 1.x and 6.x).
 	await setGraph(
 		page,
 		[
-			node('key1', 'keypress', { code: 'KeyR', pulse: 0.3 }),
+			node('tog2', 'toggle', { on: false }),
 			node('sv1', 'setvelocity', { mode: 'continuous', x: 2, y: 0, z: 0 }, 200),
 			node('sel1', 'objectselector', { selected: box }, 400)
 		],
-		[edge('key1', 'sv1', 'trigger'), edge('sv1', 'sel1')]
+		[edge('tog2', 'sv1', 'trigger'), edge('sv1', 'sel1')]
 	);
 	await page.evaluate(
 		(uuid) => {
@@ -267,16 +271,12 @@ h.run(async () => {
 	await page.evaluate(() => window.__stores.physics.toggleSimulation());
 	await page.waitForTimeout(1200);
 
-	await page.evaluate(() => {
-		document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyR', bubbles: true }));
-	});
+	await page.evaluate(() => window.__stores.nodesHandler.setNodeData('tog2', { on: true }));
 	await page.waitForTimeout(1400); // let it reach the speed before sampling it
 	const held1 = (await bodyOf(page, box))?.linvel?.x ?? 0;
 	await page.waitForTimeout(700);
 	const held2 = (await bodyOf(page, box))?.linvel?.x ?? 0;
-	await page.evaluate(() => {
-		document.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyR', bubbles: true }));
-	});
+	await page.evaluate(() => window.__stores.nodesHandler.setNodeData('tog2', { on: false }));
 	// the velocity is re-written once per FLOW TICK, and friction bleeds it between
 	// ticks, so the observable property is a STEADY speed rather than exactly the
 	// dialled number
@@ -475,7 +475,11 @@ h.run(async () => {
 			return original(message);
 		};
 	});
-	const beforeHopY = (await posOf(B.page, box))[1];
+	// test-health-1: the box reaches B through the object sync, which can land well after the graph
+	// (6.3) on a software-GL page — read it once it is there (a box that never arrives is a named red
+	// here, not a TypeError that ended the suite at this line)
+	await h.eventually(() => posOf(B.page, box), (p) => Array.isArray(p), '6.5a (premise) the late joiner has the box', 30000);
+	const beforeHopY = (await posOf(B.page, box))?.[1] ?? 0;
 	// Drive the trigger through applyNodeTrigger — the SAME entry point a Key
 	// Press produces (flowRuntime calls exactly this, with replicate: true), so
 	// the path under test is unchanged: rising edge -> updatePhysicsActions ->

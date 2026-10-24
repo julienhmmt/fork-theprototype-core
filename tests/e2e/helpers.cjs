@@ -252,6 +252,28 @@ async function setupPageQuiet(browser, name, others, options = {}) {
 
 /** Connect `from` to `to` (approve on `to`), then let the mesh settle. */
 async function connect(from, to, settleMs = 9000) {
+	// test-health-1: dial the id the page holds NOW. setupPage reads it before the signaling link
+	// has opened, and a page whose first id the server reports as taken re-rolls it
+	// (peerHandler 'unavailable-id') — behaviours dialled the stale id and waited 30 s for an
+	// Approve card that could never come. Wait (bounded) for both links, then re-read both ids.
+	for (const peer of [from, to]) {
+		const live = await peer.page
+			.waitForFunction(
+				() => {
+					/** @type {any} */ let p;
+					window.__stores.peers.subscribe((v) => (p = v))();
+					return p?.peer?.open && p.peer.id ? p.peer.id : false;
+				},
+				null,
+				{ timeout: 20000 }
+			)
+			.then((r) => r.jsonValue())
+			.catch(() => null);
+		if (live && live !== peer.id) {
+			console.log(`[helpers] ${peer.id} is ${live} now (the id was re-rolled)`);
+			peer.id = live;
+		}
+	}
 	await step(from, 'fill the peer id', () =>
 		from.page.locator('input[placeholder="Enter peer ID to connect"]').fill(to.id)
 	);
