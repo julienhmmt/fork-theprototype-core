@@ -88,7 +88,8 @@ released version instead of drifting (it carried a stale 1.8.0 before 1.11.0).
 - **Record the release's known reds** (the desk battery's baseline, pipeline-1): right after the tag, run the
   battery once ON THE TAG — two halves, each on a pc slot where the e2e-slot setup has them — and save it:
   ```sh
-  node scripts/ci/battery-desk.cjs run --half A --root <checkout of vX.Y.Z> --out <dir> --name blA   # and --half B
+  bash scripts/ci/battery-snapshot.sh vX.Y.Z <dir>     # git archive + .env + certs + the desk tool (NOT archive alone)
+  cd <dir> && BATTERY_COMMIT=vX.Y.Z node scripts/ci/battery-desk.cjs run --half A --out test-results/bl --name blA   # and --half B
   node scripts/ci/battery-desk.cjs baseline save vX.Y.Z <dir>
   ```
   The next integrator runs the same halves on its union and calls `battery-desk.cjs diff --baseline vX.Y.Z <dir>`:
