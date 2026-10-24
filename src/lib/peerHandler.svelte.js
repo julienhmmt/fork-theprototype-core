@@ -36,7 +36,7 @@ import { registerDebugHook } from '$lib/debugHooks';
 import { routePerfLive, perfLivePeerGone } from '$lib/perf/liveWire.js'; // 34 PF: the live perf stream (an import-free leaf)
 import { noteWireError } from '$lib/wireErrors';
 import { composeAdmitNotice, shortPeer } from '$lib/admitNotice';
-import { ICE_DROP_GRACE_MS, strikesNeeded, quietPeerError, unavailablePeerId } from '$lib/peerDrop';
+import { ICE_DROP_GRACE_MS, LINK_POLL_MS, strikesNeeded, quietPeerError, unavailablePeerId, consentCounters, linkSilence } from '$lib/peerDrop';
 import { noteWire } from '$lib/sceneBudget';
 import { applyAnnotation, applyAnnotationsSnapshot, sendAnnotations } from '$lib/annotationsHandler';
 import { applyPing } from '$lib/ping';
@@ -834,29 +834,55 @@ export class PeerConnection {
 			// both invisible. This is the one function every creation site already calls —
 			// the four dials and the adopted inbound conn — so one listener pair covers all.
 			conn.on('error', (/** @type {any} */ err) => noteWireError(conn.peer, 'conn-error', err?.type ?? err));
+			// F-3: a peer that died without closing its channel (a killed process, a crashed tab)
+			// leaves the conn "open" — a ghost in Users. Two watches close it ourselves, and the
+			// close runs the ordinary reconnect window, which redials a live peer and drops a gone
+			// one: ICE held `disconnected` past the grace (ICE took ~15 s to say so in the crash
+			// probe), and the selected pair's consent checks going unanswered (peerDrop.linkSilence).
 			/** @type {ReturnType<typeof setTimeout> | null} */
 			let iceDropTimer = null;
+			/** @type {ReturnType<typeof setInterval> | null} */
+			let silenceTimer = null;
+			const closeSilent = (/** @type {string} */ why) => {
+				if (!conn.open) return;
+				log('warn', 'net', 'link silent — closing it so the peer is redialled or dropped', { peer: conn.peer, why });
+				this.silentDrops.add(conn.peer);
+				try { conn.close(); } catch (e) { /* already dead */ }
+			};
 			conn.on('iceStateChanged', (/** @type {any} */ state) => {
 				if (state === 'failed' || state === 'closed') noteWireError(conn.peer, 'ice-' + state);
-				// F-3: a peer that died without closing its channel leaves ICE `disconnected`
-				// and the conn "open" for 30 s or forever — a ghost in Users. Held past the
-				// grace, close it ourselves: the close runs the ordinary reconnect window, which
-				// redials a live peer and drops a gone one.
 				if (state === 'disconnected') {
 					if (iceDropTimer) clearTimeout(iceDropTimer);
 					iceDropTimer = setTimeout(() => {
 						iceDropTimer = null;
-						if (conn.peerConnection?.iceConnectionState !== 'disconnected' || !conn.open) return;
-						log('warn', 'net', 'link silent — closing it so the peer is redialled or dropped', { peer: conn.peer });
-						this.silentDrops.add(conn.peer);
-						try { conn.close(); } catch (e) { /* already dead */ }
+						if (conn.peerConnection?.iceConnectionState === 'disconnected') closeSilent('ice-disconnected');
 					}, ICE_DROP_GRACE_MS);
 				} else if (iceDropTimer) {
 					clearTimeout(iceDropTimer);
 					iceDropTimer = null;
 				}
 			});
-			conn.on('close', () => { if (iceDropTimer) clearTimeout(iceDropTimer); });
+			const watchSilence = () => {
+				if (silenceTimer) return;
+				/** @type {any} */
+				let seen = null;
+				silenceTimer = setInterval(async () => {
+					const pc = conn.peerConnection;
+					if (!conn.open || !pc || typeof pc.getStats !== 'function') return;
+					try {
+						const verdict = linkSilence(seen, consentCounters(await pc.getStats()), Date.now());
+						seen = verdict.state;
+						if (verdict.silent) closeSilent('consent-unanswered');
+					} catch (e) { /* stats unavailable: the ICE watch still stands */ }
+				}, LINK_POLL_MS);
+			};
+			if (conn.open) watchSilence();
+			conn.on('open', watchSilence);
+			conn.on('close', () => {
+				if (iceDropTimer) clearTimeout(iceDropTimer);
+				if (silenceTimer) clearInterval(silenceTimer);
+				silenceTimer = null;
+			});
 			// The dispatch chain itself, called from the guarded handler below. Naming it is
 			// what lets a try/catch wrap 440 lines without re-indenting any of them.
 			const dispatch = (/** @type {any} */ data) => {

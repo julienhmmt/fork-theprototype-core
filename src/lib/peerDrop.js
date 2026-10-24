@@ -18,6 +18,50 @@
  * window (the B5 path), so a live peer is redialled, never lost. */
 export const ICE_DROP_GRACE_MS = 4000;
 
+/** how often a live link's ICE stats are read, and how long its consent checks may go
+ * unanswered before the link counts as dead. libwebrtc pings a writable pair every ≤ 2.5 s, so
+ * 7 s is two to three missed answers; ICE's own `disconnected` took ~15 s to show here (two
+ * Chromium peers, one renderer crashed) and `failed` 30 s+ or never. */
+export const LINK_POLL_MS = 2000;
+export const LINK_SILENT_MS = 7000;
+
+/**
+ * Read the selected candidate pair's consent counters out of an RTCStatsReport-like map.
+ * @param {Iterable<any> | {forEach: Function} | null | undefined} report
+ * @returns {{ requestsSent: number, responsesReceived: number } | null}
+ */
+export function consentCounters(report) {
+	if (!report) return null;
+	/** @type {any[]} */
+	const rows = [];
+	if (typeof (/** @type {any} */ (report).forEach) === 'function') /** @type {any} */ (report).forEach((/** @type {any} */ r) => rows.push(r));
+	else for (const r of /** @type {Iterable<any>} */ (report)) rows.push(r);
+	const transport = rows.find((r) => r?.type === 'transport' && r.selectedCandidatePairId);
+	const pair =
+		(transport && rows.find((r) => r?.id === transport.selectedCandidatePairId)) ||
+		rows.find((r) => r?.type === 'candidate-pair' && (r.selected || (r.nominated && r.state === 'succeeded')));
+	if (!pair || !Number.isFinite(pair.requestsSent) || !Number.isFinite(pair.responsesReceived)) return null;
+	return { requestsSent: pair.requestsSent, responsesReceived: pair.responsesReceived };
+}
+
+/**
+ * One poll of the silence watch. `state` carries the last answer count and when it last
+ * moved; a link is SILENT when we kept asking (requestsSent moved) and nothing answered for
+ * LINK_SILENT_MS. No counters (stats unsupported, no selected pair yet) = never silent.
+ * @param {{ responses: number, requests: number, at: number } | null} state
+ * @param {{ requestsSent: number, responsesReceived: number } | null} counters
+ * @param {number} now
+ * @returns {{ state: { responses: number, requests: number, at: number } | null, silent: boolean }}
+ */
+export function linkSilence(state, counters, now) {
+	if (!counters) return { state, silent: false };
+	if (!state || counters.responsesReceived !== state.responses) {
+		return { state: { responses: counters.responsesReceived, requests: counters.requestsSent, at: now }, silent: false };
+	}
+	const asked = counters.requestsSent > state.requests;
+	return { state, silent: asked && now - state.at >= LINK_SILENT_MS };
+}
+
 /** "this id is not on the signaling server" answers, while redialling a dropped peer,
  * before we stop waiting for them. The server answers a dial to an unknown id only when the
  * offer EXPIRES (~5 s, peerjs-server `expire_timeout`), so answers are slow: a channel that
