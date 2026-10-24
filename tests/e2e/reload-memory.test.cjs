@@ -11,7 +11,6 @@
 // GPU process). Evidence: EVIDENCE/reload-memory.json.
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
 const h = require('./helpers.cjs');
 
 const RELOADS = Number(process.env.RELOADS || 6);
@@ -22,48 +21,55 @@ const EVIDENCE = process.env.EVIDENCE || path.join(process.env.HOME || '.', '.co
 const MAX_HEAP_MB_PER_RELOAD = Number(process.env.MAX_HEAP_MB_PER_RELOAD || 5);
 const MAX_GPU_MB_PER_RELOAD = Number(process.env.MAX_GPU_MB_PER_RELOAD || 25);
 
-/** RSS (MB) of the renderer + gpu processes under this browser @param {number} rootPid */
-function processRss(rootPid) {
-	const rows = execSync('ps -eo pid=,ppid=,rss=,args=', { encoding: 'utf8', maxBuffer: 64 << 20 })
-		.split('\n')
-		.map((l) => /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/.exec(l))
-		.filter((m) => m !== null)
-		.map((m) => ({ pid: +m[1], ppid: +m[2], rss: +m[3], args: m[4] }));
-	const mine = new Set([rootPid]);
-	for (let grew = true; grew; ) {
-		grew = false;
-		for (const r of rows) if (mine.has(r.ppid) && !mine.has(r.pid)) mine.add(r.pid), (grew = true);
+/** RSS (MB) of the renderer + gpu processes of this browser, by type, from Chromium's own process
+ * list (SystemInfo.getProcessInfo — Playwright's Browser has no process(), only a BrowserServer
+ * does, so the first version never measured these). /proc is local only: on a remote slot the
+ * browser runs elsewhere and this answers null. @param {any} bcdp */
+async function processRss(bcdp) {
+	try {
+		const { processInfo } = await bcdp.send('SystemInfo.getProcessInfo');
+		const rss = (/** @type {number} */ pid) => {
+			const m = /VmRSS:\s+(\d+) kB/.exec(fs.readFileSync(`/proc/${pid}/status`, 'utf8'));
+			return m ? +m[1] / 1024 : 0;
+		};
+		const sum = (/** @type {string} */ type) => Math.round(processInfo.filter((/** @type {any} */ p) => p.type === type).reduce((t, /** @type {any} */ p) => t + rss(p.id), 0));
+		return { renderer: sum('renderer'), gpu: sum('GPU') };
+	} catch {
+		return { renderer: null, gpu: null };
 	}
-	const sum = (/** @type {RegExp} */ re) => Math.round(rows.filter((r) => mine.has(r.pid) && re.test(r.args)).reduce((t, r) => t + r.rss, 0) / 1024);
-	return { renderer: sum(/--type=renderer/), gpu: sum(/--type=gpu-process/) };
 }
 
 h.run(async () => {
 	const browser = await h.launch();
-	const rootPid = browser.process?.()?.pid ?? 0;
+	const bcdp = await browser.newBrowserCDPSession();
 	const A = await h.setupPage(browser, 'A');
+	// Runtime.getHeapUsage + Memory.getDOMCounters are read FRESH per call; the first version read
+	// Performance.getMetrics, which on a reloaded target kept answering the first document's
+	// numbers (seven byte-identical rows), so it could not see growth at all
 	const cdp = await A.page.context().newCDPSession(A.page);
-	await cdp.send('Performance.enable');
 	await cdp.send('HeapProfiler.enable');
 	const sample = async (/** @type {number} */ i) => {
 		await A.page.waitForTimeout(SETTLE_MS);
 		await cdp.send('HeapProfiler.collectGarbage');
 		await cdp.send('HeapProfiler.collectGarbage');
-		const m = Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map((/** @type {any} */ x) => [x.name, x.value]));
+		const heap = await cdp.send('Runtime.getHeapUsage');
+		const dom = await cdp.send('Memory.getDOMCounters');
 		const gl = await A.page.evaluate(() => {
 			/** @type {any} */ let r;
-			window.__stores.renderer?.subscribe?.((/** @type {any} */ v) => (r = v))?.();
+			window.__stores.globalRenderer.subscribe((/** @type {any} */ v) => (r = v))();
 			return r?.info?.memory ?? null;
 		}).catch(() => null);
+		// the premise: every sample is a FRESH document (an unchanged timeOrigin = no reload happened)
+		const origin = await A.page.evaluate(() => performance.timeOrigin);
 		return {
 			reload: i,
-			heapMB: Math.round((m.JSHeapUsedSize / 1048576) * 10) / 10,
-			documents: m.Documents,
-			frames: m.Frames,
-			nodes: m.Nodes,
-			listeners: m.JSEventListeners,
+			origin,
+			heapMB: Math.round((heap.usedSize / 1048576) * 10) / 10,
+			documents: dom.documents,
+			nodes: dom.nodes,
+			listeners: dom.jsEventListeners,
 			gl,
-			...(rootPid ? processRss(rootPid) : {})
+			...(await processRss(bcdp))
 		};
 	};
 	/** @type {any[]} */
@@ -85,13 +91,16 @@ h.run(async () => {
 	fs.writeFileSync(path.join(EVIDENCE, 'reload-memory.json'), JSON.stringify({ at: new Date().toISOString(), url: h.URL, rows, crashed }, null, 1));
 
 	h.check(!crashed, `the tab survives ${RELOADS} reloads (${crashed || 'all of them'})`);
+	h.check(new Set(rows.map((r) => r.origin)).size === rows.length, `premise: each sample is a fresh document (${new Set(rows.map((r) => r.origin)).size} distinct of ${rows.length})`);
 	// growth from the FIRST reload on: reload 0 -> 1 warms caches every app has
 	const from = rows[1] ?? rows[0];
 	const last = rows[rows.length - 1];
 	const n = Math.max(1, last.reload - from.reload);
 	const heapPer = (last.heapMB - from.heapMB) / n;
 	h.check(heapPer <= MAX_HEAP_MB_PER_RELOAD, `JS heap after GC grows <= ${MAX_HEAP_MB_PER_RELOAD} MB per reload (${heapPer.toFixed(1)} MB/reload: ${rows.map((r) => r.heapMB).join(' → ')})`);
-	h.check(rows.slice(1).every((r) => r.documents <= 2), `no old document is retained (live Documents per reload: ${rows.map((r) => r.documents).join(', ')})`);
+	// an absolute count says little (the page legitimately owns more than one: iframes, an inert
+	// template document); a RETAINED old document shows up as the count climbing reload by reload
+	h.check(last.documents <= from.documents, `no old document is retained (live Documents per reload: ${rows.map((r) => r.documents).join(', ')})`);
 	if (last.gpu != null && from.gpu != null) {
 		const gpuPer = (last.gpu - from.gpu) / n;
 		h.check(gpuPer <= MAX_GPU_MB_PER_RELOAD, `GPU process RSS grows <= ${MAX_GPU_MB_PER_RELOAD} MB per reload (${gpuPer.toFixed(1)} MB/reload: ${rows.map((r) => r.gpu).join(' → ')})`);
