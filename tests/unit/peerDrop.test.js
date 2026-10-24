@@ -4,7 +4,8 @@ import {
 	unavailablePeerId,
 	LEAVE_QUIET_MS,
 	ICE_DROP_GRACE_MS,
-	UNAVAILABLE_STRIKES
+	UNAVAILABLE_STRIKES,
+	strikesNeeded
 } from '../../src/lib/peerDrop.js';
 
 // F-3: a dropped peer leaves Users within seconds and a leave never toasts "Connection error".
@@ -30,9 +31,13 @@ describe('F-3 peer drop policy', () => {
 		expect(unavailablePeerId('something else')).toBe('');
 		expect(unavailablePeerId(undefined)).toBe('');
 	});
-	it('drops a dead peer in seconds, not the old 30 s+', () => {
-		// ICE grace + the strikes' share of the 0.5/1/2 s backoff
-		const backoff = [500, 1000, 2000, 4000, 8000].slice(0, UNAVAILABLE_STRIKES).reduce((a, b) => a + b, 0);
-		expect(ICE_DROP_GRACE_MS + backoff).toBeLessThanOrEqual(10000);
+	it('a link closed for silence needs one "not on the server" answer, a closed channel three', () => {
+		expect(strikesNeeded(true)).toBe(1);
+		expect(strikesNeeded(false)).toBe(UNAVAILABLE_STRIKES);
+		expect(UNAVAILABLE_STRIKES).toBeGreaterThan(1);
+	});
+	it('drops a silent peer well inside the reconnect window', () => {
+		// grace + the first redial (0.5 s) + one EXPIRE answer (~5 s) < the 15.5 s window
+		expect(ICE_DROP_GRACE_MS + 500 + 5000).toBeLessThan(15500);
 	});
 });

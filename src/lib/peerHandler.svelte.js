@@ -36,7 +36,7 @@ import { registerDebugHook } from '$lib/debugHooks';
 import { routePerfLive, perfLivePeerGone } from '$lib/perf/liveWire.js'; // 34 PF: the live perf stream (an import-free leaf)
 import { noteWireError } from '$lib/wireErrors';
 import { composeAdmitNotice, shortPeer } from '$lib/admitNotice';
-import { ICE_DROP_GRACE_MS, UNAVAILABLE_STRIKES, quietPeerError, unavailablePeerId } from '$lib/peerDrop';
+import { ICE_DROP_GRACE_MS, strikesNeeded, quietPeerError, unavailablePeerId } from '$lib/peerDrop';
 import { noteWire } from '$lib/sceneBudget';
 import { applyAnnotation, applyAnnotationsSnapshot, sendAnnotations } from '$lib/annotationsHandler';
 import { applyPing } from '$lib/ping';
@@ -293,6 +293,9 @@ export class PeerConnection {
 		/** F-3: peerId -> "not on the signaling server" answers while we redial them
 		 * @type {Map<string, number>} */
 		this.unavailableStrikes = new Map();
+		/** F-3: peers whose link WE closed for ICE silence — one "not on the server" answer
+		 * then ends the wait (peerDrop.strikesNeeded) @type {Set<string>} */
+		this.silentDrops = new Set();
 		/** F-5: peers the host removed from an automatic admission — their re-dials are
 		 * refused for the rest of this tab's session, guests setting or not @type {Set<string>} */
 		this.removedPeers = new Set();
@@ -845,6 +848,7 @@ export class PeerConnection {
 						iceDropTimer = null;
 						if (conn.peerConnection?.iceConnectionState !== 'disconnected' || !conn.open) return;
 						log('warn', 'net', 'link silent — closing it so the peer is redialled or dropped', { peer: conn.peer });
+						this.silentDrops.add(conn.peer);
 						try { conn.close(); } catch (e) { /* already dead */ }
 					}, ICE_DROP_GRACE_MS);
 				} else if (iceDropTimer) {
@@ -1939,6 +1943,7 @@ export class PeerConnection {
 						log('info', 'net', 'reconnected', { peer: peerId });
 						this.reconnecting.delete(peerId);
 						this.unavailableStrikes.delete(peerId);
+						this.silentDrops.delete(peerId);
 						peers.update((value) => value);
 						this.sendHandshake(conn, peerId, true, this.peer.id);
 					});
@@ -2005,7 +2010,7 @@ export class PeerConnection {
 			try { dead.close(); } catch (e) { /* never opened */ }
 		}
 		log('info', 'net', 'redial: peer not on the server', { peer: peerId, strikes });
-		if (strikes >= UNAVAILABLE_STRIKES) this.finalizeDisconnect(peerId, true);
+		if (strikes >= strikesNeeded(this.silentDrops.has(peerId))) this.finalizeDisconnect(peerId, true);
 	}
 
 	// The peer is really gone: full per-peer teardown (self-heal — a relayed
@@ -2018,6 +2023,7 @@ export class PeerConnection {
 	finalizeDisconnect(peerId, relay) {
 		this.reconnecting.delete(peerId);
 		this.unavailableStrikes.delete(peerId);
+		this.silentDrops.delete(peerId);
 		this.lastLeaveAt = Date.now();
 		const conn = this.connections[peerId];
 		if (conn) {
@@ -2057,6 +2063,7 @@ export class PeerConnection {
 		this.broadcast({ type: 'disconnected', peerId: this.peer.id });
 		this.lastLeaveAt = Date.now(); // F-3: the closes below make peer-level noise
 		this.unavailableStrikes.clear();
+		this.silentDrops.clear();
 		dropPeerUnderlays(null); // 60 Q5: every peer's shared reference images go with the session
 		this.reconnecting.clear(); // pending retry timers see a cleared map and no-op
 		this.gracefulLeft.clear();

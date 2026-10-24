@@ -16,13 +16,21 @@
 /** how long ICE may sit in `disconnected` before we treat the link as dropped. Chromium
  * recovers a lossy-but-alive link well inside this; a dropped one goes to the reconnect
  * window (the B5 path), so a live peer is redialled, never lost. */
-export const ICE_DROP_GRACE_MS = 5000;
+export const ICE_DROP_GRACE_MS = 4000;
 
 /** "this id is not on the signaling server" answers, while redialling a dropped peer,
- * before we stop waiting for them. Three spans ~3.5 s of the backoff (0.5 + 1 + 2 s): long
- * enough for a signaling blip on their side, short enough that a dead peer is gone in
- * seconds. */
+ * before we stop waiting for them. The server answers a dial to an unknown id only when the
+ * offer EXPIRES (~5 s, peerjs-server `expire_timeout`), so answers are slow: a channel that
+ * CLOSED (a wifi hop, a lid) takes three — a signaling blip on their side heals inside that —
+ * while a link we closed for SILENCE (ICE quiet past the grace: nothing has come from them
+ * for 10 s already) takes one. Measured on two Chromium peers, one renderer crashed: the
+ * three-answer rule could not land inside the 15.5 s reconnect window at all. */
 export const UNAVAILABLE_STRIKES = 3;
+
+/** @param {boolean} silent was the link closed for ICE silence? @returns {number} */
+export function strikesNeeded(silent) {
+	return silent ? 1 : UNAVAILABLE_STRIKES;
+}
 
 /** after a leave, a drop or a redial, peer-level noise for this long is a symptom of
  * that, never news. */
