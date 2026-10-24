@@ -16,7 +16,9 @@
 //  2. HARD (a network CHANGE): the same, plus the peer connection is closed outright at the start, so
 //     the B5 reconnect window has to redial — through a signaling server it cannot reach until the
 //     drop ends. The window is ~15.5 s (checks at 0.5/1/2/4/8 s), so a 5 s drop must fit inside it.
-// Counterfactual: NETDROP_MS=20000 outlasts the window — phase 2 goes red (teardown + toast).
+// Counterfactual: NETDROP_MS=20000 outlasts the window — phase 2 goes red (teardown + toast; measured
+// e2e/v10cf). Phase 1 stays green at 20 s, by design: a QUIET drop never breaks the data channel, so it
+// proves the conn carries on, not the window's length.
 const h = require('./helpers.cjs');
 
 const DROP_MS = Number(process.env.NETDROP_MS || 5000);
@@ -51,6 +53,16 @@ function dropShim() {
 	proto.addEventListener = function (/** @type {string} */ type, /** @type {any} */ fn, /** @type {any} */ opts) {
 		return add.call(this, type, type === 'message' && typeof fn === 'function' ? wrap(fn) : fn, opts);
 	};
+	// the signaling server stays unreachable for the whole drop: offline emulation alone let peerjs's
+	// own reconnect back in mid-drop (A was on the server again at 2.8 s), so a socket opened while
+	// the drop holds goes nowhere
+	const RealWS = window.WebSocket;
+	// @ts-ignore
+	window.WebSocket = function (/** @type {string} */ url, /** @type {any} */ protocols) {
+		return new RealWS(D.holding ? 'wss://127.0.0.1:9/' : url, protocols);
+	};
+	window.WebSocket.prototype = RealWS.prototype;
+	Object.setPrototypeOf(window.WebSocket, RealWS);
 	const Real = window.RTCPeerConnection;
 	// @ts-ignore
 	window.RTCPeerConnection = function (/** @type {any[]} */ ...args) {
@@ -161,6 +173,11 @@ h.run(async () => {
 				} catch {}
 			});
 		}
+		// the premise is read AT THE CUT: whether peerjs's own reconnect later slips past the shim (it did,
+		// now and then) is the app recovering, not the drop failing to happen
+		let cut = false;
+		for (const t = Date.now(); !cut && Date.now() - t < 3000; await A.page.waitForTimeout(150))
+			cut = !(await signalingUp(A)) && !(await signalingUp(B)); // peerjs marks itself down on the socket's close event
 		if (shape === 'hard') {
 			await A.page.evaluate((/** @type {string} */ id) => {
 				/** @type {any} */ let pc;
@@ -171,7 +188,20 @@ h.run(async () => {
 		const t0 = Date.now();
 		/** @type {string[]} */
 		const lost = [];
+		/** what each side's reconnect window is doing, printed if the heal fails @type {string[]} */
+		const timeline = [];
+		const state = (/** @type {any} */ p, /** @type {string} */ id) =>
+			p.page
+				.evaluate((/** @type {string} */ pid) => {
+					/** @type {any} */ let pc;
+					window.__stores.peers.subscribe((/** @type {any} */ v) => (pc = v))();
+					const c = pc.connections[pid];
+					const age = (/** @type {any} */ x) => (x?.__dialedAt ? Math.round((Date.now() - x.__dialedAt) / 100) / 10 + 's' : '-');
+					return `sig=${pc.peer?.open ? 1 : 0} rec=${pc.reconnecting.get(pid) ?? '-'} conn=${c ? (c.open ? 'open' : 'neg ' + age(c)) : 'none'} in=${pc.inboundDials?.has(pid) ? 'neg ' + age(pc.inboundDials.get(pid)) : '-'} opened=${pc.openedPeers.has(pid) ? 1 : 0}`;
+				}, id)
+				.catch((/** @type {any} */ e) => 'err ' + String(e?.message ?? e).slice(0, 60));
 		const watch = async () => {
+			timeline.push(`${((Date.now() - t0) / 1000).toFixed(1)}s A[${await state(A, B.id)}] B[${await state(B, A.id)}]`);
 			if (!(await inRoster(A, B.id))) lost.push(`A lost B at ${Date.now() - t0}ms`);
 			if (!(await inRoster(B, A.id))) lost.push(`B lost A at ${Date.now() - t0}ms`);
 			if ((await bLocks()) === 0) lost.push(`A dropped B's lock at ${Date.now() - t0}ms`);
@@ -184,9 +214,9 @@ h.run(async () => {
 			await watch();
 			await A.page.waitForTimeout(500);
 		}
-		h.check(!(await signalingUp(A)) && !(await signalingUp(B)), `${tag} premise: the signaling link really was down on both pages`);
-		// ---- the network comes back
-		for (const p of [A, B]) await p.page.context().setOffline(false);
+		h.check(cut, `${tag} premise: the signaling link really was down on both pages (at the cut)`);
+		// ---- the network comes back: lift the shim's hold FIRST, so the app's own `online` retry
+		// (fired by setOffline(false)) reaches the real server rather than the held-down socket
 		for (const p of [A, B]) {
 			await p.page.evaluate(() => {
 				// @ts-ignore
@@ -195,9 +225,11 @@ h.run(async () => {
 				window.__drop.release();
 			});
 		}
-		// watch the roster through the rest of the reconnect window (~15.5 s from the drop's start)
+		for (const p of [A, B]) await p.page.context().setOffline(false);
+		// watch the roster through the rest of the reconnect window: ~15.5 s from the drop's start, plus
+		// the up-to-20 s its last check gives a dial still negotiating (VERDICT_GRACE_MS)
 		const healed = { a: false, b: false };
-		while (Date.now() - t0 < Math.max(DROP_MS, 0) + 17000) {
+		while (Date.now() - t0 < Math.max(DROP_MS, 0) + 37000) {
 			await watch();
 			healed.a ||= await openTo(A, B.id);
 			healed.b ||= await openTo(B, A.id);
@@ -205,7 +237,9 @@ h.run(async () => {
 			await A.page.waitForTimeout(500);
 		}
 		h.check(lost.length === 0, `${tag} each peer kept the other in its roster, and B's lock stood, throughout (${lost.slice(0, 2).join(', ') || 'never lost'})`);
-		h.check((await openTo(A, B.id)) && (await openTo(B, A.id)), `${tag} the conn is open both ways again`);
+		const healedBoth = (await openTo(A, B.id)) && (await openTo(B, A.id));
+		if (!healedBoth) console.log(`  ${tag} timeline (A=${A.id} B=${B.id}; the lower id dials):\n    ` + timeline.join('\n    '));
+		h.check(healedBoth, `${tag} the conn is open both ways again`);
 		h.check((await disconnectToasts(A, toastsA)) === 0 && (await disconnectToasts(B, toastsB)) === 0, `${tag} no "disconnected" toast on either side`);
 		await h.eventually(() => has(B, duringA), (v) => v, `${tag} A's edit made during the drop reaches B`, 15000);
 		await h.eventually(() => has(A, duringB), (v) => v, `${tag} B's edit made during the drop reaches A`, 15000);
