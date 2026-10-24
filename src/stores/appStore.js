@@ -762,6 +762,36 @@ export function pushNotification(text, kind = 'info') {
   const entry = { id: `n${Date.now()}_${++_notifId}`, text, ts: Date.now(), kind };
   notifications.update((list) => [...list, entry].slice(-50));
   notificationsUnread.update((c) => c + 1);
+  return entry.id;
+}
+
+/** F-5 (fix-live): the buttons a notification-history entry KEEPS until one is pressed,
+ * keyed by entry id. Runtime only — a function cannot be persisted, so after a reload the
+ * entry is plain text again (the decision it offered belonged to that session anyway).
+ * @type {import('svelte/store').Writable<Record<string, {label: string, action: () => void}[]>>} */
+export const notificationActions = writable({});
+
+/**
+ * F-5: a decision toast whose buttons ALSO live on its notification-history entry, so a
+ * notice missed while the toast was up can still be acted on from the bell. Pressing a
+ * button in either place answers both (the history entry loses its buttons).
+ * @param {string} message @param {{label: string, action: () => void}[]} actions
+ * @returns {string} the history entry id
+ */
+export function showLastingToast(message, actions) {
+  /** @type {string} */
+  let id = '';
+  const answer = () => notificationActions.update((m) => {
+    if (!(id in m)) return m;
+    const next = { ...m };
+    delete next[id];
+    return next;
+  });
+  const wrapped = actions.map((a) => ({ ...a, action: () => { answer(); a.action(); } }));
+  toastStore.update((toast) => [...toast, { text: message, actions: wrapped }]);
+  id = pushNotification(message, 'action') || '';
+  if (id) notificationActions.update((m) => ({ ...m, [id]: wrapped }));
+  return id;
 }
 
 /**

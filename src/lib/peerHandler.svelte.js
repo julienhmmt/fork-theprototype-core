@@ -35,6 +35,7 @@ import { createFastLinks, createStaleFilter, createKeyframer, stampPose, poseKey
 import { registerDebugHook } from '$lib/debugHooks';
 import { routePerfLive, perfLivePeerGone } from '$lib/perf/liveWire.js'; // 34 PF: the live perf stream (an import-free leaf)
 import { noteWireError } from '$lib/wireErrors';
+import { composeAdmitNotice, shortPeer } from '$lib/admitNotice';
 import { ICE_DROP_GRACE_MS, UNAVAILABLE_STRIKES, quietPeerError, unavailablePeerId } from '$lib/peerDrop';
 import { noteWire } from '$lib/sceneBudget';
 import { applyAnnotation, applyAnnotationsSnapshot, sendAnnotations } from '$lib/annotationsHandler';
@@ -116,7 +117,7 @@ import { applyObjectFile } from '$lib/animatedImports';
 import { applyRemoteBehavior } from '$lib/packBehavior';
 import { sendArchBehaviorStates } from '$lib/arch/archParts.js';
 import { lockedObjects, selectedObject, peerHands, objectsGroup, pokeScene } from '../stores/sceneStore';
-import { addMessage, peers, userdata, pendingApprovals, waitingForApproval, showToast, pushNotification, chatHistory, mergeChatHistory } from '../stores/appStore';
+import { addMessage, peers, userdata, pendingApprovals, waitingForApproval, showToast, showLastingToast, pushNotification, chatHistory, mergeChatHistory } from '../stores/appStore';
 // 41 G21: the signaling link's ups and downs are a STATE on the Connect pill's dot, never toasts
 import { GIVE_UP_ATTEMPTS } from '$lib/connectionStatus';
 import { get } from 'svelte/store';
@@ -292,6 +293,9 @@ export class PeerConnection {
 		/** F-3: peerId -> "not on the signaling server" answers while we redial them
 		 * @type {Map<string, number>} */
 		this.unavailableStrikes = new Map();
+		/** F-5: peers the host removed from an automatic admission — their re-dials are
+		 * refused for the rest of this tab's session, guests setting or not @type {Set<string>} */
+		this.removedPeers = new Set();
 		/** @type {Set<string>} peers we mean to exchange FULL STATE with — the
 		 * host we're joining (requestConnect) or a joiner we approved. Mesh-fill
 		 * dials (the `hosts` flow) don't request state, and an adopted inbound
@@ -729,6 +733,12 @@ export class PeerConnection {
 					// 'admit' | 'deny' | {label} (knock). 'deny' refuses with no card — told to a
 					// joiner that can hear it. Without `decide`, `authorize` as before.
 					const cloudMeta = conn?.metadata?.cloud ?? null;
+					// F-5: someone the host removed stays out (the setting would just let them back)
+					if (this.removedPeers.has(conn.peer)) {
+						if (conn?.metadata?.jr) this.sendJoinResult(conn.peer, 'denied');
+						conn.close();
+						return;
+					}
 					const verdict = auth && typeof auth.decide === 'function' ? auth.decide(conn.peer, cloudMeta) : undefined;
 					if (verdict === 'deny') {
 						if (conn?.metadata?.jr) this.sendJoinResult(conn.peer, 'denied');
@@ -759,6 +769,7 @@ export class PeerConnection {
 						}
 						get(peers).send({ type: 'userdata', userdata: get(userdata) });
 						this.approveDialBack(conn.peer);
+						this.announceAutoAdmit(conn.peer, auth, cloudMeta);
 					}
 				} catch (e) {
 					console.error('cloud auth provider threw:', e);
@@ -1936,6 +1947,48 @@ export class PeerConnection {
 			}
 			this.scheduleReconnect(peerId, attempt + 1);
 		}, delay);
+	}
+
+	// F-5: an AUTOMATIC admission is never silent. A toast AND a notification-history entry
+	// that keeps its buttons: Turn off (when the provider offers it — e.g. "Allow guests to
+	// join automatically") and Remove. The provider says why; without one, a generic line.
+	/** @param {string} peerId @param {any} auth @param {any} cloudMeta */
+	announceAutoAdmit(peerId, auth, cloudMeta) {
+		let provided = null;
+		try {
+			provided = typeof auth?.admitNotice === 'function' ? auth.admitNotice(peerId, cloudMeta) : null;
+		} catch (e) {
+			console.error('cloud auth provider admitNotice threw:', e);
+		}
+		const notice = composeAdmitNotice(peerId, provided);
+		/** @type {{label: string, action: () => void}[]} */
+		const actions = [];
+		if (notice.turnOff) {
+			const turnOff = notice.turnOff;
+			actions.push({ label: notice.turnOffLabel, action: () => { try { turnOff(); } catch (e) { console.error('turnOff threw:', e); } } });
+		}
+		actions.push({ label: 'Remove', action: () => this.removeAdmittedPeer(peerId) });
+		log('info', 'net', 'peer admitted automatically', { peer: peerId });
+		showLastingToast(notice.text, actions);
+	}
+
+	// F-5: Remove from the auto-admit notice. Local to this host: drop them from the roster,
+	// close our link, and refuse their re-dials for the rest of the session. (The mesh-wide
+	// kick with a block list is roadmap 55 A9; this is the host's own door.)
+	/** @param {string} peerId */
+	removeAdmittedPeer(peerId) {
+		this.removedPeers.add(peerId);
+		this.gracefulLeft.add(peerId); // their close is expected — no redial
+		const roster = /** @type {any[]} */ (get(userdata)).filter((/** @type {any} */ e) => e[0] !== peerId);
+		userdata.set(roster);
+		if (this.openedPeers.has(peerId)) this.finalizeDisconnect(peerId, true);
+		else {
+			const conn = this.connections[peerId];
+			delete this.connections[peerId];
+			try { conn?.close(); } catch (e) { /* never opened */ }
+		}
+		this.broadcast({ type: 'userdata', userdata: get(userdata) });
+		showToast(shortPeer(peerId) + ' was removed. They cannot rejoin while this tab stays open.');
 	}
 
 	// F-3: the signaling server answered "no such peer" to a redial. The dial it named
