@@ -78,13 +78,11 @@ gate_green() {
 # pending one is a run this machine never finished (it slept or rebooted mid-run): run it again.
 settled() {
 	local row; row=$(gh api "repos/$REPO/commits/$1/statuses" -q '[.[] | select(.context == "pc-battery")][0] | [.state, .updated_at] | @tsv')
-	[ -n "$row" ] || return 1
 	local st at; IFS=$'\t' read -r st at <<<"$row"
+	# no status at all reads as an empty row (a lone tab), not as no output
+	[ -n "$st" ] || return 1
 	[ "$st" != pending ] && return 0
 	[ $(($(date +%s) - $(date -d "$at" +%s))) -lt "${PC_BATTERY_STALE:-10800}" ]
-}
-status() {
-	[ "$(gh api "repos/$REPO/commits/$1/status" -q '[.statuses[] | select(.context == "pc-battery")] | length')" -gt 0 ]
 }
 status() { # <sha> <state> <description> [url]
 	[ "$DRY" = 1 ] && { log "would post pc-battery=$2 ($3)"; return; }
@@ -104,7 +102,7 @@ run_pr() {
 	[ "$(git -C "$C" rev-parse "refs/pc-battery/$pr")" = "$sha" ] || { log "head moved since the check: next poll"; return 1; }
 	local mb; mb=$(git -C "$C" merge-base "origin/$base" "$sha")
 	for side in base head; do
-		git -C "$C" worktree remove --force "$DIR/$side" 2>/dev/null; rm -rf "$DIR/$side"
+		git -C "$C" worktree remove --force "$DIR/$side" 2>/dev/null; rm -rf "${DIR:?}/$side"
 	done
 	git -C "$C" worktree add -q --detach "$DIR/base" "$mb" && git -C "$C" worktree add -q --detach "$DIR/head" "$sha" || return 1
 	for side in base head; do
@@ -213,16 +211,7 @@ fi
 for pr in $(gh pr list -R "$REPO" --base deps --state open --json number -q 'sort_by(.number) | .[].number'); do
 	read -r verdict sha base <<<"$(eligible "$pr")"
 	if [ "$verdict" != ok ]; then log "#$pr skipped: $sha $base"; continue; fi
-	# settled <sha>: a final pc-battery status, or a pending one younger than PC_BATTERY_STALE seconds. An older
-# pending one is a run this machine never finished (it slept or rebooted mid-run): run it again.
-settled() {
-	local row; row=$(gh api "repos/$REPO/commits/$1/statuses" -q '[.[] | select(.context == "pc-battery")][0] | [.state, .updated_at] | @tsv')
-	[ -n "$row" ] || return 1
-	local st at; IFS=$'\t' read -r st at <<<"$row"
-	[ "$st" != pending ] && return 0
-	[ $(($(date +%s) - $(date -d "$at" +%s))) -lt "${PC_BATTERY_STALE:-10800}" ]
-}
-status "$sha" && continue
+	settled "$sha" && continue
 	gate_green "$sha" || { log "#$pr: deps-gate not green on ${sha:0:7} (yet)"; continue; }
 	run_pr "$pr" "$sha" "$base"
 done
