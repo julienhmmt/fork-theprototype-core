@@ -132,6 +132,7 @@
 		winH = saved.h;
 	}
 	// 70 W2: a popped-out instance renders its floating layout inside its window, never docked
+	// svelte-ignore state_referenced_locally
 	if (popped) docked = false;
 	$effect(() =>
 		popped ? undefined : onLayoutRestore(() => {

@@ -73,6 +73,7 @@
 	// 37 R14: a named workspace layout was applied — re-read the mode + floating size
 	// this panel read ONCE above (it stays mounted while closed, so nothing else would)
 	// 70 W2: a popped-out instance renders its floating layout inside its window, never docked
+	// svelte-ignore state_referenced_locally
 	if (popped) docked = false;
 	$effect(() =>
 		popped ? undefined : onLayoutRestore(() => {

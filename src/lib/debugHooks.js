@@ -450,6 +450,10 @@ export const DEBUG_HOOKS = [
 	['sharedText', () => import('./sharedText')],
 	// 50-window (C1): the code workspace in its own browser window
 	['codePopout', () => import('./codePopout')],
+	// 70 W2-W5: pop-out windows (the live layout + the window host)
+	['panelPlaces', () => import('./windows/panelPlaces.js')],
+	['panelHost', () => import('./windows/panelHost.js')],
+	['panelLayout', () => import('./windows/panelLayout.js')],
 	['codeSidebars', () => import('./codeSidebars')],
 	['scriptAssets', () => import('./scriptAssets')],
 	['codeTabs', () => import('./codeTabs')],
