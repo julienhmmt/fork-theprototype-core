@@ -122,7 +122,7 @@
 	// 53 A2: and its SHAPE, so the band never rides on colour alone ($lib/networkQuality)
 
     let openDropdown = $state(false);
-	let muteMenu = $state(null);
+	let muteMenu = $state<{ x: number; y: number; peerId: string } | null>(null);
 	// 130: the peers overflow is a proper popover listing EVERY peer (none
 	// hidden by stacking) with a labeled Watch affordance
 	/** @param {string} id */
@@ -1123,7 +1123,7 @@
 			},
 			// fix-live: the plugin's entries (the cloud's "Report…"), with the name the roster shows
 			...$peerMenuItems.map((item) => {
-				const pid = muteMenu.peerId;
+				const pid = muteMenu?.peerId ?? '';
 				return {
 					label: item.label,
 					action: () => item.run(pid, { name: String($userdata.find((e) => e[0] === pid)?.[1] ?? '') })
