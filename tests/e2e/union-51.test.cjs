@@ -145,7 +145,7 @@ h.run(async () => {
 	const onGround = made.map((m, k) => Math.abs(m.minY - ground[k]));
 	h.check(made.length === 12 && Math.max(...onGround) < 0.05, `U1: each crate's base is on the ground (max gap ${Math.max(...onGround).toFixed(3)} m)`);
 	h.check((await rowsOf(A.page, terrain, 'crates')).length === 0, 'U1: the instances left the set');
-	await h.eventually(() => objectsNamed(B.page, 'U51Crate'), (v) => v.length === 12 && v.every((m) => m.physics === 'dynamic'), 'U1: B has the 12 crates with their physics', 60000);
+	await h.eventually(() => objectsNamed(B.page, 'U51Crate'), (v) => v.length === 12 && v.every((m) => m.physics === 'dynamic'), 'U1: B has the 12 crates — same name, with their physics (COUNTERFACTUAL: B named them "U51Crate copy")', 60000);
 	await A.page.evaluate(() => /** @type {any} */ (window).__stores.history.undo());
 	h.check((await objectsNamed(A.page, 'U51Crate')).length === 0 && (await rowsOf(A.page, terrain, 'crates')).length === 12, 'U1: one undo — crates gone, instances back');
 	await h.eventually(() => objectsNamed(B.page, 'U51Crate'), (v) => v.length === 0, 'U1: on B too', 15000);

@@ -218,9 +218,9 @@ export async function instancesToObjects(what, opts = {}) {
 				for (const i of list) {
 					const inst = set.list[i];
 					if (!inst) continue;
-					const clone = duplicateObject(template.uuid, { select: false, history: false, carryCables: false });
+					// the copy's name rides the `duplicate` message (renaming it afterwards stayed on this peer)
+					const clone = duplicateObject(template.uuid, { select: false, history: false, carryCables: false, name: objectOf(template.uuid)?.name });
 					if (!clone) continue;
-					clone.name = objectOf(template.uuid)?.name ?? clone.name;
 					poseAt(clone, instanceWorldMatrix(terrain, grid, inst, set.align).multiply(lift));
 					recordObjectPresence('create', clone);
 					made.push(clone.uuid);
