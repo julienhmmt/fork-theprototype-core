@@ -45,7 +45,7 @@ const APP = 'ThePrototype';
 
 /**
  * One open popup.
- * @typedef {{id: string, w: Window, instance: any, teardown: (() => void)[], gone: boolean}} Popup
+ * @typedef {{id: string, w: Window, instance: any, teardown: (() => void)[], gone: boolean, seen: boolean}} Popup
  */
 /** @type {Map<string, Popup>} */
 const popups = new Map();
@@ -165,7 +165,7 @@ function openPopup(lw, opts = {}) {
 	doc.close();
 	doc.title = docTitle(lw);
 	/** @type {Popup} */
-	const pop = { id: lw.id, w, instance: null, teardown: [], gone: false };
+	const pop = { id: lw.id, w, instance: null, teardown: [], gone: false, seen: false };
 	popups.set(lw.id, pop);
 	pop.teardown.push(mirrorStyles(doc), mirrorAttributes(document.documentElement, doc.documentElement), mirrorAttributes(document.body, doc.body));
 	pop.teardown.push(trackFocus(w));
@@ -293,8 +293,12 @@ function cameBack(keys) {
 function syncWindows(l) {
 	for (const [id, pop] of [...popups]) {
 		const lw = model.windowById(l, id);
-		if (!lw) closeWindowById(id);
-		else {
+		// a window just opened is in the layout a moment AFTER window.open (a store write in between
+		// must not close it): only a window the layout has held can leave it
+		if (!lw) {
+			if (pop.seen) closeWindowById(id);
+		} else {
+			pop.seen = true;
 			try {
 				pop.w.document.title = docTitle(lw);
 			} catch {
