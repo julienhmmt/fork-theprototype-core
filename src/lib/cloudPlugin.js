@@ -608,6 +608,8 @@ export function makeCloudApi() {
 		},
 
 		// --- utilities ---
+		/** toast(message, actions?, {keep?}) — fix-live F-2: `keep: true` leaves the buttons on the
+		 *  notification-history entry until one is pressed (e.g. a role offer) */
 		toast: showToast
 	};
 }

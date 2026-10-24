@@ -259,6 +259,7 @@ static|embed>`. Core never talks to a server about it.
 | `loadRemoteScene({…, keepGameId?})` | `keepGameId: true` = the OWNER opening their own published scene (no fork); otherwise a community load is a remix |
 | `onExportBuilt(fn)` → off | after an export zip is built: `fn({gameId, buildId, preset, title, template, parentGameId, appVersion})` |
 | `onTemplateOpen(fn)` → off | a Games-tab template was started: `fn(slug)` (one "template open") |
+| `toast(message, actions?, {keep?})` | fix-live F-2: with `keep: true` an action toast's buttons also stay on its notification-history entry until one is pressed (a role offer the user sees later) |
 | `setPeerMenuItems(items)` | fix-live: `[{id, label, run(peerId, {name})}]` (≤ 8, labels ≤ 40) appended to the Users peer menu (right-click a peer) under core's own entries — the cloud's "Report…"; `[]` clears |
 | `setConnectBadge(badge \| null)` | fix-live F-5: `{text, title?, onClick?}` — a small badge on the Connect pill for a standing setting (e.g. "Public · guests join"); `null` hides it. Probe with `typeof` |
 | `setSceneHeart(info \| null)` | the heart on the play-link start card (`#embed-heart`) and a game's pause menu (`#game-shell-heart`): `{count, liked, toggle() → Promise<{liked, count} \| null>}`; `null` from `toggle` rolls the optimistic flip back |

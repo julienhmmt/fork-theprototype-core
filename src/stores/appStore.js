@@ -797,9 +797,16 @@ export function showLastingToast(message, actions) {
 /**
  * Plain string = 3s info toast. Pass `actions` ([{label, action}]) for a
  * sticky decision toast (15s) with buttons.
+ * fix-live F-2: `opts.keep` = the buttons ALSO stay on the notification-history entry until one
+ * is pressed (a decision someone may only see later — a role offer). See showLastingToast.
  * @param {string} message @param {{label: string, action: () => void}[]=} actions
+ * @param {{keep?: boolean}=} opts
  */
-export function showToast(message, actions) {
+export function showToast(message, actions, opts) {
+  if (actions?.length && opts?.keep) {
+    showLastingToast(message, actions);
+    return;
+  }
   toastStore.update((toast) => {
     // U-3: collapse duplicate plain-string toasts so a repeated message can't
     // spam the stack (action toasts are always distinct, never deduped)
