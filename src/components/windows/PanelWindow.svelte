@@ -21,6 +21,7 @@
 	import PoppedPanel from './PoppedPanel.svelte';
 	import { showsStrip, windowById } from '$lib/windows/panelLayout.js';
 	import { panelDrag, PANEL_DRAG_TYPE } from '$lib/windows/panelPlaces.js';
+	import { panelTitles } from '$lib/windows/panelRegistry.js';
 
 	let { winId, api }: { winId: string; api: any } = $props();
 
@@ -28,6 +29,8 @@
 	const layout = api.layout;
 	// svelte-ignore state_referenced_locally
 	const alwaysStrip = api.alwaysStrip;
+	/** a tab's name, live (the Inspector's follows what it shows) */
+	const titleOf = (key: string): string => $panelTitles[key] ?? api.titleOf(key);
 
 	const win = $derived(windowById($layout, winId));
 	const strip = $derived(showsStrip(win, $alwaysStrip));
@@ -163,18 +166,18 @@
 								role="tab"
 								aria-selected={key === win.active}
 								draggable="true"
-								title={`${api.titleOf(key)} — drag to move it, right-click for more`}
+								title={`${titleOf(key)} — drag to move it, right-click for more`}
 								onclick={() => api.activate(key)}
 								oncontextmenu={(e) => tabMenu(e, key)}
 								ondragstart={(e) => onDragStart(e, key)}
 								ondragend={(e) => onDragEnd(e, key)}
-								><Icon name={api.iconOf(key)} size={14} aria-hidden="true" /><span class="pw-tab-label">{api.titleOf(key)}</span></button
+								><Icon name={api.iconOf(key)} size={16} aria-hidden="true" /><span class="pw-tab-label">{titleOf(key)}</span></button
 							>
 							<button
 								class="pw-tab-x"
-								aria-label={`Dock ${api.titleOf(key)} back into the app`}
+								aria-label={`Dock ${titleOf(key)} back into the app`}
 								title="Dock back into the app"
-								onclick={() => api.dockBack(key)}><Icon name="x" size={12} aria-hidden="true" /></button
+								onclick={() => api.dockBack(key)}><Icon name="x" size={16} aria-hidden="true" /></button
 							>
 						</span>
 					{/each}
@@ -189,12 +192,12 @@
 						role="tab"
 						aria-selected="true"
 						draggable="true"
-						title={`${api.titleOf(key)} — drag to move it, right-click to dock it back or move it`}
+						title={`${titleOf(key)} — drag to move it, right-click to dock it back or move it`}
 						oncontextmenu={(e) => tabMenu(e, key)}
 						ondragstart={(e) => onDragStart(e, key)}
 						ondragend={(e) => onDragEnd(e, key)}
-						><span class="pw-grip" aria-hidden="true"><Icon name="grip-vertical" size={14} /></span><Icon name={api.iconOf(key)} size={16} aria-hidden="true" /><span
-							class="pw-title-label">{api.titleOf(key)}</span
+						><span class="pw-grip" aria-hidden="true"><Icon name="grip-vertical" size={16} /></span><Icon name={api.iconOf(key)} size={16} aria-hidden="true" /><span
+							class="pw-title-label">{titleOf(key)}</span
 						></button
 					>
 				</div>

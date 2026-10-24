@@ -357,7 +357,9 @@
 	const columnShared = $derived($sidebarTabs[insSide].some((k) => k !== 'inspector'));
 	// 53 A5: instant under reduced motion
 	const insTransition = $derived(
-		sheetMode
+		popped
+			? { duration: 0 } // 70: a pop-out window has nowhere to slide in from
+			: sheetMode
 			? { y: 500, duration: $reducedMotion ? 0 : 240, easing: sineIn }
 			: { ...transitionParamsRight, x: insSide === 'left' ? -transitionParamsRight.x : transitionParamsRight.x, duration: columnShared || $reducedMotion ? 0 : transitionParamsRight.duration }
 	);

@@ -64,7 +64,7 @@
 		<Icon name="app-window" size={16} aria-hidden="true" />
 		<span>Your pop-out windows from last time</span>
 		<Button id="restore-windows-open" variant="primary" size="sm" onclick={() => restoreNext()}>{label}</Button>
-		<button class="rwb-x" aria-label="Forget these windows" title="Keep everything in this window (forgets the saved windows)" onclick={dismissRestore}><Icon name="x" size={14} aria-hidden="true" /></button>
+		<button class="rwb-x" aria-label="Forget these windows" title="Keep everything in this window (forgets the saved windows)" onclick={dismissRestore}><Icon name="x" size={16} aria-hidden="true" /></button>
 	</div>
 {/if}
 

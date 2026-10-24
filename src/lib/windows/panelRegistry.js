@@ -83,6 +83,10 @@ export function isPoppable(key) {
 	return Object.hasOwn(PANELS, key);
 }
 
+/** every panel's name, live (the Inspector's is Properties / Configure Scene / File): the window chrome
+ * and the popups' document titles follow it */
+export const panelTitles = derived(inspectorTabTitle, () => /** @type {Record<string, string>} */ (Object.fromEntries(ENTRIES.map((e) => [e.key, e.title()]))));
+
 /** the panel's name (a tab label, a window title) @param {string} key */
 export function panelTitle(key) {
 	return PANELS[key]?.title() ?? DOCK_TITLES[key] ?? key;

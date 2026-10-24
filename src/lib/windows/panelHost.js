@@ -30,7 +30,7 @@ import { showToast } from '../../stores/appStore';
 import { popOutSupported } from './popOutSupport.js';
 import { trackFocus, lastFocusedWindow, mainWin } from './winEnv.js';
 import { panelLayout, registerPanelHost, alwaysShowTabStrip } from './panelPlaces.js';
-import { PANELS, isPoppable, panelTitle } from './panelRegistry.js';
+import { PANELS, isPoppable, panelTitle, panelTitles } from './panelRegistry.js';
 import * as model from './panelLayout.js';
 
 /** @typedef {import('./panelLayout.js').Layout} Layout */
@@ -604,6 +604,7 @@ export async function startPanelHost() {
 		syncWindows(l);
 		persist(l);
 	});
+	panelTitles.subscribe(() => syncWindows(get(panelLayout)));
 	// a site allowed to open pop-ups gets its windows back by itself; elsewhere this opens
 	// nothing and the restore bar asks for a click per window
 	if (saved.windows.length) restoreNext();

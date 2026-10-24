@@ -7,6 +7,7 @@
 	// A tab that is not in front stays mounted (its state survives a tab switch) and is hidden.
 	import { SvelteFlowProvider } from '@xyflow/svelte';
 	import { observe } from '$lib/windows/winEnv.js';
+	import { panelTitles } from '$lib/windows/panelRegistry.js';
 
 	let { key, active = true, api }: { key: string; active?: boolean; api: any } = $props();
 
@@ -45,7 +46,7 @@
 	});
 </script>
 
-<div bind:this={pane} class="tp-pop-pane" class:tp-pop-hidden={!active} data-pop-key={key} role="tabpanel" aria-label={api.titleOf(key)}>
+<div bind:this={pane} class="tp-pop-pane" class:tp-pop-hidden={!active} data-pop-key={key} role="tabpanel" aria-label={$panelTitles[key] ?? api.titleOf(key)}>
 	{#if Comp}
 		{#if entry.wrap === 'flow'}
 			<SvelteFlowProvider><Comp popped={true} /></SvelteFlowProvider>
