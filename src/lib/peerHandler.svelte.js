@@ -4,6 +4,7 @@ import { sceneCommand, lockRestore, checkLocks, createObject, sendObjects, delet
 import { gateCreationBroadcast } from './objectPermissions';
 import { createGeometry, createLight, createGroup, changeName, moveGeometry, lockGeometry, moveCamera } from '$lib/geometries.svelte';
 import { sendNodes, applyNodesSnapshot, applyNodeSync, createFlowNode, moveFlowNode, updateFlowNodeData, deleteFlowNodes, createFlowEdge, deleteFlowEdges, applyFlowCursor } from '$lib/nodesHandler';
+import { preloadSandboxFor } from '$lib/sandbox/preload.js';
 import { applyGraphCreate, applyGraphDelete } from '$lib/flowGraphs';
 import { applyNodeTrigger } from '$lib/flowRuntime';
 import { applyBurst } from '$lib/particleRuntime';
@@ -1025,6 +1026,7 @@ export class PeerConnection {
 				} else if(data.type == 'huddelete') {
 					applyRemoteHudDelete(data);
 				} else if(data.type == 'huds') {
+					preloadSandboxFor(data);
 					applyRemoteHuds(data);
 				} else if(data.type == 'gethuds') {
 					if (sameRoomOrUnknown(conn.peer)) sendHuds(data.sender);
@@ -1219,6 +1221,7 @@ export class PeerConnection {
 						mineName: myScene()?.scene ?? ''
 					});
 				} else if(data.type == 'nodes') {
+					preloadSandboxFor(data); // 69: a joiner's scene with code starts the engine before its first tick
 					applyNodesSnapshot(data.nodes, data.edges, data.graphs);
 				} else if(data.type == 'nodesync') {
 					applyNodeSync(data);

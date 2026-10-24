@@ -77,6 +77,11 @@ export function sandboxNow() {
 	return null;
 }
 
+/** true once the engine is loaded — never starts a load (preload checks, probes) */
+export function sandboxReady() {
+	return !!runtime;
+}
+
 /** why the engine could not load (null = it did, or has not tried) */
 export function sandboxLoadError() {
 	return loadError;
