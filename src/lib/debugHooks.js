@@ -451,6 +451,8 @@ export const DEBUG_HOOKS = [
 	// 50-window (C1): the code workspace in its own browser window
 	['codePopout', () => import('./codePopout')],
 	['codeSidebars', () => import('./codeSidebars')],
+	// 70 W1: files and folders from the Code tab (create / rename / move / delete, their undo)
+	['codeFiles', () => import('./codeFiles')],
 	['scriptAssets', () => import('./scriptAssets')],
 	['codeTabs', () => import('./codeTabs')],
 	['aiExtensions', () => import('./ai/aiExtensions')],

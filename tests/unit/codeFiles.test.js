@@ -170,9 +170,9 @@ describe('the Files group', () => {
 		expect(tree.find((n) => n.label === 'Orphan')).toMatchObject({ parentId: null });
 	});
 	it('a script opens as script, a note as text — and the key is the one keyOfTab computes', () => {
-		const door = leavesOf(tree).find((l) => l.label === 'door.js');
+		const door = /** @type {any} */ (leavesOf(tree).find((l) => l.label === 'door.js'));
 		expect(door.request).toEqual({ source: 'script', ref: { itemId: 'i1' } });
-		expect(leavesOf(tree).find((l) => l.label === 'notes.md').request).toEqual({ source: 'text', ref: { itemId: 'i2' } });
+		expect(/** @type {any} */ (leavesOf(tree).find((l) => l.label === 'notes.md')).request).toEqual({ source: 'text', ref: { itemId: 'i2' } });
 		expect(keyOfTab({ kind: 'file', itemId: 'i1' })).toBe(door.key);
 	});
 	it('projectTree carries it as the Files group; search walks the folders', () => {
