@@ -85,6 +85,17 @@ released version instead of drifting (it carried a stale 1.8.0 before 1.11.0).
   ```
   (plus every changed module file; the same three lines with `scenes`/`format-2` and
   `packs`/`format-1`). A modules merge alone no longer reaches production's gallery.
+- **Record the release's known reds** (the desk battery's baseline, pipeline-1): right after the tag, run the
+  battery once ON THE TAG — two halves, each on a pc slot where the e2e-slot setup has them — and save it:
+  ```sh
+  node scripts/ci/battery-desk.cjs run --half A --root <checkout of vX.Y.Z> --out <dir> --name blA   # and --half B
+  node scripts/ci/battery-desk.cjs baseline save vX.Y.Z <dir>
+  ```
+  The next integrator runs the same halves on its union and calls `battery-desk.cjs diff --baseline vX.Y.Z <dir>`:
+  a red whose every twice-red check is red on the tag too is PRE-EXISTING (no A/B run), a red that went green on
+  the end-of-half retry is FLAKY (logged; `battery-desk.cjs flakes` prints the rates), and only NEW reds need a look.
+  A new `tests/e2e/*.test.cjs` goes into `tests/e2e/battery.json` (suites, or `exclude` with a reason) —
+  `tests/unit/batteryDesk.test.js` fails on a file in neither.
 - The peers warn (never block) on version mismatches, and `.tpscene`/`.tpmodule`
   files confirm before loading a NEWER format int — older files always load
   silently. Bump `SESSION_FORMAT`/`MODULE_FORMAT` only when the shape actually
