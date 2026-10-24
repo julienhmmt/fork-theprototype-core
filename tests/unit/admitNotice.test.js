@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { get } from 'svelte/store';
 import { composeAdmitNotice, shortPeer } from '../../src/lib/admitNotice.js';
-import { connectBadge, setConnectBadge } from '../../src/lib/cloudHooks.js';
+import { connectBadge, setConnectBadge, peerMenuItems, setPeerMenuItems } from '../../src/lib/cloudHooks.js';
 
 // F-5: an automatic admission is never silent, and a standing "guests join" setting is visible.
 describe('F-5 auto-admit notice', () => {
@@ -48,5 +48,17 @@ describe('F-5 Connect pill badge seam', () => {
 			setConnectBadge(v);
 			expect(get(connectBadge)).toBeNull();
 		}
+	});
+});
+
+describe('reports: Users peer menu seam', () => {
+	it('keeps only runnable, labelled items, capped', () => {
+		const run = () => {};
+		setPeerMenuItems([{ id: 'report', label: ' Report… ', run }, { label: 'no run' }, { label: '', run }, null]);
+		expect(get(peerMenuItems)).toEqual([{ id: 'report', label: 'Report…', run }]);
+		setPeerMenuItems(Array.from({ length: 12 }, (_, n) => ({ label: 'x' + n, run })));
+		expect(get(peerMenuItems).length).toBe(8);
+		setPeerMenuItems('junk');
+		expect(get(peerMenuItems)).toEqual([]);
 	});
 });

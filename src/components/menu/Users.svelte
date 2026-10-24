@@ -111,7 +111,7 @@
 	import { toolbarSlots, slotOrder, TOP_DEFAULT } from '$lib/toolbarSlots';
 	import { phoneShell } from '$lib/ui/phoneShell.js';
 	import CloudSlot from '../CloudSlot.svelte';
-	import { usersSlot, profileSlot, rolesInfo, scenePresence } from '$lib/cloudHooks';
+	import { usersSlot, profileSlot, rolesInfo, scenePresence, peerMenuItems } from '$lib/cloudHooks';
 	import { safeStorage } from '$lib/safeStorage';
 	// 45 N4: a pinned / closed right sidebar moves the profile circle while its menu may be open
 	import { geometry as sidebarGeometry } from '$lib/sidebars';
@@ -1120,7 +1120,15 @@
 			{
 				label: $mutedPeers.includes(muteMenu.peerId) ? 'Unmute voice' : 'Mute voice',
 				action: () => toggleMutePeer(muteMenu.peerId)
-			}
+			},
+			// fix-live: the plugin's entries (the cloud's "Report…"), with the name the roster shows
+			...$peerMenuItems.map((item) => {
+				const pid = muteMenu.peerId;
+				return {
+					label: item.label,
+					action: () => item.run(pid, { name: String($userdata.find((e) => e[0] === pid)?.[1] ?? '') })
+				};
+			})
 		]}
 		on:close={() => (muteMenu = null)}
 	/>

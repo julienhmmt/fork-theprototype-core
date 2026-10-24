@@ -439,3 +439,21 @@ export function setConnectBadge(badge) {
 			: null
 	);
 }
+
+/**
+ * fix-live (reports): entries a plugin adds to the Users PEER menu (right-click a peer), under
+ * core's own. `run(peerId, {name})` gets the peer's session id and the name the roster shows.
+ * The cloud plugin's "Report…" lives here. Set via cloudApi.setPeerMenuItems; [] clears.
+ * @type {import('svelte/store').Writable<{id: string, label: string, run: (peerId: string, info: {name: string}) => void}[]>} */
+export const peerMenuItems = writable([]);
+
+/** @param {any} items */
+export function setPeerMenuItems(items) {
+	const list = Array.isArray(items) ? items : [];
+	peerMenuItems.set(
+		list
+			.filter((i) => i && typeof i.run === 'function' && String(i.label ?? '').trim())
+			.slice(0, 8)
+			.map((i, n) => ({ id: String(i.id ?? 'item-' + n).slice(0, 40), label: String(i.label).trim().slice(0, 40), run: i.run }))
+	);
+}
