@@ -11,7 +11,7 @@
 		"dev": "vite dev",
 		"certs": "node scripts/gen-certs.cjs",
 		"build": "vite build",
-		"postbuild": "node scripts/export-manifest.cjs",
+		"postbuild": "node scripts/csp-headers.cjs && node scripts/export-manifest.cjs",
 		"check:export": "node scripts/check-export.cjs",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
