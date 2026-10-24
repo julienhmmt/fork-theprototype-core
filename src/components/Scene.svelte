@@ -395,7 +395,7 @@
 			// so its local position put every walking player 0.9 m into the floor on every peer.
 			camera.current.updateWorldMatrix(true, false);
 			camera.current.matrixWorld.decompose(camContentPos, camContentQuat, camFeetPoint);
-			const feetWorld = localFeet();
+			const feetWorld = localFeet(delta * 1000);
 			const camExtras: Record<string, number> = {};
 			if (feetWorld !== null) {
 				camFeetPoint.set(camContentPos.x, feetWorld, camContentPos.z);
