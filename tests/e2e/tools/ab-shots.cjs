@@ -5,12 +5,13 @@
 //        app surfaces (start, object list, Inspector, Settings, logo menu) x dark/light x desktop 1440x900 + a
 //        folded (390x896) and an unfolded (770x850) touch phone -> <out-dir>/<surface>-<device>-<theme>.png
 //        The 3D canvas is hidden (a GPU's anti-aliasing is not a UI change), transitions are off and the
-//        random 5-letter peer id is masked.
+//        random 5-letter peer id and any toast (load-timed wording) are masked.
 //   node tests/e2e/tools/ab-shots.cjs diff <base-dir> <head-dir> <out-dir> [--noise <base2-dir>]
 //        every PNG present in both dirs: changed pixels (a channel moved more than AB_TOLERANCE, default 16)
-//        -> <out-dir>/<name>-diff.png + report.md + report.json. With --noise, the same diff between two
-//        BASE runs is the floor (animated scenes never shoot the same twice): a shot fails only when
-//        head-vs-base moved more than 1.5 x the floor + AB_MAX (fraction, default 0.0001). Exit 1 on a failure.
+//        -> <out-dir>/<name>-diff.png + report.md + report.json. A shot fails when head-vs-base moved more than
+//        AB_MAX (fraction, default 0.0001). With --noise <base2>, the head is compared with the closer of the two
+//        base runs and the base-vs-base diff is the floor (animated scenes never shoot the same twice): it fails
+//        only past max(1.5 x the floor, AB_MAX). Exit 1 on a failure.
 //
 // Like kit-diff.cjs the decode and the compare run in a browser page (no image library in the repo).
 const fs = require('fs');
@@ -72,7 +73,7 @@ async function shoot(url, out) {
 			/** @param {string} name */
 			const shot = async (name) => {
 				await p.waitForTimeout(900);
-				await p.screenshot({ path: path.join(out, `${name}-${dev}-${theme}.png`), mask: [p.getByText(/^[A-Z0-9]{5}$/)] }).catch(() => failed++);
+				await p.screenshot({ path: path.join(out, `${name}-${dev}-${theme}.png`), mask: [p.getByText(/^[A-Z0-9]{5}$/), p.locator('.tp-toast, [class*="toast"]')] }).catch(() => failed++);
 			};
 			const reset = () =>
 				p.evaluate(() => {
@@ -99,7 +100,7 @@ async function shoot(url, out) {
 			});
 			// the Inspector shows the box's random uuid: not a difference worth a red
 			await p.waitForTimeout(900);
-			await p.screenshot({ path: path.join(out, `inspector-${dev}-${theme}.png`), mask: [p.getByText(/^[A-Z0-9]{5}$/), p.getByText(/[0-9a-f]{8}-[0-9a-f]{4}-/)] }).catch(() => failed++);
+			await p.screenshot({ path: path.join(out, `inspector-${dev}-${theme}.png`), mask: [p.getByText(/^[A-Z0-9]{5}$/), p.getByText(/[0-9a-f]{8}-[0-9a-f]{4}-/), p.locator('.tp-toast, [class*="toast"]')] }).catch(() => failed++);
 			await reset();
 			await p.evaluate(() => {
 				const s = /** @type {any} */ (window).__stores;
@@ -178,9 +179,15 @@ async function diff(base, head, out, noise) {
 	const page = await b.newPage();
 	const rows = [];
 	for (const n of names) {
-		const d = await compare(page, path.join(base, n), path.join(head, n), path.join(out, n.replace(/\.png$/, '-diff.png')));
-		const floor = noise && fs.existsSync(path.join(noise, n)) ? (await compare(page, path.join(base, n), path.join(noise, n), null)).fraction : 0;
-		const fail = d.fraction > floor * 1.5 + MAX;
+		let d = await compare(page, path.join(base, n), path.join(head, n), path.join(out, n.replace(/\.png$/, '-diff.png')));
+		let floor = 0;
+		if (noise && fs.existsSync(path.join(noise, n))) {
+			floor = (await compare(page, path.join(base, n), path.join(noise, n), null)).fraction;
+			// head against the CLOSER base run: an animated frame matches one of two samples better than either
+			const d2 = await compare(page, path.join(noise, n), path.join(head, n), null);
+			if (d2.fraction < d.fraction) d = d2;
+		}
+		const fail = d.fraction > Math.max(floor * 1.5, MAX);
 		rows.push({ name: n, changed: d.changed, fraction: d.fraction, floor, fail });
 	}
 	await b.close();

@@ -8,7 +8,7 @@
 # green and which carry no `pc-battery` status yet, and runs each one:
 #
 #   1 /kit in every theme, base vs head                   (tests/e2e/tools/kit-diff.cjs)
-#   2 the app surfaces, desktop + two phone shapes         (tests/e2e/tools/ab-shots.cjs shoot/diff)
+#   2 the app surfaces, desktop + two phone shapes, base twice (tests/e2e/tools/ab-shots.cjs shoot/diff)
 #   3 the level shots, base twice (the noise floor) + head (scripts/perf-levels.cjs SHOTS=1)
 #   4 fps on the heaviest games, base/head alternating x2  (scripts/perf-games.cjs)
 #
@@ -137,12 +137,13 @@ cd "$DIR/head"
 export PERF_SCENES_DIR="$DIR/scenes" PERF_MODULES_DIR="$DIR/modules" E2E_NO_PERF_OFFER=1
 node tests/e2e/tools/kit-diff.cjs shoot $UB "$W/kit/base" && node tests/e2e/tools/kit-diff.cjs shoot $UH "$W/kit/head"
 node tests/e2e/tools/kit-diff.cjs diff "$W/kit/base" "$W/kit/head" "$W/kit/diff"; echo "kit rc=\$?" >> "$W/rc.txt"
-node tests/e2e/tools/ab-shots.cjs shoot $UB "$W/surf/base" && node tests/e2e/tools/ab-shots.cjs shoot $UH "$W/surf/head"
-node tests/e2e/tools/ab-shots.cjs diff "$W/surf/base" "$W/surf/head" "$W/surf/diff"; echo "surfaces rc=\$?" >> "$W/rc.txt"
+node tests/e2e/tools/ab-shots.cjs shoot $UB "$W/surf/base" && node tests/e2e/tools/ab-shots.cjs shoot $UH "$W/surf/head" && node tests/e2e/tools/ab-shots.cjs shoot $UB "$W/surf/base2"
+node tests/e2e/tools/ab-shots.cjs diff "$W/surf/base" "$W/surf/head" "$W/surf/diff" --noise "$W/surf/base2"; echo "surfaces rc=\$?" >> "$W/rc.txt"
 for t in base1:$UB head:$UH base2:$UB; do
   SHOTS=1 APP_URL=\${t#*:} node scripts/perf-levels.cjs --dir "$DIR/scenes" --only $levels --label ab --out "$W/lvl/\${t%%:*}" > "$W/lvl-\${t%%:*}.log" 2>&1
 done
-node tests/e2e/tools/ab-shots.cjs diff "$W/lvl/base1" "$W/lvl/head" "$W/lvl/diff" --noise "$W/lvl/base2"; echo "levels rc=\$?" >> "$W/rc.txt"
+# a 3D frame of an animated level: half a percent of the pixels is the least that means anything
+AB_MAX=0.005 node tests/e2e/tools/ab-shots.cjs diff "$W/lvl/base1" "$W/lvl/head" "$W/lvl/diff" --noise "$W/lvl/base2"; echo "levels rc=\$?" >> "$W/rc.txt"
 for i in 1 2; do for t in head:$UH base:$UB; do
   APP_URL=\${t#*:} node scripts/perf-games.cjs --only $games --label \${t%%:*}-\$i --out "$W/fps" > "$W/fps-\${t%%:*}-\$i.log" 2>&1
 done; done
@@ -162,9 +163,11 @@ let bad = 0; const out = ['| game | calls base→head | tris base→head | p50 m
 for (const s of slugs) {
   const b = runs.base.map((r) => by(r, s)).filter(Boolean); const h = runs.head.map((r) => by(r, s)).filter(Boolean);
   if (!b.length || !h.length) { bad++; out.push(`| ${s} | – | – | – | **missing run** |`); continue; }
-  const near = (x, y) => Math.abs(x - y) <= Math.max(2, 0.02 * Math.max(x, y));
+  // the head inside the base runs' own range, widened: calls 2 % (or 2), triangles 5 % (animated meshes move)
+  const within = (key, f) => { const v = b.map((r) => r[key]); const lo = Math.min(...v), hi = Math.max(...v), tol = Math.max(2, f * hi);
+    return h.some((r) => r[key] >= lo - tol && r[key] <= hi + tol); };
   const bp = Math.max(...b.map((r) => r.p50)), hp = Math.min(...h.map((r) => r.p50));
-  const scene = near(b[0].medianCalls, h[0].medianCalls) && near(b[0].medianTriangles, h[0].medianTriangles);
+  const scene = within('medianCalls', 0.02) && within('medianTriangles', 0.05);
   const ok = scene && hp <= bp * max; if (!ok) bad++;
   out.push(`| ${s} | ${b[0].medianCalls}→${h[0].medianCalls} | ${b[0].medianTriangles}→${h[0].medianTriangles} | ${bp.toFixed(1)} → ${hp.toFixed(1)} | ${ok ? 'ok' : scene ? '**slower**' : '**scene changed**'} |`);
 }
