@@ -145,8 +145,9 @@ node tests/e2e/tools/ab-shots.cjs diff "$W/surf/base" "$W/surf/head" "$W/surf/di
 for t in base1:$UB head:$UH base2:$UB; do
   SHOTS=1 APP_URL=\${t#*:} node scripts/perf-levels.cjs --dir "$DIR/scenes" --only $levels --label ab --out "$W/lvl/\${t%%:*}" > "$W/lvl-\${t%%:*}.log" 2>&1
 done
-# a 3D frame of an animated level: half a percent of the pixels is the least that means anything
-AB_MAX=0.005 node tests/e2e/tools/ab-shots.cjs diff "$W/lvl/base1" "$W/lvl/head" "$W/lvl/diff" --noise "$W/lvl/base2"; echo "levels rc=\$?" >> "$W/rc.txt"
+# a 3D frame of an animated level: identical apps measured up to 0.9 % apart (castle courtyard VR, flags and
+# speckle); a shader or colour change moves far more of the frame, so 2 % is the least that means anything
+AB_MAX=0.02 node tests/e2e/tools/ab-shots.cjs diff "$W/lvl/base1" "$W/lvl/head" "$W/lvl/diff" --noise "$W/lvl/base2"; echo "levels rc=\$?" >> "$W/rc.txt"
 for i in 1 2; do for t in head:$UH base:$UB; do
   APP_URL=\${t#*:} node scripts/perf-games.cjs --only $games --label \${t%%:*}-\$i --out "$W/fps" > "$W/fps-\${t%%:*}-\$i.log" 2>&1
 done; done
