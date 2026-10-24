@@ -384,16 +384,17 @@ function refresh(argv) {
 			for (const [n, s] of Object.entries(JSON.parse(fs.readFileSync(f, 'utf8')))) if (n in b.suites) b.suites[n] = Number(s);
 		}
 	}
-	// --red <dir> --reason "…": suites red in that run's results (fail / timeout) become optional with the reason —
-	// for a no-retry run on unchanged code, i.e. what this runner cannot pass at all. --green <dir>: a suite that
-	// passed there is never moved (one red after a green is a flake, and a required flake has its retry).
-	const redDir = opt(argv, '--red');
-	if (redDir) {
+	// --red <dir>... --reason "…": suites red in those runs' results (fail / timeout / flaky) become optional with
+	// the reason — for runs on unchanged code, i.e. what this runner cannot pass reliably. --green <dir>: a suite
+	// that passed there is never moved.
+	const redDirs = opts(argv, '--red');
+	if (redDirs.length) {
 		const reason = opt(argv, '--reason') || 'red on the GitHub runner (SwiftShader) with unchanged code';
 		/** @param {string} dir @param {(r: SuiteResult) => boolean} f */
 		const names = (dir, f) => new Set(walk(path.resolve(dir)).filter((x) => /results-\d+\.json$/.test(x)).flatMap((x) => JSON.parse(fs.readFileSync(x, 'utf8')).results.filter(f).map((/** @type {SuiteResult} */ r) => r.name)));
 		const green = new Set(opts(argv, '--green').flatMap((d) => [...names(d, (r) => r.status === 'pass' || r.status === 'flaky')]));
-		for (const n of names(redDir, (r) => r.status === 'fail' || r.status === 'timeout')) if (n in b.suites && !green.has(n) && !(n in b.optional)) b.optional[n] = reason;
+		for (const d of redDirs)
+			for (const n of names(d, (r) => r.status === 'fail' || r.status === 'timeout' || r.status === 'flaky')) if (n in b.suites && !green.has(n) && !(n in b.optional)) b.optional[n] = reason;
 	}
 	for (const k of Object.keys(b.optional)) if (!(k in b.suites)) delete b.optional[k];
 	write(b);
