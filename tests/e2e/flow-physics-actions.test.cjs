@@ -495,14 +495,42 @@ h.run(async () => {
 	// or these nodes' logic. Unexplained, and reported as such rather than
 	// papered over — the same key press works before the join and in every
 	// single-peer section.
+	// test-health-1: stamped on the SESSION clock, the one flowRuntime stamps with (syncedNow). The
+	// raw Date.now() this used to pass is a different clock once a peer is in: the join merges B's
+	// trigger log, which sets A's history epoch in session time, so a raw stamp behind it is refused
+	// as somebody else's history (and sits outside the pulse window) — 6.5 red, no hop.
 	await page.evaluate(() => {
-		window.__stores.flowRuntime.applyNodeTrigger('key6', (Date.now() % 86400000) / 1000, true);
+		const s = window.__stores;
+		s.flowRuntime.applyNodeTrigger('key6', (s.connectionState.sessionNow() % 86400000) / 1000, true);
 	});
+	let hopped = false;
 	await h.eventually(
 		async () => (await posOf(page, box))[1],
-		(y) => y > 0.7,
+		(y) => (hopped = y > 0.7),
 		'6.5 (premise) the trigger hops the box on A, the peer running the world'
 	);
+	// a red 6.5 says WHY: which clock the stamp is on, the history epoch, the stamp held
+	if (!hopped)
+		console.log(
+			'  6.5 clocks: ' +
+				JSON.stringify(
+					await page.evaluate(() => {
+						const s = window.__stores;
+						let t = {};
+						s.flowTriggers?.subscribe?.((v) => (t = v))?.();
+						let sim = null;
+						s.physics.simulating.subscribe((v) => (sim = v))();
+						return {
+							rawNow: (Date.now() % 86400000) / 1000,
+							sessionNow: (s.connectionState.sessionNow() % 86400000) / 1000,
+							epoch: s.flowRuntime.triggerHistoryEpoch(),
+							key6: t?.key6 ?? null,
+							simulating: sim,
+							initiator: s.physics.isInitiator?.() ?? null
+						};
+					})
+				)
+		);
 	await h.eventually(
 		async () => (await posOf(B.page, box))[1],
 		(y) => y > beforeHopY + 0.2,
@@ -514,7 +542,8 @@ h.run(async () => {
 	// is that the physics ACTION nodes add nothing of their own
 	const unexpected = types.filter(
 		(t) =>
-			!['move', 'nodetrigger', 'nodechange', 'nodesync', 'nodes', 'simulate', 'objectParameters'].includes(
+			// + `camera`: the presence stream (where a peer is looking), which flows whenever a peer is in
+			!['move', 'nodetrigger', 'nodechange', 'nodesync', 'nodes', 'simulate', 'objectParameters', 'camera'].includes(
 				t
 			)
 	);
