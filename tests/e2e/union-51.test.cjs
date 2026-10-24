@@ -3,7 +3,7 @@
 //      the FULL prefab back with its logic — the user's 2026-10-21 rule ("Convert to object makes one real with its
 //      logic"); each object stands centred on its instance with its base on the ground, on both peers; one undo.
 //   U2 sources x edit: a pack-item set becomes objects carrying the pack reference (skips, never fails, when the
-//      pack CDN is unreachable).
+//      pack CDN is unreachable); U2b a Library-model set becomes objects that reach the other peer WITH their meshes.
 //   U3 sources x surface x edit — DETERMINISM: a mixed, tinted, sunk, spaced, slope-masked fill on a terrain plus
 //      hand edits (rotate, delete) through the Select tool, and a mixed fill on a sphere host, are the same instances
 //      on both peers, a re-roll keeps the hand edits, and after a reload (autosave restore) A rebuilds them all.
@@ -186,6 +186,32 @@ h.run(async () => {
 		await h.eventually(() => objectCount(B.page), (n) => n === before, 'U2: one undo takes them back on B', 15000);
 		await A.page.evaluate((u) => /** @type {any} */ (window).__stores.terrainPaint.writeScatter(u, (/** @type {any} */ b) => b.sets.filter((/** @type {any} */ x) => x.id !== 'kit')), terrain);
 	}
+
+	// ---- U2b: a Library-model set -> objects, on both peers (the prefab's look GLB, without its prefab id) ----------------
+	const look = { kind: 'library', hash: prefab.source.hash, name: prefab.source.name };
+	await A.page.evaluate(([u, src]) => /** @type {any} */ (window).__stores.terrainPaint.addScatterSet(u, { id: 'looks', source: src, seed: 5, gen: { count: 5, scaleMin: 1, scaleMax: 1 } }), [terrain, look]);
+	await h.eventually(() => rowsOf(A.page, terrain, 'looks'), (v) => v.length === 5, 'premise: A lays out 5 Library models', 20000);
+	const before2 = await objectCount(A.page);
+	const libs = await A.page.evaluate((u) => /** @type {any} */ (window).__stores.scatterConvert.instancesToObjects({ scope: 'set', uuid: u, setId: 'looks' }, { confirm: false }), terrain);
+	h.check(libs.length === 5, `U2b: the Library-model set became 5 objects (${libs.length})`);
+	h.check((await objectCount(A.page)) === before2 + 5, 'U2b: ... and no template is left behind');
+	/** meshes under each object, per peer @param {any} page */
+	const meshCounts = (page) =>
+		page.evaluate((ids) => {
+			/** @type {any} */
+			let g = null;
+			/** @type {any} */ (window).__stores.objectsGroup.subscribe((/** @type {any} */ v) => (g = v))();
+			return ids.map((/** @type {string} */ id) => {
+				let n = 0;
+				g.getObjectByProperty('uuid', id)?.traverse((/** @type {any} */ m) => m.isMesh && n++);
+				return n;
+			});
+		}, libs);
+	const meshesA = await meshCounts(A.page);
+	await h.eventually(() => meshCounts(B.page), (v) => v.length === 5 && v.every((n, k) => n > 0 && n === meshesA[k]), `U2b: B has the 5 objects WITH their meshes (A ${meshesA.join(',')}; COUNTERFACTUAL: duplicates of a template whose meshes had not arrived)`, 60000);
+	await A.page.evaluate(() => /** @type {any} */ (window).__stores.history.undo());
+	await h.eventually(() => objectCount(B.page), (n) => n === before2, 'U2b: one undo takes them back on B', 30000);
+	await A.page.evaluate((u) => /** @type {any} */ (window).__stores.terrainPaint.editScatterSet(u, 'looks', null), terrain);
 
 	// ---- U3: determinism — mixed + tint + sink + spacing + slope mask + hand edits, two peers, re-roll, reload ----------
 	await A.page.evaluate(

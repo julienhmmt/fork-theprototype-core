@@ -17,12 +17,15 @@ import { showConfirm } from './confirmDialog';
 // INSTANCES -> OBJECTS: each picked instance (the Select tool's selection, or a whole set)
 // becomes a real object at exactly the pose it was drawn with — same base on the ground, same
 // turn, same tilt when the set aligns to slope, same size. The way every object is made is
-// one the session already replicates: ONE template (a `/create` of the primitive, an import
-// of the Library model or the pack item, or — a prefab's look that remembers its prefab —
-// `instantiatePrefab`, which brings the prefab WITH its logic), then `duplicateObject` per
-// instance (the small `duplicate` message + a `move`), then the template goes. The instances leave the set. All of it is ONE
-// history batch, so one undo puts the instances back and takes the objects away on every
-// peer. More than CONVERT_CONFIRM_ABOVE asks first.
+// one the session already replicates. A source peers receive AT ONCE gets ONE template (a
+// `/create` of the primitive, or — a prefab's look that remembers its prefab — `instantiatePrefab`,
+// which brings the prefab WITH its logic), then `duplicateObject` per instance (the small
+// `duplicate` message + a `move`), then the template goes. A Library model or a pack item
+// reaches peers LATE (an import's meshes follow its root on a timer; a pack stub refills from
+// the pack), so a duplicate could beat the template there: each of those objects is placed on
+// its own (an import of the file, or a pack stub — the Explorer's own placements). The instances
+// leave the set. All of it is ONE history batch, so one undo puts the instances back and takes
+// the objects away on every peer. More than CONVERT_CONFIRM_ABOVE asks first.
 //
 // COPIES -> A SCATTER SET: several copies of ONE object (a primitive type, or one Library
 // model) standing on a terrain become instances of that terrain's set for that source (made
@@ -73,7 +76,8 @@ function poseAt(object, world) {
 	send({ type: 'move', uuid: object.uuid, pos: object.position.toArray(), rot: object.rotation.toArray(), scale: object.scale.toArray() });
 }
 
-/** Make the ONE template object for a source. Resolves {uuid, offset} (offset = where the
+/** Make the ONE template object for a source that peers receive AT ONCE (a primitive's `/create`, a prefab's
+ * `object` message). Resolves {uuid, offset} (offset = where the
  * object's own transform relative to the instance base, a matrix in the instance's frame), or null.
  * @param {any} source */
 async function makeTemplate(source) {
@@ -93,41 +97,68 @@ async function makeTemplate(source) {
 	}
 	if (source.kind === 'library' && source.prefab) {
 		// a logic prefab scatters its LOOK only (51-sources); a real object is the FULL prefab with
-		// its logic (the user's rule) — when this machine's prefab library still holds it
+		// its logic (the user's rule) — when this machine's prefab library still holds it (else `placer`)
 		const { prefabById, instantiatePrefab } = await import('./prefabs');
 		const prefab = prefabById(source.prefab);
 		const object = prefab ? instantiatePrefab(prefab) : null;
 		if (object) return { uuid: object.uuid, offset: lookOffset(object) };
 	}
-	if (source.kind === 'library') {
-		const explorer = await import('./explorer');
-		const item = explorer.itemByHash(source.hash);
-		const blob = item ? await explorer.itemBlob(item.id) : null;
-		if (!item || !blob) return null;
-		const { importFile } = await import('./fileHandler.svelte');
-		const uuid = await importFile(new File([blob], item.name), String(item.name).replace(/\.\w+$/, ''), undefined, [0, 0, 0]);
-		return uuid ? { uuid, offset: new THREE.Matrix4() } : null;
-	}
+	return null;
+}
+
+/** Does this source reach peers late (bytes or a pack refill), so it cannot be a `duplicate` template?
+ * A prefab look whose prefab is here is made from the prefab (an `object` message, applied at once).
+ * @param {any} source */
+async function reachesPeersLate(source) {
+	if (source.kind === 'pack') return true;
+	if (source.kind !== 'library') return false;
+	if (!source.prefab) return true;
+	const { prefabById } = await import('./prefabs');
+	return !prefabById(source.prefab);
+}
+
+/** A function that places ONE object of `source` at a world matrix (its base there) and resolves its uuid —
+ * a pack item as a pack STUB (tiny on the wire, every peer refills it from the pack, the Explorer's own
+ * placement), a Library model as an import of its file. Null when the model cannot be had.
+ * @param {any} source @returns {Promise<((world: any) => Promise<string | null>) | null>} */
+async function placer(source) {
+	const { addImported, importFile } = await import('./fileHandler.svelte');
 	if (source.kind === 'pack') {
-		// 51 union: a pack item is placed the way the Explorer places one (its file from the pack
-		// cache, the packRef stamped so a save writes the small reference)
 		const refs = await import('./packRefs');
 		const url = refs.packRefUrl(source);
 		const name = source.item || String(source.path.split('/').pop() ?? 'model').replace(/\.\w+$/, '');
-		let buffer;
-		try {
-			const { fetchPackBuffer } = await import('./packCache');
-			buffer = await fetchPackBuffer(url);
-		} catch {
-			return null;
-		}
-		const { importFile } = await import('./fileHandler.svelte');
-		const uuid = await importFile(new File([buffer], name + '.glb'), name, 'glb', [0, 0, 0], undefined, {
-			packRef: refs.packRefFromUrl(url, { pack: source.pack, item: name })
-		});
-		return uuid ? { uuid, offset: new THREE.Matrix4() } : null;
+		const ref = refs.packRefFromUrl(url, { pack: source.pack, item: name });
+		if (!ref) return null;
+		void import('./packCache').then((m) => m.fetchPackBuffer(url)).catch(() => {});
+		return async (world) => {
+			const stub = new THREE.Group();
+			stub.userData = { packRef: { ...ref }, packStub: true };
+			localPose(stub, world);
+			addImported(stub, name, stub.position.toArray());
+			poseAt(stub, world); // the `move` carries the turn and size whatever the stub element keeps
+			return stub.uuid;
+		};
 	}
-	return null;
+	const explorer = await import('./explorer');
+	const item = explorer.itemByHash(source.hash);
+	const blob = item ? await explorer.itemBlob(item.id) : null;
+	if (!item || !blob) return null;
+	const name = String(item.name).replace(/\.\w+$/, '');
+	return async (world) => {
+		const at = new THREE.Object3D();
+		localPose(at, world);
+		const uuid = await importFile(new File([blob], item.name), name, undefined, at.position.toArray(), undefined, { noOptimize: true, quaternion: at.quaternion.toArray() });
+		const object = uuid ? objectOf(uuid) : null;
+		if (object) poseAt(object, world);
+		return uuid ?? null;
+	};
+}
+
+/** Set an object's local transform (a child of objectsGroup) so it shows at `world`, no message. @param {any} object @param {any} world */
+function localPose(object, world) {
+	const parent = /** @type {any} */ (get(objectsGroup));
+	parent.updateWorldMatrix(true, false);
+	new THREE.Matrix4().copy(parent.matrixWorld).invert().multiply(world).decompose(object.position, object.quaternion, object.scale);
 }
 
 /** Where an object sits relative to the base of its LOOK, as a matrix in the instance's frame:
@@ -208,13 +239,31 @@ export async function instancesToObjects(what, opts = {}) {
 			}
 			for (const [src, list] of bySource) {
 				const source = set.sources?.[src]?.source ?? set.source;
+				// the set's sink pushes each instance down its own up axis (terrainSurface.instanceMatrices)
+				const sink = new THREE.Matrix4().makeTranslation(0, -(set.sink ?? 0), 0);
+				if (await reachesPeersLate(source)) {
+					// 51-int: a Library model or a pack item reaches peers LATE (an import's meshes follow its root
+					// after a timer; a pack stub refills from the pack), so a `duplicate` of a template could reach a
+					// peer before the template has anything to copy — each object is placed on its own instead
+					const one = await placer(source);
+					if (!one) {
+						showToast('Could not make ' + (source.name || source.item || 'the model') + (source.kind === 'pack' ? ' — its pack could not be reached' : ' — it is not in your Library'));
+						continue;
+					}
+					for (const i of list) {
+						const inst = set.list[i];
+						if (!inst) continue;
+						const uuid = await one(instanceWorldMatrix(terrain, grid, inst, set.align).multiply(sink));
+						if (uuid) made.push(uuid);
+					}
+					continue;
+				}
 				const template = await makeTemplate(source);
 				if (!template) {
 					showToast('Could not make ' + (source.name || source.type || source.item || 'the model') + (source.kind === 'pack' ? ' — its pack could not be reached' : ' — it is not in your Library'));
 					continue;
 				}
-				// the set's sink pushes each instance down its own up axis (terrainSurface.instanceMatrices)
-				const lift = new THREE.Matrix4().makeTranslation(0, -(set.sink ?? 0), 0).multiply(template.offset);
+				const lift = sink.multiply(template.offset);
 				for (const i of list) {
 					const inst = set.list[i];
 					if (!inst) continue;
