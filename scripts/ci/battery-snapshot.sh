@@ -21,5 +21,5 @@ mkdir -p "$dir/scripts/ci" "$dir/tests/e2e"
 cp "$here/scripts/ci/battery-desk.cjs" "$here/scripts/ci/battery.cjs" "$dir/scripts/ci/"
 cp "$here/tests/e2e/battery.json" "$dir/tests/e2e/"
 if git -C "$here" diff --quiet "$tag" HEAD -- package-lock.json; then lock=same; else lock=differs; fi
-echo "$tag $(git -C "$here" rev-parse --short "$tag") (package-lock vs this tree: $lock)" > "$dir/.snap"
+echo "$tag $(git -C "$here" rev-parse --short "$tag^{commit}") (package-lock vs this tree: $lock)" > "$dir/.snap"
 echo "battery-snapshot: $dir = $tag + .env + certs + the desk tool; run it with BATTERY_COMMIT=$tag"
