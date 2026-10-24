@@ -5,7 +5,7 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
-## 1.42.1 — Security: scene code runs in a sandbox 🔒
+## 1.43.1 — Security: scene code runs in a sandbox 🔒
 
 A security fix ([GHSA-r74q-9hg7-wrgr](https://github.com/theprototype-app/core/security/advisories/GHSA-r74q-9hg7-wrgr)).
 Until now, code carried inside a scene — Script nodes, Behaviour files, the Player code of a Character Controller and
@@ -28,6 +28,46 @@ Please update; self-hosters, rebuild from this release.
 - ☁️ On theprototype.app: your sign-in renews itself while you use the app and is no longer kept where page code
   can read it; **Sign out everywhere** ends every session at once; and roles in a room are verified — only the host
   or an admin can change who may edit, and when the host leaves an admin or editor takes over.
+
+## 1.43.0 — Scatter everywhere: any model, on any object, edited by hand, the same on every device 🌿
+
+Scatter grew up: pack items, prefabs and mixes of models, on any object (not just terrains), filled to a count with
+masks and spacing, then edited one instance at a time — and still only a few hundred bytes to send.
+
+### 🪨 What you can scatter
+
+- **Pack items** (a Nature Kit rock), **prefabs** and **Use as scatter source** on any object, as well as primitives
+  and Library models. A prefab scatters as its look; **To objects** brings the real prefab back, logic and all.
+- 🎲 **Mix models by weight** (three rocks at 50/30/20), with **Tint** (a little colour variation) and **Sink** (push
+  them into the ground).
+- A scatter is its settings + a seed + your hand edits: everyone in the session, and every reload, gets exactly the
+  same instances. **Re-roll** gives a new layout and keeps every instance you edited.
+
+### 🌍 Scatter on any object
+
+- Properties ▸ Scatter ▸ **Add scatter** on any mesh or placed model — moss on a rock, barnacles on a ship. The
+  instances move, turn and scale with it.
+- **Fill** by count or density, keep a **minimum spacing**, and limit it by **slope**, **height** or a **painted
+  terrain layer**.
+
+### ✋ Edit instances
+
+- The Scatter brush has tools now: **Paint, Erase, Rotate, Scale, Relax** and **Select** — click or box-select
+  instances, move/turn/size them with the gizmo, re-roll or delete them. **Affects** limits a tool to one model.
+- 🔁 **Convert both ways**: instances **To objects**, or several copies of one object ▸ **Make scatter**.
+- Terrain paint ▸ **Detail** sets each terrain's paint resolution (64–512).
+
+### 📱 Fast on every device
+
+- Far scatter fades out to stay inside each device's budget (Quest, phone, desktop); nearby instances and every
+  collider stay the same everywhere, so a ball bounces off the same rock on a phone and a PC. Settings ▸ Scene ▸
+  Performance ▸ **Distant scatter**.
+
+### 🔧 Under the hood
+
+- Updated: svelte 5.57.2, vite 8.3.5, vitest 5.0.5, @threlte/extras 9.22.3, three-mesh-bvh 0.9.16, @lucide/svelte
+  1.61.0, iwer 2.7.0, axe-core 4.14.0, prettier 3.9.10, Playwright 1.64.1 (three stays 0.186.1).
+- Dependency updates now arrive automatically, tested by the full e2e battery before they reach a release.
 
 ## 1.42.0 — Together and anywhere: type code together, pop the editor out to a second screen, play on a real table 🤝
 
