@@ -63,15 +63,19 @@ h.run(async () => {
 	await h.connect(B, A);
 	const page = A.page;
 
-	// the Code tab, empty
-	await page.evaluate(async () => {
-		const s = window.__stores;
-		s.codeWorkspace.startCodeWorkspace();
-		s.codeWorkspaceClose.set(false);
-		s.bottomDock.activateDock('code');
-		s.bottomDock.dockHeight.set(560);
-	});
-	await page.locator('#code-ws-left').waitFor({ state: 'visible', timeout: 15000 });
+	// the Code tab, empty (asked again if a cold page had not mounted the dock yet)
+	for (let i = 0; i < 4; i++) {
+		await page.evaluate(async () => {
+			const s = window.__stores;
+			s.codeWorkspace.startCodeWorkspace();
+			s.codeWorkspaceClose.set(false);
+			s.bottomDock.activateDock('code');
+			s.bottomDock.dockHeight.set(560);
+			s.undoToast.undoTiming.ms = 120000; // the toast must outlast the waits for B below
+		});
+		if (await page.locator('#code-ws-left').waitFor({ state: 'visible', timeout: 10000 }).then(() => true, () => false)) break;
+	}
+	h.check(await page.locator('#code-ws-left').isVisible(), 'premise: the Code tab is open, its left sidebar showing');
 	h.check(await row(page, 'grp:files').isVisible(), 'premise: the Project tree has a Files group');
 
 	// ------------------------------------------------------------ 1 New folder + New file
@@ -100,19 +104,21 @@ h.run(async () => {
 	await shot(page, '01-after-new-file-dark.png');
 
 	// ------------------------------------------------------------ 2 one undo each
-	await row(page, 'dir:' + levels.id).focus();
-	await page.keyboard.press('Control+z');
-	await h.eventually(() => itemNamed(page, 'player.js'), (i) => !i, 'Ctrl+Z in the tree takes the new file back on A', 6000);
-	await h.eventually(() => itemNamed(B.page, 'player.js'), (i) => !i, '…and on B', 20000);
-	h.check(!(await tabs(page)).some((t) => t.itemId === player.id), "the undone file's clean tab closes");
-	h.check(!!(await folderNamed(page, 'Levels')), 'one undo is one action: the folder is still there');
+	// the toast offers the NEWEST op (the file); Ctrl+Z in the tree walks further back (the folder)
 	const pressed = await page.evaluate(() => {
 		const b = [...document.querySelectorAll('.tp-toast--undo:not([inert]) .tp-toast-action')].find((x) => x.textContent.trim() === 'Undo');
 		b?.click();
 		return !!b;
 	});
-	h.check(pressed, "the toast offers Undo for the folder (the next op on the Code tab's stack)");
-	await h.eventually(() => folderNamed(page, 'Levels'), (f) => !f, "the toast's Undo takes the folder back on A", 6000);
+	h.check(pressed, 'the toast offers Undo for the new file');
+	await h.eventually(() => itemNamed(page, 'player.js'), (i) => !i, "the toast's Undo takes the new file back on A", 6000);
+	await h.eventually(() => itemNamed(B.page, 'player.js'), (i) => !i, '…and on B', 20000);
+	h.check(!(await tabs(page)).some((t) => t.itemId === player.id), "the undone file's clean tab closes");
+	h.check(await page.locator('#code-ws-left').isVisible(), '…and the Code tab stays open on the tree (it was the last tab)');
+	h.check(!!(await folderNamed(page, 'Levels')), 'one undo is one action: the folder is still there');
+	await row(page, 'dir:' + levels.id).focus();
+	await page.keyboard.press('Control+z');
+	await h.eventually(() => folderNamed(page, 'Levels'), (f) => !f, 'Ctrl+Z in the tree takes the folder back on A', 6000);
 	await h.eventually(() => folderNamed(B.page, 'Levels'), (f) => !f, '…and on B', 20000);
 	h.check((await debug(page)).stack.length === 0, 'nothing left to undo');
 	h.check(((await read(page, 'history.undoStack'))?.length ?? 0) === 0, 'the scene history is untouched');
@@ -145,6 +151,7 @@ h.run(async () => {
 	h.check(made.ok && !!made.tabId, 'premise: "enemy.js" made in Enemies and open in a tab');
 	await h.eventually(() => itemNamed(B.page, 'enemy.js'), (i) => !!i, 'premise: it reached B', 20000);
 	const fileRow = () => row(page, 'f:' + enemy.id);
+	for (const id of [scripts.id, enemies.id]) if ((await row(page, 'dir:' + id).getAttribute('aria-expanded')) !== 'true') await row(page, 'dir:' + id).click();
 	await fileRow().waitFor({ state: 'visible', timeout: 5000 });
 	await fileRow().focus();
 	await page.keyboard.press('F2');
@@ -156,7 +163,7 @@ h.run(async () => {
 
 	await fileRow().dragTo(row(page, 'grp:files'));
 	await h.eventually(async () => (await items(page)).find((i) => i.id === enemy.id)?.folderId ?? null, (f) => f === null, 'dragging the file onto Files moves it to the Library root', 6000);
-	await h.eventually(async () => (await itemNamed(B.page, 'boss.js'))?.folderId ?? 'x', (f) => !f, 'the move reaches B', 20000);
+	await h.eventually(() => itemNamed(B.page, 'boss.js'), (i) => !!i && !i.folderId, 'the move reaches B', 20000);
 	await fileRow().focus();
 	await page.keyboard.press('Control+x');
 	h.check(await page.locator('#code-ws-cut').isVisible(), 'Ctrl+X marks it to move (and says how to finish)');
@@ -209,7 +216,8 @@ h.run(async () => {
 	await page.waitForTimeout(300);
 	h.check((await page.locator('#code-ws-new-file').getAttribute('aria-disabled')) === 'true', "a viewer's New file is disabled");
 	h.check(/View only/.test((await page.locator('#code-ws-new-folder').getAttribute('title')) ?? ''), '…with the reason on hover');
-	await page.locator('#code-ws-new-folder').click();
+	await page.locator('#code-ws-new-folder').click({ force: true }); // aria-disabled: Playwright would wait for it
+	await page.waitForTimeout(300);
 	h.check((await page.locator('#code-ws-name-input').count()) === 0, 'pressing it opens nothing');
 	const r = await page.evaluate(() => window.__stores.codeFiles.createCodeFolder({ name: 'Nope' }));
 	h.check(!r.ok && /View only/.test(r.reason ?? ''), 'the verb itself refuses a viewer, with the reason');

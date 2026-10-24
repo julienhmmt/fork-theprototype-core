@@ -46,7 +46,8 @@ import {
 	folderNameTaken,
 	moveProblem,
 	subtreeOf,
-	isTextFileName
+	isTextFileName,
+	renamedFileName
 } from './codeFilesCore.js';
 
 /** why a viewer cannot change files, word for word what the sidebar shows */
@@ -176,7 +177,7 @@ export function renameCodeEntry(opts, how = {}) {
 	const q = !!how.quiet;
 	const no = refusal();
 	if (no) return refuse(no, q);
-	const to = String(opts.name ?? '').trim();
+	let to = String(opts.name ?? '').trim();
 	if (opts.kind === 'folder') {
 		const folder = get(explorerFolders).find((f) => f.id === opts.id);
 		if (!folder) return refuse('That folder is gone', q);
@@ -190,6 +191,7 @@ export function renameCodeEntry(opts, how = {}) {
 	}
 	const item = get(explorerItems).find((i) => i.id === opts.id);
 	if (!item) return refuse('That file is gone', q);
+	to = renamedFileName(to, item.name);
 	if (to === item.name) return { ok: true };
 	const bad = nameProblem(to, 'file');
 	if (bad) return refuse(bad, q);
@@ -247,7 +249,7 @@ export function deleteCounts(entry) {
 /** close the clean tabs of files that left the library (a dirty one stays: its text is unsaved
  * work, and its Save says the file is gone) @param {Set<string>} itemIds */
 function closeTabsOf(itemIds) {
-	for (const tab of get(codeTabs)) if (tab.kind === 'file' && tab.itemId && itemIds.has(tab.itemId) && !isDirty(tab)) closeCodeTab(tab.id);
+	for (const tab of get(codeTabs)) if (tab.kind === 'file' && tab.itemId && itemIds.has(tab.itemId) && !isDirty(tab)) closeCodeTab(tab.id, { keepOpen: true });
 }
 
 /**

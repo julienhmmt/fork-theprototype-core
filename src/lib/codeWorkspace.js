@@ -348,7 +348,10 @@ export function reloadCodeTab(id) {
 	shared.replaceText(key, target);
 }
 
-/** Close a tab. A dirty one only with `force` (the UI asks first). @param {string} id @param {{force?: boolean}} [opts] */
+/** Close a tab. A dirty one only with `force` (the UI asks first). The last tab closes the
+ * workspace, unless `keepOpen` (70 W1: a file op in the Project tree closes the tabs of files it
+ * took away, and the tree the person is working in must not vanish with them).
+ * @param {string} id @param {{force?: boolean, keepOpen?: boolean}} [opts] */
 export function closeCodeTab(id, opts = {}) {
 	const tab = tabById(id);
 	if (!tab) return true;
@@ -357,7 +360,7 @@ export function closeCodeTab(id, opts = {}) {
 	activeCodeTab.set(nextActiveAfterClose(list, id, get(activeCodeTab)));
 	codeTabs.set(list.filter((t) => t.id !== id));
 	clearTimeout(liveTimers.get(id));
-	if (!get(codeTabs).length) codeWorkspaceClose.set(true);
+	if (!get(codeTabs).length && !opts.keepOpen) codeWorkspaceClose.set(true);
 	return true;
 }
 

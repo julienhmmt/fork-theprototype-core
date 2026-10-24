@@ -5,6 +5,7 @@ import {
 	templateOf,
 	nameProblem,
 	fileNameFor,
+	renamedFileName,
 	uniqueName,
 	nameTakenBy,
 	folderNameTaken,
@@ -70,6 +71,12 @@ describe('names', () => {
 	it('the typed name gets the template extension only when it has none', () => {
 		expect(fileNameFor('player', 'script')).toBe('player.js');
 		expect(fileNameFor('  ideas ', 'note')).toBe('ideas.md');
+		// a rename typed without an extension keeps the file's own (case and all)
+		expect(renamedFileName('boss', 'enemy.js')).toBe('boss.js');
+		expect(renamedFileName(' boss ', 'Enemy.JSON')).toBe('boss.JSON');
+		expect(renamedFileName('boss.md', 'enemy.js')).toBe('boss.md');
+		expect(renamedFileName('boss', '.env')).toBe('boss');
+		expect(renamedFileName('', 'enemy.js')).toBe('');
 		expect(fileNameFor('notes.txt', 'note')).toBe('notes.txt');
 		expect(fileNameFor('', 'json')).toBe('data.json');
 	});

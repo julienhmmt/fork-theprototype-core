@@ -22,7 +22,7 @@
 	import { rolesInfo } from '$lib/cloudHooks';
 	import { explorerClose } from '../../stores/appStore.js';
 	import { deleteWithoutConfirm, recycleBinEnabled } from '$lib/sharedLibrary';
-	import { FILE_TEMPLATES, templateOf, fileNameFor, stemOf, moveProblem, subtreeOf } from '$lib/codeFilesCore.js';
+	import { FILE_TEMPLATES, templateOf, fileNameFor, renamedFileName, stemOf, moveProblem, subtreeOf } from '$lib/codeFilesCore.js';
 	import {
 		createCodeFile,
 		createCodeFolder,
@@ -265,7 +265,9 @@
 		ed.mode === 'new-file' ? 'Name of the new ' + templateOf(ed.template).label + ' file' : ed.mode === 'new-folder' ? 'Name of the new folder' : 'New name for ' + ed.value;
 	const editPreview = $derived.by(() => {
 		const ed = /** @type {any} */ (editing);
-		return ed?.mode === 'new-file' ? fileNameFor(ed.value, ed.template ?? 'script') : '';
+		if (ed?.mode === 'new-file') return fileNameFor(ed.value, ed.template ?? 'script');
+		const old = ed?.mode === 'rename' && ed.kind === 'file' ? entryOf(ed.key)?.name : '';
+		return old ? renamedFileName(ed.value, old) : '';
 	});
 
 	/** @param {string} key */

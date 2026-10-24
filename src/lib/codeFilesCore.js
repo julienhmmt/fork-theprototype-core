@@ -148,6 +148,18 @@ export function fileNameFor(typed, templateKey) {
 }
 
 /**
+ * What a file rename makes: a typed name with no extension keeps the file's own (the field
+ * selects only the stem, so typing over it is the common case — "boss" on enemy.js is boss.js).
+ * @param {string} typed @param {string} oldName
+ */
+export function renamedFileName(typed, oldName) {
+	const n = String(typed ?? '').trim();
+	const old = String(oldName ?? '');
+	if (!n || extensionOf(n) || !extensionOf(old)) return n;
+	return n + old.slice(old.lastIndexOf('.'));
+}
+
+/**
  * A free name: `name` when nobody has it, else "name 2", "name 3"… before the extension. Case
  * is ignored for the comparison (two files differing only in case confuse every reader).
  * @param {string} name @param {Iterable<string>} taken
