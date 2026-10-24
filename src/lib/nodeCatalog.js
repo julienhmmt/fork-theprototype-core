@@ -43,7 +43,7 @@ const V_MARK = '{v}';
  * not see it", "my copies vanished when I stopped the sim". HudNode had hand-rolled
  * exactly this for `hudscreen`; a spec field means the next such node needs no card of
  * its own to say its one important thing.
- * @typedef {{ key: string, kind: 'range' | 'select' | 'toggle' | 'text' | 'number' | 'color' | 'vector3' | 'code', label?: string, doc?: string, group?: string, socket?: boolean, min?: number, max?: number, step?: number, options?: string[], placeholder?: string, maxLength?: number }} NodeParam
+ * @typedef {{ key: string, kind: 'range' | 'select' | 'toggle' | 'text' | 'number' | 'color' | 'vector3' | 'code', label?: string, doc?: string, group?: string, socket?: boolean, min?: number, max?: number, step?: number, options?: string[], placeholder?: string, maxLength?: number, legacy?: any }} NodeParam
  * @typedef {{ type: string, label: string, defaults: Record<string, any>, params?: NodeParam[], inputs?: string[], inputLabels?: Record<string, string>, note?: string }} NodeSpec
  */
 
@@ -1147,12 +1147,23 @@ export const nodeCatalog = [
 			// input (only fire for that other object) and an `other` output, and Triggers
 			// holds only input-less sources (the palette rule). Palette-only: no wire change.
 			// PFX-C: fires when the physics sim lands this object on the ground /
-			// another object (initiator-detected, replicated trigger stamp)
+			// another object (initiator-detected, replicated trigger stamp).
+			// fix-batch-1 #14: from ANY side by default; a node saved before `direction`
+			// existed reads 'down' (`legacy`), so old scenes fire exactly as they did
 			{
 				type: 'onimpact',
 				label: 'On Impact',
-				defaults: { pulse: 0.3, minStrength: 1 },
-				params: [{ key: 'minStrength', kind: 'range', min: 0, max: 10, step: 0.1 }]
+				defaults: { pulse: 0.3, minStrength: 1, direction: 'any' },
+				params: [
+					{ key: 'minStrength', kind: 'range', min: 0, max: 10, step: 0.1 },
+					{
+						key: 'direction',
+						kind: 'select',
+						options: ['any', 'down'],
+						legacy: 'down',
+						doc: 'any = a hit from any side (speed along the contact); down = landings only'
+					}
+				]
 			},
 			// CL-C C2: sensor overlap edges (initiator-detected, replicated stamps)
 			{ type: 'onenter', label: 'On Enter', defaults: { pulse: 0.3 } },

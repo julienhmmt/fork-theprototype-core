@@ -17,6 +17,7 @@ import { scriptInputs, scriptOutputs, isScriptValue, coerceInput } from './scrip
 import { findNodeDef } from './customNodes';
 import { updateSounds } from './soundRuntime';
 import { colliderSpecOf } from './colliderSpec'; // B6: pure THREE leaf
+import { impactStrengthFor } from './impactSpeed'; // fix-batch-1 #14: a leaf
 import { updateParticles } from './particleRuntime';
 // 36-sim: jiggle's park (a leaf over three + flowStore; closes no cycle)
 import { parkJiggle } from './sim/jiggleRuntime.js';
@@ -3568,15 +3569,21 @@ export function objectHasOnClick(uuid) {
  * stamp replicates (nodetrigger), so every peer computes the identical pulse.
  * 36 X6: `otherUuid` = the body it hit ('' = the ground) — gated by the node's
  * `filter` input and carried to every peer for its `other` output.
- * @param {string} uuid @param {number} strength downward speed at contact (m/s)
- * @param {string=} otherUuid
+ * fix-batch-1 #14: physics registers TWO channels per contact and each node reads the one
+ * its `direction` names — 'any' the closing speed along the contact normal (a wall, a
+ * target), 'down' the landing speed (the only rule up to 1.43, and what a node saved
+ * before the option keeps). null = that channel did not count this contact.
+ * @param {string} uuid @param {number | null} down downward speed at contact (m/s)
+ * @param {string=} otherUuid @param {number | null=} speed closing speed along the normal
+ *   (m/s; omitted = `down`, a caller that only knows one number)
  */
-export function fireObjectImpact(uuid, strength, otherUuid = '') {
+export function fireObjectImpact(uuid, down, otherUuid = '', speed = down) {
 	const ctx = runtimeCtx();
 	nodes.forEach((node) => {
 		if (node.type !== 'onimpact') return;
 		const data = resolveInputs(node, nodes, edges, syncedNow(), ctx);
-		if (strength < num(data.minStrength ?? 0)) return;
+		const strength = impactStrengthFor(data.direction, down, speed ?? null);
+		if (strength === null || strength < num(data.minStrength ?? 0)) return;
 		if (!contactPasses(data, otherUuid)) return;
 		if (reachesObjectSelector(node.id, uuid) || implicitOwnerOf(node) === uuid) fireContact(node, otherUuid);
 	});
