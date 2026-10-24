@@ -84,6 +84,8 @@ export function sandboxLoadError() {
 
 /** parse guest JSON: `__proto__` keys dropped, handles revived by `revive` @param {string} json @param {(v: any) => any} [revive] */
 export function fromGuestJson(json, revive) {
+	// the reviver is only needed when a key it acts on can be in the text (a \u escape can spell one)
+	if (json.indexOf('\\u') < 0 && json.indexOf('__proto__') < 0 && (!revive || json.indexOf('"__fn"') < 0)) return JSON.parse(json);
 	return JSON.parse(json, (key, value) => {
 		if (key === '__proto__') return undefined;
 		return revive ? revive(value) : value;
@@ -224,8 +226,8 @@ export class Guest {
 		return h;
 	}
 
-	/** @param {any} result a callFunction result */
-	unwrap(result) {
+	/** @param {any} result a callFunction result @returns {string | null} the returned string */
+	unwrapText(result) {
 		if (result.error) {
 			const dumped = this.vm.dump(result.error);
 			result.error.dispose();
@@ -234,7 +236,33 @@ export class Guest {
 		const type = this.vm.typeof(result.value);
 		const text = type === 'string' ? this.vm.getString(result.value) : null;
 		result.value.dispose();
+		return text;
+	}
+
+	/** @param {any} result a callFunction result */
+	unwrap(result) {
+		const text = this.unwrapText(result);
 		return text === null ? undefined : this.decode(text);
+	}
+
+	/**
+	 * The hot path: call a prelude function with plain STRING arguments and get its string back, no
+	 * JSON envelope either way (a per-frame script call spends most of its time in the guest's JSON
+	 * otherwise). The caller owns both formats.
+	 * @param {string} name @param {string[]} args @returns {string | null}
+	 */
+	callRaw(name, args) {
+		if (this.disposed) throw new Error('the sandbox was disposed');
+		const vm = this.vm;
+		const fn = this.entryHandle(name);
+		const handles = args.map((a) => vm.newString(a));
+		this.enter();
+		try {
+			return this.unwrapText(vm.callFunction(fn, vm.undefined, handles));
+		} finally {
+			for (const h of handles) h.dispose();
+			this.exit();
+		}
 	}
 
 	/**
@@ -305,15 +333,14 @@ const BRIDGE_PRELUDE = String.raw`
 	const encode = (value) =>
 		JSON.stringify({ v: value }, (k, v) => (typeof v === 'function' ? { __fn: register(v) } : v));
 	const hostFn = (id) => (...a) => call('hfn', id, a);
-	const decode = (json) =>
-		JSON.parse(json, (k, v) =>
-			v && typeof v === 'object' && typeof v.__hfn === 'number' && Object.keys(v).length === 1 ? hostFn(v.__hfn) : v
-		).v;
+	const revive = (k, v) =>
+		v && typeof v === 'object' && typeof v.__hfn === 'number' && Object.keys(v).length === 1 ? hostFn(v.__hfn) : v;
+	// a reviver costs as much as the parse in this engine: only when a handle is in the text
+	const parse = (json) => (json.indexOf('"__hfn"') < 0 ? JSON.parse(json) : JSON.parse(json, revive));
+	const decode = (json) => parse(json).v;
 	const ERRORS = { TypeError, RangeError, ReferenceError, SyntaxError };
 	function call(op, ...args) {
-		const out = JSON.parse(H(op, encode(args)), (k, v) =>
-			v && typeof v === 'object' && typeof v.__hfn === 'number' && Object.keys(v).length === 1 ? hostFn(v.__hfn) : v
-		);
+		const out = parse(H(op, encode(args)));
 		if (out && typeof out.e === 'string') throw new (ERRORS[out.n] || Error)(out.e);
 		return out.v;
 	}

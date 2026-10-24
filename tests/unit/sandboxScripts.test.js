@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as THREE from 'three';
-import { loadSandbox, newGuest, ENTRY_DEADLINE_MS } from '../../src/lib/sandbox/engine.js';
+import { loadSandbox, newGuest, ENTRY_DEADLINE_MS, fromGuestJson } from '../../src/lib/sandbox/engine.js';
 import {
 	compileInGuest,
 	runEffectInGuest,
@@ -94,6 +94,14 @@ describe('effects move the real object', () => {
 });
 
 describe('hostile scripts reach nothing', () => {
+	it('guest JSON never yields a __proto__ key, however it is spelled', () => {
+		for (const json of ['{"v":{"__proto__":{"polluted":true},"a":1}}', '{"v":{"\\u005f_proto__":{"polluted":true},"a":1}}']) {
+			const out = fromGuestJson(json);
+			expect(Object.keys(out.v)).toEqual(['a']);
+			expect(/** @type {any} */ (Object.assign({}, out.v)).polluted).toBeUndefined();
+		}
+	});
+
 	it('no window, document, storage, cookies, network or host realm', () => {
 		const key = compiled(
 			'value',
