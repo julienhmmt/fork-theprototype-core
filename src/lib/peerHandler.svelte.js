@@ -298,20 +298,23 @@ export class PeerConnection {
 		/** 25-F: peers a refusal dial is out to — their `peer-unavailable` is not news @type {Set<string>} */
 		this.refusalDials = new Set();
 
-		// CN-3: an invite link can pin the signaling world (#A1B2C~srv=…). Parse it
-		// HERE, before resolvePeerOptions runs — the peer.on('open') hash flow below
-		// fires too late for server selection. Strip only the ~srv tail so the
-		// auto-connect flow keeps working on the bare id.
+		// CN-3: an invite link can name the signaling world (#A1B2C~srv=…). 69 T8: it is
+		// never switched to SILENTLY any more — a signaling server sees every peer's address
+		// and relays how they connect, and a link is something anybody can send. A link that
+		// names a server takes the hash whole (no auto-dial on our own server) and, once the
+		// app is up, asks with the host named (inviteLinks.confirmInviteServer — the same
+		// question a link pasted into a running tab gets). A link without one keeps the
+		// auto-connect flow on the bare id.
 		if (typeof location !== 'undefined' && location.hash.includes('~')) {
 			const { peerId: hashPeer, srv } = parseInviteHash(location.hash);
-			if (srv) {
-				const ov = decodeInviteServer(srv);
-				if (ov) {
-					applyInviteServerOverride(ov);
-					console.log('invite link pinned the signaling server:', srv);
-				}
-			}
-			location.hash = hashPeer ? '#' + hashPeer : '';
+			const ov = srv ? decodeInviteServer(srv) : null;
+			if (ov && hashPeer) {
+				location.hash = '';
+				const self = this;
+				setTimeout(() => {
+					import('./inviteLinks.js').then((m) => m.confirmInviteServer(self, hashPeer.toLowerCase(), ov)).catch(() => {});
+				}, 0);
+			} else location.hash = hashPeer ? '#' + hashPeer : '';
 		}
 
 		// A non-production hostname (localhost etc.) means the local dev signaling
