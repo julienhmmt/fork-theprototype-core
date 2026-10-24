@@ -106,11 +106,27 @@ h.run(async () => {
 	const crates = await rowsOf(A.page, terrain, 'crates');
 	const objs0 = await objectCount(A.page);
 	await A.page.evaluate((u) => /** @type {any} */ (window).__stores.objectActions.selectObject(u, true), terrain);
-	await A.page.waitForSelector('[data-scatter-to-objects="crates"]', { timeout: 15000 });
-	await A.page.locator('[data-scatter-to-objects="crates"]').click();
-	await h.eventually(() => objectsNamed(A.page, 'U51Crate'), (v) => v.length === 12, 'U1: "To objects" makes 12 crates', 20000);
+	// the Inspector opens on a timer that runs late under load: wait until the row has held still before pressing it
+	const btn = A.page.locator('[data-scatter-to-objects="crates"]');
+	await btn.waitFor({ state: 'visible', timeout: 15000 });
+	await btn.scrollIntoViewIfNeeded();
+	let box0 = await btn.boundingBox();
+	for (let i = 0; i < 20; i++) {
+		await A.page.waitForTimeout(250);
+		const box1 = await btn.boundingBox();
+		if (box0 && box1 && Math.abs(box0.y - box1.y) < 0.5 && Math.abs(box0.x - box1.x) < 0.5) break;
+		box0 = box1;
+	}
+	const tClick = Date.now();
+	await btn.click();
+	// the press imports the convert path on first use: on a loaded two-peer DEV server that took ~50 s (measured, the
+	// dynamic imports), on a built app it is immediate — so a generous wait, and the time is printed
+	await h.eventually(() => objectsNamed(A.page, 'U51Crate'), (v) => v.length === 12, 'U1: "To objects" makes 12 crates', 120000);
+	console.log(`U1: the crates appeared ${Date.now() - tClick} ms after the press`);
+	if ((await objectsNamed(A.page, 'U51Crate')).length !== 12)
+		console.log('U1 DIAG', await A.page.evaluate(() => new Promise((r) => /** @type {any} */ (window).__stores.notifications.subscribe((/** @type {any[]} */ v) => r(JSON.stringify(v.slice(-4).map((n) => n.text))))())));
 	const made = await objectsNamed(A.page, 'U51Crate');
-	h.check(made.every((m) => m.physics === 'dynamic'), `U1: every crate is the FULL prefab — its physics came back (${made.map((m) => m.physics).join(',')})`);
+	h.check(made.length === 12 && made.every((m) => m.physics === 'dynamic'), `U1: every crate is the FULL prefab — its physics came back (${made.map((m) => m.physics).join(',')})`);
 	const ground = await A.page.evaluate(
 		([u, pts]) => {
 			const s = /** @type {any} */ (window).__stores;
@@ -125,11 +141,11 @@ h.run(async () => {
 	);
 	const rows = crates.map((r) => r.split(' ').map(Number));
 	const centred = made.every((m) => rows.some((r) => Math.hypot(r[1] - m.cx, r[2] - m.cz) < 0.03));
-	h.check(centred, 'U1: each crate stands centred on an instance it replaced');
+	h.check(made.length === 12 && centred, 'U1: each crate stands centred on an instance it replaced');
 	const onGround = made.map((m, k) => Math.abs(m.minY - ground[k]));
-	h.check(Math.max(...onGround) < 0.05, `U1: each crate's base is on the ground (max gap ${Math.max(...onGround).toFixed(3)} m)`);
+	h.check(made.length === 12 && Math.max(...onGround) < 0.05, `U1: each crate's base is on the ground (max gap ${Math.max(...onGround).toFixed(3)} m)`);
 	h.check((await rowsOf(A.page, terrain, 'crates')).length === 0, 'U1: the instances left the set');
-	await h.eventually(() => objectsNamed(B.page, 'U51Crate'), (v) => v.length === 12 && v.every((m) => m.physics === 'dynamic'), 'U1: B has the 12 crates with their physics', 20000);
+	await h.eventually(() => objectsNamed(B.page, 'U51Crate'), (v) => v.length === 12 && v.every((m) => m.physics === 'dynamic'), 'U1: B has the 12 crates with their physics', 60000);
 	await A.page.evaluate(() => /** @type {any} */ (window).__stores.history.undo());
 	h.check((await objectsNamed(A.page, 'U51Crate')).length === 0 && (await rowsOf(A.page, terrain, 'crates')).length === 12, 'U1: one undo — crates gone, instances back');
 	await h.eventually(() => objectsNamed(B.page, 'U51Crate'), (v) => v.length === 0, 'U1: on B too', 15000);
@@ -237,13 +253,19 @@ h.run(async () => {
 
 	await A.page.evaluate((u) => /** @type {any} */ (window).__stores.terrainPaint.rerollScatterSet(u, 'mix', 777), terrain);
 	const rerolled = await rowsOf(A.page, terrain, 'mix');
-	const byId = (/** @type {string[]} */ list) => new Map(list.map((r) => [r.split(' ')[0], r]));
-	const before = byId(mixA);
-	const after = byId(rerolled);
-	const keptEdits = ['g0', 'g1', 'g2', 'g9'].every((id) => !before.has(id) || after.get(id) === before.get(id));
-	const deletedStay = ['g20', 'g24'].every((id) => !after.has(id));
+	const ovAfter = JSON.parse(await blockOf(A.page, terrain)).sets.find((/** @type {any} */ s) => s.id === 'mix')?.ov ?? {};
 	h.check(rerolled.join('\n') !== mixA.join('\n'), 'U3: Re-roll lays out a new fill');
-	h.check(keptEdits && deletedStay, 'U3: ... and keeps the hand edits (edited slots unchanged, deleted ones stay deleted)');
+	h.check(JSON.stringify(ovAfter) === JSON.stringify(edited.ov), `U3: ... and keeps every hand edit (the ${Object.keys(ovAfter).length} overrides unchanged)`);
+	// an override pins what it edited (turn, size) on the re-rolled slot; a deleted slot stays deleted
+	const afterRows = new Map(rerolled.map((r) => [r.split(' ')[0], r.split(' ').map(Number)]));
+	const pinned = Object.entries(edited.ov).every(([k, o]) => {
+		const row = afterRows.get('g' + k);
+		const ov = /** @type {any} */ (o);
+		if (ov.del) return !row;
+		if (!row) return true; // a slot the new layout masks out
+		return (ov.yaw === undefined || Math.abs(row[4] - ov.yaw) < 1e-3 || Math.abs(Math.abs(row[4] - ov.yaw) - 2 * Math.PI) < 1e-3) && (ov.scale === undefined || Math.abs(row[5] - ov.scale) < 1e-3);
+	});
+	h.check(pinned, 'U3: ... the edited slots keep their turn and size, the deleted ones stay deleted');
 	await h.eventually(() => rowsOf(B.page, terrain, 'mix'), (v) => v.join('\n') === rerolled.join('\n'), 'U3: B follows the re-roll exactly', 20000);
 
 	// ---- U4: axe on the Scatter section (dark + High contrast) and the Sculpt toolbar ----------------------------------
@@ -276,8 +298,22 @@ h.run(async () => {
 		await new Promise((r) => setTimeout(r, 500));
 	});
 	await h.freshReload(A);
-	const answered = await h.answerRestore(A, 'restore', 20000);
-	h.check(answered, 'premise: the reload offers the autosave and it is restored');
+	// the reload offers the autosave; restore it (through the modal's own action — a click on the modal timed out under load)
+	const offered = await A.page
+		.waitForFunction(
+			() => {
+				const m = /** @type {any} */ (window).__stores?.autosave;
+				let v;
+				m?.restoreAvailable?.subscribe((/** @type {any} */ x) => (v = x))();
+				return !!v;
+			},
+			null,
+			{ timeout: 30000, polling: 200 }
+		)
+		.then(() => true)
+		.catch(() => false);
+	h.check(offered, 'premise: the reload offers the autosave');
+	await A.page.evaluate(() => /** @type {any} */ (window).__stores.autosave.restoreSnapshot());
 	await h.eventually(() => rowsOf(A.page, terrain, 'mix'), (v) => v.join('\n') === rerolled.join('\n'), 'U3: after the reload A rebuilds the same terrain fill (seed + overrides)', 30000);
 	await h.eventually(() => rowsOf(A.page, sphere, 'moss'), (v) => v.join('\n') === mossA.join('\n'), 'U3: ... and the same sphere fill', 30000);
 
