@@ -23,6 +23,7 @@
 //   node scripts/ci/battery-desk.cjs diff [--baseline tag|file] <out-dir>...  # exit 1 when anything is NEW
 //   node scripts/ci/battery-desk.cjs flakes [--days 30]                    # flake rate per suite
 //   node scripts/ci/battery-desk.cjs coverage                              # every e2e file listed or excluded
+//   node scripts/ci/battery-desk.cjs import u1A.txt --logs e2e/ [--retry r2.txt]  # an old battery.sh run, for diff
 //
 // State (baselines, the outcome log) lives in $BATTERY_STATE, default ~/.local/state/theprototype/battery.
 // The environment a suite reads (APP_URL, MODULES_REPO, the *_TPSCENE paths, PEER_CONFIG_SELF) is the
@@ -383,6 +384,54 @@ function flakes(argv) {
 	for (const [n, p] of list) console.log(`  ${((100 * p.flaky) / p.runs).toFixed(0).padStart(3)} %  ${n}  (${p.flaky} of ${p.runs} runs flaky, ${p.red} red twice)`);
 }
 
+// ---------------------------------------------------------------- import (an old battery.sh run)
+
+/**
+ * A run of the integrators' old battery.sh (its summary lines + one <suite>.log each) as a desk run, so it can
+ * be diffed against a baseline. battery.sh never retried, so a red stays red unless `--retry <summary>` names a
+ * later rerun of the same suites (green there = flaky; red there = the checks red in both).
+ * @param {string[]} argv
+ */
+function importRun(argv) {
+	const logs = path.resolve(opt(argv, '--logs') || '.');
+	const retryFile = opt(argv, '--retry');
+	const summary = argv.filter((a, i) => !a.startsWith('--') && !['--logs', '--retry', '--name', '--out'].includes(argv[i - 1]))[0];
+	if (!summary) throw new Error('import: name the summary file');
+	const name = opt(argv, '--name') || path.basename(summary, '.txt');
+	/** @param {string} file @param {string} dir */
+	const parse = (file, dir) => {
+		/** @type {Map<string, Attempt>} */
+		const m = new Map();
+		for (const l of fs.readFileSync(file, 'utf8').split('\n')) {
+			const r = /^(\S+) rc=(\S+) pass~(\d+) fail~(\d+) (\d+)s :: ?(.*)$/.exec(l);
+			if (!r) continue;
+			const rc = r[2] === 'gone' ? null : Number(r[2]);
+			const logFile = path.join(dir, `${r[1].startsWith('MOD:') ? 'mod-' + r[1].slice(4) : r[1]}.log`);
+			const log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : r[6];
+			m.set(r[1], { rc, secs: Number(r[5]), pass: Number(r[3]), fail: Number(r[4]), last: r[6], fps: fingerprints(r[1], log, rc) });
+		}
+		return m;
+	};
+	const first = parse(summary, logs);
+	const again = retryFile ? parse(retryFile, path.resolve(opt(argv, '--retry-logs') || path.dirname(retryFile))) : new Map();
+	/** @type {DeskResult[]} */
+	const results = [];
+	for (const [n, a] of first) {
+		const r = again.get(n);
+		if (a.rc === 0) results.push({ name: n, status: 'pass', first: a, fps: [] });
+		else if (r && r.rc === 0) results.push({ name: n, status: 'flaky', first: a, retry: r, fps: [] });
+		else {
+			const both = r ? a.fps.filter((f) => r.fps.includes(f)) : a.fps;
+			results.push({ name: n, status: 'red', first: a, retry: r, fps: both.length ? both : r ? r.fps : a.fps });
+		}
+	}
+	const out = path.resolve(opt(argv, '--out') || path.dirname(summary));
+	/** @type {DeskRun} */
+	const rec = { name, root: '', commit: (fs.readFileSync(summary, 'utf8').split('\n')[0] || '').replace(/^snapshot: /, ''), slot: 'imported', started: fs.statSync(summary).mtime.toISOString(), secs: 0, results };
+	fs.writeFileSync(path.join(out, `${name}.json`), JSON.stringify(rec, null, 1));
+	console.log(`imported ${results.length} suites (${results.filter((r) => r.status === 'red').length} red, ${results.filter((r) => r.status === 'flaky').length} flaky) -> ${path.join(out, name + '.json')}`);
+}
+
 // ---------------------------------------------------------------- coverage
 
 /**
@@ -415,6 +464,7 @@ if (require.main === module) {
 		else if (cmd === 'baseline' && argv[0] === 'save' && argv[1]) baselineSave(argv[1], argv.slice(2));
 		else if (cmd === 'diff') diff(argv);
 		else if (cmd === 'flakes') flakes(argv);
+		else if (cmd === 'import') importRun(argv);
 		else if (cmd === 'coverage') {
 			const c = coverage(/** @type {DeskBattery} */ (load()), e2eFiles());
 			for (const n of c.unlisted) console.log(`unlisted: ${n} — add it to tests/e2e/battery.json suites, or to exclude with a reason`);
@@ -424,7 +474,8 @@ if (require.main === module) {
 			for (const n of c.both) console.log(`both: ${n} is a suite AND excluded`);
 			process.exit(c.unlisted.length + c.both.length ? 1 : 0);
 		} else {
-			console.error('usage: battery-desk.cjs run --half A|B [--of N] [--only a,b] [--list f] [--out d] [--name n] [--root tree] [--no-retry]\n' + '       | baseline save <tag> <out-dir>... | diff [--baseline tag|file] <out-dir>... | flakes [--days N] | coverage');
+			console.error('usage: battery-desk.cjs run --half A|B [--of N] [--only a,b] [--list f] [--out d] [--name n] [--root tree] [--no-retry]\n' + '       | baseline save <tag> <out-dir>... | diff [--baseline tag|file] <out-dir>... | flakes [--days N] | coverage\n' +
+					'       | import <battery.sh summary.txt> --logs <dir> [--retry <summary.txt> [--retry-logs dir]] [--name n] [--out dir]');
 			process.exit(2);
 		}
 	} catch (e) {
