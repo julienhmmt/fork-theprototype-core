@@ -12,6 +12,8 @@ import {
 import { setObjectColor, switchMaterialType, setMaterialParam } from '$lib/materialsHandler';
 import { notifyExternalMove } from '$lib/flowRuntime';
 import { meshGenReady } from './meshProviders.js';
+import { viewerToolRefusal } from './viewerGate.js';
+import { isViewer } from '$lib/objectPermissions';
 import { graphOf, SCENE_GRAPH } from '../../stores/flowStore';
 import { sceneJoints } from '$lib/joints';
 import { graphToText } from '$lib/graphText';
@@ -562,6 +564,9 @@ const PHYSICS_DISABLED =
  */
 export async function executeAiTool(rawName, rawArgs) {
 	const { name, args } = repairToolCall(rawName, rawArgs);
+	// F-1: a viewer's edits never reach anyone, so refuse instead of reporting success
+	const refusal = viewerToolRefusal(name, isViewer());
+	if (refusal) return refusal;
 	try {
 		switch (name) {
 			case 'list_scene':
