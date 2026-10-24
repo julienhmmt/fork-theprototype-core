@@ -96,12 +96,15 @@ function record(op) {
 	offerUndo({ id: 'codefiles', text: describe(op), undo: () => undoOp(op) });
 }
 
-/** @param {string} reason */
-function refuse(reason) {
+/** @param {string} reason @param {boolean} [quiet] the caller shows the reason itself (an inline name field) */
+function refuse(reason, quiet = false) {
 	debug.refused++;
-	showToast(reason);
+	if (!quiet) showToast(reason);
 	return { ok: false, reason };
 }
+
+/** @param {string} name */
+const takenReason = (name) => 'A file called "' + name + '" already exists — two files with one name would share one editor';
 
 /** the library's text-file names, for the uniqueness rule */
 const textItems = () => get(explorerItems).filter((i) => isTextFileName(i.name));
@@ -116,25 +119,26 @@ function liveFolder(id) {
  * template's default, numbered when taken; a typed name that is taken is REFUSED with the holder
  * named (a silent rename would leave the person looking for the name they typed). Opens in a
  * Code tab unless `open: false`.
- * @param {{template?: string, name?: string, folderId?: string | null, open?: boolean}} [opts]
+ * @param {{template?: string, name?: string, folderId?: string | null, open?: boolean, quiet?: boolean}} [opts]
  * @returns {Promise<{ok: boolean, reason?: string, item?: any, tabId?: string | null}>}
  */
 export async function createCodeFile(opts = {}) {
+	const q = !!opts.quiet;
 	const no = refusal();
-	if (no) return refuse(no);
+	if (no) return refuse(no, q);
 	await loadExplorer();
 	const tpl = templateOf(opts.template ?? 'script');
 	const typed = String(opts.name ?? '').trim();
 	const name = typed ? fileNameFor(typed, tpl.key) : uniqueName(tpl.defaultName, textItems().map((i) => i.name));
 	const bad = nameProblem(name, 'file');
-	if (bad) return refuse(bad);
+	if (bad) return refuse(bad, q);
 	const holder = nameTakenBy(name, get(explorerItems));
-	if (holder) return refuse('A file called "' + holder.name + '" already exists — two files with one name would share one editor');
+	if (holder) return refuse(takenReason(holder.name), q);
 	const folderId = liveFolder(opts.folderId);
 	const bytes = /** @type {ArrayBuffer} */ (new TextEncoder().encode(templateText(tpl.key, name)).buffer);
 	// a NEW record even when the bytes match one we hold (two empty JSON files are two files)
 	const item = await addItemFromBytes(bytes, name, folderId, { allowDuplicate: true });
-	if (!item) return refuse('Could not create "' + name + '"');
+	if (!item) return refuse('Could not create "' + name + '"', q);
 	record({ op: 'create', kind: 'file', id: item.id, name: item.name });
 	const tabId = opts.open === false ? null : await openCode({ source: tpl.key === 'script' ? 'script' : 'text', ref: { itemId: item.id } });
 	return { ok: true, item, tabId };
@@ -142,21 +146,22 @@ export async function createCodeFile(opts = {}) {
 
 /**
  * New folder in `parentId` (null = the root). An empty name is "New folder", numbered.
- * @param {{name?: string, parentId?: string | null}} [opts]
+ * @param {{name?: string, parentId?: string | null, quiet?: boolean}} [opts]
  * @returns {{ok: boolean, reason?: string, folder?: any}}
  */
 export function createCodeFolder(opts = {}) {
+	const q = !!opts.quiet;
 	const no = refusal();
-	if (no) return refuse(no);
+	if (no) return refuse(no, q);
 	const parentId = liveFolder(opts.parentId);
 	const typed = String(opts.name ?? '').trim();
 	const siblings = get(explorerFolders).filter((f) => (f.parentId ?? null) === parentId).map((f) => f.name);
 	const name = typed || uniqueName('New folder', siblings);
 	const bad = nameProblem(name, 'folder');
-	if (bad) return refuse(bad);
-	if (folderNameTaken(name, parentId, get(explorerFolders))) return refuse('There is already a folder called "' + name + '" here');
+	if (bad) return refuse(bad, q);
+	if (folderNameTaken(name, parentId, get(explorerFolders))) return refuse('There is already a folder called "' + name + '" here', q);
 	const folder = createFolder(name, parentId);
-	if (!folder) return refuse('Could not create the folder "' + name + '"');
+	if (!folder) return refuse('Could not create the folder "' + name + '"', q);
 	record({ op: 'create', kind: 'folder', id: folder.id, name: folder.name });
 	return { ok: true, folder };
 }
@@ -164,31 +169,32 @@ export function createCodeFolder(opts = {}) {
 /**
  * Rename a file or a folder. Open tabs follow (codeWorkspace.followNames).
  * @param {{kind: 'file' | 'folder', id: string, name: string}} opts
- * @param {{undoing?: boolean}} [how]
+ * @param {{undoing?: boolean, quiet?: boolean}} [how]
  * @returns {{ok: boolean, reason?: string}}
  */
 export function renameCodeEntry(opts, how = {}) {
+	const q = !!how.quiet;
 	const no = refusal();
-	if (no) return refuse(no);
+	if (no) return refuse(no, q);
 	const to = String(opts.name ?? '').trim();
 	if (opts.kind === 'folder') {
 		const folder = get(explorerFolders).find((f) => f.id === opts.id);
-		if (!folder) return refuse('That folder is gone');
+		if (!folder) return refuse('That folder is gone', q);
 		if (to === folder.name) return { ok: true };
 		const bad = nameProblem(to, 'folder');
-		if (bad) return refuse(bad);
-		if (folderNameTaken(to, folder.parentId ?? null, get(explorerFolders), folder.id)) return refuse('There is already a folder called "' + to + '" here');
+		if (bad) return refuse(bad, q);
+		if (folderNameTaken(to, folder.parentId ?? null, get(explorerFolders), folder.id)) return refuse('There is already a folder called "' + to + '" here', q);
 		renameFolder(folder.id, to);
 		if (!how.undoing) record({ op: 'rename', kind: 'folder', id: folder.id, from: folder.name, to });
 		return { ok: true };
 	}
 	const item = get(explorerItems).find((i) => i.id === opts.id);
-	if (!item) return refuse('That file is gone');
+	if (!item) return refuse('That file is gone', q);
 	if (to === item.name) return { ok: true };
 	const bad = nameProblem(to, 'file');
-	if (bad) return refuse(bad);
+	if (bad) return refuse(bad, q);
 	const holder = nameTakenBy(to, get(explorerItems), item.id);
-	if (holder) return refuse('A file called "' + holder.name + '" already exists — two files with one name would share one editor');
+	if (holder) return refuse(takenReason(holder.name), q);
 	renameItem(item.id, to);
 	if (!how.undoing) record({ op: 'rename', kind: 'file', id: item.id, from: item.name, to });
 	return { ok: true };
