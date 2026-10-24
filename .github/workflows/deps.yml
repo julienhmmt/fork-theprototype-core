@@ -116,7 +116,7 @@ jobs:
     name: e2e ${{ matrix.shard }}/${{ matrix.of }}
     needs: plan
     runs-on: ubuntu-latest
-    timeout-minutes: 100
+    timeout-minutes: 110
     # the browsers and their OS libraries at exactly the lockfile's Playwright: no 5-minute apt step per shard
     container:
       image: mcr.microsoft.com/playwright:v${{ needs.plan.outputs.playwright }}-noble
@@ -172,7 +172,7 @@ jobs:
                    untangle:UNTANGLE waves:WAVES race:RACE; do export "${g#*:}_TPSCENE=$G/${g%%:*}/scene.tpscene"; done
           export JELLY_TPSCENE=$S/examples/jelly-room/scene.tpscene TANK_TPSCENE=$S/examples/fluid-tank-toy/scene.tpscene \
                  POOL_TPSCENE=$S/examples/pool-party/scene.tpscene
-          node scripts/ci/battery.cjs run --shard ${{ matrix.shard }} --of ${{ matrix.of }} --serve --port 5173 --out "$W/battery-out"
+          node scripts/ci/battery.cjs run --shard ${{ matrix.shard }} --of ${{ matrix.of }} --serve --port 5173 --deadline 85 --out "$W/battery-out"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

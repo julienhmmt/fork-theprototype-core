@@ -9,7 +9,7 @@
 // names a suite; the list is data, refreshed from the integrators' battery runs (`refresh`).
 //
 //   node scripts/ci/battery.cjs plan                      # matrix JSON for GITHUB_OUTPUT
-//   node scripts/ci/battery.cjs run --shard 3 --of 14     # run one shard (serves the app itself)
+//   node scripts/ci/battery.cjs run --shard 3 --of 14     # run one shard (serves the app + the signaling server)
 //   node scripts/ci/battery.cjs report <results-dir>      # merge shard results → summary, exit 1 on a required red
 //   node scripts/ci/battery.cjs refresh [--list f]... [--summary f]... [--results dir]
 //
@@ -19,16 +19,16 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawn, spawnSync } = require('child_process');
+const { spawn } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const BATTERY = path.join(ROOT, 'tests', 'e2e', 'battery.json');
 
 /**
- * @typedef {{ comment?: string, refs: Record<string, {repo: string, ref: string}>, shards: {target_minutes: number, max: number, min: number},
+ * @typedef {{ comment?: string, refs: Record<string, {repo: string, ref: string}>, shards: {target_minutes: number, max: number, min: number, par?: number},
  *   pc?: {games: string[], levels: string[]}, skip: Record<string, string>, optional: Record<string, string>, setup: Record<string, string>,
  *   suites: Record<string, number> }} Battery
- * @typedef {{ name: string, status: 'pass'|'flaky'|'fail'|'timeout'|'gone', required: boolean, rc: number|null, secs: number,
+ * @typedef {{ name: string, status: 'pass'|'flaky'|'fail'|'timeout'|'gone'|'notrun', required: boolean, rc: number|null, secs: number,
  *   retrySecs?: number, pass: number, fail: number, last: string, shard: number }} SuiteResult
  */
 
@@ -49,7 +49,8 @@ function shardCount(b) {
 	const env = Number(process.env.BATTERY_SHARDS || 0);
 	if (env > 0) return env;
 	const total = runnable(b).reduce((t, [, s]) => t + s, 0);
-	const n = Math.ceil(total / (b.shards.target_minutes * 60));
+	// `par` suites run side by side on one runner, so a shard holds par x target_minutes of suite time
+	const n = Math.ceil(total / (b.shards.target_minutes * 60 * (b.shards.par || 1)));
 	return Math.max(b.shards.min, Math.min(b.shards.max, n));
 }
 
@@ -190,59 +191,77 @@ async function run(argv) {
 	let signalChild = server ? await signal.ensureSignalServer() : null;
 	/** @type {SuiteResult[]} */
 	const results = [];
-	console.log(`shard ${shard}/${of}: ${mine.length} suites, est ${Math.round(mine.reduce((t, s) => t + (b.suites[s] || 60), 0) / 60)} min`);
-	for (const name of mine) {
-		const required = !(name in b.optional);
-		if (!fs.existsSync(path.join(ROOT, 'tests', 'e2e', name + '.test.cjs'))) {
-			results.push({ name, status: 'gone', required: false, rc: null, secs: 0, pass: 0, fail: 0, last: 'no such suite (refresh battery.json)', shard });
-			continue;
+	const par = Number(opt(argv, '--par') || b.shards.par || 1);
+	// past the deadline no suite starts: the rest report `notrun` instead of the job being killed with nothing said
+	const deadline = Date.now() + Number(opt(argv, '--deadline') || 0) * 60000 || Infinity;
+	const save = () => fs.writeFileSync(path.join(out, `results-${shard}.json`), JSON.stringify({ shard, of, results }, null, 1));
+	console.log(`shard ${shard}/${of}: ${mine.length} suites, est ${Math.round(mine.reduce((t, s) => t + (b.suites[s] || 60), 0) / 60)} min, ${par} at a time`);
+	/** @type {Promise<any> | null} */
+	let agentSetup = null;
+	const queue = [...mine];
+	const worker = async () => {
+		for (let name = queue.shift(); name; name = queue.shift()) {
+			const required = !(name in b.optional);
+			if (!fs.existsSync(path.join(ROOT, 'tests', 'e2e', name + '.test.cjs'))) {
+				results.push({ name, status: 'gone', required: false, rc: null, secs: 0, pass: 0, fail: 0, last: 'no such suite (refresh battery.json)', shard });
+				continue;
+			}
+			if (Date.now() > deadline) {
+				results.push({ name, status: 'notrun', required, rc: null, secs: 0, pass: 0, fail: 0, last: 'shard deadline passed before it started', shard });
+				continue;
+			}
+			// a dead dev server turns every later suite red for the wrong reason: bring it back first
+			if (server && !(await reachable(url))) {
+				console.log(`[battery] dev server unreachable before ${name}: restarting`);
+				stop(server);
+				server = await serve(port, path.join(out, 'logs', 'dev-server.log'));
+			}
+			if (server && !(await signal.signalUp())) {
+				console.log(`[battery] signaling server down before ${name}: restarting`);
+				signalChild = await signal.ensureSignalServer();
+			}
+			// a suite's extra install happens once, on the shard that holds it
+			if (b.setup[name] === 'agent' && !fs.existsSync(path.join(ROOT, 'tools', 'agent', 'node_modules'))) {
+				agentSetup ||= new Promise((res) => spawn('npm', ['ci', '--no-audit', '--no-fund'], { cwd: path.join(ROOT, 'tools', 'agent'), stdio: 'inherit' }).on('exit', res));
+				await agentSetup;
+			}
+			const est = b.suites[name] || 60;
+			let r = await runSuite(name, est, out, '');
+			/** @type {SuiteResult['status']} */
+			let status = r.rc === 0 ? 'pass' : r.timedOut ? 'timeout' : 'fail';
+			/** @type {number|undefined} */
+			let retrySecs;
+			// only a suite that gates earns a second run (an optional red is expected and only reported)
+			if (status !== 'pass' && required && Date.now() < deadline) {
+				const again = await runSuite(name, est, out, '.retry');
+				retrySecs = again.secs;
+				if (again.rc === 0) status = 'flaky';
+				else r = again;
+			}
+			results.push({ name, status, required, rc: r.rc, secs: r.secs, retrySecs, pass: r.pass, fail: r.fail, last: r.last, shard });
+			save();
+			if (status === 'pass' || status === 'flaky') fs.rmSync(path.join(out, 'evidence', name), { recursive: true, force: true });
+			console.log(`${name} ${status}${required ? '' : ' (optional)'} rc=${r.rc} pass~${r.pass} fail~${r.fail} ${r.secs}s${retrySecs ? ` retry ${retrySecs}s` : ''} :: ${r.last}`);
 		}
-		// a dead dev server turns every later suite red for the wrong reason: bring it back first
-		if (server && !(await reachable(url))) {
-			console.log(`[battery] dev server unreachable before ${name}: restarting`);
-			stop(server);
-			server = await serve(port, path.join(out, 'logs', 'dev-server.log'));
-		}
-		if (server && !(await signal.signalUp())) {
-			console.log(`[battery] signaling server down before ${name}: restarting`);
-			signalChild = await signal.ensureSignalServer();
-		}
-		// a suite's extra install happens once, on the shard that holds it
-		if (b.setup[name] === 'agent' && !fs.existsSync(path.join(ROOT, 'tools', 'agent', 'node_modules'))) {
-			spawnSync('npm', ['ci', '--no-audit', '--no-fund'], { cwd: path.join(ROOT, 'tools', 'agent'), stdio: 'inherit' });
-		}
-		const est = b.suites[name] || 60;
-		let r = await runSuite(name, est, out, '');
-		/** @type {SuiteResult['status']} */
-		let status = r.rc === 0 ? 'pass' : r.timedOut ? 'timeout' : 'fail';
-		/** @type {number|undefined} */
-		let retrySecs;
-		if (status !== 'pass') {
-			const again = await runSuite(name, est, out, '.retry');
-			retrySecs = again.secs;
-			if (again.rc === 0) status = 'flaky';
-			else r = again;
-		}
-		const res = { name, status, required, rc: r.rc, secs: r.secs, retrySecs, pass: r.pass, fail: r.fail, last: r.last, shard };
-		results.push(res);
-		if (status === 'pass' || status === 'flaky') fs.rmSync(path.join(out, 'evidence', name), { recursive: true, force: true });
-		console.log(`${name} ${status}${required ? '' : ' (optional)'} rc=${r.rc} pass~${r.pass} fail~${r.fail} ${r.secs}s${retrySecs ? ` retry ${retrySecs}s` : ''} :: ${r.last}`);
-	}
+	};
+	await Promise.all(Array.from({ length: par }, worker));
 	stop(server);
 	signal.stopSignalServer(signalChild);
-	fs.writeFileSync(path.join(out, `results-${shard}.json`), JSON.stringify({ shard, of, results }, null, 1));
-	const red = results.filter((r) => r.required && (r.status === 'fail' || r.status === 'timeout'));
+	save();
+	const red = results.filter(isRed);
 	if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, table(results, `Shard ${shard}/${of}`));
 	process.exit(red.length ? 1 : 0);
 }
+
+/** a red that gates: a required suite that failed, timed out or never ran @param {SuiteResult} r */
+const isRed = (r) => r.required && (r.status === 'fail' || r.status === 'timeout' || r.status === 'notrun');
 
 // ---------------------------------------------------------------- the report
 
 /** @param {SuiteResult[]} results @param {string} title */
 function table(results, title) {
-	const red = results.filter((r) => r.status === 'fail' || r.status === 'timeout');
-	const req = red.filter((r) => r.required);
-	const opt = red.filter((r) => !r.required);
+	const req = results.filter(isRed);
+	const opt = results.filter((r) => !r.required && (r.status === 'fail' || r.status === 'timeout'));
 	const flaky = results.filter((r) => r.status === 'flaky');
 	const secs = results.reduce((t, r) => t + r.secs + (r.retrySecs || 0), 0);
 	const row = (/** @type {SuiteResult} */ r) => `| ${r.name} | ${r.status} | ${r.shard} | ${r.pass}/${r.fail} | ${r.secs}s | ${r.last.replace(/\|/g, '\\|')} |`;
@@ -277,8 +296,7 @@ function report(argv) {
 	else console.log(md);
 	// measured seconds, for `refresh --results` on a later day
 	fs.writeFileSync(path.join(dir, 'durations.json'), JSON.stringify(Object.fromEntries(all.filter((r) => r.status === 'pass').map((r) => [r.name, r.secs])), null, 1));
-	const red = all.filter((r) => r.required && (r.status === 'fail' || r.status === 'timeout'));
-	process.exit(red.length || missing.length ? 1 : 0);
+	process.exit(all.filter(isRed).length || missing.length ? 1 : 0);
 }
 
 /** @param {string} dir @returns {string[]} */
@@ -350,7 +368,7 @@ function plan() {
 	const b = load();
 	const of = shardCount(b);
 	const shards = assign(b, of);
-	const include = shards.map((s, i) => ({ shard: i + 1, of, suites: s.suites.length, est: Math.round(s.secs / 60) }));
+	const include = shards.map((s, i) => ({ shard: i + 1, of, suites: s.suites.length, est: Math.round(s.secs / 60 / (b.shards.par || 1)) }));
 	const needs = [...new Set(Object.entries(b.setup).filter(([n]) => n in b.suites && !(n in b.skip)).map(([, v]) => v))];
 	const line = `matrix=${JSON.stringify({ include })}\nshards=${of}\nsetup=${needs.join(',')}\n`;
 	if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, line);
@@ -364,7 +382,7 @@ if (require.main === module) {
 	else if (cmd === 'report') report(argv);
 	else if (cmd === 'refresh') refresh(argv);
 	else {
-		console.error('usage: battery.cjs plan | run --shard N --of M [--serve] [--port P] [--only a,b] | report <dir> | refresh [--list f] [--summary f] [--results dir]');
+		console.error('usage: battery.cjs plan | run --shard N --of M [--serve] [--port P] [--par K] [--deadline MIN] [--only a,b] | report <dir> | refresh [--list f] [--summary f] [--results dir]');
 		process.exit(2);
 	}
 }
