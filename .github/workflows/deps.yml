@@ -129,10 +129,23 @@ jobs:
       refs: ${{ needs.plan.outputs.refs }}
       deadline: 75
 
-  # red or flaky on SwiftShader with the same red on unchanged code: run, reported, never waited for. They start
-  # AFTER the required shards (the free plan runs 20 jobs at once) and deps-gate does not need them.
-  e2e-optional:
+  # SwiftShader makes any one suite fail now and then, twice on one loaded runner too: a required red (or a suite
+  # the deadline left unrun) gets two more tries on a FRESH runner before it counts
+  confirm:
     needs: [plan, e2e]
+    if: always() && needs.e2e.result == 'failure'
+    uses: ./.github/workflows/battery.yml
+    with:
+      set: confirm
+      matrix: '{"include":[{"shard":1,"of":3,"suites":0,"est":0},{"shard":2,"of":3,"suites":0,"est":0},{"shard":3,"of":3,"suites":0,"est":0}]}'
+      playwright: ${{ needs.plan.outputs.playwright }}
+      refs: ${{ needs.plan.outputs.refs }}
+      deadline: 20
+
+  # red or flaky on SwiftShader with the same red on unchanged code: run, reported, never waited for. They start
+  # AFTER the required shards and the confirm step (the free plan runs 20 jobs at once); deps-gate does not need them.
+  e2e-optional:
+    needs: [plan, e2e, confirm]
     if: always() && needs.plan.outputs.optional_shards != '0'
     uses: ./.github/workflows/battery.yml
     with:
@@ -158,7 +171,7 @@ jobs:
   # THE required check (the ruleset on `deps` names it)
   gate:
     name: deps-gate
-    needs: [scope, ci, perf, plan, e2e]
+    needs: [scope, ci, perf, plan, e2e, confirm]
     if: always() && needs.scope.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -171,6 +184,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: battery-required-*
+          path: battery
+      - uses: actions/download-artifact@v4
+        if: needs.confirm.result != 'skipped'
+        with:
+          pattern: battery-confirm-*
           path: battery
       - name: battery report
         id: report

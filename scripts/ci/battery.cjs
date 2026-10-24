@@ -10,6 +10,7 @@
 //
 //   node scripts/ci/battery.cjs plan                      # the required + optional matrices for GITHUB_OUTPUT
 //   node scripts/ci/battery.cjs run --set required --shard 3 --of 14   # one shard (serves the app + the signaling server)
+//   node scripts/ci/battery.cjs run --set confirm --from <dir> --shard 1 --of 3   # re-run a run's required reds
 //   node scripts/ci/battery.cjs report <results-dir>      # merge shard results → summary, exit 1 on a required red
 //   node scripts/ci/battery.cjs refresh [--list f]... [--summary f]... [--results dir]
 //
@@ -198,17 +199,26 @@ function runSuite(name, est, out, tag, capMs) {
 /** @param {string[]} argv */
 async function run(argv) {
 	const b = load();
-	const of = Number(opt(argv, '--of') || shardCount(b, /** @type {BatterySet} */ (opt(argv, '--set') || 'required')));
+	const of = Number(opt(argv, '--of') || shardCount(b, /** @type {BatterySet} */ (opt(argv, '--set') === 'optional' ? 'optional' : 'required')));
 	const shard = Number(opt(argv, '--shard') || 1);
 	const out = path.resolve(opt(argv, '--out') || process.env.BATTERY_OUT || path.join(ROOT, '..', 'battery-out'));
 	const port = Number(opt(argv, '--port') || 5173);
 	const only = opt(argv, '--only');
 	fs.mkdirSync(path.join(out, 'logs'), { recursive: true });
-	const set = /** @type {BatterySet} */ (opt(argv, '--set') || 'all');
-	const mine = only ? only.split(',') : assign(b, of, set)[shard - 1].suites;
+	const set = /** @type {BatterySet | 'confirm'} */ (opt(argv, '--set') || 'all');
+	// --set confirm --from <dir>: the required reds of a finished run (and what its deadline left unrun), re-run on
+	// THIS fresh runner — part `shard` of `of` takes every of-th one. A red that passes here was the shard's load.
+	const from = opt(argv, '--from');
+	const reds = () =>
+		walk(path.resolve(/** @type {string} */ (from)))
+			.filter((f) => /results-\d+\.json$/.test(f))
+			.flatMap((f) => JSON.parse(fs.readFileSync(f, 'utf8')).results.filter(isRed).map((/** @type {SuiteResult} */ r) => r.name))
+			.sort()
+			.filter((_, i) => i % of === shard - 1);
+	const mine = only ? only.split(',') : set === 'confirm' ? reds() : assign(b, of, set)[shard - 1].suites;
 	// the suites' own default is a hosts-file origin: say where the app is
 	const url = (process.env.APP_URL ||= `https://localhost:${port}/`);
-	let server = argv.includes('--serve') ? await serve(port, path.join(out, 'logs', 'dev-server.log')) : null;
+	let server = argv.includes('--serve') && mine.length ? await serve(port, path.join(out, 'logs', 'dev-server.log')) : null;
 	// the two-peer suites meet on a signaling server: with no .env a localhost app picks the local-dev
 	// one on :9001, so --serve brings it (a public runner never touches the self-hosted or the public box)
 	const signal = require(path.join(ROOT, 'tests', 'e2e', 'localSignal.cjs'));
@@ -220,7 +230,7 @@ async function run(argv) {
 	const retry = !argv.includes('--no-retry');
 	// past the deadline no suite starts: the rest report `notrun` instead of the job being killed with nothing said
 	const deadline = Date.now() + Number(opt(argv, '--deadline') || 0) * 60000 || Infinity;
-	const save = () => fs.writeFileSync(path.join(out, `results-${shard}.json`), JSON.stringify({ shard, of, set, results }, null, 1));
+	const save = () => fs.writeFileSync(path.join(out, `${set === 'confirm' ? 'confirm' : 'results'}-${shard}.json`), JSON.stringify({ shard, of, set, results }, null, 1));
 	console.log(`shard ${shard}/${of}: ${mine.length} suites, est ${Math.round(mine.reduce((t, s) => t + (b.suites[s] || 60), 0) / 60)} min, ${par} at a time`);
 	/** @type {Promise<any> | null} */
 	let agentSetup = null;
@@ -314,6 +324,15 @@ function report(argv) {
 		of = r.of;
 		seen.add(r.shard);
 		all.push(...r.results);
+	}
+	// a red the confirm step saw pass on a fresh runner is a flake of that shard, not a red of the change
+	for (const f of walk(dir).filter((f) => /confirm-\d+\.json$/.test(f))) {
+		for (const c of JSON.parse(fs.readFileSync(f, 'utf8')).results) {
+			const r = all.find((x) => x.name === c.name);
+			if (!r || !isRed(r) || !(c.status === 'pass' || c.status === 'flaky')) continue;
+			if (r.status === 'notrun') Object.assign(r, { ...c, shard: r.shard, last: `ran in the confirm step — ${c.last}` });
+			else Object.assign(r, { status: 'flaky', last: `green on a fresh runner (confirm ${c.secs}s) — ${r.last}` });
+		}
 	}
 	const b = load();
 	const missing = Array.from({ length: of || shardCount(b) }, (_, i) => i + 1).filter((s) => !seen.has(s));
@@ -424,7 +443,7 @@ if (require.main === module) {
 	else if (cmd === 'report') report(argv);
 	else if (cmd === 'refresh') refresh(argv);
 	else {
-		console.error('usage: battery.cjs plan | run --shard N --of M [--set required|optional|all] [--serve] [--port P] [--par K] [--deadline MIN] [--only a,b] | report <dir> | refresh [--list f] [--summary f] [--results dir] [--red dir --reason r [--green dir]]');
+		console.error('usage: battery.cjs plan | run --shard N --of M [--set required|optional|all|confirm --from <dir>] [--serve] [--port P] [--par K] [--deadline MIN] [--only a,b] | report <dir> | refresh [--list f] [--summary f] [--results dir] [--red dir --reason r [--green dir]]');
 		process.exit(2);
 	}
 }
