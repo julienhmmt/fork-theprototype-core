@@ -5,7 +5,7 @@
 		"packs": {"repo":"theprototype-app/packs","ref":"360f31686652f0f9c7e240ff09785c6b6c60d678"},
 		"scenes": {"repo":"theprototype-app/scenes","ref":"ace0668ff36d5e9b7bdde1a3dd3c47e3910a9338"}
 	},
-	"shards": {"target_minutes":40,"max":20,"min":4,"par":2},
+	"shards": {"target_minutes":40,"max":20,"min":4,"par":1},
 	"pc": {"games":["jam-room","race","dungeon-realms","escape-room","waves"],"levels":["tavern-interior","castle-courtyard","forest-clearing","wizards-tower","market-square"]},
 	"skip": {
 		"arch-primitives": "two peers on the self-hosted signaling box",

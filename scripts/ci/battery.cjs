@@ -192,6 +192,8 @@ async function run(argv) {
 	/** @type {SuiteResult[]} */
 	const results = [];
 	const par = Number(opt(argv, '--par') || b.shards.par || 1);
+	// --no-retry: a classification run (what is red on this runner at all), not a gate
+	const retry = !argv.includes('--no-retry');
 	// past the deadline no suite starts: the rest report `notrun` instead of the job being killed with nothing said
 	const deadline = Date.now() + Number(opt(argv, '--deadline') || 0) * 60000 || Infinity;
 	const save = () => fs.writeFileSync(path.join(out, `results-${shard}.json`), JSON.stringify({ shard, of, results }, null, 1));
@@ -232,7 +234,7 @@ async function run(argv) {
 			/** @type {number|undefined} */
 			let retrySecs;
 			// only a suite that gates earns a second run (an optional red is expected and only reported)
-			if (status !== 'pass' && required && Date.now() < deadline) {
+			if (status !== 'pass' && required && retry && Date.now() < deadline) {
 				const again = await runSuite(name, est, out, '.retry');
 				retrySecs = again.secs;
 				if (again.rc === 0) status = 'flaky';

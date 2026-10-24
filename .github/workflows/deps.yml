@@ -106,6 +106,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: plan
+        env:
+          BATTERY_SHARDS: 20 # PROBE classification run (deps-auto lane), reverted after
         run: node scripts/ci/battery.cjs plan
       - id: pw
         run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/playwright'].version")" >> "$GITHUB_OUTPUT"
@@ -172,7 +174,7 @@ jobs:
                    untangle:UNTANGLE waves:WAVES race:RACE; do export "${g#*:}_TPSCENE=$G/${g%%:*}/scene.tpscene"; done
           export JELLY_TPSCENE=$S/examples/jelly-room/scene.tpscene TANK_TPSCENE=$S/examples/fluid-tank-toy/scene.tpscene \
                  POOL_TPSCENE=$S/examples/pool-party/scene.tpscene
-          node scripts/ci/battery.cjs run --shard ${{ matrix.shard }} --of ${{ matrix.of }} --serve --port 5173 --deadline 85 --out "$W/battery-out"
+          node scripts/ci/battery.cjs run --shard ${{ matrix.shard }} --of ${{ matrix.of }} --serve --port 5173 --deadline 95 --no-retry --out "$W/battery-out"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
