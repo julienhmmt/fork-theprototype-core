@@ -4,7 +4,9 @@
 # target-branch). Every PR into `deps` runs the whole release gate here: ci.yml (build, the
 # svelte-check ratchet, vitest, scene-lint, kit-diff, a11y, supply chain) and perf-budget.yml, both
 # called as reusable workflows, then the integrators' e2e battery split into shards on
-# GitHub-hosted runners (SwiftShader: no GPU). `deps-gate` is the one required check; the ruleset on
+# GitHub-hosted runners (SwiftShader: no GPU, battery.yml): the REQUIRED set gates; the OPTIONAL set (red on
+# SwiftShader with unchanged code, each with its reason in tests/e2e/battery.json) runs after it and is only
+# reported. `deps-gate` is the one required check; the ruleset on
 # `deps` also requires the `pc-battery` commit status, which the GPU check on a desktop posts for a
 # PR that changes what the app ships (scripts/ci/pc-battery.sh — pulled from there, no runner of ours
 # in this public repo) and this workflow posts as "not needed" for every other PR.
@@ -101,89 +103,55 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      optional_matrix: ${{ steps.plan.outputs.optional_matrix }}
+      optional_shards: ${{ steps.plan.outputs.optional_shards }}
       playwright: ${{ steps.pw.outputs.version }}
       refs: ${{ steps.refs.outputs.refs }}
     steps:
       - uses: actions/checkout@v4
       - id: plan
-        env:
-          BATTERY_SHARDS: 20 # PROBE classification run (deps-auto lane), reverted after
         run: node scripts/ci/battery.cjs plan
       - id: pw
         run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/playwright'].version")" >> "$GITHUB_OUTPUT"
       - id: refs
         run: echo "refs=$(node -p "JSON.stringify(require('./tests/e2e/battery.json').refs)")" >> "$GITHUB_OUTPUT"
 
+  # the suites that gate (sized by battery.json to finish inside the hour)
   e2e:
-    name: e2e ${{ matrix.shard }}/${{ matrix.of }}
     needs: plan
+    uses: ./.github/workflows/battery.yml
+    with:
+      set: required
+      matrix: ${{ needs.plan.outputs.matrix }}
+      playwright: ${{ needs.plan.outputs.playwright }}
+      refs: ${{ needs.plan.outputs.refs }}
+      deadline: 75
+
+  # red or flaky on SwiftShader with the same red on unchanged code: run, reported, never waited for. They start
+  # AFTER the required shards (the free plan runs 20 jobs at once) and deps-gate does not need them.
+  e2e-optional:
+    needs: [plan, e2e]
+    if: always() && needs.plan.outputs.optional_shards != '0'
+    uses: ./.github/workflows/battery.yml
+    with:
+      set: optional
+      matrix: ${{ needs.plan.outputs.optional_matrix }}
+      playwright: ${{ needs.plan.outputs.playwright }}
+      refs: ${{ needs.plan.outputs.refs }}
+      deadline: 40
+
+  optional-report:
+    needs: e2e-optional
+    if: always() && needs.e2e-optional.result != 'skipped'
     runs-on: ubuntu-latest
-    timeout-minutes: 110
-    # the browsers and their OS libraries at exactly the lockfile's Playwright: no 5-minute apt step per shard
-    container:
-      image: mcr.microsoft.com/playwright:v${{ needs.plan.outputs.playwright }}-noble
-      options: --ipc=host
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
-    # the sibling checkouts sit beside core, where the suites' own defaults look for them. Inside a
-    # container the workspace is NOT ${{ github.workspace }} (that is the host path): use the env vars.
-    env:
-      E2E_NO_PERF_OFFER: '1'
-      MODE: quick
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          path: core
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ fromJSON(needs.plan.outputs.refs).scenes.repo }}
-          ref: ${{ fromJSON(needs.plan.outputs.refs).scenes.ref }}
-          path: scenes
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ fromJSON(needs.plan.outputs.refs).modules.repo }}
-          ref: ${{ fromJSON(needs.plan.outputs.refs).modules.ref }}
-          path: modules
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ fromJSON(needs.plan.outputs.refs).packs.repo }}
-          ref: ${{ fromJSON(needs.plan.outputs.refs).packs.ref }}
-          path: packs
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: core/.nvmrc
-          cache: npm
-          cache-dependency-path: |
-            core/package-lock.json
-            modules/package-lock.json
-      - name: install
-        run: |
-          command -v openssl > /dev/null || (apt-get update -qq && apt-get install -y -qq --no-install-recommends openssl > /dev/null)
-          (cd core && npm ci --no-audit --no-fund && npm run certs)
-          # the module zips the game suites install (MODULES_REPO)
-          (cd modules && npm ci --no-audit --no-fund && node scripts/pack.cjs --all --force)
-      - name: battery shard ${{ matrix.shard }}/${{ matrix.of }} (~${{ matrix.est }} min, ${{ matrix.suites }} suites)
-        working-directory: core
-        run: |
-          W=$GITHUB_WORKSPACE; S=$W/scenes; G=$S/games
-          export SCENES_DIR=$S SCENES_REPO=$S SHELL_SCENES_DIR=$G GAMES_DIR=$G FBW_SCENES=$S/examples
-          export MODULES_REPO=$W/modules MODULES_DIR=$W/modules PACKS_DIR=$W/packs
-          for g in dungeon-realms:DUNGEON_REALMS escape-room:ESCAPE football:FOOTBALL jam-room:JAM_ROOM marble-maze:MARBLE \
-                   mini-golf:MINIGOLF sky-run:SKY_RUN stars-room:STARS_ROOM target-toss:TARGET_TOSS towers:TOWERS \
-                   untangle:UNTANGLE waves:WAVES race:RACE; do export "${g#*:}_TPSCENE=$G/${g%%:*}/scene.tpscene"; done
-          export JELLY_TPSCENE=$S/examples/jelly-room/scene.tpscene TANK_TPSCENE=$S/examples/fluid-tank-toy/scene.tpscene \
-                 POOL_TPSCENE=$S/examples/pool-party/scene.tpscene
-          node scripts/ci/battery.cjs run --shard ${{ matrix.shard }} --of ${{ matrix.of }} --serve --port 5173 --deadline 95 --no-retry --out "$W/battery-out"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: battery-${{ matrix.shard }}
-          # every suite's log; screenshots and evidence only for the suites that failed (the runner deletes the
-          # rest). Beside core, not in it: an artefact inside the served tree reloads the app mid-test.
-          path: battery-out
-          retention-days: 14
-          if-no-files-found: ignore
+          pattern: battery-optional-*
+          path: battery
+      - name: optional suites (report only)
+        run: node scripts/ci/battery.cjs report battery || true
 
   # THE required check (the ruleset on `deps` names it)
   gate:
@@ -200,7 +168,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: battery-*
+          pattern: battery-required-*
           path: battery
       - name: battery report
         id: report

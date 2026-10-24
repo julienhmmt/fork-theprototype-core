@@ -8,14 +8,17 @@
 // SwiftShader with the same red on the unchanged base — the reason is on the line). Nothing here
 // names a suite; the list is data, refreshed from the integrators' battery runs (`refresh`).
 //
-//   node scripts/ci/battery.cjs plan                      # matrix JSON for GITHUB_OUTPUT
-//   node scripts/ci/battery.cjs run --shard 3 --of 14     # run one shard (serves the app + the signaling server)
+//   node scripts/ci/battery.cjs plan                      # the required + optional matrices for GITHUB_OUTPUT
+//   node scripts/ci/battery.cjs run --set required --shard 3 --of 14   # one shard (serves the app + the signaling server)
 //   node scripts/ci/battery.cjs report <results-dir>      # merge shard results → summary, exit 1 on a required red
 //   node scripts/ci/battery.cjs refresh [--list f]... [--summary f]... [--results dir]
 //
-// Sharding is longest-first onto the least-loaded shard, by name on ties: every shard computes the
-// same assignment from the same file, so the plan job only has to say how many shards there are.
-// A failed suite runs once more; green on the retry = `flaky` (reported, not a red).
+// Two sets, two matrices: the REQUIRED suites gate (deps-gate waits for them, sized to finish inside the hour);
+// the OPTIONAL ones run in their own shards AFTER the required ones (the free-plan runner cap is 20 jobs), are
+// reported, and gate nothing. Sharding is longest-first onto the least-loaded shard, by name on ties: every shard
+// computes the same assignment from the same file, so the plan job only says how many shards there are.
+// A failed required suite runs once more; green on the retry = `flaky` (reported, not a red). An optional red is
+// not retried, and its run is cut at the deadline (they are the slow ones: a red waits out its timeouts).
 
 const fs = require('fs');
 const path = require('path');
@@ -44,26 +47,46 @@ function runnable(b) {
 		.sort((x, y) => y[1] - x[1] || (x[0] < y[0] ? -1 : 1));
 }
 
-/** @param {Battery} b @returns {number} */
-function shardCount(b) {
-	const env = Number(process.env.BATTERY_SHARDS || 0);
-	if (env > 0) return env;
-	const total = runnable(b).reduce((t, [, s]) => t + s, 0);
-	// `par` suites run side by side on one runner, so a shard holds par x target_minutes of suite time
-	const n = Math.ceil(total / (b.shards.target_minutes * 60 * (b.shards.par || 1)));
-	return Math.max(b.shards.min, Math.min(b.shards.max, n));
+/** @typedef {'required'|'optional'|'all'} BatterySet */
+
+/** the runnable suites of one set, longest first @param {Battery} b @param {BatterySet} set @returns {[string, number][]} */
+function suitesOf(b, set) {
+	return runnable(b).filter(([n]) => set === 'all' || (set === 'optional') === n in b.optional);
 }
 
-/** @param {Battery} b @param {number} of @returns {{suites: string[], secs: number}[]} */
-function assign(b, of) {
-	const shards = Array.from({ length: of }, () => ({ suites: /** @type {string[]} */ ([]), secs: 0 }));
-	for (const [name, secs] of runnable(b)) {
-		let best = 0;
-		for (let i = 1; i < of; i++) if (shards[i].secs < shards[best].secs) best = i;
-		shards[best].suites.push(name);
-		shards[best].secs += secs;
-	}
-	return shards;
+/** @param {Battery} b @param {BatterySet} [set] @returns {number} */
+function shardCount(b, set = 'required') {
+	const env = Number(process.env[set === 'optional' ? 'BATTERY_OPTIONAL_SHARDS' : 'BATTERY_SHARDS'] || 0);
+	if (env > 0) return env;
+	const total = suitesOf(b, set).reduce((t, [, s]) => t + s, 0);
+	if (!total) return 0;
+	// `par` suites run side by side on one runner, so a shard holds par x target_minutes of suite time
+	const n = Math.ceil(total / (b.shards.target_minutes * 60 * (b.shards.par || 1)));
+	return Math.max(set === 'optional' ? 1 : b.shards.min, Math.min(b.shards.max, n));
+}
+
+/**
+ * Longest first onto the least-loaded shard, name breaking ties, so every shard computes the same split.
+ * `all` (a local run) queues each shard's optional suites after its required ones, balanced on their own.
+ * @param {Battery} b @param {number} of @param {BatterySet} [set] @returns {{suites: string[], secs: number}[]}
+ */
+function assign(b, of, set = 'required') {
+	const shards = Array.from({ length: of }, () => ({ suites: /** @type {string[]} */ ([]), secs: 0, load: 0 }));
+	const lpt = (/** @type {[string, number][]} */ list) => {
+		for (const s of shards) s.load = 0;
+		for (const [name, secs] of list) {
+			let best = 0;
+			for (let i = 1; i < of; i++) if (shards[i].load < shards[best].load) best = i;
+			shards[best].suites.push(name);
+			shards[best].load += secs;
+			shards[best].secs += secs;
+		}
+	};
+	if (set === 'all') {
+		lpt(suitesOf(b, 'required'));
+		lpt(suitesOf(b, 'optional'));
+	} else lpt(suitesOf(b, set));
+	return shards.map(({ suites, secs }) => ({ suites, secs }));
 }
 
 /** pass/fail lines the way the integrators' battery.sh counts them @param {string} log */
@@ -141,8 +164,8 @@ function stop(child) {
 
 // ---------------------------------------------------------------- one suite
 
-/** @param {string} name @param {number} est @param {string} out @param {string} tag */
-function runSuite(name, est, out, tag) {
+/** @param {string} name @param {number} est @param {string} out @param {string} tag @param {number} capMs */
+function runSuite(name, est, out, tag, capMs) {
 	const file = path.join(ROOT, 'tests', 'e2e', name + '.test.cjs');
 	const ev = path.join(out, 'evidence', name);
 	fs.mkdirSync(ev, { recursive: true });
@@ -151,7 +174,7 @@ function runSuite(name, est, out, tag) {
 	// every evidence variable the suites read points OUTSIDE the served tree (an .html artefact
 	// inside it full-reloads the app mid-test) and is kept only when the suite fails
 	const env = { ...process.env, EVIDENCE_DIR: ev, EVIDENCE: ev, OUT: ev, SHOT_DIR: ev, SHOTS_DIR: ev };
-	const timeout = Math.min(1800, Math.max(600, Math.round(est * 3))) * 1000;
+	const timeout = Math.max(60000, Math.min(capMs, Math.min(1800, Math.max(600, Math.round(est * 3))) * 1000));
 	const t0 = Date.now();
 	return new Promise((resolve) => {
 		const child = spawn('node', [file], { cwd: ROOT, env, stdio: ['ignore', log, log], detached: true });
@@ -175,13 +198,14 @@ function runSuite(name, est, out, tag) {
 /** @param {string[]} argv */
 async function run(argv) {
 	const b = load();
-	const of = Number(opt(argv, '--of') || shardCount(b));
+	const of = Number(opt(argv, '--of') || shardCount(b, /** @type {BatterySet} */ (opt(argv, '--set') || 'required')));
 	const shard = Number(opt(argv, '--shard') || 1);
 	const out = path.resolve(opt(argv, '--out') || process.env.BATTERY_OUT || path.join(ROOT, '..', 'battery-out'));
 	const port = Number(opt(argv, '--port') || 5173);
 	const only = opt(argv, '--only');
 	fs.mkdirSync(path.join(out, 'logs'), { recursive: true });
-	const mine = only ? only.split(',') : assign(b, of)[shard - 1].suites;
+	const set = /** @type {BatterySet} */ (opt(argv, '--set') || 'all');
+	const mine = only ? only.split(',') : assign(b, of, set)[shard - 1].suites;
 	// the suites' own default is a hosts-file origin: say where the app is
 	const url = (process.env.APP_URL ||= `https://localhost:${port}/`);
 	let server = argv.includes('--serve') ? await serve(port, path.join(out, 'logs', 'dev-server.log')) : null;
@@ -196,7 +220,7 @@ async function run(argv) {
 	const retry = !argv.includes('--no-retry');
 	// past the deadline no suite starts: the rest report `notrun` instead of the job being killed with nothing said
 	const deadline = Date.now() + Number(opt(argv, '--deadline') || 0) * 60000 || Infinity;
-	const save = () => fs.writeFileSync(path.join(out, `results-${shard}.json`), JSON.stringify({ shard, of, results }, null, 1));
+	const save = () => fs.writeFileSync(path.join(out, `results-${shard}.json`), JSON.stringify({ shard, of, set, results }, null, 1));
 	console.log(`shard ${shard}/${of}: ${mine.length} suites, est ${Math.round(mine.reduce((t, s) => t + (b.suites[s] || 60), 0) / 60)} min, ${par} at a time`);
 	/** @type {Promise<any> | null} */
 	let agentSetup = null;
@@ -228,14 +252,15 @@ async function run(argv) {
 				await agentSetup;
 			}
 			const est = b.suites[name] || 60;
-			let r = await runSuite(name, est, out, '');
+			// an optional red is slow to fail: never let one run far past the deadline
+			let r = await runSuite(name, est, out, '', required ? Infinity : deadline + 300000 - Date.now());
 			/** @type {SuiteResult['status']} */
 			let status = r.rc === 0 ? 'pass' : r.timedOut ? 'timeout' : 'fail';
 			/** @type {number|undefined} */
 			let retrySecs;
 			// only a suite that gates earns a second run (an optional red is expected and only reported)
 			if (status !== 'pass' && required && retry && Date.now() < deadline) {
-				const again = await runSuite(name, est, out, '.retry');
+				const again = await runSuite(name, est, out, '.retry', Infinity);
 				retrySecs = again.secs;
 				if (again.rc === 0) status = 'flaky';
 				else r = again;
@@ -359,6 +384,17 @@ function refresh(argv) {
 			for (const [n, s] of Object.entries(JSON.parse(fs.readFileSync(f, 'utf8')))) if (n in b.suites) b.suites[n] = Number(s);
 		}
 	}
+	// --red <dir> --reason "…": suites red in that run's results (fail / timeout) become optional with the reason —
+	// for a no-retry run on unchanged code, i.e. what this runner cannot pass at all. --green <dir>: a suite that
+	// passed there is never moved (one red after a green is a flake, and a required flake has its retry).
+	const redDir = opt(argv, '--red');
+	if (redDir) {
+		const reason = opt(argv, '--reason') || 'red on the GitHub runner (SwiftShader) with unchanged code';
+		/** @param {string} dir @param {(r: SuiteResult) => boolean} f */
+		const names = (dir, f) => new Set(walk(path.resolve(dir)).filter((x) => /results-\d+\.json$/.test(x)).flatMap((x) => JSON.parse(fs.readFileSync(x, 'utf8')).results.filter(f).map((/** @type {SuiteResult} */ r) => r.name)));
+		const green = new Set(opts(argv, '--green').flatMap((d) => [...names(d, (r) => r.status === 'pass' || r.status === 'flaky')]));
+		for (const n of names(redDir, (r) => r.status === 'fail' || r.status === 'timeout')) if (n in b.suites && !green.has(n) && !(n in b.optional)) b.optional[n] = reason;
+	}
 	for (const k of Object.keys(b.optional)) if (!(k in b.suites)) delete b.optional[k];
 	write(b);
 	console.log(`battery.json: ${Object.keys(b.suites).length} suites, ${Object.keys(b.skip).length} skipped, ${Object.keys(b.optional).length} optional, ${shardCount(b)} shards`);
@@ -368,13 +404,16 @@ function refresh(argv) {
 
 function plan() {
 	const b = load();
-	const of = shardCount(b);
-	const shards = assign(b, of);
-	const include = shards.map((s, i) => ({ shard: i + 1, of, suites: s.suites.length, est: Math.round(s.secs / 60 / (b.shards.par || 1)) }));
-	const needs = [...new Set(Object.entries(b.setup).filter(([n]) => n in b.suites && !(n in b.skip)).map(([, v]) => v))];
-	const line = `matrix=${JSON.stringify({ include })}\nshards=${of}\nsetup=${needs.join(',')}\n`;
+	let line = '';
+	for (const set of /** @type {BatterySet[]} */ (['required', 'optional'])) {
+		const of = shardCount(b, set);
+		const include = assign(b, of, set).map((s, i) => ({ shard: i + 1, of, suites: s.suites.length, est: Math.round(s.secs / 60 / (b.shards.par || 1)) }));
+		const key = set === 'required' ? 'matrix' : 'optional_matrix';
+		// an empty matrix is an error in a workflow: the optional job skips on optional_shards=0 instead
+		line += `${key}=${JSON.stringify({ include: include.length ? include : [{ shard: 0, of: 0, suites: 0, est: 0 }] })}\n${set}_shards=${of}\n`;
+		console.log(`${set}: ${of} shards\n` + include.map((s) => `  shard ${s.shard}: ${s.suites} suites ~${s.est} min`).join('\n'));
+	}
 	if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, line);
-	console.log(line + include.map((s) => `shard ${s.shard}: ${s.suites} suites ~${s.est} min`).join('\n'));
 }
 
 if (require.main === module) {
@@ -384,7 +423,7 @@ if (require.main === module) {
 	else if (cmd === 'report') report(argv);
 	else if (cmd === 'refresh') refresh(argv);
 	else {
-		console.error('usage: battery.cjs plan | run --shard N --of M [--serve] [--port P] [--par K] [--deadline MIN] [--only a,b] | report <dir> | refresh [--list f] [--summary f] [--results dir]');
+		console.error('usage: battery.cjs plan | run --shard N --of M [--set required|optional|all] [--serve] [--port P] [--par K] [--deadline MIN] [--only a,b] | report <dir> | refresh [--list f] [--summary f] [--results dir] [--red dir --reason r [--green dir]]');
 		process.exit(2);
 	}
 }
