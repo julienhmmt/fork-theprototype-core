@@ -101,17 +101,25 @@ function half(b, half, of) {
 	return shards[i].suites;
 }
 
-/** @param {string} url @returns {Promise<boolean>} */
-function reachable(url) {
+/**
+ * the dev server answers. `vite --host localhost` may listen on ::1 only while node resolves localhost
+ * to 127.0.0.1, so both loopbacks are asked (battery.cjs's reachable, with the request's own host header).
+ * @param {string} url @returns {Promise<boolean>}
+ */
+async function reachable(url) {
 	const u = new URL(url);
-	return new Promise((resolve) => {
-		const req = require('https').get({ host: u.hostname, port: u.port, path: u.pathname, rejectUnauthorized: false, timeout: 300000 }, (res) => {
-			res.resume();
-			res.on('end', () => resolve((res.statusCode || 0) < 500));
+	/** @param {string} host @returns {Promise<boolean>} */
+	const ask = (host) =>
+		new Promise((resolve) => {
+			const req = require('https').get({ host, port: u.port, path: u.pathname, headers: { host: u.host }, servername: u.hostname, rejectUnauthorized: false, timeout: 300000 }, (res) => {
+				res.resume();
+				res.on('end', () => resolve((res.statusCode || 0) < 500));
+			});
+			req.on('timeout', () => req.destroy());
+			req.on('error', () => resolve(false));
 		});
-		req.on('timeout', () => req.destroy());
-		req.on('error', () => resolve(false));
-	});
+	if (u.hostname !== 'localhost') return ask(u.hostname);
+	return (await ask('::1')) || (await ask('127.0.0.1'));
 }
 
 /**
@@ -166,6 +174,8 @@ function line(name, a) {
 
 /** @param {string} root */
 function commitOf(root) {
+	// a snapshot (rsync of a checkout, no .git) says what it is through the environment
+	if (process.env.BATTERY_COMMIT) return process.env.BATTERY_COMMIT;
 	try {
 		return require('child_process').execFileSync('git', ['-C', root, 'describe', '--tags', '--always', '--dirty'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 	} catch {
