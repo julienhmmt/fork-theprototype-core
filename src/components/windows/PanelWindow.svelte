@@ -156,54 +156,47 @@
 				<div class="pw-tabs" role="tablist" aria-label="Panels in this window">
 					{#each win.panels as key, i (key)}
 						{#if dropAt === i}<span class="pw-caret" aria-hidden="true"></span>{/if}
-						<div
-							class="pw-tab"
-							class:pw-active={key === win.active}
-							data-pw-tab={key}
-							role="tab"
-							tabindex="0"
-							aria-selected={key === win.active}
-							draggable="true"
-							title={`${api.titleOf(key)} — drag to move it, right-click for more`}
-							onclick={() => api.activate(key)}
-							onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), api.activate(key))}
-							oncontextmenu={(e) => tabMenu(e, key)}
-							ondragstart={(e) => onDragStart(e, key)}
-							ondragend={(e) => onDragEnd(e, key)}
-						>
-							<Icon name={api.iconOf(key)} size={14} aria-hidden="true" />
-							<span class="pw-tab-label">{api.titleOf(key)}</span>
+						<span class="pw-tab" class:pw-active={key === win.active}>
+							<button
+								class="pw-tab-btn"
+								data-pw-tab={key}
+								role="tab"
+								aria-selected={key === win.active}
+								draggable="true"
+								title={`${api.titleOf(key)} — drag to move it, right-click for more`}
+								onclick={() => api.activate(key)}
+								oncontextmenu={(e) => tabMenu(e, key)}
+								ondragstart={(e) => onDragStart(e, key)}
+								ondragend={(e) => onDragEnd(e, key)}
+								><Icon name={api.iconOf(key)} size={14} aria-hidden="true" /><span class="pw-tab-label">{api.titleOf(key)}</span></button
+							>
 							<button
 								class="pw-tab-x"
 								aria-label={`Dock ${api.titleOf(key)} back into the app`}
 								title="Dock back into the app"
-								onclick={(e) => {
-									e.stopPropagation();
-									api.dockBack(key);
-								}}><Icon name="x" size={12} aria-hidden="true" /></button
+								onclick={() => api.dockBack(key)}><Icon name="x" size={12} aria-hidden="true" /></button
 							>
-						</div>
+						</span>
 					{/each}
 					{#if dropAt === win.panels.length}<span class="pw-caret" aria-hidden="true"></span>{/if}
 				</div>
 			{:else}
 				{@const key = win.panels[0]}
-				<div
-					class="pw-title"
-					data-pw-tab={key}
-					role="tab"
-					tabindex="0"
-					aria-selected="true"
-					draggable="true"
-					title={`${api.titleOf(key)} — drag to move it, right-click to dock it back or move it`}
-					oncontextmenu={(e) => tabMenu(e, key)}
-					onkeydown={(e) => (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) && tabMenu(new MouseEvent('contextmenu', { clientX: 16, clientY: 32 }), key)}
-					ondragstart={(e) => onDragStart(e, key)}
-					ondragend={(e) => onDragEnd(e, key)}
-				>
-					<span class="pw-grip" aria-hidden="true"><Icon name="grip-vertical" size={14} /></span>
-					<Icon name={api.iconOf(key)} size={16} aria-hidden="true" />
-					<span class="pw-title-label">{api.titleOf(key)}</span>
+				<div class="pw-tabs" role="tablist" aria-label="Panel in this window">
+					<button
+						class="pw-title"
+						data-pw-tab={key}
+						role="tab"
+						aria-selected="true"
+						draggable="true"
+						title={`${api.titleOf(key)} — drag to move it, right-click to dock it back or move it`}
+						oncontextmenu={(e) => tabMenu(e, key)}
+						ondragstart={(e) => onDragStart(e, key)}
+						ondragend={(e) => onDragEnd(e, key)}
+						><span class="pw-grip" aria-hidden="true"><Icon name="grip-vertical" size={14} /></span><Icon name={api.iconOf(key)} size={16} aria-hidden="true" /><span
+							class="pw-title-label">{api.titleOf(key)}</span
+						></button
+					>
 				</div>
 				{#if dropAt !== null}<span class="pw-hint">Drop to add as a tab</span>{/if}
 			{/if}
@@ -265,13 +258,19 @@
 	.pw-tab {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
-		padding: 4px 6px 4px 10px;
+		gap: 2px;
+		padding: 0 4px 0 0;
 		border-radius: 6px;
 		font-size: 12px;
 		color: var(--text-2, var(--text));
-		cursor: grab;
 		white-space: nowrap;
+	}
+	.pw-tab-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 4px 4px 4px 10px;
+		cursor: grab;
 	}
 	.pw-tab:hover {
 		background: color-mix(in srgb, var(--text) 8%, transparent);
@@ -319,7 +318,7 @@
 	.pw-title:focus-visible .pw-grip {
 		opacity: 0.7;
 	}
-	.pw-tab:active,
+	.pw-tab-btn:active,
 	.pw-title:active {
 		cursor: grabbing;
 	}
