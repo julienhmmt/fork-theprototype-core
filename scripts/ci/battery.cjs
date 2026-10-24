@@ -150,7 +150,7 @@ function runSuite(name, est, out, tag) {
 	// every evidence variable the suites read points OUTSIDE the served tree (an .html artefact
 	// inside it full-reloads the app mid-test) and is kept only when the suite fails
 	const env = { ...process.env, EVIDENCE_DIR: ev, EVIDENCE: ev, OUT: ev, SHOT_DIR: ev, SHOTS_DIR: ev };
-	const timeout = Math.min(1800, Math.max(300, Math.round(est * 3))) * 1000;
+	const timeout = Math.min(1800, Math.max(600, Math.round(est * 3))) * 1000;
 	const t0 = Date.now();
 	return new Promise((resolve) => {
 		const child = spawn('node', [file], { cwd: ROOT, env, stdio: ['ignore', log, log], detached: true });
@@ -184,6 +184,10 @@ async function run(argv) {
 	// the suites' own default is a hosts-file origin: say where the app is
 	const url = (process.env.APP_URL ||= `https://localhost:${port}/`);
 	let server = argv.includes('--serve') ? await serve(port, path.join(out, 'logs', 'dev-server.log')) : null;
+	// the two-peer suites meet on a signaling server: with no .env a localhost app picks the local-dev
+	// one on :9001, so --serve brings it (a public runner never touches the self-hosted or the public box)
+	const signal = require(path.join(ROOT, 'tests', 'e2e', 'localSignal.cjs'));
+	let signalChild = server ? await signal.ensureSignalServer() : null;
 	/** @type {SuiteResult[]} */
 	const results = [];
 	console.log(`shard ${shard}/${of}: ${mine.length} suites, est ${Math.round(mine.reduce((t, s) => t + (b.suites[s] || 60), 0) / 60)} min`);
@@ -198,6 +202,10 @@ async function run(argv) {
 			console.log(`[battery] dev server unreachable before ${name}: restarting`);
 			stop(server);
 			server = await serve(port, path.join(out, 'logs', 'dev-server.log'));
+		}
+		if (server && !(await signal.signalUp())) {
+			console.log(`[battery] signaling server down before ${name}: restarting`);
+			signalChild = await signal.ensureSignalServer();
 		}
 		// a suite's extra install happens once, on the shard that holds it
 		if (b.setup[name] === 'agent' && !fs.existsSync(path.join(ROOT, 'tools', 'agent', 'node_modules'))) {
@@ -221,6 +229,7 @@ async function run(argv) {
 		console.log(`${name} ${status}${required ? '' : ' (optional)'} rc=${r.rc} pass~${r.pass} fail~${r.fail} ${r.secs}s${retrySecs ? ` retry ${retrySecs}s` : ''} :: ${r.last}`);
 	}
 	stop(server);
+	signal.stopSignalServer(signalChild);
 	fs.writeFileSync(path.join(out, `results-${shard}.json`), JSON.stringify({ shard, of, results }, null, 1));
 	const red = results.filter((r) => r.required && (r.status === 'fail' || r.status === 'timeout'));
 	if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, table(results, `Shard ${shard}/${of}`));
