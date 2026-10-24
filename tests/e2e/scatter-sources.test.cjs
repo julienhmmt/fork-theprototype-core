@@ -345,7 +345,9 @@ h.run(async () => {
 		const cone = group.children[group.children.length - 1];
 		cone.userData.physics = { mode: 'dynamic', mass: 1 };
 		s.objectActions.selectObject(cone.uuid, true);
-		const menu = s.objectMenu?.buildObjectMenuItems ? JSON.stringify(s.objectMenu.buildObjectMenuItems(cone.uuid).map((i) => i?.label)) : null;
+		// every label, submenus included (51-int moved the row under Physics & effects ▸)
+		const flat = (/** @type {any[]} */ items) => items.flatMap((i) => [i?.label, ...flat(i?.children ?? [])]);
+		const menu = s.objectMenu?.buildObjectMenuItems ? JSON.stringify(flat(s.objectMenu.buildObjectMenuItems(cone.uuid))) : null;
 		const src = await s.scatterSources.useAsScatterSource();
 		let brush = null;
 		s.terrainPaint.scatterSource.subscribe((v) => (brush = v))();
