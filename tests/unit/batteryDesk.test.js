@@ -75,3 +75,26 @@ describe('battery-desk: every e2e file is in the battery or excluded', () => {
 		expect(a.filter((/** @type {string} */ n) => b.includes(n))).toEqual([]);
 	});
 });
+
+describe('battery-desk import: an old battery.sh run', () => {
+	it('takes the FAIL lines written under each row, and a rerun as the retry', () => {
+		const fs = require('node:fs');
+		const os = require('node:os');
+		const path = require('node:path');
+		const { execFileSync } = require('node:child_process');
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bd-'));
+		fs.writeFileSync(path.join(dir, 'u1.txt'), 'snapshot: x\nok-suite rc=0 pass~3 fail~0 9s :: ALL PASS\nred rc=1 pass~2 fail~1 9s :: 1 FAILURES\n    FAIL the toast hides after 1200 ms\nwobbly rc=1 pass~1 fail~1 5s :: 1 FAILURES\n    FAIL a flaky check\nBATTERY-DONE\n');
+		fs.writeFileSync(path.join(dir, 'r2.txt'), 'snapshot: x\nwobbly rc=0 pass~2 fail~0 5s :: ALL PASS\n');
+		// a later rerun's green log in the same folder must not hide the red row's own lines
+		fs.writeFileSync(path.join(dir, 'red.log'), 'PASS everything\nALL PASS\n');
+		const cli = path.resolve('scripts/ci/battery-desk.cjs');
+		execFileSync('node', [cli, 'import', path.join(dir, 'u1.txt'), '--logs', dir, '--retry', path.join(dir, 'r2.txt'), '--name', 'u1', '--out', dir]);
+		const run = JSON.parse(fs.readFileSync(path.join(dir, 'u1.json'), 'utf8'));
+		const by = Object.fromEntries(run.results.map((/** @type {{name: string}} */ r) => [r.name, r]));
+		expect(by['ok-suite'].status).toBe('pass');
+		expect(by.red.status).toBe('red');
+		expect(by.red.fps).toEqual(['red :: the toast hides after # ms']);
+		expect(by.wobbly.status).toBe('flaky');
+		fs.rmSync(dir, { recursive: true, force: true });
+	});
+});

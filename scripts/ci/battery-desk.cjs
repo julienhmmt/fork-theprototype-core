@@ -402,14 +402,23 @@ function importRun(argv) {
 	const parse = (file, dir) => {
 		/** @type {Map<string, Attempt>} */
 		const m = new Map();
-		for (const l of fs.readFileSync(file, 'utf8').split('\n')) {
+		// battery.sh writes the run's own FAIL / SCRIPT FAILED lines indented under its row: those are the evidence.
+		// A <suite>.log is read only when the row has none AND the log is not newer than the summary -- a later
+		// rerun into the same folder overwrites the log (MEASURED: 51-int's r2-r7 rewrote half its u1 logs).
+		const lines = fs.readFileSync(file, 'utf8').split('\n');
+		const when = fs.statSync(file).mtimeMs;
+		lines.forEach((l, i) => {
 			const r = /^(\S+) rc=(\S+) pass~(\d+) fail~(\d+) (\d+)s :: ?(.*)$/.exec(l);
-			if (!r) continue;
+			if (!r) return;
 			const rc = r[2] === 'gone' ? null : Number(r[2]);
+			/** @type {string[]} */
+			const under = [];
+			for (let j = i + 1; j < lines.length && /^\s{4}\S/.test(lines[j]); j++) under.push(lines[j].trim());
 			const logFile = path.join(dir, `${r[1].startsWith('MOD:') ? 'mod-' + r[1].slice(4) : r[1]}.log`);
-			const log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : r[6];
+			const fresh = fs.existsSync(logFile) && fs.statSync(logFile).mtimeMs <= when + 60000;
+			const log = under.length ? under.join('\n') : fresh ? fs.readFileSync(logFile, 'utf8') : r[6];
 			m.set(r[1], { rc, secs: Number(r[5]), pass: Number(r[3]), fail: Number(r[4]), last: r[6], fps: fingerprints(r[1], log, rc) });
-		}
+		});
 		return m;
 	};
 	const first = parse(summary, logs);
