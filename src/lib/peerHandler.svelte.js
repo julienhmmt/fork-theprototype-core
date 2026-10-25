@@ -1003,6 +1003,8 @@ export class PeerConnection {
 						// the whitelist, written at dial time, so it counts people who were
 						// invited and never arrived.
 						if (roomIsFull(this)) return;
+						// F-5: a peer still linked to someone this host removed must not fill them back in
+						if (this.removedPeers.has(id)) return;
 						// mesh fill: connect, but DON'T request full state — the scene
 						// is one shared state and we already pull it from the peer we
 						// joined. Requesting it from everyone made a joiner download
@@ -1261,7 +1263,11 @@ export class PeerConnection {
 				} else if(data.type == 'locked') {
 					lockRestore(data.lockeditems);
 				} else if(data.type == 'userdata') {
-					userData(data.userdata);
+					// F-5: the roster applier UNIONS, so a third peer still linked to someone this host
+					// removed would put them straight back in Users — a removed peer stays out of ours
+					userData(this.removedPeers.size && Array.isArray(data.userdata)
+						? data.userdata.filter((/** @type {any} */ e) => !this.removedPeers.has(e?.[0]))
+						: data.userdata);
 				} else if(data.type == 'specator') {
 					specator(data, data.watching);
 				} else if(data.type == 'cameraSettings') {
