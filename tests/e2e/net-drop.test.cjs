@@ -12,7 +12,8 @@
 //  * ICE reports `disconnected` after its consent checks fail, and `connected` again after —
 //    the shim reports both on every RTCPeerConnection.
 // Two shapes, both DROP_MS long (default 5000):
-//  1. QUIET: all of the above. The same conn should simply carry on.
+//  1. QUIET: all of the above. Under ICE_DROP_GRACE_MS the same conn simply carries on; past it
+//     (the 5 s default) fix-live F-3 closes the silent link and the reconnect window redials it.
 //  2. HARD (a network CHANGE): the same, plus the peer connection is closed outright at the start, so
 //     the B5 reconnect window has to redial — through a signaling server it cannot reach until the
 //     drop ends. The window is ~15.5 s (checks at 0.5/1/2/4/8 s), so a 5 s drop must fit inside it.
@@ -22,6 +23,8 @@
 const h = require('./helpers.cjs');
 
 const DROP_MS = Number(process.env.NETDROP_MS || 5000);
+/** src/lib/peerDrop.js ICE_DROP_GRACE_MS */
+const ICE_DROP_GRACE_MS = 4000;
 
 /** runs in the page before any app code: the hold switch + fake ICE state */
 function dropShim() {
@@ -251,7 +254,11 @@ h.run(async () => {
 			window.__stores.peers.subscribe((/** @type {any} */ v) => (pc = v))();
 			return pc.connections[id]?.__th1 === 'before';
 		}, B.id);
-		if (shape === 'quiet') h.check(same, `${tag} the SAME conn carried on (no redial was needed)`);
+		// fix-live F-3 closes a link whose ICE sits `disconnected` past ICE_DROP_GRACE_MS (4 s,
+		// src/lib/peerDrop.js) and hands it to the reconnect window, so a quiet drop LONGER than that
+		// heals by a redial; the checks above (roster, locks, no toast, edits both ways) are the promise
+		if (shape === 'quiet' && DROP_MS < ICE_DROP_GRACE_MS) h.check(same, `${tag} the SAME conn carried on (no redial was needed)`);
+		else if (shape === 'quiet') console.log(`  ${tag} healed by ${same ? 'the same conn' : 'a redial (F-3: ICE held disconnected past the grace)'}`);
 		else h.check(!same, `${tag} premise: the conn really was replaced by the reconnect window`);
 	}
 
