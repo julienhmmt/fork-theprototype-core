@@ -18,8 +18,8 @@ for f in .env certs/localhost.crt certs/localhost.key; do
   if [ -f "$here/$f" ]; then mkdir -p "$dir/$(dirname "$f")"; cp "$here/$f" "$dir/$f"; else echo "battery-snapshot: no $f in $here (the run may differ from a lane's)" >&2; fi
 done
 mkdir -p "$dir/scripts/ci" "$dir/tests/e2e"
-cp "$here/scripts/ci/battery-desk.cjs" "$here/scripts/ci/battery.cjs" "$dir/scripts/ci/"
-cp "$here/tests/e2e/battery.json" "$dir/tests/e2e/"
+cp "$here/scripts/ci/battery-desk.cjs" "$here/scripts/ci/battery.cjs" "$here/scripts/ci/quarantine.cjs" "$dir/scripts/ci/"   # battery.cjs requires quarantine.cjs (test-health-1)
+cp "$here/tests/e2e/battery.json" "$here/tests/e2e/quarantine.json" "$dir/tests/e2e/"
 if git -C "$here" diff --quiet "$tag" HEAD -- package-lock.json; then lock=same; else lock=differs; fi
 echo "$tag $(git -C "$here" rev-parse --short "$tag^{commit}") (package-lock vs this tree: $lock)" > "$dir/.snap"
 echo "battery-snapshot: $dir = $tag + .env + certs + the desk tool; run it with BATTERY_COMMIT=$tag"

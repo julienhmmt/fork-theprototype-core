@@ -272,7 +272,7 @@ h.run(async () => {
 	}
 
 	let list = await msgs(A);
-	h.check(!list.some((m) => m.role === 'error'), 'no tool errors in the spider run');
+	h.check(!list.some((m) => m.role === 'error'), 'no tool errors in the spider run' + JSON.stringify(list.filter((m) => m.role === 'error')).slice(0, 300));
 	h.check(
 		list.some((m) => m.role === 'tool-status' && /behavior node/.test(m.content)),
 		'transcript labels the flow-node calls'
