@@ -274,7 +274,7 @@ h.run(async () => {
 		const head = A.page.locator('button', { hasText: /^Scatter$/ }).first();
 		if (await head.isVisible().catch(() => false)) await head.click({ timeout: h.PATIENT_CLICK_MS });
 	}
-	await add.scrollIntoViewIfNeeded();
+	await add.scrollIntoViewIfNeeded({ timeout: h.PATIENT_CLICK_MS });
 	await add.click({ timeout: h.PATIENT_CLICK_MS });
 	await A.page.locator('.ts-list [role="option"]', { hasText: /^\s*Cone\s*$/ }).click({ timeout: h.PATIENT_CLICK_MS });
 	await h.eventuallyAfter(A, B, () => blockOf(B.page, terrain), (v) => v?.sets?.[0]?.sources?.length === 2, 'B has the mix', 10000);

@@ -116,7 +116,7 @@ h.run(async () => {
 	// ---- E2: the "Add scatter" row, right after the Water section -------------------------------
 	await A.page.evaluate((u) => window.__stores.objectActions.selectObject(u, true), uuid);
 	const add = A.page.locator('#scatter-add');
-	await add.waitFor({ state: 'attached', timeout: 15000 });
+	await add.waitFor({ state: 'attached', timeout: h.PATIENT_CLICK_MS });
 	if (!(await add.isVisible().catch(() => false))) {
 		const head = A.page.locator('button', { hasText: /^Scatter$/ }).first();
 		if (await head.isVisible().catch(() => false)) await head.click({ timeout: h.PATIENT_CLICK_MS });
@@ -131,7 +131,7 @@ h.run(async () => {
 	});
 	h.check(order.pour && order.bubbles, 'the Add scatter row comes after Add bubble emitter / Add pour emitter');
 	h.check(order.label === 'Add scatter', `the row reads "Add scatter" (${order.label})`);
-	await add.scrollIntoViewIfNeeded();
+	await add.scrollIntoViewIfNeeded({ timeout: h.PATIENT_CLICK_MS });
 	const undo0 = await undoDepth(A.page);
 	await add.click({ timeout: h.PATIENT_CLICK_MS });
 	await h.eventually(() => firstSet(A.page, uuid), (s) => !!s?.gen, 'Add scatter makes a FILL set on the sphere', 8000);
@@ -214,7 +214,7 @@ h.run(async () => {
 		for (const t of ['dark', 'light']) {
 			await A.page.evaluate((th) => window.__stores.themes.theme.set(th), t);
 			await A.page.waitForTimeout(400);
-			await A.page.locator('[data-scatter-fill]').first().scrollIntoViewIfNeeded();
+			await A.page.locator('[data-scatter-fill]').first().scrollIntoViewIfNeeded({ timeout: h.PATIENT_CLICK_MS });
 			await A.page.screenshot({ path: `${SHOTS}/02-fill-rows-${t}.png` });
 		}
 	await A.page.evaluate(() => window.__stores.themes.theme.set('dark'));
