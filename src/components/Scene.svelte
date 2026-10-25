@@ -1195,12 +1195,8 @@
 			// a touch gizmo covers most of a small object, which is what the finger aims at
 			const touchTap = event.pointerType === 'touch';
 			// (an object's gizmo only — a mesh / spline session's gizmo keeps every tap)
-			// test-health-1: on a finger, `dragging` set by THIS press is not a drag — we are past the
-			// still-tap test above (<= 5 px, <= 400 ms), and the gizmo's own pointerdown starts a drag on
-			// the handle under the finger, so whether a tap on the seated gizmo let go of the object
-			// depended on which pointerup listener ran first (select-41 G14 unfolded: axis XYZ, dragging)
 			const onGizmo =
-				!!$TControls && (touchTap || !$TControls.dragging) && !!$TControls.axis && !event.altKey &&
+				!!$TControls && !$TControls.dragging && !!$TControls.axis && !event.altKey &&
 				!$editingObject && !$faceEditObject && !$splineEditObject && !$measureMode && !splineToolActive();
 			if ($TControls && ($TControls.dragging || ($TControls.axis && !event.altKey)) && !(touchTap && onGizmo)) return;
 			if (!$objectsGroup) return;
