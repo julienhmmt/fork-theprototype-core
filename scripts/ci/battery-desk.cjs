@@ -97,7 +97,8 @@ function deskEntries(b) {
 /** @param {DeskBattery} b @param {string} half @param {number} of */
 function half(b, half, of) {
 	const i = half.toUpperCase().charCodeAt(0) - 65;
-	const shards = assign({ ...b, skip: {}, suites: Object.fromEntries(deskEntries(b)) }, of);
+	// the desk runs every suite the same way: `optional` is a GitHub-runner property, so it is not a set here
+	const shards = assign({ ...b, skip: {}, optional: {}, suites: Object.fromEntries(deskEntries(b)) }, of);
 	if (!(i >= 0 && i < of)) throw new Error(`--half ${half}: there are ${of} halves (A..${String.fromCharCode(64 + of)})`);
 	return shards[i].suites;
 }
