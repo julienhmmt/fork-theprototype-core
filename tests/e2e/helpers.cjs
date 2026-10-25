@@ -331,6 +331,13 @@ async function step(peer, what, run) {
 	}
 }
 
+/**
+ * scatter-sync: the timeout for a REAL click in a suite that renders two heavy pages. Every actionability check
+ * still runs; only the wait is longer, because each input event waits for a frame ack and one frame took several
+ * seconds on a slow GitHub runner (SwiftShader, two pages) — 30 s clicks timed out there with no task hung.
+ */
+const PATIENT_CLICK_MS = Number(process.env.E2E_CLICK_MS || 90000);
+
 /** Poll `fn` until `predicate` holds; records a PASS/FAIL check. */
 async function eventually(fn, predicate, label, timeout = 10000) {
 	const start = Date.now();
@@ -1128,4 +1135,4 @@ function envelopeDelta(a, b) {
 	return { maxDelta, meanDelta: n ? sum / n : 0, worstSlice };
 }
 
-module.exports = { URL, GPU_ARGS, APPROVE_LABEL, approveButton, watchPress, check, launch, setupPage, setupPageQuiet, connect, leavePlay, eventually, caughtUp, eventuallyAfter, projectPoint, freshReload, answerRestore, closePeer, finish, run, installModule, moduleZipPath, makeCollectibleChains, pageErrors, externalErrors, grabFrame, centeredClip, frameDelta, framePixelsOffColor, AUDIO_ARGS, audioMetrics, renderOffline, envelopeDelta };
+module.exports = { URL, GPU_ARGS, PATIENT_CLICK_MS, APPROVE_LABEL, approveButton, watchPress, check, launch, setupPage, setupPageQuiet, connect, leavePlay, eventually, caughtUp, eventuallyAfter, projectPoint, freshReload, answerRestore, closePeer, finish, run, installModule, moduleZipPath, makeCollectibleChains, pageErrors, externalErrors, grabFrame, centeredClip, frameDelta, framePixelsOffColor, AUDIO_ARGS, audioMetrics, renderOffline, envelopeDelta };

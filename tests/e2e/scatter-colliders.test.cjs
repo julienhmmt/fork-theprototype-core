@@ -80,11 +80,11 @@ async function pickCollider(peer, terrain, setId, name) {
 	if (!(await sel.isVisible().catch(() => false))) {
 		// the Scatter section may start collapsed
 		const head = peer.page.locator('button', { hasText: /^Scatter$/ }).first();
-		if (await head.isVisible().catch(() => false)) await head.click();
+		if (await head.isVisible().catch(() => false)) await head.click({ timeout: h.PATIENT_CLICK_MS });
 	}
 	await sel.scrollIntoViewIfNeeded();
-	await sel.click();
-	await peer.page.locator('.ts-list [role="option"]', { hasText: new RegExp(`^\\s*${name}\\s*$`) }).click();
+	await sel.click({ timeout: h.PATIENT_CLICK_MS });
+	await peer.page.locator('.ts-list [role="option"]', { hasText: new RegExp(`^\\s*${name}\\s*$`) }).click({ timeout: h.PATIENT_CLICK_MS });
 	await peer.page.waitForTimeout(300);
 	return sel.innerText();
 }

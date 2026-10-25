@@ -243,9 +243,9 @@ h.run(async () => {
 			[uuid, sel]
 		);
 		const before = (await listsOf(A.page, uuid))['p:Cone'];
-		await A.page.click('#sculpt-scatter-turn-left');
-		await A.page.click('#sculpt-scatter-bigger');
-		await A.page.click('#sculpt-scatter-reroll');
+		await A.page.click('#sculpt-scatter-turn-left', { timeout: h.PATIENT_CLICK_MS });
+		await A.page.click('#sculpt-scatter-bigger', { timeout: h.PATIENT_CLICK_MS });
+		await A.page.click('#sculpt-scatter-reroll', { timeout: h.PATIENT_CLICK_MS });
 		post = (await listsOf(A.page, uuid))['p:Cone'];
 		h.check(sel.every((k) => post[k].x === before[k].x && post[k].z === before[k].z), 'Turn / Bigger / Re-roll keep the selected positions');
 		h.check(sel.some((k) => post[k].scale !== before[k].scale || post[k].yaw !== before[k].yaw), 'and change their look');

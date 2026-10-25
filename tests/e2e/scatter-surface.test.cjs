@@ -119,7 +119,7 @@ h.run(async () => {
 	await add.waitFor({ state: 'attached', timeout: 15000 });
 	if (!(await add.isVisible().catch(() => false))) {
 		const head = A.page.locator('button', { hasText: /^Scatter$/ }).first();
-		if (await head.isVisible().catch(() => false)) await head.click();
+		if (await head.isVisible().catch(() => false)) await head.click({ timeout: h.PATIENT_CLICK_MS });
 	}
 	const order = await A.page.evaluate(() => {
 		const pour = document.querySelector('#pour-add');
@@ -133,7 +133,7 @@ h.run(async () => {
 	h.check(order.label === 'Add scatter', `the row reads "Add scatter" (${order.label})`);
 	await add.scrollIntoViewIfNeeded();
 	const undo0 = await undoDepth(A.page);
-	await add.click();
+	await add.click({ timeout: h.PATIENT_CLICK_MS });
 	await h.eventually(() => firstSet(A.page, uuid), (s) => !!s?.gen, 'Add scatter makes a FILL set on the sphere', 8000);
 	const set = await firstSet(A.page, uuid);
 	h.check(set.host === 'mesh' && set.gen.count === 200 && set.seed > 0, `the set lives on the mesh (host ${set.host}, count ${set.gen.count}, seeded)`);
@@ -206,9 +206,9 @@ h.run(async () => {
 	await h.eventuallyAfter(A, B, () => drawn(B.page, uuid), (d) => d.length === 120 && d.every((p, i) => p.id === band[i].id), 'B draws the same masked fill', 15000);
 
 	// the Fill rows in the Inspector: Density switch through the real Segmented control
-	await A.page.locator('[id$="-mode-density"]').first().click();
+	await A.page.locator('[id$="-mode-density"]').first().click({ timeout: h.PATIENT_CLICK_MS });
 	await h.eventually(() => firstSet(A.page, uuid), (s) => s?.gen?.density != null && s.gen.count == null, 'the Fill row switches the set to DENSITY', 8000);
-	await A.page.locator('[id$="-mode-count"]').first().click();
+	await A.page.locator('[id$="-mode-count"]').first().click({ timeout: h.PATIENT_CLICK_MS });
 	await h.eventually(() => firstSet(A.page, uuid), (s) => s?.gen?.count != null, '...and back to COUNT', 8000);
 	if (SHOTS)
 		for (const t of ['dark', 'light']) {
