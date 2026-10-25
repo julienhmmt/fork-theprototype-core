@@ -180,6 +180,15 @@ h.run(async () => {
 			.catch(() => false),
 		'a toast says where it went (with Show in Library)'
 	);
+	// 60 Q5: the same toast makes the shared image a reference underlay
+	const refBtn = page.getByRole('button', { name: 'Use as reference' }).first();
+	const refShown = await refBtn.isVisible().catch(() => false);
+	h.check(refShown, 'the toast offers Use as reference');
+	if (refShown) await refBtn.click().catch(() => {});
+	const refs = async () =>
+		page.evaluate(async () => (await window.__stores.underlays).underlaysDebug().mine.map((u) => u.name));
+	await until(async () => (await refs()).length > 0, 15000);
+	h.check((await refs()).length === 1, 'Use as reference makes it one reference image: ' + JSON.stringify(await refs()));
 
 	await share(page, [
 		{ name: 'shared-door.glb', mimeType: 'model/gltf-binary', buffer: fs.readFileSync(DOOR) }
@@ -278,7 +287,8 @@ h.run(async () => {
 			[name, buf.toString('base64')]
 		);
 	await launch('fluid-tank-toy.tpscene', fs.readFileSync(SCENE));
-	await until(async () => (await lastLaunch(lq.page))?.scene === 'fluid-tank-toy.tpscene', 30000);
+	// software GL loads fluid-tank-toy slowly: 30 s / 10 s were red on every local slot (60-union probe)
+	await until(async () => (await lastLaunch(lq.page))?.scene === 'fluid-tank-toy.tpscene', 180000);
 	await until(
 		() =>
 			lq.page.evaluate(async () => {
@@ -286,7 +296,7 @@ h.run(async () => {
 				(await window.__stores.levels).currentLevel.subscribe((x) => (v = x))();
 				return v?.name;
 			}),
-		10000
+		60000
 	);
 	const level = await lq.page.evaluate(async () => {
 		const m = await window.__stores.levels;

@@ -16,7 +16,9 @@
 // time), models are IMPORTED into the current scene (the import dialog's path, so an .obj's
 // .mtl and textures ride along), and an image on its own goes into the Explorer LIBRARY with
 // a "Show in Library" action — a picture has no single right place in a 3D scene, and the
-// library is where every texture/HUD/shader picker already reads from.
+// library is where every texture/HUD/shader picker already reads from. The same toast offers
+// "Use as reference" (60 Q5): the image also becomes a reference underlay on the ground, the
+// choice a viewport drop of an image offers.
 //
 // Nothing runs until the boot is ready to take it: the scene group exists AND the
 // restore-session question is answered (`restoreSettled`), because a model imported into
@@ -91,6 +93,21 @@ export function receiveLaunchFiles(files, source) {
 /** @type {Promise<any>} */
 let queue = Promise.resolve();
 
+/** 60 Q5: shared images as reference underlays on the ground, then the window that edits them
+ * @param {File[]} files */
+async function useAsReference(files) {
+	const [{ addUnderlay, underlayWindowOpen }, { underlayPoseFromView }] = await Promise.all([
+		import('./underlays'),
+		import('./underlayPose')
+	]);
+	for (const file of files) {
+		const pose = underlayPoseFromView('ground');
+		if (!pose) return;
+		await addUnderlay(file, pose);
+	}
+	underlayWindowOpen.set(true);
+}
+
 /** @param {File[]} files @param {'share' | 'open'} source */
 async function route(files, source) {
 	const result = {
@@ -157,6 +174,10 @@ async function route(files, source) {
 							explorerClose.set(false);
 							revealItem(first.id);
 						}
+					},
+					{
+						label: 'Use as reference',
+						action: () => void useAsReference(c.images)
 					}
 				]
 			);
