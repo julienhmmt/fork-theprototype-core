@@ -128,7 +128,7 @@ h.run(async () => {
 						{ kind: 'primitive', primitive: 'Box', params: [1, 0.5, 1.4], position: [0, 0.6, 0], color: '#442200', name: 'Body' },
 						{ kind: 'primitive', primitive: 'Box', params: [0.15, 0.5, 0.15], position: [0.7, 0.25, 0], name: 'LegL' },
 						{ kind: 'primitive', primitive: 'Box', params: [0.15, 0.5, 0.15], position: [-0.7, 0.25, 0], name: 'LegR' },
-						{ kind: 'primitive', primitive: 'Box', params: [0.4, 0.4, 0.4], position: [3, 2, 0], name: 'Pebble' }
+						{ kind: 'primitive', primitive: 'Box', params: [0.4, 0.4, 0.4], position: [3, 2, 0], name: 'Pebble', physics: 'dynamic' } // fix-live F-4: AI-made objects are static unless asked
 					]
 				})
 			);
