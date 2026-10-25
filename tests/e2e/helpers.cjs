@@ -345,6 +345,49 @@ async function eventually(fn, predicate, label, timeout = 10000) {
 }
 
 /**
+ * scatter-sync: WAIT FOR `to` TO HAVE DISPATCHED EVERYTHING `from` HAS SENT IT SO FAR — a real event, not a
+ * guess at how long a slow runner takes. `from` sends a clock ping (an ordinary one: the app folds it into
+ * its clock estimate like any other), and `to` answers it from its message loop, so the pong means every
+ * earlier message on that ordered conn has been through `to`'s dispatcher (an async applier's module
+ * import resolves in the microtasks before the next message). Returns false after `timeout`.
+ * @param {{page: any, id: string}} from @param {{page: any, id: string}} to
+ */
+async function caughtUp(from, to, timeout = 120000) {
+	const ok = await from.page
+		.evaluate(
+			([peerId, ms]) =>
+				new Promise((resolve) => {
+					let p;
+					window.__stores.peers.subscribe((v) => (p = v))();
+					const t0 = Date.now() + Math.random() / 1000;
+					const conns = new Set([p.connections?.[peerId], ...((p.peer?._connections?.get?.(peerId)) ?? p.peer?.connections?.[peerId] ?? [])].filter(Boolean));
+					const off = () => conns.forEach((c) => c.off?.('data', on));
+					const on = (/** @type {any} */ d) => {
+						if (d?.type === 'clockpong' && d.t0 === t0) {
+							off();
+							resolve(true);
+						}
+					};
+					conns.forEach((c) => c.on('data', on));
+					const conn = p.connections?.[peerId];
+					if (!conn?.open) return (off(), resolve(false));
+					conn.send({ type: 'clockping', sender: p.peer.id, t0 });
+					setTimeout(() => (off(), resolve(false)), ms);
+				}),
+			[to.id, timeout]
+		)
+		.catch(() => false);
+	if (!ok) console.log(`  (${to.id} did not answer ${from.id}'s wire barrier within ${Math.round(timeout / 1000)} s)`);
+	return ok;
+}
+
+/** `eventually`, measured from the moment `to` has caught up with `from`'s wire (see caughtUp). */
+async function eventuallyAfter(from, to, fn, predicate, label, timeout = 10000) {
+	await caughtUp(from, to);
+	return eventually(fn, predicate, label, timeout);
+}
+
+/**
  * Screen pixel of a world point on that page's camera.
  *
  * W9: measured against the CANVAS, not the window, and offset by where the canvas
@@ -1085,4 +1128,4 @@ function envelopeDelta(a, b) {
 	return { maxDelta, meanDelta: n ? sum / n : 0, worstSlice };
 }
 
-module.exports = { URL, GPU_ARGS, APPROVE_LABEL, approveButton, watchPress, check, launch, setupPage, setupPageQuiet, connect, leavePlay, eventually, projectPoint, freshReload, answerRestore, closePeer, finish, run, installModule, moduleZipPath, makeCollectibleChains, pageErrors, externalErrors, grabFrame, centeredClip, frameDelta, framePixelsOffColor, AUDIO_ARGS, audioMetrics, renderOffline, envelopeDelta };
+module.exports = { URL, GPU_ARGS, APPROVE_LABEL, approveButton, watchPress, check, launch, setupPage, setupPageQuiet, connect, leavePlay, eventually, caughtUp, eventuallyAfter, projectPoint, freshReload, answerRestore, closePeer, finish, run, installModule, moduleZipPath, makeCollectibleChains, pageErrors, externalErrors, grabFrame, centeredClip, frameDelta, framePixelsOffColor, AUDIO_ARGS, audioMetrics, renderOffline, envelopeDelta };

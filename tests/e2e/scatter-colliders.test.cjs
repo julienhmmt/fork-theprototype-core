@@ -113,7 +113,7 @@ h.run(async () => {
 		s.objectsGroup.update((v) => v);
 		return t.uuid;
 	});
-	await h.eventually(() => blockOf(B.page, terrain), (v) => v !== 'missing', 'B has the terrain', 20000);
+	await h.eventuallyAfter(A, B, () => blockOf(B.page, terrain), (v) => v !== 'missing', 'B has the terrain', 20000);
 
 	const scattered = await A.page.evaluate((u) => {
 		const s = window.__stores;
@@ -160,7 +160,7 @@ h.run(async () => {
 		o.scale.set(0.4, 0.4, 0.4);
 		return o.uuid;
 	});
-	await h.eventually(() => posOf(B.page, ball), (p) => !!p, 'B has the ball', 20000);
+	await h.eventuallyAfter(A, B, () => posOf(B.page, ball), (p) => !!p, 'B has the ball', 20000);
 	// the Terrain is procedural (hills): measure the ground under the rock and drop from above it
 	const ground = await A.page.evaluate(
 		([u, x, z]) => {
@@ -209,7 +209,7 @@ h.run(async () => {
 	if (SHOTS) await A.page.screenshot({ path: `${SHOTS}/01-scatter-collider-select.png` });
 	const aBlock = await blockOf(A.page, terrain);
 	h.check(aBlock?.sets?.[0]?.collider === 'box', 'the set field is box on A');
-	await h.eventually(() => blockOf(B.page, terrain), (v) => v?.sets?.[0]?.collider === 'box', 'the set field REPLICATED to B', 15000);
+	await h.eventuallyAfter(A, B, () => blockOf(B.page, terrain), (v) => v?.sets?.[0]?.collider === 'box', 'the set field REPLICATED to B', 15000);
 
 	// ---- A steps the world: the ball stops on the rock, on A and on B ----------------------
 	await parkBall(A.page, ball, over);
@@ -224,9 +224,9 @@ h.run(async () => {
 	await A.page.evaluate(() => window.__stores.objectActions.deselectObject());
 	await A.page.waitForTimeout(500);
 	await pickCollider(B, terrain, setId, 'Sphere');
-	await h.eventually(() => blockOf(A.page, terrain), (v) => v?.sets?.[0]?.collider === 'sphere', 'B\'s pick replicated back to A', 15000);
+	await h.eventuallyAfter(B, A, () => blockOf(A.page, terrain), (v) => v?.sets?.[0]?.collider === 'sphere', 'B\'s pick replicated back to A', 15000);
 	await B.page.evaluate(() => window.__stores.history.undo());
-	await h.eventually(() => blockOf(A.page, terrain), (v) => v?.sets?.[0]?.collider === 'box', 'ONE undo on B puts Box back, on A too', 10000);
+	await h.eventuallyAfter(B, A, () => blockOf(A.page, terrain), (v) => v?.sets?.[0]?.collider === 'box', 'ONE undo on B puts Box back, on A too', 10000);
 	await B.page.evaluate(() => window.__stores.history.redo());
 	await h.eventually(() => blockOf(A.page, terrain), (v) => v?.sets?.[0]?.collider === 'sphere', 'redo brings Sphere back on A', 10000);
 	await B.page.evaluate(() => window.__stores.objectActions.deselectObject());
