@@ -102,7 +102,7 @@ h.run(async () => {
 		const group = await new Promise((r) => window.__stores.objectsGroup.subscribe(r)());
 		return group.children[group.children.length - 1].uuid;
 	});
-	await h.eventually(() => scatterOf(B.page, uuid), (v) => v !== 'missing', 'B has the terrain', 20000);
+	await h.eventuallyAfter(A, B, () => scatterOf(B.page, uuid), (v) => v !== 'missing', 'B has the terrain', 20000);
 	await look(A.page, [0.5, 22, 3], [0, 0, 0]);
 	await look(B.page, [-6, 16, -8], [0, 0, 0]);
 
@@ -124,7 +124,7 @@ h.run(async () => {
 	await stroke(A.page, uuid, 0, 0, 6); // boxes fill the gaps between the cones in the same circle
 	let lists = await listsOf(A.page, uuid);
 	h.check(lists['p:Cone']?.length > 20 && lists['p:Box']?.length > 0, `two models scattered (${lists['p:Cone']?.length} cones, ${lists['p:Box']?.length} boxes)`);
-	await h.eventually(async () => (await scatterOf(B.page, uuid)) === (await scatterOf(A.page, uuid)), (v) => v, 'B holds the same scatter', 15000);
+	await h.eventuallyAfter(A, B, async () => (await scatterOf(B.page, uuid)) === (await scatterOf(A.page, uuid)), (v) => v, 'B holds the same scatter', 15000);
 
 	// ---- E4 brushes ---------------------------------------------------------------------------
 	const near = (l, x, z, r) => l.filter((p) => Math.hypot(p.x - x, p.z - z) < r);
@@ -141,7 +141,7 @@ h.run(async () => {
 	const yawAfter = near(lists['p:Cone'], 0, 0, 2).map((p) => p.yaw);
 	h.check(yawAfter.some((y, i) => Math.abs(y - yawBefore[i]) > 0.05), 'the Rotate brush turns the instances under it');
 	h.check((await undoDepth(A.page)) === d0 + 1, 'one rotate stroke = ONE undo entry');
-	await h.eventually(async () => (await scatterOf(B.page, uuid)) === (await scatterOf(A.page, uuid)), (v) => v, 'B sees the rotate', 10000);
+	await h.eventuallyAfter(A, B, async () => (await scatterOf(B.page, uuid)) === (await scatterOf(A.page, uuid)), (v) => v, 'B sees the rotate', 10000);
 
 	await A.page.evaluate(() => window.__stores.scatterEdit.setScatterTool('scale'));
 	const scaleMean = (l) => l.reduce((a, p) => a + p.scale, 0) / Math.max(1, l.length);
@@ -199,7 +199,7 @@ h.run(async () => {
 	await A.page.evaluate(() => window.__stores.history.undo());
 	lists = await listsOf(A.page, uuid);
 	h.check(lists['p:Box'].length === boxes0, 'one undo brings the boxes back');
-	await h.eventually(async () => (await scatterOf(B.page, uuid)) === (await scatterOf(A.page, uuid)), (v) => v, 'B agrees after the undo', 10000);
+	await h.eventuallyAfter(A, B, async () => (await scatterOf(B.page, uuid)) === (await scatterOf(A.page, uuid)), (v) => v, 'B agrees after the undo', 10000);
 
 	// ---- per-terrain splat detail ---------------------------------------------------------------
 	const res = await A.page.evaluate((u) => {
@@ -209,7 +209,7 @@ h.run(async () => {
 		return { r0, ok, r1: p.splatResolutionOf(u) };
 	}, uuid);
 	h.check(res.r0 === 128 && res.ok && res.r1 === 256, `Detail sets this terrain's splat to 256 (${res.r0} -> ${res.r1})`);
-	await h.eventually(() => B.page.evaluate((u) => window.__stores.terrainPaint.splatResolutionOf(u), uuid), (r) => r === 256, 'B paints at 256 too', 10000);
+	await h.eventuallyAfter(A, B, () => B.page.evaluate((u) => window.__stores.terrainPaint.splatResolutionOf(u), uuid), (r) => r === 256, 'B paints at 256 too', 10000);
 	await A.page.evaluate(() => window.__stores.history.undo());
 	h.check((await A.page.evaluate((u) => window.__stores.terrainPaint.splatResolutionOf(u), uuid)) === 128, 'one undo puts it back');
 

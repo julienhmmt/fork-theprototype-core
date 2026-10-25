@@ -67,6 +67,8 @@
   import SculptToolbar from './components/menu/SculptToolbar.svelte'
   import SplineToolbar from './components/menu/SplineToolbar.svelte'
   import MeasureToolbar from './components/menu/MeasureToolbar.svelte' // 47 M1
+  import UnderlayWindow from './components/menu/UnderlayWindow.svelte' // 60 Q5
+  import { underlayDropMenu } from '$lib/underlays'
   import ModuleToolboxLayer from './components/ui/ModuleToolboxLayer.svelte'
   // 48 D1: the node graph debugger's panel (loaded the first time it opens)
   import { debugOpen } from '$lib/flowDebug.js'
@@ -296,6 +298,9 @@ import { startMusicToolbox } from './lib/musicToolbox'
     startShortcuts()
     startSnapping()
     startAutosave()
+    // 60 Q4: files shared into the app (share_target → sw.js inbox) or opened from the OS
+    // (file_handlers → launchQueue); they wait for the restore question (launchInbox.js)
+    if (!exportMode) import('$lib/launchInbox').then((m) => m.startLaunchInbox()).catch(() => {})
     startSceneAssets()
     startCodeWorkspace() // 36-code: scriptEditorOpen -> a workspace tab, file follow
     startNetworkQuality()
@@ -389,6 +394,13 @@ import { startMusicToolbox } from './lib/musicToolbox'
     // an unsupported file — importFile pairs them up.
     const companionExt = /\.(mtl|png|jpe?g|webp|bmp|gif)$/i
     const companions = files.filter((file) => companionExt.test(file.name))
+    // 60 Q5: a drop of nothing but images is not a model's companions — they used to be
+    // dropped silently. Ask what they are for: a reference image to build over, or the Explorer.
+    const imageExt = /\.(png|jpe?g|webp|bmp|gif)$/i
+    if (files.every((file) => imageExt.test(file.name))) {
+      underlayDropMenu.set({ x: event.clientX, y: event.clientY, files })
+      return
+    }
     files.forEach((file) => {
       const name = file.name.toLowerCase()
       if (modelExt.test(name)) importFile(file, file.name.replace(modelExt, ''), undefined, undefined, companions)
@@ -452,6 +464,8 @@ import { startMusicToolbox } from './lib/musicToolbox'
 <SculptToolbar />
 <SplineToolbar />
 <MeasureToolbar />
+<!-- 60 Q5: Reference images (+ the image-drop "Use as reference" menu) -->
+<UnderlayWindow />
 <!-- A5: module toolboxes. OUTSIDE the {#if !$isLocked} block — a toolbox that opted
      into playMode has to survive Play mode, and the layer decides per box. -->
 <ModuleToolboxLayer />

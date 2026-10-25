@@ -650,6 +650,9 @@ ROOM_SCOPED.add('batch');
 // (every get* request does; the answer side checks the room and says `none` across rooms).
 ROOM_SCOPED.add('ytext');
 ROOM_SCOPED.add('ytextaw');
+// 60 Q5: a shared reference image belongs to the scene it was laid in (its request rides the floor)
+ROOM_SCOPED.add('underlay');
+ROOM_SCOPED.add('underlaydelete');
 
 /**
  * THE ONE PREDICATE, used on both sides of the wire: `broadcast` will not SEND a
