@@ -1466,6 +1466,8 @@ export class PeerConnection {
 					if (data.fc === 1 && this.openFastChannel(conn)) conn.send({ type: 'fastchan', v: 1 });
 					checkModuleVersions(data.versions);
 					checkPeerAppVersion(data.appVersion);
+				} else if(data.type == 'relink') {
+					this.adoptRelink(conn);
 				} else if(data.type == 'fastchan') {
 					// 60 Q2: the other end opened its fast channel on this conn's RTCPeerConnection
 					this.openFastChannel(conn);
@@ -1690,6 +1692,11 @@ export class PeerConnection {
 		// peer that reads messages rather than metadata, and it is idempotent on a joiner
 		// that has already moved on.
 		if (this.approvedDialBacks.delete(peerId)) conn.send({ type: 'joinresult', result: 'approved' });
+		// 60-int: a HEAL says so before anything that is answered. Our end of the old link is
+		// closed (F-3's silence close, or a drop), but theirs may still read `open` — a close
+		// never crosses a dead link — and they would keep sending, and answering this very
+		// handshake, into it (net-drop on the deployed preview: one direction's edits lost)
+		if (opts.heal || this.reconnecting.has(peerId)) conn.send({ type: 'relink' });
 		// a conn opened to them — whatever goodbye they once sent is history
 		this.gracefulLeft.delete(peerId);
 		let hosts = [id];
@@ -2116,6 +2123,33 @@ export class PeerConnection {
 		}
 		log('info', 'net', 'redial: peer not on the server', { peer: peerId, strikes });
 		if (strikes >= strikesNeeded(this.silentDrops.has(peerId))) this.finalizeDisconnect(peerId, true);
+	}
+
+	/**
+	 * 60-int: the far end says the link we send on is closed at THEIR end (`relink`, the first
+	 * thing a healed handshake sends). A drop is not always seen by both sides: F-3 closes a link
+	 * whose ICE sat `disconnected` past its grace on one end while the other end's ICE came back,
+	 * and that close never crosses the dead link — so our conn still reads `open`, the inbound
+	 * heal was refused as "the stable outgoing conn stays preferred", and every edit and every
+	 * full-state reply went into a conn nobody reads. Adopt the conn the relink came on, close
+	 * the stale one (already replaced, so its close is ignored) and re-sync both ways.
+	 * Only when our conn still reads open: a side that saw the drop itself has none to replace,
+	 * and its ordinary heal adoption already ran.
+	 * @param {any} conn
+	 */
+	adoptRelink(conn) {
+		const peerId = conn.peer;
+		const stale = this.connections[peerId];
+		if (!stale || stale === conn || !stale.open || !conn.open) return;
+		log('warn', 'net', 'relink: the peer closed our old link — this conn replaces it', { peer: peerId });
+		this.connections[peerId] = conn;
+		conn.on('close', () => this.onConnClose(peerId, conn));
+		this.fastLinks.close(peerId);
+		try { stale.close(); } catch (e) { /* already dead */ }
+		this.openedPeers.add(peerId);
+		peers.update((value) => value);
+		// what we sent while the link was dead never arrived, and what they answered went to it
+		this.sendHandshake(conn, peerId, true, this.peer.id, { heal: true });
 	}
 
 	/** One reconnect-window dial: the lower id only, and never over a dial already in flight.

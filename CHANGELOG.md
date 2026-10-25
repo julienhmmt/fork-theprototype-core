@@ -62,6 +62,8 @@ file from your phone into the app, paste a scene link into Notion — and moveme
 - Right-clicking the viewport opens its menu on every platform again.
 - Two-peer sync: anything the host does while a just-approved joiner is still connecting now reaches that joiner as
   soon as its connection opens, instead of only after the joiner's full scene download (seconds later on slow machines).
+- After a network drop that only one side noticed, edits flow both ways again: the side still holding the dead link
+  switches to the fresh one and catches up on what it missed.
 - Offers (like being made admin) keep their Accept / Decline buttons in Notifications.
 - A late joiner sees a shader graph on an object that arrives after it; physics actions fire even at very low frame
   rates; viewers' Explorer fills in (project, shared files and big material presets reach viewers).

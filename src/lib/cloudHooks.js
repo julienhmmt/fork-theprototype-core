@@ -85,7 +85,10 @@ const ALWAYS_ALLOWED = new Set([
 	// `matpresetpart`) stay gateable.
 	'getproject',
 	'getasset',
-	'getmatpreset'
+	'getmatpreset',
+	// 60-int: "the link you are sending on is dead at my end — use this conn". Transport, no
+	// content: a gated relink leaves a viewer's host talking into a closed link after a drop
+	'relink'
 ]);
 
 /** @type {((peerId: string, msgType: string) => boolean) | null} */
