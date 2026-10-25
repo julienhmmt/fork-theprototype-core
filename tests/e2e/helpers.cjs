@@ -180,6 +180,19 @@ async function setupPage(browser, name, options = {}) {
 	// GitHub's runners run it (2-4 slow vCPUs, SwiftShader) on a fast box — `4` = four times slower main threads
 	const throttle = Number(process.env.E2E_CPU_THROTTLE || 0);
 	if (throttle > 1) await (await ctx.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: throttle });
+	// E2E_LONGTASKS=<ms> (scatter-sync): print every main-thread task longer than that, with when it ran —
+	// a Playwright click that "waits for scheduled navigations" for 30 s is a page that did not yield
+	const longMs = Number(process.env.E2E_LONGTASKS || 0);
+	if (longMs > 0) {
+		await page.addInitScript((ms) => {
+			try {
+				new PerformanceObserver((list) => {
+					for (const e of list.getEntries()) if (e.duration >= ms) console.warn(`[longtask] ${Math.round(e.duration)} ms at ${new Date(performance.timeOrigin + e.startTime).toISOString().slice(11, 23)}`);
+				}).observe({ type: 'longtask', buffered: true });
+			} catch {}
+		}, longMs);
+		page.on('console', (m) => m.text().startsWith('[longtask]') && console.log(`[${name}] ${m.text()}`));
+	}
 	// Page errors were LOGGED and nothing more, so a suite could sail past a
 	// component that had crashed on mount: a duplicate each-key threw inside the
 	// Animation window, the pane stopped opening for real users, and every check
@@ -275,6 +288,13 @@ async function connect(from, to, settleMs = 9000) {
 	// "Reject" (cloudHooks roles); "Editor access" is the plain build's Approve
 	await step(to, 'approve the request', () => approveButton(to.page).click({ timeout: 30000 }));
 	await from.page.waitForTimeout(settleMs);
+	// scatter-sync: the settle is a MINIMUM now — on a slow runner (GitHub, SwiftShader) the approval
+	// dial-back took 15 s to open, so a suite's first edit raced a conn that was still negotiating.
+	// Wait (bounded, never failing here) until BOTH ends hold an open conn to the other.
+	const openTo = (page, id) =>
+		page.evaluate((peerId) => new Promise((r) => window.__stores.peers.subscribe((p) => r(!!p?.connections?.[peerId]?.open))()), id).catch(() => false);
+	const until = Date.now() + 45000;
+	while (Date.now() < until && !((await openTo(from.page, to.id)) && (await openTo(to.page, from.id)))) await from.page.waitForTimeout(250);
 }
 
 /**
