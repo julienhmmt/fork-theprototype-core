@@ -38,6 +38,7 @@ import { routePerfLive, perfLivePeerGone } from '$lib/perf/liveWire.js'; // 34 P
 import { noteWireError } from '$lib/wireErrors';
 import { composeAdmitNotice, shortPeer } from '$lib/admitNotice';
 import { ICE_DROP_GRACE_MS, LINK_POLL_MS, strikesNeeded, quietPeerError, unavailablePeerId, consentCounters, linkSilence } from '$lib/peerDrop';
+import { createDialBackQueue } from '$lib/dialBackQueue'; // scatter-sync: room edits held for an opening approval dial-back
 import { noteWire } from '$lib/sceneBudget';
 import { applyAnnotation, applyAnnotationsSnapshot, sendAnnotations } from '$lib/annotationsHandler';
 import { applyPing } from '$lib/ping';
@@ -318,6 +319,9 @@ export class PeerConnection {
 		/** 25-F: peers whose NEXT dial is an approval dial-back, so its handshake opens with
 		 * `joinresult: approved` @type {Set<string>} */
 		this.approvedDialBacks = new Set();
+		/** scatter-sync: room broadcasts HELD for a peer whose approval dial-back has not opened
+		 * yet, flushed after its handshake (dialBackQueue.js says why) */
+		this.dialBackQueue = createDialBackQueue();
 		// 37 R1: peers that advertised `wb: 1` (the `modules` handshake) and so understand a
 		// `{type:'batch'}` envelope; everyone else gets the envelope's items one by one
 		/** @type {Set<string>} */
@@ -1795,6 +1799,14 @@ export class PeerConnection {
 		if (getobjects && !holdContent) conn.send({type: 'getnodedefs', sender: this.peer.id})
 		// join them into the voice mesh if our mic is live
 		voicePeerConnected(peerId);
+		// scatter-sync: what we said while this approved joiner's conn was still opening, in
+		// order, re-gated NOW (their room row may have arrived since). After the handshake, so
+		// the joiner already knows where we stand; the full-state reply after it is add-only.
+		for (const payload of this.dialBackQueue.take(peerId)) {
+			if (!conn.open) break;
+			if (this.withholdFrom(peerId, payload)) continue;
+			this.sendTo(peerId, conn, payload);
+		}
 	}
 
 	/**
@@ -2183,6 +2195,7 @@ export class PeerConnection {
 		this.fastLinks.closeAll();
 		this.staleFilter.clear();
 		this.keyframer.clear();
+		this.dialBackQueue.clear();
 		for (const peerId of Object.keys(this.connections)) {
 			const conn = this.connections[peerId];
 			delete this.connections[peerId];
@@ -2267,15 +2280,6 @@ export class PeerConnection {
 		// STREAMS keep flowing (private is not offline, and the far side draws nothing anyway
 		// — its own `elsewhereThan` reads our private row as elsewhere).
 		const roomScoped = ROOM_SCOPED.has(payload?.type);
-		const gated = STREAM_TYPES.has(payload?.type) || roomScoped;
-		const mine = gated ? (myScene()?.scene ?? '') : '';
-		const where = gated ? get(peerScenes) : {};
-		// R22 round 36 (rooms): THE HOST, because the unnamed world is a room with an
-		// identity now and only the host's row can say which. `null` is a real answer here
-		// (we are hosting, so the unnamed room is OURS) — it is OMITTING the argument that
-		// would ask round 35's question, which is why it is passed unconditionally.
-		const host = gated ? get(sessionHost) : null;
-		const secret = roomScoped && amPrivate();
 		// 60 Q2: which peers took it unreliably (they are owed the trailing keyframe)
 		const key = poseKey(payload);
 		const fast = !!opts?.fast && key !== null && fastChannelEnabled();
@@ -2285,35 +2289,64 @@ export class PeerConnection {
 		const fastPeers = [];
 		Object.keys(this.connections).forEach(peerId => {
 			const conn = this.connections[peerId];
-			if (!conn || !conn.open) return;
-			if (secret) return;
-			if (gated && elsewhereThan(where, mine, peerId, host)) return;
-			if (roomScoped && gateHolds(peerId)) return;
-			try {
-				if (fast && this.fastLinks.isOpen(peerId)) {
-					if (text === null) {
-						try {
-							text = JSON.stringify(payload);
-						} catch {
-							text = '';
-						}
-					}
-					if (text && this.fastLinks.trySend(peerId, text)) {
-						fastPeers.push(peerId);
-						return;
+			if (!conn) return;
+			if (!conn.open) {
+				// scatter-sync: an APPROVED joiner whose dial-back is still opening gets this after
+				// its handshake instead of never (dialBackQueue.js). Room content only — streams
+				// are re-derived every frame, and the rest has handshake replies of its own.
+				if (roomScoped && this.approvedDialBacks.has(peerId)) this.dialBackQueue.hold(peerId, payload);
+				return;
+			}
+			if (this.withholdFrom(peerId, payload)) return;
+			if (fast && this.fastLinks.isOpen(peerId)) {
+				if (text === null) {
+					try {
+						text = JSON.stringify(payload);
+					} catch {
+						text = '';
 					}
 				}
-				// 37 R1: a peer that never said `wb: 1` gets the envelope's items one by one
-				if (payload?.type === 'batch' && !this.wireBatchPeers.has(peerId))
-					for (const item of payload.items) conn.send(item);
-				else conn.send(payload);
-			} catch (err) {
-				log('error', 'net', 'send failed', { peer: peerId, error: String(err) });
+				if (text && this.fastLinks.trySend(peerId, text)) {
+					fastPeers.push(peerId);
+					return;
+				}
 			}
+			this.sendTo(peerId, conn, payload);
 		});
 		if (key !== null) {
 			if (fastPeers.length) this.keyframer.noteFast(key, payload, fastPeers);
 			else this.keyframer.noteReliable(key);
+		}
+	}
+
+	/**
+	 * The per-peer half of `broadcast`'s gate (the reasons are written above it), shared with
+	 * the dial-back flush and the 60 Q2 trailing keyframe, so a message sent later is judged by
+	 * the same rules when it finally goes.
+	 * @param {string} peerId @param {any} payload @returns {boolean} true = do not send
+	 */
+	withholdFrom(peerId, payload) {
+		const roomScoped = ROOM_SCOPED.has(payload?.type);
+		const gated = STREAM_TYPES.has(payload?.type) || roomScoped;
+		if (roomScoped && amPrivate()) return true;
+		// R22 round 36 (rooms): THE HOST, because the unnamed world is a room with an
+		// identity now and only the host's row can say which. `null` is a real answer here
+		// (we are hosting, so the unnamed room is OURS) — it is OMITTING the argument that
+		// would ask round 35's question, which is why it is passed unconditionally.
+		if (gated && elsewhereThan(get(peerScenes), myScene()?.scene ?? '', peerId, get(sessionHost))) return true;
+		if (roomScoped && gateHolds(peerId)) return true;
+		return false;
+	}
+
+	/** @param {string} peerId @param {any} conn @param {any} payload */
+	sendTo(peerId, conn, payload) {
+		try {
+			// 37 R1: a peer that never said `wb: 1` gets the envelope's items one by one
+			if (payload?.type === 'batch' && !this.wireBatchPeers.has(peerId))
+				for (const item of payload.items) conn.send(item);
+			else conn.send(payload);
+		} catch (err) {
+			log('error', 'net', 'send failed', { peer: peerId, error: String(err) });
 		}
 	}
 
@@ -2324,21 +2357,11 @@ export class PeerConnection {
 	 * @param {any} payload @param {string[]} peerIds
 	 */
 	sendReliableTo(payload, peerIds) {
-		const mine = myScene()?.scene ?? '';
-		const where = get(peerScenes);
-		const host = get(sessionHost);
 		for (const peerId of peerIds) {
 			const conn = this.connections[peerId];
 			if (!conn || !conn.open) continue;
-			if (STREAM_TYPES.has(payload?.type) || ROOM_SCOPED.has(payload?.type)) {
-				if (elsewhereThan(where, mine, peerId, host)) continue;
-			}
-			if (ROOM_SCOPED.has(payload?.type) && (amPrivate() || gateHolds(peerId))) continue;
-			try {
-				conn.send(payload);
-			} catch (err) {
-				log('error', 'net', 'send failed', { peer: peerId, error: String(err) });
-			}
+			if (this.withholdFrom(peerId, payload)) continue;
+			this.sendTo(peerId, conn, payload);
 		}
 	}
 
