@@ -79,7 +79,7 @@ h.run(async () => {
 		const group = await new Promise((r) => window.__stores.objectsGroup.subscribe(r)());
 		return group.children[group.children.length - 1].uuid;
 	});
-	await h.eventually(() => scatterOf(B.page, uuid), (v) => v !== 'missing', 'B has the terrain', 20000);
+	await h.eventuallyAfter(A, B, () => scatterOf(B.page, uuid), (v) => v !== 'missing', 'B has the terrain', 20000);
 	await look(A.page, [0.5, 22, 3], [0, 0, 0]);
 	const entered = await A.page.evaluate((u) => {
 		const s = window.__stores;
@@ -128,10 +128,10 @@ h.run(async () => {
 	h.check((await objectCount(A.page)) === objsA + 5, 'A has five more objects (the template went)');
 	h.check((await listsOf(A.page, uuid))['p:Cone'].length === lists['p:Cone'].length - 5, 'and five fewer instances');
 	h.check((await undoDepth(A.page)) === d0 + 1, 'the whole conversion is ONE undo entry');
-	await h.eventually(() => objectCount(B.page), (n) => n === objsA + 5, 'B has the five objects', 15000);
+	await h.eventuallyAfter(A, B, () => objectCount(B.page), (n) => n === objsA + 5, 'B has the five objects', 15000);
 	await A.page.evaluate(() => window.__stores.history.undo());
 	h.check((await objectCount(A.page)) === objsA && (await listsOf(A.page, uuid))['p:Cone'].length === lists['p:Cone'].length, 'one undo: objects gone, instances back');
-	await h.eventually(() => objectCount(B.page), (n) => n === objsA, 'on B too', 15000);
+	await h.eventuallyAfter(A, B, () => objectCount(B.page), (n) => n === objsA, 'on B too', 15000);
 
 	// the confirm above 500
 	const asked = await A.page.evaluate(async (u) => {
@@ -186,8 +186,8 @@ h.run(async () => {
 	h.check(Math.abs(added[0].x - 3) < 0.02 && Math.abs(added[0].z + 8) < 0.02 && Math.abs(added[0].yaw - 0.3) < 0.01 && Math.abs(added[0].scale - 1) < 0.01, 'at their ground position, turn and size');
 	h.check((await objectCount(A.page)) === objsB4 - 4, 'the objects are gone');
 	h.check((await undoDepth(A.page)) === d0 + 1, 'ONE undo entry');
-	await h.eventually(async () => (await scatterOf(B.page, uuid)) === (await scatterOf(A.page, uuid)), (v) => v, 'B holds the new instances', 10000);
-	await h.eventually(() => objectCount(B.page), (k) => k === objsB4 - 4, 'and lost the objects', 10000);
+	await h.eventuallyAfter(A, B, async () => (await scatterOf(B.page, uuid)) === (await scatterOf(A.page, uuid)), (v) => v, 'B holds the new instances', 10000);
+	await h.eventuallyAfter(A, B, () => objectCount(B.page), (k) => k === objsB4 - 4, 'and lost the objects', 10000);
 	const mixed = await A.page.evaluate(async ([a, b]) => window.__stores.scatterConvert.scatterableSelection([a, b], []), [uuid, uuid]);
 	h.check(mixed.ok === false, 'one object (or none) is refused with a reason');
 
