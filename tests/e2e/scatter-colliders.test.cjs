@@ -46,14 +46,32 @@ async function parkBall(page, ball, at) {
 
 /** run a simulation on `peer` until the ball is AT REST (sim time is slow on a loaded box: a
  * fixed sleep reads a ball still falling), then stop and return its height there and on `other` */
+/** Resolve after `n` rendered frames on that page (bounded). @param {any} page @param {number} n */
+const framesPass = (page, n) =>
+	page.evaluate(
+		(n) =>
+			new Promise((resolve) => {
+				let left = n;
+				const tick = () => (--left <= 0 ? resolve(true) : requestAnimationFrame(tick));
+				requestAnimationFrame(tick);
+				setTimeout(() => resolve(false), 120000);
+			}),
+		n
+	);
+
 async function drop(peer, other, ball) {
 	await peer.page.evaluate(() => window.__stores.physics.toggleSimulation());
 	await peer.page.waitForTimeout(800);
 	let last = null;
 	let still = 0;
-	const deadline = Date.now() + 30000;
+	// scatter-sync: SIMULATED time, not wall time. The step accumulator catches up at most 8 substeps a
+	// frame, so on a slow runner (multi-second frames) 30 s of wall clock was ~1 s of simulation and the
+	// ball was still falling. Each sample waits 500 ms AND 8 rendered frames (>= 8 substeps), so "still"
+	// always spans real simulation, and the cap is generous wall time.
+	const deadline = Date.now() + 240000;
 	while (Date.now() < deadline && still < 3) {
 		await peer.page.waitForTimeout(500);
+		await framesPass(peer.page, 8);
 		const y = (await posOf(peer.page, ball))?.[1] ?? null;
 		still = last !== null && y !== null && Math.abs(y - last) < 0.004 ? still + 1 : 0;
 		last = y;
@@ -63,6 +81,7 @@ async function drop(peer, other, ball) {
 	await peer.page.waitForTimeout(300);
 	const here = (await posOf(peer.page, ball))?.[1] ?? null;
 	// the watching peer has the stream (~10 Hz + smoothing) and the settling move sent at stop
+	await h.caughtUp(peer, other);
 	let there = null;
 	const until = Date.now() + 8000;
 	while (Date.now() < until) {

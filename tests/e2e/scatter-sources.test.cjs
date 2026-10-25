@@ -324,7 +324,7 @@ h.run(async () => {
 	});
 	h.check(prefab.source?.kind === 'library' && /look only/i.test(prefab.source?.note ?? ''), `the prefab became a Library look with a note (${JSON.stringify(prefab.source)})`);
 	await A.page.evaluate(([u, src]) => window.__stores.terrainPaint.addScatterSet(u, { id: 'crates', source: src, seed: 3, gen: { count: 40, scaleMin: 1, scaleMax: 1 } }), [terrain, prefab.source]);
-	await h.eventually(() => drawnOf(A.page, terrain), (v) => v.crates?.ids.length === 40, 'A draws the crates', 20000);
+	await h.eventually(() => drawnOf(A.page, terrain), (v) => v.crates?.ids.length === 40, 'A draws the crates', 90000); // scatter-sync: the look loads + lays out locally; a slow runner needed > 20 s
 	await h.eventuallyAfter(A, B, () => drawnOf(B.page, terrain), (v) => (v.crates?.ids.length ?? 0) > 0, 'B pulled the look and draws the crates', 30000);
 	const glb = await A.page.evaluate((hash) => {
 		let items = [];
