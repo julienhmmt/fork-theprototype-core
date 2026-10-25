@@ -5,6 +5,12 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.43.2 — A dependency fix 🔧
+
+- 🔧 Updated **body-parser** (a security advisory, GHSA-27r3-jxmh-p828) in the development tools and the agent bridge.
+  The app you open in the browser does not use it and is unchanged; the downloadable release builds are published
+  again from this version.
+
 ## 1.43.1 — Security: scene code runs in a sandbox 🔒
 
 A security fix ([GHSA-r74q-9hg7-wrgr](https://github.com/theprototype-app/core/security/advisories/GHSA-r74q-9hg7-wrgr)).
