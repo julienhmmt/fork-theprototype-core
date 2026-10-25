@@ -1211,17 +1211,28 @@ function updateHudRuntime(time, ctx, now) {
 	hudRuntime.set(next);
 }
 
+/** fix-batch-1: node id -> the clock time an autostart HUD Timer was first seen @type {Map<string, number>} */
+const hudTimerSeen = new Map();
+
 /** Seconds left on a HUD Timer. DERIVED from the shared trigger stamp, so every peer
  * reads the same number with no clock and no message of its own — the same reasoning
- * as a looping sound's phase. An `autostart` timer with nothing wired counts from the
- * runtime's own clock origin.
+ * as a looping sound's phase. An `autostart` timer with nothing wired counts from when THIS
+ * peer first saw the node (fix-batch-1, docs-1: it counted from the clock's origin, and the
+ * synced clock is seconds since midnight, so an autostart timer always read 0). That one is
+ * per peer — a timer everyone must agree on is wired to a shared pulse (`start`).
  * @param {any} node @param {any} data @param {number} time @param {any} ctx */
 function hudTimerRemaining(node, data, time, ctx) {
 	const duration = Math.max(0, num(data.duration));
 	// fix-batch-1 (docs-1 Q1): the card's socket is `start` (flowSockets types it), and only an
 	// unnamed / `trigger` wire counted — a Start wired by hand was ignored
 	const stamp = triggerStampFor(node.id, ctx, 'start');
-	if (stamp === null) return data.autostart === false ? duration : Math.max(0, duration - time);
+	if (stamp === null) {
+		if (data.autostart === false) return duration;
+		const seen = hudTimerSeen.get(node.id);
+		// a clock that went BACK (midnight, a session clock adopted on join) re-bases
+		if (seen === undefined || time < seen) hudTimerSeen.set(node.id, time);
+		return Math.max(0, duration - (time - /** @type {number} */ (hudTimerSeen.get(node.id))));
+	}
 	// a synced stamp can sit AHEAD of `time` by a frame; clamp both ends
 	return Math.max(0, Math.min(duration, duration - (time - stamp)));
 }
