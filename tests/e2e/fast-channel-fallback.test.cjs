@@ -26,7 +26,8 @@ h.run(async () => {
 		await to.page.evaluate((fid) => {
 			window.__poses = [];
 			window.__stores.fastChannel.setPoseTap((peer, d, via) => {
-				if (peer === fid && d.type === 'camera') window.__poses.push({ via, x: d.position[0] });
+				// only the suite's own poses (z -1, yaw 0.5): the app's camera loop sends real ones too
+				if (peer === fid && d.type === 'camera' && d.position?.[2] === -1 && d.rotation?.[1] === 0.5) window.__poses.push({ via, x: d.position[0] });
 			});
 		}, from.id);
 		await from.page.evaluate(

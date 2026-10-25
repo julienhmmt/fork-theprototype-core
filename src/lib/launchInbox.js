@@ -102,8 +102,12 @@ async function useAsReference(files) {
 	]);
 	for (const file of files) {
 		const pose = underlayPoseFromView('ground');
-		if (!pose) return;
-		await addUnderlay(file, pose);
+		if (!pose) {
+			lastLaunch.reference = 'no view';
+			showToast('Open the scene view first, then use the picture as a reference');
+			return;
+		}
+		lastLaunch.reference = (await addUnderlay(file, pose)) ? 'added' : 'failed';
 	}
 	underlayWindowOpen.set(true);
 }
@@ -191,7 +195,7 @@ async function route(files, source) {
 }
 
 /** the last routed launch, and how far the running one got — read by the e2e debug hook */
-export const lastLaunch = { value: /** @type {any} */ (null), stage: '' };
+export const lastLaunch = { value: /** @type {any} */ (null), stage: '', reference: '' };
 
 /**
  * Collect what the service worker parked for a share, ONCE: every file in the inbox, then

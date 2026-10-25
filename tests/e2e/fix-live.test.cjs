@@ -37,24 +37,34 @@ h.run(async () => {
 	await h.eventually(() => opened(A.page, B.id), (v) => v === true, 'B joined A');
 
 	// ── §1 F-1: B is a viewer (what a cloud build's Approve gives) ─────────────────────────
+	// a cloud build's roles plugin RE-PUBLISHES rolesInfo (B really holds Editor access there), so the
+	// viewer role is asserted again inside every call's own evaluate, not once up front
 	await B.page.evaluate(() => {
 		const p = window.__stores.peers;
 		/** @type {any} */ let me = null;
 		p.subscribe((v) => (me = v))();
-		window.__stores.cloudHooks.rolesInfo.set({
-			myId: me?.peer?.id || 'me', myRole: 'viewer', amAdmin: false,
-			order: ['viewer', 'editor', 'admin'], roleOf: () => 'viewer', setRole: () => {}
-		});
+		/** @type {any} */ (window).__asViewer = () =>
+			window.__stores.cloudHooks.rolesInfo.set({
+				myId: me?.peer?.id || 'me', myRole: 'viewer', amAdmin: false,
+				order: ['viewer', 'editor', 'admin'], roleOf: () => 'viewer', setRole: () => {}
+			});
 	});
 	const before = await childCount(A.page);
-	const created = await B.page.evaluate(() =>
-		window.__stores.aiTools.executeAiTool('create_objects', { objects: [{ kind: 'primitive', primitive: 'Box', name: 'viewer-box' }] })
-	);
+	const created = await B.page.evaluate(() => {
+		/** @type {any} */ (window).__asViewer();
+		return window.__stores.aiTools.executeAiTool('create_objects', { objects: [{ kind: 'primitive', primitive: 'Box', name: 'viewer-box' }] });
+	});
 	h.check(!!created?.error && created.viewOnly === true && !('created' in created), 'F-1: a viewer create_objects is refused, not `created` (' + JSON.stringify(created).slice(0, 120) + ')');
 	h.check(/view-only/.test(created?.error ?? ''), 'F-1: the refusal says view-only');
-	const upd = await B.page.evaluate(() => window.__stores.aiTools.executeAiTool('update_objects', { updates: [{ uuid: 'x', color: '#f00' }] }));
+	const upd = await B.page.evaluate(() => {
+		/** @type {any} */ (window).__asViewer();
+		return window.__stores.aiTools.executeAiTool('update_objects', { updates: [{ uuid: 'x', color: '#f00' }] });
+	});
 	h.check(upd?.viewOnly === true, 'F-1: update_objects refused too');
-	const list = await B.page.evaluate(() => window.__stores.aiTools.executeAiTool('list_scene', {}));
+	const list = await B.page.evaluate(() => {
+		/** @type {any} */ (window).__asViewer();
+		return window.__stores.aiTools.executeAiTool('list_scene', {});
+	});
 	h.check(!list?.error, 'F-1: list_scene still works for a viewer');
 	h.check((await childCount(B.page)) === before && (await childCount(A.page)) === before, 'F-1: nothing was made, here or on the host');
 	await B.page.evaluate(() => window.__stores.cloudHooks.rolesInfo.set(null));
@@ -205,7 +215,18 @@ h.run(async () => {
 	h.check((await notes(A.page)).filter((t) => NOISE.test(t)).length === noiseBefore, 'F-3: a graceful leave toasts no Connection error');
 
 	// ── §2b F-5 Remove: C comes back (still admitted), the host removes them ─────────────
-	await C.page.locator('input[placeholder="Enter peer ID to connect"]').fill(A.id);
+	// the pill goes back to idle after the leave; a narrow window squeezes it to its dot (helpers.connect's rule)
+	const dial = C.page.locator('input[placeholder="Enter peer ID to connect"]');
+	const pillState = () =>
+		C.page.evaluate(() => document.querySelector('.connect-pill[data-state]')?.getAttribute('data-state') ?? null);
+	await h.eventually(pillState, (v) => v === 'idle', 'F-5: (setup) C is idle again after the leave', 15000);
+	const dot = C.page.locator('#connect-squeeze-dot');
+	if (!(await dial.isVisible().catch(() => false)) && (await dot.isVisible().catch(() => false))) await dot.click();
+	if (!(await dial.isVisible().catch(() => false))) {
+		await C.page.screenshot({ path: (process.env.OUT || 'test-results') + '/fix-live-C-dial.png' }).catch(() => {});
+		console.log('  (C dial missing: pill ' + (await pillState()) + ')');
+	}
+	await dial.fill(A.id);
 	await C.page.getByRole('button', { name: 'Connect', exact: true }).click();
 	await h.eventually(() => opened(A.page, C.id), (v) => v === true, 'F-5: C admitted again', 30000);
 	// the admission TOAST's own Remove (a DOM click: an overlay toast can sit on it; scoped, because

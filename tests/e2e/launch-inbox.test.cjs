@@ -27,9 +27,9 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '../..');
 const DOOR = path.join(ROOT, 'tests/e2e/fixtures/test-door.glb');
 const SCENE = path.join(ROOT, 'tests/fixtures/scenes-1.22/fluid-tank-toy.tpscene');
-// a 2×2 PNG
+// a 2×2 PNG (a VALID one: the reference-image check decodes it)
 const PNG = Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP4z8DwHwyBNAMDA8N/BgYAWwkH+U0xOJMAAAAASUVORK5CYII=',
+	'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEklEQVR4nGP4z8DA0PCfAUIBACFyBP1TVaZ3AAAAAElFTkSuQmCC',
 	'base64'
 );
 
@@ -184,11 +184,20 @@ h.run(async () => {
 	const refBtn = page.getByRole('button', { name: 'Use as reference' }).first();
 	const refShown = await refBtn.isVisible().catch(() => false);
 	h.check(refShown, 'the toast offers Use as reference');
-	if (refShown) await refBtn.click().catch(() => {});
+	// a DOM click: an overlay toast (auto quality) can sit on the button and eat a real one
+	if (refShown) await refBtn.dispatchEvent('click').catch((e) => console.log('  (click: ' + e.message + ')'));
 	const refs = async () =>
 		page.evaluate(async () => (await window.__stores.underlays).underlaysDebug().mine.map((u) => u.name));
 	await until(async () => (await refs()).length > 0, 15000);
-	h.check((await refs()).length === 1, 'Use as reference makes it one reference image: ' + JSON.stringify(await refs()));
+	h.check(
+		(await refs()).length === 1,
+		'Use as reference makes it one reference image: ' +
+			JSON.stringify(await refs()) +
+			' (' +
+			(await page.evaluate(async () => (await window.__stores.launchInbox)?.lastLaunch?.reference)) +
+			') toasts ' +
+			JSON.stringify(await page.locator('.tp-toast').allInnerTexts().catch(() => []))
+	);
 
 	await share(page, [
 		{ name: 'shared-door.glb', mimeType: 'model/gltf-binary', buffer: fs.readFileSync(DOOR) }
