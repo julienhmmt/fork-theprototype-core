@@ -176,6 +176,10 @@ async function setupPage(browser, name, options = {}) {
 		}, options.storage);
 	}
 	const page = await ctx.newPage();
+	// E2E_CPU_THROTTLE=<rate> (scatter-sync): CDP CPU throttling on every page, so a suite can be run the way
+	// GitHub's runners run it (2-4 slow vCPUs, SwiftShader) on a fast box — `4` = four times slower main threads
+	const throttle = Number(process.env.E2E_CPU_THROTTLE || 0);
+	if (throttle > 1) await (await ctx.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: throttle });
 	// Page errors were LOGGED and nothing more, so a suite could sail past a
 	// component that had crashed on mount: a duplicate each-key threw inside the
 	// Animation window, the pane stopped opening for real users, and every check
