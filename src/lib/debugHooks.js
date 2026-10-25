@@ -25,6 +25,8 @@ export const DEBUG_HOOKS = [
 	['kitEntities', () => import('./kit/entityApp.js')],
 	// 34 R3 (D1/D2): behaviours (runtime, behaviourStatus, behavioursDebug)
 	['behaviours', () => import('./behaviours/app.js')],
+	// 69: the sandbox engine (sandboxReady / loadSandbox / sandboxLoadError) — probes on built apps
+	['sandbox', () => import('./sandbox/engine.js')],
 	['meshEdit', () => import('./meshEdit')],
 	['perf', () => import('./perf/recorder')],
 	['perfDetailed', () => import('./perf/detailed')],
@@ -115,8 +117,15 @@ export const DEBUG_HOOKS = [
 	['terrainPaint', () => import('./terrainPaint')],
 	['terrainSurface', () => import('./terrainSurface')],
 	['terrainPaintCore', () => import('./terrainPaintCore')],
+	// 51 E4/E5: editing scatter instances (tools, selection, gizmo) and its pure half
+	['scatterEdit', () => import('./scatterEdit')],
+	['scatterEditCore', () => import('./scatterEditCore')],
+	['scatterConvert', () => import('./scatterConvert')],
 	['scatterColliders', () => import('./scatterColliders')],
 	['terrainScatterCore', () => import('./terrainScatterCore')],
+	// 51 E1: the scatter source catalog (pack items, prefabs + objects as their look)
+	['scatterSources', () => import('./scatterSources')],
+	['scatterThin', () => import('./scatterThin')],
 	['userModules', () => import('./userModules')],
 	['environment', () => import('./environment')],
 	// 37-hdri: the HDRI layer (hdriDebug, installHdriLayer) + its leaf stores (skyEnv, envToneMapping, hdriStatus) + the pure core

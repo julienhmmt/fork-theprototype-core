@@ -53,6 +53,15 @@ describe('battery shards: longest first onto the least-loaded shard', () => {
 		expect(assign(b, 2)).toEqual(s);
 		expect(s.flat().some((x) => x.suites.includes('x'))).toBe(false);
 	});
+	it('splits required from optional; a local `all` run queues optional after required', () => {
+		const b = { ...battery({ a: 600, b: 500, o1: 900, o2: 100 }), optional: { o1: 'red on the base', o2: 'flaky' } };
+		expect(assign(b, 2).map((x) => x.suites)).toEqual([['a'], ['b']]);
+		expect(assign(b, 2, 'optional').map((x) => x.suites)).toEqual([['o1'], ['o2']]);
+		expect(assign(b, 2, 'all').map((x) => x.suites)).toEqual([['a', 'o1'], ['b', 'o2']]);
+		const sized = { ...b, shards: { target_minutes: 10, max: 20, min: 1 } };
+		expect([shardCount(sized), shardCount(sized, 'optional')]).toEqual([2, 2]);
+		expect(shardCount({ ...sized, optional: {} }, 'optional')).toBe(0);
+	});
 	it('sizes the matrix from the target minutes, clamped', () => {
 		expect(shardCount(battery({ a: 600, b: 600, c: 600, d: 600 }))).toBe(4);
 		expect(shardCount(battery({ a: 60 }))).toBe(2);
