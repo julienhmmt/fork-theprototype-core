@@ -245,7 +245,19 @@ h.run(async () => {
 		ap.updateAnim(obj.uuid, { duration: 1, loop: 'once' });
 		return obj.uuid;
 	});
-	await A.page.waitForTimeout(1500);
+	// the door has to REACH the third page first (a fixed 1.5 s read it at x=0.03 under load) — wait for
+	// it at its real place, bounded; the check below still says where it was if it never came
+	await h.eventually(
+		() => C.page.evaluate((id) => {
+			let g;
+			window.__stores.objectsGroup.subscribe((x) => (g = x))();
+			const obj = g?.getObjectByProperty('uuid', id);
+			return obj ? obj.getWorldPosition(new window.__stores.THREE.Vector3()).x : null;
+		}, doorUuid),
+		(x) => x !== null && Math.abs(x - 3) < 0.01,
+		'(premise) the door arrives on the joiner',
+		15000
+	);
 
 	// where C thinks the hinge is BEFORE the door opens — the invariant to hold
 	const hingeClosed = await C.page.evaluate((id) => {
