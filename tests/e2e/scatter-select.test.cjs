@@ -103,7 +103,7 @@ h.run(async () => {
 		const group = await new Promise((r) => window.__stores.objectsGroup.subscribe(r)());
 		return group.children[group.children.length - 1].uuid;
 	});
-	await h.eventually(() => scatterOf(B.page, uuid), (v) => v !== 'missing', 'B has the terrain', 20000);
+	await h.eventuallyAfter(A, B, () => scatterOf(B.page, uuid), (v) => v !== 'missing', 'B has the terrain', 20000);
 	await look(A.page, [0.5, 22, 3], [0, 0, 0]);
 	await look(B.page, [-6, 16, -8], [0, 0, 0]);
 
@@ -125,7 +125,7 @@ h.run(async () => {
 	await stroke(A.page, uuid, 0, 0, 6); // boxes fill the gaps between the cones in the same circle
 	let lists = await listsOf(A.page, uuid);
 	h.check(lists['p:Cone']?.length > 20 && lists['p:Box']?.length > 0, `two models scattered (${lists['p:Cone']?.length} cones, ${lists['p:Box']?.length} boxes)`);
-	await h.eventually(async () => (await scatterOf(B.page, uuid)) === (await scatterOf(A.page, uuid)), (v) => v, 'B holds the same scatter', 15000);
+	await h.eventuallyAfter(A, B, async () => (await scatterOf(B.page, uuid)) === (await scatterOf(A.page, uuid)), (v) => v, 'B holds the same scatter', 15000);
 
 	let d0 = 0;
 	// ---- E4 select: real click, real box, gizmo -------------------------------------------------
@@ -232,7 +232,7 @@ h.run(async () => {
 		h.check(turned, 'Turn adds 0.5 rad to each selected yaw');
 		h.check(sel.every((k) => Math.abs(post[k].scale / pre[k].scale - 2) < 0.02), 'Size doubles each selected instance');
 		h.check((await undoDepth(A.page)) === d0 + 3, 'three gizmo drags = three undo entries');
-		await h.eventually(async () => (await scatterOf(B.page, uuid)) === (await scatterOf(A.page, uuid)), (v) => v, 'B sees the gizmo edits', 10000);
+		await h.eventuallyAfter(A, B, async () => (await scatterOf(B.page, uuid)) === (await scatterOf(A.page, uuid)), (v) => v, 'B sees the gizmo edits', 10000);
 		await A.page.evaluate(() => window.__stores.history.undo());
 		post = (await listsOf(A.page, uuid))['p:Cone'];
 		h.check(sel.every((k) => Math.abs(post[k].scale - pre[k].scale) < 0.01), 'undo takes the last drag (the size) back');
@@ -243,9 +243,9 @@ h.run(async () => {
 			[uuid, sel]
 		);
 		const before = (await listsOf(A.page, uuid))['p:Cone'];
-		await A.page.click('#sculpt-scatter-turn-left');
-		await A.page.click('#sculpt-scatter-bigger');
-		await A.page.click('#sculpt-scatter-reroll');
+		await A.page.click('#sculpt-scatter-turn-left', { timeout: h.PATIENT_CLICK_MS });
+		await A.page.click('#sculpt-scatter-bigger', { timeout: h.PATIENT_CLICK_MS });
+		await A.page.click('#sculpt-scatter-reroll', { timeout: h.PATIENT_CLICK_MS });
 		post = (await listsOf(A.page, uuid))['p:Cone'];
 		h.check(sel.every((k) => post[k].x === before[k].x && post[k].z === before[k].z), 'Turn / Bigger / Re-roll keep the selected positions');
 		h.check(sel.some((k) => post[k].scale !== before[k].scale || post[k].yaw !== before[k].yaw), 'and change their look');
@@ -260,7 +260,7 @@ h.run(async () => {
 		post = (await listsOf(A.page, uuid))['p:Cone'];
 		h.check(post.length === coneN - sel.length, `Delete removes the selected instances (${coneN} -> ${post.length})`);
 		h.check((await objectCount(A.page)) === objs, 'and NOT the terrain');
-		await h.eventually(async () => (await scatterOf(B.page, uuid)) === (await scatterOf(A.page, uuid)), (v) => v, 'B sees the delete', 10000);
+		await h.eventuallyAfter(A, B, async () => (await scatterOf(B.page, uuid)) === (await scatterOf(A.page, uuid)), (v) => v, 'B sees the delete', 10000);
 		await A.page.evaluate(() => window.__stores.history.undo());
 		h.check((await listsOf(A.page, uuid))['p:Cone'].length === coneN, 'one undo brings them back');
 

@@ -5,6 +5,73 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.44.0 — Quick wins: play from where you stand, trace over a picture, share files in, embed anywhere ⚡
+
+Small things you feel in every session: try the corner you are building without walking there, trace a plan, send a
+file from your phone into the app, paste a scene link into Notion — and movement that stays smooth on bad Wi-Fi.
+
+### ▶️ Play here
+
+- **Play here** starts Play where your camera is — standing on whatever is under it, facing your view — and Stop puts
+  the camera and your selection back. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd>, right-click Play, the
+  viewport menu's Tools, an optional toolbar button (Customize toolbar), on a phone Play's long press or More, and in VR
+  Tools ▸ Play here.
+
+### 🖼️ Reference images
+
+- Drop an image on the viewport ▸ **Use as reference**: a see-through, unclickable picture on the ground or facing
+  your view to trace over. Opacity, size and height in Tools ▸ Reference images. Hidden in Play, never in exports or
+  published scenes; yours only unless you tick **Share with session**.
+
+### 📲 Share into the app
+
+- Install the app and it appears in your phone's **share sheet**: share a picture and it lands in your Library (or
+  becomes a reference image); share a .glb/.gltf and it is placed in your scene; share a .tpscene and it opens.
+- **Open files from your desktop**: with the app installed, double-click a .tpscene to open it, or a .glb/.gltf to add
+  it to the scene you have open — a second file goes to the same window.
+
+### 🔗 Embed anywhere
+
+- Paste a public scene link (/s/…) into **Notion, WordPress, Discourse** and other oEmbed / Iframely sites and the
+  game plays in place.
+
+### 📶 Smoother together
+
+- Movement — avatars, VR hands, dragged, held and thrown objects, physics — rides a new fast channel between players,
+  so a lossy connection no longer freezes and jumps it (5 % loss: 95 % of gaps 74 ms, was 249 ms). Edits stay reliable
+  and in order; older peers fall back by themselves.
+- 👻 People whose app crashed or lost its connection leave the Users list on their own, and leaving never shows
+  "Connection error". A short Wi-Fi drop heals the session instead of ending it.
+- 🚪 When a guest joins your public room automatically you get a notice with **Turn off** and **Remove**, and the
+  Connect bar says **Public · guests join**.
+- 🚩 Report a public room or a person from the room list and the Users list.
+
+### 💾 Kept on your device
+
+- Packs, skies, converted textures and CC0 downloads are kept on the device (stored once per content), so scenes
+  load again without the network. Settings ▸ Storage shows the use, sets a size limit and clears it; the app asks once
+  to keep the storage, and says why.
+
+### 🤖 AI assistant
+
+- As a viewer, the assistant tells you it can't change the scene instead of "creating" things nobody sees.
+- Things it builds stay where they are when you press Play, unless you ask for physics.
+
+### 🔧 Fixes
+
+- Right-clicking the viewport opens its menu on every platform again.
+- Two-peer sync: anything the host does while a just-approved joiner is still connecting now reaches that joiner as
+  soon as its connection opens, instead of only after the joiner's full scene download (seconds later on slow machines).
+- After a network drop that only one side noticed, edits flow both ways again: the side still holding the dead link
+  switches to the fresh one and catches up on what it missed.
+- Offers (like being made admin) keep their Accept / Decline buttons in Notifications.
+- A late joiner sees a shader graph on an object that arrives after it; physics actions fire even at very low frame
+  rates; viewers' Explorer fills in (project, shared files and big material presets reach viewers).
+- Deleting a file you never shared no longer tells the session its name.
+- The README, the welcome window and the docs now say plainly how it works: sessions are peer-to-peer, and our
+  servers handle signaling and relay, accounts and cloud saves, assets, community pages, anonymous error reports and
+  counters.
+
 ## 1.43.2 — A dependency fix 🔧
 
 - 🔧 Updated **body-parser** (a security advisory, GHSA-27r3-jxmh-p828) in the development tools and the agent bridge.

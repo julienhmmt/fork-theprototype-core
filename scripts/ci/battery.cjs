@@ -5,14 +5,16 @@
 // (suite → seconds measured on a GitHub runner, or twice the desk time until one has run), the
 // suites a public runner must skip (`skip`: they need the self-hosted signaling box, a hosts-file
 // origin or a built app) and the ones that run but do not gate (`optional`: red or flaky on
-// SwiftShader with the same red on the unchanged base — the reason is on the line). Nothing here
-// names a suite; the list is data, refreshed from the integrators' battery runs (`refresh`).
+// SwiftShader with the same red on the unchanged base — the reason is on the line). A red CHECK that
+// tests/e2e/quarantine.json lists (test-health-1: per check, with an owner and a review date, read through
+// scripts/ci/quarantine.cjs) does not gate either. Nothing here names a suite; the list is data, refreshed
+// from the integrators' battery runs (`refresh`).
 //
 //   node scripts/ci/battery.cjs plan                      # the required + optional matrices for GITHUB_OUTPUT
 //   node scripts/ci/battery.cjs run --set required --shard 3 --of 14   # one shard (serves the app + the signaling server)
 //   node scripts/ci/battery.cjs run --set confirm --from <dir> --shard 1 --of 3   # re-run a run's required reds
 //   node scripts/ci/battery.cjs report <results-dir>      # merge shard results → summary, exit 1 on a required red
-//   node scripts/ci/battery.cjs refresh [--list f]... [--summary f]... [--results dir]
+//   node scripts/ci/battery.cjs refresh [--list f]... [--summary f]... [--results dir]...
 //
 // Two sets, two matrices: the REQUIRED suites gate (deps-gate waits for them, sized to finish inside the hour);
 // the OPTIONAL ones run in their own shards AFTER the required ones (the free-plan runner cap is 20 jobs), are
@@ -21,10 +23,12 @@
 // A required red is NOT retried on its shard: the CONFIRM step re-runs every required red (and whatever the deadline
 // left unrun) on fresh runners, two tries; green there = `flaky` (reported, not a red). An optional red is never
 // retried, and its run is cut at the deadline (they are the slow ones: a red waits out its timeouts).
+// A required red whose every failed check is quarantined = `quarantined` (reported in its own tier, not a red).
 
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const quarantine = require('./quarantine.cjs');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const BATTERY = path.join(ROOT, 'tests', 'e2e', 'battery.json');
@@ -32,8 +36,8 @@ const BATTERY = path.join(ROOT, 'tests', 'e2e', 'battery.json');
 /**
  * @typedef {{ comment?: string, refs: Record<string, {repo: string, ref: string}>, shards: {target_minutes: number, max: number, min: number, par?: number},
  *   pc?: {games: string[], levels: string[]}, skip: Record<string, string>, optional: Record<string, string>, setup: Record<string, string>,
- *   suites: Record<string, number> }} Battery
- * @typedef {{ name: string, status: 'pass'|'flaky'|'fail'|'timeout'|'gone'|'notrun', required: boolean, rc: number|null, secs: number,
+ *   suites: Record<string, number>, modules?: Record<string, number>, desk?: Record<string, string[]>, exclude?: Record<string, string[]> }} Battery
+ * @typedef {{ name: string, status: 'pass'|'flaky'|'quarantined'|'fail'|'timeout'|'gone'|'notrun', required: boolean, rc: number|null, secs: number,
  *   retrySecs?: number, pass: number, fail: number, last: string, shard: number }} SuiteResult
  */
 
@@ -192,7 +196,7 @@ function runSuite(name, est, out, tag, capMs) {
 			fs.closeSync(log);
 			const text = fs.readFileSync(logFile, 'utf8');
 			if (timedOut) fs.appendFileSync(logFile, `\n[battery] TIMEOUT after ${timeout / 1000}s\n`);
-			resolve({ rc: timedOut ? null : code, secs: Math.round((Date.now() - t0) / 1000), timedOut, ...counts(text) });
+			resolve({ rc: timedOut ? null : code, secs: Math.round((Date.now() - t0) / 1000), timedOut, text, ...counts(text) });
 		});
 	});
 }
@@ -200,6 +204,12 @@ function runSuite(name, est, out, tag, capMs) {
 /** @param {string[]} argv */
 async function run(argv) {
 	const b = load();
+	const q = quarantine.load();
+	const qErrors = quarantine.validate(q);
+	if (qErrors.length) {
+		for (const e of qErrors) console.error('quarantine.json: ' + e);
+		process.exit(2);
+	}
 	const of = Number(opt(argv, '--of') || shardCount(b, /** @type {BatterySet} */ (opt(argv, '--set') === 'optional' ? 'optional' : 'required')));
 	const shard = Number(opt(argv, '--shard') || 1);
 	const out = path.resolve(opt(argv, '--out') || process.env.BATTERY_OUT || path.join(ROOT, '..', 'battery-out'));
@@ -231,7 +241,8 @@ async function run(argv) {
 	// loaded shard fails the same suite twice), and a shard without retries stays inside its estimate
 	const retry = set === 'confirm' || argv.includes('--retry');
 	// past the deadline no suite starts: the rest report `notrun` instead of the job being killed with nothing said
-	const deadline = Date.now() + Number(opt(argv, '--deadline') || 0) * 60000 || Infinity;
+	const dl = Number(opt(argv, '--deadline') || 0);
+	const deadline = dl ? Date.now() + dl * 60000 : Infinity;
 	const save = () => fs.writeFileSync(path.join(out, `${set === 'confirm' ? 'confirm' : 'results'}-${shard}.json`), JSON.stringify({ shard, of, set, results }, null, 1));
 	console.log(`shard ${shard}/${of}: ${mine.length} suites, est ${Math.round(mine.reduce((t, s) => t + (b.suites[s] || 60), 0) / 60)} min, ${par} at a time`);
 	/** @type {Promise<any> | null} */
@@ -277,10 +288,20 @@ async function run(argv) {
 				if (again.rc === 0) status = 'flaky';
 				else r = again;
 			}
-			results.push({ name, status, required, rc: r.rc, secs: r.secs, retrySecs, pass: r.pass, fail: r.fail, last: r.last, shard });
+			/** @type {string[]} */
+			let quarantinedChecks = [];
+			if (required && (status === 'fail' || status === 'timeout')) {
+				const v = quarantine.classify(q, name, r.text, { timedOut: r.timedOut });
+				if (v.quarantined) {
+					status = 'quarantined';
+					quarantinedChecks = v.whole ? ['(whole suite)'] : v.failed;
+				}
+			}
+			const last = quarantinedChecks.length ? 'quarantined: ' + quarantinedChecks.join(' | ').slice(0, 140) : r.last;
+			results.push({ name, status, required, rc: r.rc, secs: r.secs, retrySecs, pass: r.pass, fail: r.fail, last, shard });
 			save();
-			if (status === 'pass' || status === 'flaky') fs.rmSync(path.join(out, 'evidence', name), { recursive: true, force: true });
-			console.log(`${name} ${status}${required ? '' : ' (optional)'} rc=${r.rc} pass~${r.pass} fail~${r.fail} ${r.secs}s${retrySecs ? ` retry ${retrySecs}s` : ''} :: ${r.last}`);
+			if (status === 'pass' || status === 'flaky' || status === 'quarantined') fs.rmSync(path.join(out, 'evidence', name), { recursive: true, force: true });
+			console.log(`${name} ${status}${required ? '' : ' (optional)'} rc=${r.rc} pass~${r.pass} fail~${r.fail} ${r.secs}s${retrySecs ? ` retry ${retrySecs}s` : ''} :: ${last}`);
 		}
 	};
 	await Promise.all(Array.from({ length: par }, worker));
@@ -301,13 +322,15 @@ const isRed = (r) => r.required && (r.status === 'fail' || r.status === 'timeout
 function table(results, title) {
 	const req = results.filter(isRed);
 	const opt = results.filter((r) => !r.required && (r.status === 'fail' || r.status === 'timeout'));
+	const quar = results.filter((r) => r.status === 'quarantined');
 	const flaky = results.filter((r) => r.status === 'flaky');
 	const secs = results.reduce((t, r) => t + r.secs + (r.retrySecs || 0), 0);
 	const row = (/** @type {SuiteResult} */ r) => `| ${r.name} | ${r.status} | ${r.shard} | ${r.pass}/${r.fail} | ${r.secs}s | ${r.last.replace(/\|/g, '\\|')} |`;
 	const head = '| suite | status | shard | ✓/✗ | time | last line |\n|---|---|---|---|---|---|\n';
-	let md = `### ${title}: ${results.length} suites, ${req.length} required red, ${opt.length} optional red, ${flaky.length} flaky (${Math.round(secs / 60)} suite-min)\n\n`;
+	let md = `### ${title}: ${results.length} suites, ${req.length} required red, ${opt.length} optional red, ${quar.length} quarantined, ${flaky.length} flaky (${Math.round(secs / 60)} suite-min)\n\n`;
 	if (req.length) md += `**Required reds**\n\n${head}${req.map(row).join('\n')}\n\n`;
 	if (opt.length) md += `<details><summary>Optional reds (do not gate)</summary>\n\n${head}${opt.map(row).join('\n')}\n\n</details>\n\n`;
+	if (quar.length) md += `<details><summary>Quarantined reds (tests/e2e/quarantine.json — do not gate)</summary>\n\n${head}${quar.map(row).join('\n')}\n\n</details>\n\n`;
 	if (flaky.length) md += `<details><summary>Flaky (green on the retry)</summary>\n\n${head}${flaky.map(row).join('\n')}\n\n</details>\n\n`;
 	const gone = results.filter((r) => r.status === 'gone');
 	if (gone.length) md += `Listed but gone (refresh tests/e2e/battery.json): ${gone.map((r) => r.name).join(', ')}\n\n`;
@@ -339,6 +362,8 @@ function report(argv) {
 	const b = load();
 	const missing = Array.from({ length: of || shardCount(b) }, (_, i) => i + 1).filter((s) => !seen.has(s));
 	let md = table(all, 'e2e battery');
+	const qWarn = quarantine.warnings(quarantine.load(), all, Object.keys(b.suites));
+	if (qWarn.length) md += `<details><summary>Quarantine to review (${qWarn.length})</summary>\n\n${qWarn.map((w) => '- ' + w).join('\n')}\n\n</details>\n\n`;
 	if (missing.length) md += `**Shards with no results (crashed or cancelled): ${missing.join(', ')}**\n`;
 	if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
 	else console.log(md);
@@ -376,6 +401,10 @@ function write(b) {
 		`\t"setup": ${obj(b.setup, '\t')}`,
 		`\t"suites": ${obj(b.suites, '\t')}`
 	];
+	// the desk battery's keys (battery-desk.cjs): written only when present, so a file without them stays byte-identical
+	if (b.modules) body.push(`\t"modules": ${obj(b.modules, '\t')}`);
+	if (b.desk) body.push(`\t"desk": ${obj(b.desk, '\t')}`);
+	if (b.exclude) body.push(`\t"exclude": ${obj(Object.fromEntries(Object.entries(b.exclude).map(([k, v]) => [k, [...v].sort()])), '\t')}`);
 	fs.writeFileSync(BATTERY, `{\n${body.join(',\n')}\n}\n`);
 }
 
@@ -385,8 +414,14 @@ function refresh(argv) {
 	const lists = opts(argv, '--list');
 	if (lists.length) {
 		// the integrator's battery lists ARE the battery: names not in them leave, new ones arrive at 120 s
-		const names = new Set(lists.flatMap((f) => fs.readFileSync(f, 'utf8').split(/\s+/).filter((n) => n && !n.startsWith('MOD:'))));
+		const all = lists.flatMap((f) => fs.readFileSync(f, 'utf8').split(/\s+/).filter(Boolean));
+		const names = new Set(all.filter((n) => !n.startsWith('MOD:')));
 		b.suites = Object.fromEntries([...names].map((n) => [n, b.suites[n] ?? 120]));
+		// the modules repo's flights (MOD:x) are the desk battery's, never a runner's
+		const mods = all.filter((n) => n.startsWith('MOD:')).map((n) => n.slice(4));
+		if (mods.length) b.modules = Object.fromEntries(mods.map((m) => [m, b.modules?.[m] ?? 600]));
+		// a suite that joined the battery is no longer excluded
+		if (b.exclude) for (const k of Object.keys(b.exclude)) b.exclude[k] = b.exclude[k].filter((/** @type {string} */ n) => !names.has(n));
 	}
 	/** @type {Record<string, number[]>} */
 	const desk = {};
@@ -399,12 +434,14 @@ function refresh(argv) {
 	const median = (/** @type {number[]} */ v) => v.sort((x, y) => x - y)[Math.floor(v.length / 2)];
 	// a desk second is about two runner seconds (measured: the e2e-smoke suites on ubuntu-latest vs the Deck)
 	for (const [n, v] of Object.entries(desk)) if (n in b.suites) b.suites[n] = Math.round(2 * median(v));
-	const results = opt(argv, '--results');
-	if (results) {
-		for (const f of walk(path.resolve(results)).filter((f) => f.endsWith('durations.json'))) {
-			for (const [n, s] of Object.entries(JSON.parse(fs.readFileSync(f, 'utf8')))) if (n in b.suites) b.suites[n] = Number(s);
-		}
-	}
+	// --results <dir>...: seconds measured on the runners, the MEDIAN across every durations.json found — one
+	// suite's time moves by half from run to run on a shared runner, so a single run balances badly
+	/** @type {Record<string, number[]>} */
+	const ran = {};
+	for (const dir of opts(argv, '--results'))
+		for (const f of walk(path.resolve(dir)).filter((f) => f.endsWith('durations.json')))
+			for (const [n, s] of Object.entries(JSON.parse(fs.readFileSync(f, 'utf8')))) (ran[n] ||= []).push(Number(s));
+	for (const [n, v] of Object.entries(ran)) if (n in b.suites) b.suites[n] = Math.round(median(v));
 	// --red <dir>... --reason "…": suites red in those runs' results (fail / timeout / flaky) become optional with
 	// the reason — for runs on unchanged code, i.e. what this runner cannot pass reliably. --green <dir>: a suite
 	// that passed there is never moved.
@@ -420,6 +457,7 @@ function refresh(argv) {
 	for (const k of Object.keys(b.optional)) if (!(k in b.suites)) delete b.optional[k];
 	write(b);
 	console.log(`battery.json: ${Object.keys(b.suites).length} suites, ${Object.keys(b.skip).length} skipped, ${Object.keys(b.optional).length} optional, ${shardCount(b)} shards`);
+	for (const w of quarantine.warnings(quarantine.load(), [], Object.keys(b.suites))) console.log('warning: ' + w);
 }
 
 // ---------------------------------------------------------------- plan

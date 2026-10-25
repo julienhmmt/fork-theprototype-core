@@ -103,7 +103,7 @@ h.run(async () => {
 		// park it where nothing else is, at rest (a /create stamps a dynamic body; no sim runs here)
 		return o.uuid;
 	});
-	await h.eventually(() => blockOf(B.page, uuid), (v) => v !== 'missing', 'B has the sphere', 20000);
+	await h.eventuallyAfter(A, B, () => blockOf(B.page, uuid), (v) => v !== 'missing', 'B has the sphere', 20000);
 	await moveHost(A.page, uuid, [0, 1, 0], [0, 0, 0], [1, 1, 1]);
 	const geoBefore = await A.page.evaluate((u) => {
 		let g;
@@ -116,10 +116,10 @@ h.run(async () => {
 	// ---- E2: the "Add scatter" row, right after the Water section -------------------------------
 	await A.page.evaluate((u) => window.__stores.objectActions.selectObject(u, true), uuid);
 	const add = A.page.locator('#scatter-add');
-	await add.waitFor({ state: 'attached', timeout: 15000 });
+	await add.waitFor({ state: 'attached', timeout: h.PATIENT_CLICK_MS });
 	if (!(await add.isVisible().catch(() => false))) {
 		const head = A.page.locator('button', { hasText: /^Scatter$/ }).first();
-		if (await head.isVisible().catch(() => false)) await head.click();
+		if (await head.isVisible().catch(() => false)) await head.click({ timeout: h.PATIENT_CLICK_MS });
 	}
 	const order = await A.page.evaluate(() => {
 		const pour = document.querySelector('#pour-add');
@@ -131,9 +131,9 @@ h.run(async () => {
 	});
 	h.check(order.pour && order.bubbles, 'the Add scatter row comes after Add bubble emitter / Add pour emitter');
 	h.check(order.label === 'Add scatter', `the row reads "Add scatter" (${order.label})`);
-	await add.scrollIntoViewIfNeeded();
+	await add.scrollIntoViewIfNeeded({ timeout: h.PATIENT_CLICK_MS });
 	const undo0 = await undoDepth(A.page);
-	await add.click();
+	await add.click({ timeout: h.PATIENT_CLICK_MS });
 	await h.eventually(() => firstSet(A.page, uuid), (s) => !!s?.gen, 'Add scatter makes a FILL set on the sphere', 8000);
 	const set = await firstSet(A.page, uuid);
 	h.check(set.host === 'mesh' && set.gen.count === 200 && set.seed > 0, `the set lives on the mesh (host ${set.host}, count ${set.gen.count}, seeded)`);
@@ -153,8 +153,8 @@ h.run(async () => {
 	// ---- replication + determinism -----------------------------------------------------------------
 	const aBlock = await blockOf(A.page, uuid);
 	h.check(aBlock.length < 400, `the wire carries params + seed, not instances (${aBlock.length} chars)`);
-	await h.eventually(() => blockOf(B.page, uuid), (v) => v === aBlock, 'the block is equal on B', 15000);
-	await h.eventually(() => drawn(B.page, uuid), (d) => samePlaces(d, aDrawn), 'B draws the SAME 200 instances (same seed, same places)', 15000);
+	await h.eventuallyAfter(A, B, () => blockOf(B.page, uuid), (v) => v === aBlock, 'the block is equal on B', 15000);
+	await h.eventuallyAfter(A, B, () => drawn(B.page, uuid), (d) => samePlaces(d, aDrawn), 'B draws the SAME 200 instances (same seed, same places)', 15000);
 	const reapplied = await A.page.evaluate((u) => {
 		let g;
 		window.__stores.objectsGroup.subscribe((v) => (g = v))();
@@ -175,7 +175,7 @@ h.run(async () => {
 		'A: the instances follow the host (moved, turned 90°, scaled 2x)'
 	);
 	h.check(moved.every((p, i) => p.local.every((v, k) => Math.abs(v - aDrawn[i].local[k]) < 1e-6)), 'their LOCAL layout did not change (no reshuffle)');
-	await h.eventually(() => drawn(B.page, uuid), (d) => samePlaces(d, moved, 2e-3), 'B: the instances followed the move too', 15000);
+	await h.eventuallyAfter(A, B, () => drawn(B.page, uuid), (d) => samePlaces(d, moved, 2e-3), 'B: the instances followed the move too', 15000);
 
 	// ---- E3 fill: density, spacing, masks ------------------------------------------------------------
 	await editSet(A.page, uuid, set.id, { gen: { ...set.gen, count: undefined, density: 4 } });
@@ -202,19 +202,19 @@ h.run(async () => {
 	const band = await drawn(A.page, uuid);
 	h.check(band.length === 120 && band.every((p) => Math.abs(p.local[1]) <= 0.3 + 1e-3), `HEIGHT -0.3..0.3 (local): a band round the middle (${band.length})`);
 	const bandBlock = await blockOf(A.page, uuid);
-	await h.eventually(() => blockOf(B.page, uuid), (v) => v === bandBlock, 'the mask edits replicate', 15000);
-	await h.eventually(() => drawn(B.page, uuid), (d) => d.length === 120 && d.every((p, i) => p.id === band[i].id), 'B draws the same masked fill', 15000);
+	await h.eventuallyAfter(A, B, () => blockOf(B.page, uuid), (v) => v === bandBlock, 'the mask edits replicate', 15000);
+	await h.eventuallyAfter(A, B, () => drawn(B.page, uuid), (d) => d.length === 120 && d.every((p, i) => p.id === band[i].id), 'B draws the same masked fill', 15000);
 
 	// the Fill rows in the Inspector: Density switch through the real Segmented control
-	await A.page.locator('[id$="-mode-density"]').first().click();
+	await A.page.locator('[id$="-mode-density"]').first().click({ timeout: h.PATIENT_CLICK_MS });
 	await h.eventually(() => firstSet(A.page, uuid), (s) => s?.gen?.density != null && s.gen.count == null, 'the Fill row switches the set to DENSITY', 8000);
-	await A.page.locator('[id$="-mode-count"]').first().click();
+	await A.page.locator('[id$="-mode-count"]').first().click({ timeout: h.PATIENT_CLICK_MS });
 	await h.eventually(() => firstSet(A.page, uuid), (s) => s?.gen?.count != null, '...and back to COUNT', 8000);
 	if (SHOTS)
 		for (const t of ['dark', 'light']) {
 			await A.page.evaluate((th) => window.__stores.themes.theme.set(th), t);
 			await A.page.waitForTimeout(400);
-			await A.page.locator('[data-scatter-fill]').first().scrollIntoViewIfNeeded();
+			await A.page.locator('[data-scatter-fill]').first().scrollIntoViewIfNeeded({ timeout: h.PATIENT_CLICK_MS });
 			await A.page.screenshot({ path: `${SHOTS}/02-fill-rows-${t}.png` });
 		}
 	await A.page.evaluate(() => window.__stores.themes.theme.set('dark'));
@@ -253,10 +253,10 @@ h.run(async () => {
 	const boxes = (await drawn(A.page, uuid)).filter((p) => p.set === paint.painted?.id);
 	h.check(boxes.length === paint.painted?.count && boxes.every((p) => Math.abs(Math.hypot(...p.local) - 1) < 0.03 && p.local[0] > 0.3), 'painted instances sit ON the sphere where the brush went');
 	const pBlock = await blockOf(A.page, uuid);
-	await h.eventually(() => blockOf(B.page, uuid), (v) => v === pBlock, 'the stroke replicates', 15000);
+	await h.eventuallyAfter(A, B, () => blockOf(B.page, uuid), (v) => v === pBlock, 'the stroke replicates', 15000);
 	await A.page.evaluate(() => window.__stores.history.undo());
 	await h.eventually(() => firstSet(A.page, uuid).then(() => blockOf(A.page, uuid)), (v) => !v.includes('"Box"'), 'ONE undo removes the stroke', 8000);
-	await h.eventually(() => blockOf(B.page, uuid), (v) => !v.includes('"Box"'), '...on B too', 15000);
+	await h.eventuallyAfter(A, B, () => blockOf(B.page, uuid), (v) => !v.includes('"Box"'), '...on B too', 15000);
 	await A.page.evaluate(() => window.__stores.terrainSculpt.exitSculpt());
 
 	// ---- a terrain fill on a painted layer ------------------------------------------------------------
@@ -309,7 +309,7 @@ h.run(async () => {
 		gDrawn.length === 60 && gDrawn.every((p) => Math.abs(p.world[1] - 1) < 0.02 && (Math.abs(p.world[0] - 8) <= 0.51 || Math.abs(p.world[0] - 11) <= 0.51)),
 		`the fill lies on both children's top faces (${gDrawn.length})`
 	);
-	await h.eventually(() => drawn(B.page, grp.uuid), (d) => samePlaces(d, gDrawn, 2e-3), 'B draws the group fill identically', 15000);
+	await h.eventuallyAfter(A, B, () => drawn(B.page, grp.uuid), (d) => samePlaces(d, gDrawn, 2e-3), 'B draws the group fill identically', 15000);
 	{
 		const bd = await drawn(B.page, grp.uuid);
 		if (!samePlaces(bd, gDrawn, 2e-3))
