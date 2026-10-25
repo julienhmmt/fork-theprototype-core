@@ -58,6 +58,8 @@ describe('Rotate / Motor', () => {
 		spin({ on: false }, 51302); // off (the runtime's base restore puts the pose back; the ramp is forgotten)
 		expect(spin({}, 51310)).toBeCloseTo(0, 9); // on again: from rest
 		expect(spin({}, 51311)).toBeCloseTo(Math.PI / 2, 6);
+		spin({}, 51309.99); // a frame of jitter BEFORE the switch-on time is not a re-base: the ramp still counts from 51 310
+		expect(spin({}, 51311.5)).toBeCloseTo((2 * Math.PI * 1.5 * 1.5) / 4, 6);
 		expect(spin({}, 3)).toBeCloseTo(0, 9); // the clock went BACK (midnight): re-based, not frozen
 		expect(spin({}, 4)).toBeCloseTo(Math.PI / 2, 6);
 	});

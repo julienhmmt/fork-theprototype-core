@@ -1229,8 +1229,9 @@ function hudTimerRemaining(node, data, time, ctx) {
 	if (stamp === null) {
 		if (data.autostart === false) return duration;
 		const seen = hudTimerSeen.get(node.id);
-		// a clock that went BACK (midnight, a session clock adopted on join) re-bases
-		if (seen === undefined || time < seen) hudTimerSeen.set(node.id, time);
+		// a clock that went BACK by more than a second (midnight, a session clock adopted on join)
+		// re-bases; frame jitter does not (it would hold the timer at its full duration)
+		if (seen === undefined || time < seen - 1) hudTimerSeen.set(node.id, time);
 		return Math.max(0, duration - (time - /** @type {number} */ (hudTimerSeen.get(node.id))));
 	}
 	// a synced stamp can sit AHEAD of `time` by a frame; clamp both ends

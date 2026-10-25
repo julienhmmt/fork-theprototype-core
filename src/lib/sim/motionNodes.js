@@ -67,9 +67,11 @@ export function applyRotor(object, base, data, time, ctx) {
 	// from the first frame. It counts from the moment this peer saw it switch on (or appear); a peer
 	// joining later sees its own spin-up from rest, the price of a phase no message carries.
 	// a clock that went BACK (the synced clock wraps at midnight; joining a session swaps the
-	// local clock for the session's) re-bases rather than freezing the wheel until it catches up
+	// local clock for the session's) re-bases rather than freezing the wheel until it catches up.
+	// Only a real jump (> 1 s): a frame's worth of jitter between two callers must not re-base the
+	// wheel every frame, which holds it at rest (rotorAngle clamps a small negative to 0 anyway)
 	const since = rotorOnSince.get(ctx.key);
-	if (since === undefined || time < since) rotorOnSince.set(ctx.key, time);
+	if (since === undefined || time < since - REBASE_S) rotorOnSince.set(ctx.key, time);
 	const angle = rotorAngle(rpm, Math.max(0, +data.spinUp || 0), time - /** @type {number} */ (rotorOnSince.get(ctx.key)));
 	qBase.setFromEuler(eul.set(base.rot[0], base.rot[1], base.rot[2]));
 	qSpin.setFromAxisAngle(axis, angle);
@@ -85,6 +87,8 @@ export function applyRotor(object, base, data, time, ctx) {
 
 /** @type {Map<string, number>} per rotor (node|object): the clock time it switched on */
 const rotorOnSince = new Map();
+/** a clock that goes back by more than this has jumped (midnight, a session clock adopted) */
+const REBASE_S = 1;
 
 /** @type {Map<string, number>} the last frame time per drive (dt for the torque cap) */
 const lastDrive = new Map();
