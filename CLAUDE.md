@@ -1,7 +1,8 @@
 # CLAUDE.md — theprototype.app
 
 Collaborative peer-to-peer 3D prototyping app: SvelteKit (static adapter) + Svelte 5 +
-Threlte 8 + three.js, peerjs mesh networking (no server beyond PeerJS signaling), a
+Threlte 8 + three.js, peerjs mesh networking (a session needs only signaling + TURN; the hosted
+site's accounts, cloud saves, assets and community pages are plugins/CDN, never in a session's path), a
 node/flow editor (@xyflow/svelte 0.1.x) driving scene behavior, and a module SDK for
 loadable play content. Everything a user does must be visible to connected peers.
 

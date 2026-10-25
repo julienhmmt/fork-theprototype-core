@@ -1,7 +1,7 @@
 {
 	"name": "theprototype.app — collaborative 3D prototyping",
 	"short_name": "theprototype",
-	"description": "Build 3D scenes together in the browser — peer-to-peer, no server, VR-ready.",
+	"description": "Build 3D scenes together in the browser — peer-to-peer, VR-ready.",
 	"start_url": "/",
 	"scope": "/",
 	"display": "standalone",
