@@ -114,8 +114,6 @@ h.run(async () => {
 	// a frozen loop reads 0-1. test-health-1: 3000 ms and >= 3 — a GitHub runner measured exactly 3 in 1800 ms
 	// (ci.yml e2e-smoke, 2026-10-23/24), red at `> 3` with the loop plainly alive.
 	h.check(frames >= 3, `the render loop is still running (${frames} frames in ${FRAME_WINDOW_MS}ms)`);
-	// what one frame costs here, for the waits below that count frames
-	const frameMs = FRAME_WINDOW_MS / Math.max(1, frames);
 
 	// ---- 3. a healthy node beside it still works ---------------------------------------
 	const uuid2 = await makeBox(A);
@@ -160,15 +158,19 @@ h.run(async () => {
 			() => {
 				let v = {};
 				window.__stores.scriptErrors.subscribe((m) => (v = m))();
-				return /too slow/i.test(String(v['slow'] ?? '')) ? v['slow'] : false;
+				if (/too slow/i.test(String(v['slow'] ?? ''))) return v['slow'];
+				// 40 runs and still no badge is a real red (a run under 8 ms resets the streak, so not 31)
+				return /** @type {any} */ (globalThis).__slowRuns >= 40 ? 'NO BADGE' : false;
 			},
-			// the guard pauses after SLOW_FRAMES (30) slow frames in a row, so the wait is counted in FRAMES:
-			// at a runner's ~2 fps (slower still with this node eating each one) 30 s was not 30 frames
-			{ timeout: Math.max(30000, Math.round(30 * frameMs * 3) + 5000) }
+			// the guard pauses on the 30th slow RUN in a row (SLOW_FRAMES), so the wait counts runs: a time
+			// estimate from the measured frame rate ended at exactly 29 runs twice on a GitHub runner (this
+			// node slows the frames it is measured by). Badge, or the node has run well past 30 — bounded.
+			{ timeout: 180000 }
 		)
 		.then((r) => r.jsonValue())
 		.catch(() => null);
-	const slowWhy = slowBadge
+	const badged = !!slowBadge && slowBadge !== 'NO BADGE';
+	const slowWhy = badged
 		? slowBadge
 		: JSON.stringify(
 				await A.page
@@ -181,7 +183,7 @@ h.run(async () => {
 					})
 					.catch((/** @type {any} */ e) => String(e))
 			);
-	h.check(!!slowBadge, `a slow node is paused rather than left to eat the frame (${slowWhy})`);
+	h.check(badged, `a slow node is paused rather than left to eat the frame (${slowWhy})`);
 	h.check(
 		await A.page.evaluate(() => 1 + 1).then((v) => v === 2),
 		'and the page is still responsive after it'
