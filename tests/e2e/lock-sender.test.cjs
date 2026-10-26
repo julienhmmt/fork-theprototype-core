@@ -24,17 +24,17 @@ const toasts = (page) =>
 /** @param {any[]} l @param {string} peer @param {string} uuid */
 const has = (l, peer, uuid) => l.some((x) => x[0] === peer && x[1] === uuid);
 
-/** a raw message from `from` straight down its open connection to `toId` */
+/** raw message(s) from `from` straight down its open connection to `toId`, in ONE evaluate */
 const sendRaw = (from, toId, msg) =>
 	from.page.evaluate(
-		([id, m]) => {
+		([id, list]) => {
 			/** @type {any} */ let p;
 			window.__stores.peers.subscribe((v) => (p = v))();
 			const conn = p?.connections?.[id];
 			if (!conn?.open) throw new Error('no open connection to ' + id);
-			conn.send(m);
+			for (const m of list) conn.send(m);
 		},
-		[toId, msg]
+		[toId, Array.isArray(msg) ? msg : [msg]]
 	);
 
 h.run(async () => {
@@ -135,7 +135,8 @@ h.run(async () => {
 	// --- 5. a control request names its connection, once per 3 s ------------------------
 	const asks = (t) => t.filter((x) => x.includes('asks to control'));
 	const before = asks(await toasts(E.page)).length;
-	for (let i = 0; i < 5; i++) await sendRaw(F, E.id, { type: 'lockrequest', uuid: X, from: H.id, name: 'The Host' });
+	// one evaluate, so the five leave inside the 3 s window however slow the driver is
+	await sendRaw(F, E.id, Array.from({ length: 5 }, () => ({ type: 'lockrequest', uuid: X, from: H.id, name: 'The Host' })));
 	await fence(E, 'E (requests)');
 	{
 		const now = asks(await toasts(E.page));
