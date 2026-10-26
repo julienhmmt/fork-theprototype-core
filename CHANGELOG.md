@@ -5,6 +5,56 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.45.0 — Build in the headset: measure, arrange, paint, scatter, browse assets and shrink the world 🥽
+
+Everything you need to build a scene now works with the headset on: measure and line things up, paint terrain and
+scatter, pull models off your wrist and drop them in, and scale the whole world down to a miniature to work from above.
+
+### 📏 Measure and arrange
+
+- **Tools ▸ Measure**: tap points with the laser — they snap to corners, edges and faces (and to the grid when grid
+  snapping is on). Chains of points, labels that turn to face you and stay readable, a double tap (or **Keep**) makes it
+  a measurement item like on the desktop; **Selected ▸ Edit measurement** moves its points.
+- **Selected ▸ Arrange** for two or more objects: pick the axis, then Align min / centre / max, Even centres / gaps,
+  Drop to ground or Align to — the same as the desktop, one Undo, everyone sees it.
+
+### 🌍 Shrink the world
+
+- In Edit, **both grips always grab the world**, wherever you point: pull your hands together to shrink it down to a
+  **1:50 miniature**, apart to grow it, twist to turn it. It clicks (with a buzz) at 1:50 · 1:10 · 1:5 · 1:2 · 1:1 · 2× · 5×
+  · 10×, a readout shows the scale, and **Back to 1:1** sits on the quick menu while the world is off life size. The
+  comfort vignette closes in while it scales or turns. Only you see it.
+- To scale or turn an **object** with two hands, grab it and move it a little first, then add the second grip. Grips
+  never pick up the terrain, locked objects, things bigger than about 2 m or a room you are standing in.
+- Settings ▸ VR ▸ **Both grips scale the world**: Always (new) or Only in empty air (the old way).
+
+### 🖌️ Brushes on the controller
+
+- Quick menu ▸ Sculpt ▸ **Paint** (terrain layers 1-4) and **Scatter** (paint, erase, rotate, scale, relax, choose a
+  source). The trigger paints; the stick sets radius and strength (or density); a ring shows the brush on the ground
+  and a buzz starts each stroke. Works in a miniature too.
+
+### 📦 Asset Browser on your wrist
+
+- **Add ▸ Assets** opens a browser on your wrist: packs, free CC0 models and your library, searchable with the VR
+  keyboard. Trigger-drag a card into the scene, or click it and place copies with the laser (it snaps, the stick turns
+  it, grip stops). Grip the panel off your wrist to pin it in the air; grip it back to return it.
+- **Hand tracking**: no controllers needed to browse and place — a pinch is the trigger, pinch-drag drops a model. Tools
+  that need precision ask you to pick up a controller.
+
+### 🔧 Fixes
+
+- **On Impact** now fires when an object hits something from any side — a ball thrown at a wall or a target — not only
+  when it lands (new **From** option: any side / landing only; On Impact nodes in existing scenes keep landing only).
+- Rotate and Motor nodes spin up from rest when they switch on, and an auto-starting HUD Timer counts down from its full
+  time (both used to start as if they had been running since midnight).
+- Set Game State, Set Variable, HUD Rows, HUD Set Input, Device Param and Note Trigger show the sockets they read, so
+  you can wire them by hand; a HUD Timer's **start** socket starts it.
+- The Sequence card shows its wait times at the normal card width; thirteen node descriptions say what the node really
+  does.
+- The profile button opens with Enter or Space instead of on focus, so Tab moves past it, and Esc returns to it. At
+  large UI scales on a narrow phone, window headers stay on one row with the close button beside the title.
+
 ## 1.44.0 — Quick wins: play from where you stand, trace over a picture, share files in, embed anywhere ⚡
 
 Small things you feel in every session: try the corner you are building without walking there, trace a plan, send a
