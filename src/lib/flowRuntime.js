@@ -91,6 +91,7 @@ let behavioursRef = null;
 import { registerGameSetting, gameSettingValue } from './gameSettings';
 import { setPointGrabEnabled } from './pointGrab';
 import { spawnedFromOf } from './transientObjects'; // 31: a copy answers to its template (a leaf)
+import { pathCaptureNode } from './pathCaptureState'; // fix-batch-2: a leaf
 import { applyRotor, applyFlowFloat } from './sim/motionNodes.js'; // 36-fb F25/F24 (a three leaf)
 // 40 F15: general-purpose motion (a three leaf + its pure core)
 import {
@@ -492,6 +493,9 @@ let lastValuesAt = 0;
 const baseState = new Map();
 // animated objects whose animation is paused while the user drags them
 const suspended = new Set();
+/** fix-batch-2: the Path patrol node placing waypoints (paused while it does) @type {string | null} */
+let capturingPathNode = null;
+pathCaptureNode.subscribe((id) => (capturingPathNode = id));
 
 /**
  * 24-A A4: the effects a SUSPENDED object still gets.
@@ -3873,7 +3877,9 @@ function applyAnimation(object, base, anim, time, ctx) {
 		const speed = data.speed ?? 2;
 		object.visible = Math.sin(time * speed * Math.PI) > 0;
 	} else if (anim.type === 'pathpatrol') {
-		applyPathPatrol(object, data, time);
+		// fix-batch-2: the node whose waypoints are being placed holds still at its base
+		// pose, so the object stays where you can click it
+		if (anim.id !== capturingPathNode) applyPathPatrol(object, data, time);
 	} else if (anim.type === 'lookat') {
 		// face a target object (uuid) or point ([x,y,z]) — 134
 		let target = null;

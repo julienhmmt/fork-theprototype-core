@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { get } from 'svelte/store';
 import { globalCamera, selectedObject } from '../stores/sceneStore';
-import { peers, showToast, toastStore, stackOnDrop } from '../stores/appStore';
+import { peers, showToast, toastStore, stackOnDrop, openSceneSection } from '../stores/appStore';
 import { explorerItems, itemBlob } from './explorer';
 import { prefabs, instantiatePrefab } from './prefabs';
 import { importFile, addImported } from './fileHandler.svelte';
@@ -284,6 +284,14 @@ async function placeExplorerPayload(payload, target) {
 			} catch (e) {
 				console.log('module drop handler failed', e);
 			}
+		}
+		// fix-batch-2 (1.45.1): an HDRI used to get the audio/text line. It lights the scene as
+		// its sky from Configure Scene ▸ Environment (a direct "Use as sky" on drop is roadmap 81)
+		if (item.kind === 'hdri') {
+			showToast('An HDRI lights the whole scene as its sky — pick it in Configure Scene ▸ Environment', [
+				{ label: 'Open Environment', action: () => openSceneSection('Environment') }
+			]);
+			return;
 		}
 		showToast('Audio/text items are used where they plug in (sound nodes, scripts)');
 	}
