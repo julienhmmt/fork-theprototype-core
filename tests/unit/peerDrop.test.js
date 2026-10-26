@@ -100,6 +100,7 @@ describe('keepPeerId: our id survives a signaling drop', () => {
 		expect(peer.id).toBe('abc12');
 		// peerjs keeps its own bookkeeping: the reconnect re-registers the id it remembered
 		expect(peer._lastServerId).toBe('abc12');
+		/** @type {string[]} */
 		const started = [];
 		peer._socket = { start: (/** @type {string} */ id) => started.push(id), close() {} };
 		peer._options = {};
