@@ -67,6 +67,7 @@
   import SculptToolbar from './components/menu/SculptToolbar.svelte'
   import SplineToolbar from './components/menu/SplineToolbar.svelte'
   import MeasureToolbar from './components/menu/MeasureToolbar.svelte' // 47 M1
+  import PathCaptureToolbar from './components/menu/PathCaptureToolbar.svelte' // fix-batch-2
   import UnderlayWindow from './components/menu/UnderlayWindow.svelte' // 60 Q5
   import { underlayDropMenu } from '$lib/underlays'
   import ModuleToolboxLayer from './components/ui/ModuleToolboxLayer.svelte'
@@ -464,6 +465,7 @@ import { startMusicToolbox } from './lib/musicToolbox'
 <SculptToolbar />
 <SplineToolbar />
 <MeasureToolbar />
+<PathCaptureToolbar />
 <!-- 60 Q5: Reference images (+ the image-drop "Use as reference" menu) -->
 <UnderlayWindow />
 <!-- A5: module toolboxes. OUTSIDE the {#if !$isLocked} block — a toolbox that opted
