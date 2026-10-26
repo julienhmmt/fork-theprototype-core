@@ -44,7 +44,12 @@ function coverageKey(url) {
 	const dep = /\/node_modules\/\.vite\/deps\/([^/]+?)\.js$/.exec(p);
 	// optimizer chunks (chunk-XXXX.js) hold code split out of several packages: no single owner, no bucket
 	// vite flattens an id: `/` -> `_`, `.` -> `__` (three/examples/jsm/x.js -> three_examples_jsm_x__js, @threlte/core -> @threlte_core)
-	if (dep) return dep[1].startsWith('chunk-') ? null : 'npm:' + (/^(@[^_]+_[^_]+|[^_]+)/.exec(dep[1].replace(/__/g, '.'))?.[1] ?? dep[1]).replace('_', '/');
+	// the bundler's shared chunks (client-Cqw3l5wU.js, three.module-CVnfGTZf.js) name no installed package: no bucket either
+	if (dep) {
+		if (dep[1].startsWith('chunk-')) return null;
+		const pkg = (/^(@[^_]+_[^_]+|[^_]+)/.exec(dep[1].replace(/__/g, '.'))?.[1] ?? dep[1]).replace('_', '/');
+		return require('fs').existsSync(require('path').resolve(__dirname, '../../node_modules', pkg, 'package.json')) ? 'npm:' + pkg : null;
+	}
 	const nm = /\/node_modules\/((?:@[^/]+\/)?[^/.][^/]*)\//.exec(p);
 	if (nm) return 'npm:' + nm[1];
 	// the served tree's own sources: /src/… or /@fs/<this tree>/src/… (never a sibling checkout's src/)

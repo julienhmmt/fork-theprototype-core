@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { buildMap, formatMap, selectTiers, lockChanges, suiteRequires, releaseCheck, half } = require('../../scripts/ci/battery-desk.cjs');
+const { buildMap, formatMap, parseMap, selectTiers, lockChanges, suiteRequires, releaseCheck, half } = require('../../scripts/ci/battery-desk.cjs');
 const battery = require('../../tests/e2e/battery.json');
 
 /** a desk battery of the named suites at 60 s each, plus the tier keys @param {string[]} names @param {object} [extra] */
@@ -41,10 +41,24 @@ describe('battery-tiers: the coverage map keeps what a suite ran beyond the boot
 		expect(m.suites.s9).toEqual(['src/App.svelte']);
 		expect(m.floor).toEqual(map.floor);
 	});
-	it('the committed format is one suite per line and parses back', () => {
+	it('the committed format is one suite per line, names files by index into one table, and parses back', () => {
 		const text = formatMap(map);
-		expect(JSON.parse(text)).toEqual(map);
-		expect(text.split('\n').filter((l) => l.startsWith('\t\t"s')).length).toBe(10);
+		expect(parseMap(text)).toEqual(map);
+		expect(JSON.parse(text).files).toEqual(['src/App.svelte', 'src/components/StatsOverlay.svelte']);
+		expect(text).toContain('"s4": [1]');
+		expect(text.split('\n').filter((l) => /^\t\t"s\d": /.test(l)).length).toBe(10);
+	});
+	it('a file run past the floor by many suites names its heaviest users (ties kept, a saturated tie dropped)', () => {
+		/** @type {{ suite: string, files: Record<string, number> }[]} */
+		const many = Array.from({ length: 30 }, (_, i) => ({ suite: `m${String(i).padStart(2, '0')}`, files: { 'src/lib/menu.js': i < 3 ? 1 : 30 - i, 'src/lib/flat.js': i < 3 ? 1 : 5 } }));
+		const m = buildMap(many);
+		expect(m.heavy?.['src/lib/menu.js']).toEqual(['m03', 'm04', 'm05', 'm06', 'm07', 'm08', 'm09', 'm10']);
+		expect(m.heavy?.['src/lib/flat.js']).toBeUndefined();
+		expect(parseMap(formatMap(m)).heavy).toEqual(m.heavy);
+	});
+	it('a bundler chunk an older record names (npm:client-Cqw3l5wU) is no package and is dropped', () => {
+		const m = buildMap([{ suite: 'x', files: { 'npm:client-Cqw3l5wU': 9, 'npm:three': 4 } }, { suite: 'y', files: { 'src/App.svelte': 1 } }]);
+		expect(m.suites.x).toEqual(['npm:three']);
 	});
 });
 
@@ -102,6 +116,9 @@ describe('battery-tiers: selection by coverage', () => {
 		const wide = { ...map, suites: Object.fromEntries(Object.entries(map.suites).map(([s, f]) => [s, s === 'quiet' ? f : [...f, 'src/lib/everywhere.js']])) };
 		const t = selectTiers({ ...b, tier1_cap: 0.2 }, wide, change({ src: ['src/lib/everywhere.js'] }));
 		expect(t.shared[0]).toMatchObject({ file: 'src/lib/everywhere.js', taken: false });
+		// its heaviest users come along whatever the cap
+		const heavy = selectTiers({ ...b, tier1_cap: 0.2 }, { ...wide, heavy: { 'src/lib/everywhere.js': ['paint'] } }, change({ src: ['src/lib/everywhere.js'] }));
+		expect(heavy.tier1.find((p) => p.name === 'paint')?.why).toEqual(['heavy src/lib/everywhere.js']);
 	});
 	it('a changed package pulls the suites that ran it; boot-only and uncovered files are reported, not guessed', () => {
 		const t = selectTiers(b, map, change({ packages: ['npm:three'], src: ['src/App.svelte', 'src/lib/nobody.js'] }), {});

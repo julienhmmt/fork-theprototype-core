@@ -509,12 +509,17 @@ function e2eFiles(root = ROOT) {
  * A file only some suites load (a lazy window, a module) has floor 0, so loading it is using it; a file every
  * suite boots counts for the suites that ran past its boot work. A change to a boot-only path breaks every
  * suite, which the tier-1 always-set sees.
+ * HEAVY: a file more than HEAVY_K * 2 suites run past the floor (objectMenu.js, DockTabs.svelte) is shared, and
+ * a change to it pulls all of them only under the tier-1 cap — so the map also names its HEAVIEST users: the
+ * suites at or above the HEAVY_K-th largest count (ties included), or only those strictly above it when the
+ * ties alone would pass HEAVY_K * 2 (a saturated count says nothing). Those come along whatever the cap.
  * @typedef {{ suite: string, files: Record<string, number>, pages?: number, uncollected?: number }} CoverageRecord
  * @typedef {{ comment: string, made: string, commit: string, floor_pct: number, records: number,
- *   floor: Record<string, number>, suites: Record<string, string[]> }} CoverageMap
+ *   floor: Record<string, number>, suites: Record<string, string[]>, heavy?: Record<string, string[]> }} CoverageMap
  */
 
 const MAP_FILE = path.join(ROOT, 'tests', 'e2e', 'coverage-map.json');
+const HEAVY_K = 8;
 const MAP_COMMENT =
 	'battery-tiers: suite -> the app files (src/ paths, npm:<package>) it executes beyond the boot floor (floor = per file, the function count the quietest floor_pct % of suites reached). Read by `battery-desk.cjs tiers` to pick tier 1 by coverage. REGENERATE after a release whose union added suites or moved files (every few releases, or when `tiers` reports many unmapped suites): both halves with E2E_COVERAGE=1 on pc slots (RELEASING.md / lanes rules, the battery section), then `node scripts/ci/battery-desk.cjs map build <out-A> <out-B>`; `--merge` adds suites from a focused run to the committed map without rebuilding the floor.';
 
@@ -536,6 +541,11 @@ function readCoverage(dirs) {
 	return out;
 }
 
+/** a src/ path, or npm:<a package installed here> — not a bundler chunk an older record still names (npm:client-Cqw3l5wU) @param {string} f */
+function isFileKey(f) {
+	return !f.startsWith('npm:') || fs.existsSync(path.join(ROOT, 'node_modules', f.slice(4), 'package.json'));
+}
+
 /**
  * @param {CoverageRecord[]} records @param {{ floorPct?: number, base?: CoverageMap|null, commit?: string }} [o]
  * @returns {CoverageMap}
@@ -546,7 +556,7 @@ function buildMap(records, o = {}) {
 	const per = new Map();
 	for (const r of records) {
 		const m = per.get(r.suite) || {};
-		for (const [f, n] of Object.entries(r.files)) m[f] = Math.max(m[f] || 0, n);
+		for (const [f, n] of Object.entries(r.files)) if (isFileKey(f)) m[f] = Math.max(m[f] || 0, n);
 		per.set(r.suite, m);
 	}
 	// a record with no app file at all (a node-only suite, a page that crashed before the app) is no evidence
@@ -565,22 +575,50 @@ function buildMap(records, o = {}) {
 	/** @type {Record<string, string[]>} */
 	const suites = { ...(o.base?.suites || {}) };
 	for (const [s, m] of withFiles) suites[s] = Object.keys(m).filter((f) => m[f] > (floor[f] || 0)).sort();
+	/** @type {Record<string, string[]>} a merge has no counts for the committed suites: it keeps the committed heavy users */
+	const heavy = { ...(o.base?.heavy || {}) };
+	if (!o.base) {
+		/** @type {Map<string, [string, number][]>} */
+		const over = new Map();
+		for (const [s, m] of withFiles) for (const f of suites[s]) over.set(f, [...(over.get(f) || []), [s, m[f]]]);
+		for (const [f, l] of over) {
+			if (l.length <= HEAVY_K * 2) continue;
+			const kth = l.map(([, n]) => n).sort((x, y) => y - x)[HEAVY_K - 1];
+			const atLeast = l.filter(([, n]) => n >= kth);
+			const top = (atLeast.length <= HEAVY_K * 2 ? atLeast : l.filter(([, n]) => n > kth)).map(([s]) => s).sort();
+			if (top.length) heavy[f] = top;
+		}
+	}
 	const sorted = (/** @type {Record<string, any>} */ obj) => Object.fromEntries(Object.entries(obj).sort(([x], [y]) => (x < y ? -1 : 1)));
-	return { comment: MAP_COMMENT, made: new Date().toISOString().slice(0, 10), commit: o.commit || o.base?.commit || '?', floor_pct: floorPct, records: Object.keys(suites).length, floor: sorted(floor), suites: sorted(suites) };
+	return { comment: MAP_COMMENT, made: new Date().toISOString().slice(0, 10), commit: o.commit || o.base?.commit || '?', floor_pct: floorPct, records: Object.keys(suites).length, floor: sorted(floor), suites: sorted(suites), heavy: sorted(heavy) };
 }
 
-/** one suite per line: small enough to commit, and a regenerated map diffs suite by suite @param {CoverageMap} m */
+/**
+ * On disk the suites name files by their index in one `files` table (a suite runs ~150 files past the floor:
+ * spelled out, the map is ~2 MB); one file and one suite per line, so a regenerated map still diffs line by line.
+ * @param {CoverageMap} m
+ */
 function formatMap(m) {
-	const { suites, floor, ...head } = m;
-	const lines = Object.entries(suites).map(([s, f]) => `\t\t${JSON.stringify(s)}: ${JSON.stringify(f)}`);
+	const { suites, floor, heavy = {}, ...head } = m;
+	const files = [...new Set(Object.values(suites).flat())].sort();
+	const at = new Map(files.map((f, i) => [f, i]));
+	const lines = Object.entries(suites).map(([s, fs]) => `\t\t${JSON.stringify(s)}: ${JSON.stringify(fs.map((f) => at.get(f)))}`);
+	const heavyLines = Object.entries(heavy).map(([f, l]) => `\t\t${JSON.stringify(f)}: ${JSON.stringify(l)}`);
 	return `{\n${Object.entries(head)
 		.map(([k, v]) => `\t${JSON.stringify(k)}: ${JSON.stringify(v)},`)
-		.join('\n')}\n\t"floor": ${JSON.stringify(floor)},\n\t"suites": {\n${lines.join(',\n')}\n\t}\n}\n`;
+		.join('\n')}\n\t"floor": ${JSON.stringify(floor)},\n\t"files": [\n${files.map((f) => `\t\t${JSON.stringify(f)}`).join(',\n')}\n\t],\n\t"suites": {\n${lines.join(',\n')}\n\t},\n\t"heavy": {\n${heavyLines.join(',\n')}\n\t}\n}\n`;
+}
+
+/** the committed text with each suite's file indices spelled back out @param {string} text @returns {CoverageMap} */
+function parseMap(text) {
+	const { files, ...m } = JSON.parse(text);
+	if (files) m.suites = Object.fromEntries(Object.entries(m.suites).map(([s, ix]) => [s, /** @type {number[]} */ (ix).map((i) => files[i])]));
+	return m;
 }
 
 /** @param {string} [file] @returns {CoverageMap|null} */
 function loadMap(file = MAP_FILE) {
-	return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
+	return fs.existsSync(file) ? parseMap(fs.readFileSync(file, 'utf8')) : null;
 }
 
 /** @param {string[]} argv */
@@ -615,7 +653,8 @@ function mapCmd(argv) {
  *  (e) a SHARED file — named in battery.json `tier1_always_files`, or mapped by more than `tier1_shared_share`
  *      of the mapped suites (App.svelte, the stores, the editor shell, helpers.cjs) — pulls its suites in only
  *      while tier 1 stays under `tier1_cap` of the desk suite-minutes, smallest first; one that would cross
- *      the cap is reported and left to the always-set and tier 2.
+ *      the cap is reported and left to the always-set and tier 2 — except its HEAVY users (the map's
+ *      `heavy`), which come along whatever the cap.
  * Tier 2 = everything else. Pure: the caller hands it the diff.
  * @typedef {{ src: string[], added: string[], changedSuites: string[], support: string[], packages: string[], other: string[] }} Change
  * @typedef {{ name: string, secs: number, why: string[] }} Pick
@@ -678,8 +717,10 @@ function selectTiers(b, map, change, o = {}) {
 	for (const f of [...change.src, ...change.packages]) {
 		const list = users.get(f) || [];
 		if (!list.length) (map && map.floor[f] ? bootOnly : uncovered).push(f);
-		else if (isShared(f)) shared.push({ file: f, list });
-		else for (const s of list) add(s, `covers ${f}`);
+		else if (isShared(f)) {
+			for (const s of map?.heavy?.[f] || []) add(s, `heavy ${f}`);
+			shared.push({ file: f, list });
+		} else for (const s of list) add(s, `covers ${f}`);
 	}
 	const secs = () => [...why.keys()].reduce((t, n) => t + (secsOf[n] || 0), 0);
 	shared.sort((x, y) => x.list.length - y.list.length || (x.file < y.file ? -1 : 1));
@@ -949,4 +990,4 @@ if (require.main === module) {
 	}
 }
 
-module.exports = { normalise, fingerprints, classify, coverage, e2eFiles, deskEntries, half, buildMap, formatMap, selectTiers, lockChanges, suiteRequires, releaseCheck };
+module.exports = { normalise, fingerprints, classify, coverage, e2eFiles, deskEntries, half, buildMap, formatMap, parseMap, selectTiers, lockChanges, suiteRequires, releaseCheck };
