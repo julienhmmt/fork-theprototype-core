@@ -5,6 +5,25 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.45.1 — Fixes: path waypoints, AI connections, object flows, HDRI drops, local objects 🔧
+
+- 🛤️ **Path patrol**: placing waypoints no longer traps the viewport. A **Placing waypoints** box shows while it is on
+  (with the count, **Undo last point** and **Done**); Esc, Done, deselecting the object, clicking the object itself,
+  clicking the node editor, pressing Play or muting the node all end it. The object holds still while you place
+  points.
+- 🤖 **AI connections** (Settings ▸ AI): a base URL typed without `https://` or pasted with `/chat/completions` on the
+  end now works, and **Will call …** under the field shows the exact address. Test connection answers within about
+  10 s and says which problem it is — the server cannot be reached, it does not allow this site (CORS, with the flag
+  for vLLM / Ollama / LM Studio), a rejected key, a model the server does not know, or a vLLM started without tool
+  calling. The same reasons show in the assistant.
+- 🔀 **Add flow to Scene graph** on an object with no flow now creates the flow (with a Flow Input and a Flow Output)
+  and adds it — one Undo, everyone sees it. It is greyed out with **Locked by …** while someone else holds the object.
+- 🌅 Dropping an **HDRI** from the Explorer onto the viewport now says where it goes, with **Open Environment**.
+- 📦 **Local objects** stay yours: a downloaded scene, a whole-scene export, a published or submitted scene and a game
+  export leave them out and say so ("1 local object was not included"). Share them from the object list to include
+  them.
+- 🧊 Compressed **KTX2 textures** (Quest / web exports and packs) load again — they failed to load since 1.43.1.
+
 ## 1.45.0 — Build in the headset: measure, arrange, paint, scatter, browse assets and shrink the world 🥽
 
 Everything you need to build a scene now works with the headset on: measure and line things up, paint terrain and
