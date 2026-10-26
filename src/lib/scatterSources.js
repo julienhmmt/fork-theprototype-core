@@ -130,10 +130,10 @@ export const LOOK_ONLY = 'Look only: model + materials (its logic is not scatter
  * A subtree's LOOK as a Library model: a clone with every userData dropped, standing with its
  * lowest point at y 0 (an instance stands on the ground the way a primitive does), its own scale
  * kept, its place and turn not — then a GLB, the Library, and a push to the peers.
- * @param {any} root @param {string} name @param {string} note
+ * @param {any} root @param {string} name @param {string} note @param {{prefab?: string}} [extra]
  * @returns {Promise<any | null>} a library source
  */
-export async function lookSource(root, name, note) {
+export async function lookSource(root, name, note, extra = {}) {
 	const clone = root.clone(true);
 	clone.traverse((/** @type {any} */ n) => {
 		n.userData = {};
@@ -155,7 +155,7 @@ export async function lookSource(root, name, note) {
 	const item = await explorer.addItemFromBytes(bytes, file, null, { kind: 'object' });
 	if (!item?.hash) return null;
 	void import('./assetShare').then((m) => m.sendAsset(item.hash)).catch(() => {});
-	return sourceOf({ kind: 'library', hash: item.hash, name: item.name ?? file, note });
+	return sourceOf({ kind: 'library', hash: item.hash, name: item.name ?? file, note, ...extra });
 }
 
 /** A prefab as a scatter source: its look only. @param {string} id */
@@ -167,7 +167,7 @@ export async function sourceFromPrefab(id) {
 		showToast('That prefab is not in your library');
 		return null;
 	}
-	return lookSource(object, entry.name || 'Prefab', 'Prefab "' + (entry.name || 'Prefab') + '" — ' + LOOK_ONLY.toLowerCase());
+	return lookSource(object, entry.name || 'Prefab', 'Prefab "' + (entry.name || 'Prefab') + '" — ' + LOOK_ONLY.toLowerCase(), { prefab: id });
 }
 
 /** A scene object as a scatter source: a pristine pack piece as its pack item, anything else as

@@ -419,17 +419,6 @@ export function buildObjectMenuItems(uuid, opts = {}) {
 							}
 						]
 					: []),
-		// 51 E1: this object's look becomes what the Scatter brush paints (a pristine kit piece as its pack item)
-		...(multi || object?.userData?.terrain || !hasMesh(object)
-			? []
-			: [
-					{
-						label: 'Use as scatter source',
-						icon: 'boxes',
-						tooltip: 'Scatter this model with a terrain\u2019s Scatter brush — its look only (model + materials), not its logic',
-						action: () => import('./scatterSources').then((m) => m.useAsScatterSource(uuid))
-					}
-				]),
 		// SH5: the Shader editor is scoped by the SELECTION, so this entry makes the object current
 		// and shows the tab. Single-object for the same reason Edit mesh is — with a set selected
 		// the editor scopes to the SCENE-wide graph, which is a different thing from "this
@@ -621,7 +610,7 @@ export function buildObjectMenuItems(uuid, opts = {}) {
 			: [])
 	];
 
-	/** @type {any[]} Physics & effects ▸ — joints, particles, the object's flow */
+	/** @type {any[]} Physics & effects ▸ — joints, particles, the object's flow, Use as scatter source */
 	const behaviour = [
 		// P-B: joints — attach exactly TWO objects (weld holds the pose, a hinge spins about the
 		// FIRST-clicked object's chosen local axis, anchored at the second object's origin);
@@ -724,6 +713,18 @@ export function buildObjectMenuItems(uuid, opts = {}) {
 									);
 								}
 							)
+					}
+				]),
+		// 51 E1: this object's look becomes what the Scatter brush paints (a pristine kit piece as its pack item);
+		// one level down (51-int: the top level holds at 16 rows, the context-menu-redesign lock)
+		...(multi || object?.userData?.terrain || !hasMesh(object)
+			? []
+			: [
+					{
+						label: 'Use as scatter source',
+						icon: 'boxes',
+						tooltip: 'Scatter this model with a terrain\u2019s Scatter brush — its look only (model + materials), not its logic',
+						action: () => import('./scatterSources').then((m) => m.useAsScatterSource(uuid))
 					}
 				])
 	];

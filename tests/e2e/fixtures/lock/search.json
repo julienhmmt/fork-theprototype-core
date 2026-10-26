@@ -1,5 +1,5 @@
 {
-	"recordedAt": "2026-10-22T17:48:57.949Z",
+	"recordedAt": "2026-10-24T15:10:13.838Z",
 	"settings": {
 		"Theme": {
 			"rows": [
@@ -1776,10 +1776,12 @@
 		},
 		"Storage used": {
 			"rows": [
+				"Cache size limit",
 				"Storage used"
 			],
 			"sections": [
-				"Explorer"
+				"Explorer",
+				"Storage"
 			]
 		},
 		"Optimize big models automatically": {
@@ -1920,6 +1922,7 @@
 				"Carry object flow",
 				"Carry shader graph",
 				"Checkpoint storage",
+				"Distant scatter",
 				"Double-click action",
 				"Draw repeated kit pieces together",
 				"Edit mesh wireframe colour",
@@ -2077,6 +2080,7 @@
 		},
 		"Stance": {
 			"rows": [
+				"Distant scatter",
 				"Length",
 				"Stance"
 			],
@@ -2558,6 +2562,7 @@
 				"Carry shader graph",
 				"Checkpoint storage",
 				"Compress textures (KTX2)",
+				"Distant scatter",
 				"Double-click action",
 				"Draw repeated kit pieces together",
 				"Edit mesh wireframe colour",
@@ -2903,6 +2908,7 @@
 		"quest": {
 			"rows": [
 				"Compress textures (KTX2)",
+				"Distant scatter",
 				"Import defaults",
 				"Include VR button",
 				"LOD 1 keeps",
@@ -2927,6 +2933,7 @@
 			],
 			"sections": [
 				"Interface",
+				"Scene",
 				"Explorer",
 				"Import",
 				"Export",
@@ -2971,11 +2978,13 @@
 		"network": {
 			"rows": [
 				"Apply changes",
+				"Cached downloads",
 				"Session size",
 				"Signaling server",
 				"Statistics card"
 			],
 			"sections": [
+				"Storage",
 				"VR",
 				"Connection"
 			]
@@ -3068,6 +3077,7 @@
 		},
 		"model": {
 			"rows": [
+				"Distant scatter",
 				"Enable assistant",
 				"Mesh generation",
 				"My hand model",
@@ -3105,18 +3115,23 @@
 		},
 		"disk": {
 			"rows": [
+				"Storage breakdown",
 				"Storage used"
 			],
 			"sections": [
-				"Explorer"
+				"Explorer",
+				"Storage"
 			]
 		},
 		"quota": {
 			"rows": [
+				"Cache size limit",
+				"Storage breakdown",
 				"Storage used"
 			],
 			"sections": [
-				"Explorer"
+				"Explorer",
+				"Storage"
 			]
 		},
 		"toolbar": {
@@ -3332,6 +3347,7 @@
 				"Paste at the cursor",
 				"Pinch zoom",
 				"Play / Enter VR·AR (right-click the play button for modes)",
+				"Play here — start from the editor camera",
 				"Previous element mode",
 				"Push to talk while the mic toggle is off",
 				"Race: back on the road",
@@ -3409,6 +3425,7 @@
 				"Carry object flow",
 				"Carry shader graph",
 				"Checkpoint storage",
+				"Distant scatter",
 				"Double-click action",
 				"Draw repeated kit pieces together",
 				"Edit mesh wireframe colour",
@@ -3470,6 +3487,8 @@
 		},
 		"files": {
 			"rows": [
+				"Cache size limit",
+				"Cached downloads",
 				"Delete without asking",
 				"Deleted files log",
 				"Download shared files automatically",
@@ -3484,7 +3503,8 @@
 				"Who can unshare a file"
 			],
 			"sections": [
-				"Explorer"
+				"Explorer",
+				"Storage"
 			]
 		},
 		"library": {
@@ -3513,6 +3533,7 @@
 		"headset": {
 			"rows": [
 				"Colocation probe",
+				"Distant scatter",
 				"Draw repeated kit pieces together",
 				"Game HUD",
 				"Include VR button",
@@ -3740,6 +3761,7 @@
 				"Object list: show / bring to front / hide",
 				"Paste at the cursor",
 				"Play / Enter VR·AR (right-click the play button for modes)",
+				"Play here — start from the editor camera",
 				"Previous element mode",
 				"Push to talk while the mic toggle is off",
 				"Race: back on the road",
@@ -3862,6 +3884,7 @@
 				"Object list: show / bring to front / hide",
 				"Paste at the cursor",
 				"Play / Enter VR·AR (right-click the play button for modes)",
+				"Play here — start from the editor camera",
 				"Previous element mode",
 				"Push to talk while the mic toggle is off",
 				"Race: back on the road",
@@ -3985,6 +4008,7 @@
 				"Object list: show / bring to front / hide",
 				"Paste at the cursor",
 				"Play / Enter VR·AR (right-click the play button for modes)",
+				"Play here — start from the editor camera",
 				"Previous element mode",
 				"Push to talk while the mic toggle is off",
 				"Race: back on the road",
@@ -4419,6 +4443,7 @@
 		},
 		"ai": {
 			"rows": [
+				"Cached downloads",
 				"Colocation probe",
 				"Compress textures (KTX2)",
 				"Download shared files automatically",
@@ -4444,6 +4469,7 @@
 				"Reset tips",
 				"Reverse trackpad pan",
 				"Stance",
+				"Storage breakdown",
 				"Storage used",
 				"Teleport",
 				"Texture threshold",
@@ -4457,6 +4483,7 @@
 				"Shortcuts",
 				"Scene",
 				"Explorer",
+				"Storage",
 				"Import",
 				"Export",
 				"VR",
@@ -4478,6 +4505,7 @@
 				"Object",
 				"Particles",
 				"Physics",
+				"Scatter",
 				"Shadow",
 				"Texture",
 				"Transform",
@@ -4489,6 +4517,7 @@
 			"object": [
 				"LOD",
 				"Object",
+				"Scatter",
 				"Transform",
 				"Water"
 			],
@@ -4498,6 +4527,9 @@
 			"water": [
 				"Physics",
 				"Water"
+			],
+			"scatter": [
+				"Scatter"
 			],
 			"geometry": [
 				"Geometry"
@@ -4543,6 +4575,7 @@
 			"scale": [
 				"Emission",
 				"Material",
+				"Scatter",
 				"Shadow",
 				"Texture",
 				"Transform"

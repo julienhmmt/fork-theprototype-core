@@ -119,14 +119,18 @@ export function broadcastMove(object, force = false) {
 	lastMoveSent = now;
 	/** @type {any} */
 	const peer = get(peers);
+	// 60 Q2: the held stream is fast; a FORCED send (the release) is the pose that must land
 	if (peer)
-		peer.send({
-			type: 'move',
-			uuid: object.uuid,
-			pos: object.position.toArray(),
-			rot: object.rotation.toArray(),
-			scale: object.scale.toArray()
-		});
+		peer.send(
+			{
+				type: 'move',
+				uuid: object.uuid,
+				pos: object.position.toArray(),
+				rot: object.rotation.toArray(),
+				scale: object.scale.toArray()
+			},
+			{ fast: !force }
+		);
 }
 
 /** @param {any} object @param {any} before null = a PLAYER's grab (Interact): moved and

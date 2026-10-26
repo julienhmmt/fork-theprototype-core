@@ -5,6 +5,143 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.44.0 — Quick wins: play from where you stand, trace over a picture, share files in, embed anywhere ⚡
+
+Small things you feel in every session: try the corner you are building without walking there, trace a plan, send a
+file from your phone into the app, paste a scene link into Notion — and movement that stays smooth on bad Wi-Fi.
+
+### ▶️ Play here
+
+- **Play here** starts Play where your camera is — standing on whatever is under it, facing your view — and Stop puts
+  the camera and your selection back. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd>, right-click Play, the
+  viewport menu's Tools, an optional toolbar button (Customize toolbar), on a phone Play's long press or More, and in VR
+  Tools ▸ Play here.
+
+### 🖼️ Reference images
+
+- Drop an image on the viewport ▸ **Use as reference**: a see-through, unclickable picture on the ground or facing
+  your view to trace over. Opacity, size and height in Tools ▸ Reference images. Hidden in Play, never in exports or
+  published scenes; yours only unless you tick **Share with session**.
+
+### 📲 Share into the app
+
+- Install the app and it appears in your phone's **share sheet**: share a picture and it lands in your Library (or
+  becomes a reference image); share a .glb/.gltf and it is placed in your scene; share a .tpscene and it opens.
+- **Open files from your desktop**: with the app installed, double-click a .tpscene to open it, or a .glb/.gltf to add
+  it to the scene you have open — a second file goes to the same window.
+
+### 🔗 Embed anywhere
+
+- Paste a public scene link (/s/…) into **Notion, WordPress, Discourse** and other oEmbed / Iframely sites and the
+  game plays in place.
+
+### 📶 Smoother together
+
+- Movement — avatars, VR hands, dragged, held and thrown objects, physics — rides a new fast channel between players,
+  so a lossy connection no longer freezes and jumps it (5 % loss: 95 % of gaps 74 ms, was 249 ms). Edits stay reliable
+  and in order; older peers fall back by themselves.
+- 👻 People whose app crashed or lost its connection leave the Users list on their own, and leaving never shows
+  "Connection error". A short Wi-Fi drop heals the session instead of ending it.
+- 🚪 When a guest joins your public room automatically you get a notice with **Turn off** and **Remove**, and the
+  Connect bar says **Public · guests join**.
+- 🚩 Report a public room or a person from the room list and the Users list.
+
+### 💾 Kept on your device
+
+- Packs, skies, converted textures and CC0 downloads are kept on the device (stored once per content), so scenes
+  load again without the network. Settings ▸ Storage shows the use, sets a size limit and clears it; the app asks once
+  to keep the storage, and says why.
+
+### 🤖 AI assistant
+
+- As a viewer, the assistant tells you it can't change the scene instead of "creating" things nobody sees.
+- Things it builds stay where they are when you press Play, unless you ask for physics.
+
+### 🔧 Fixes
+
+- Right-clicking the viewport opens its menu on every platform again.
+- Two-peer sync: anything the host does while a just-approved joiner is still connecting now reaches that joiner as
+  soon as its connection opens, instead of only after the joiner's full scene download (seconds later on slow machines).
+- After a network drop that only one side noticed, edits flow both ways again: the side still holding the dead link
+  switches to the fresh one and catches up on what it missed.
+- Offers (like being made admin) keep their Accept / Decline buttons in Notifications.
+- A late joiner sees a shader graph on an object that arrives after it; physics actions fire even at very low frame
+  rates; viewers' Explorer fills in (project, shared files and big material presets reach viewers).
+- Deleting a file you never shared no longer tells the session its name.
+- The README, the welcome window and the docs now say plainly how it works: sessions are peer-to-peer, and our
+  servers handle signaling and relay, accounts and cloud saves, assets, community pages, anonymous error reports and
+  counters.
+
+## 1.43.2 — A dependency fix 🔧
+
+- 🔧 Updated **body-parser** (a security advisory, GHSA-27r3-jxmh-p828) in the development tools and the agent bridge.
+  The app you open in the browser does not use it and is unchanged; the downloadable release builds are published
+  again from this version.
+
+## 1.43.1 — Security: scene code runs in a sandbox 🔒
+
+A security fix ([GHSA-r74q-9hg7-wrgr](https://github.com/theprototype-app/core/security/advisories/GHSA-r74q-9hg7-wrgr)).
+Until now, code carried inside a scene — Script nodes, Behaviour files, the Player code of a Character Controller and
+**Custom (code)** HUD elements — ran as part of the app page itself, so a scene someone opened (a shared play link, an
+embed, a session peer's scene) could read what the page keeps: AI provider keys and, on theprototype.app, your sign-in.
+Please update; self-hosters, rebuild from this release.
+
+- 🔒 **Scene code runs in a sandbox**: a separate JavaScript engine (QuickJS, WebAssembly) that has only the scene API
+  it is given — no page, storage, cookies, network or DOM. Your scripts and the bundled games work as before; a
+  scene with code loads the engine while the scene is opening.
+- 🧩 **Custom (code) HUD elements** draw through a small document whose markup is cleaned before it is shown
+  (text, boxes, styles, SVG, a 2D canvas). Event listeners, timers and images by URL are not available inside one.
+- 🛡️ **Built apps ship a Content-Security-Policy**, so injected scripts do not run. Self-hosting? The policy is in
+  every page; `build/_headers` holds the one line (`frame-ancestors`) a server has to send itself.
+- 🔑 A diagnostics bundle never contains your API keys.
+- 📡 An invite link that names a different signaling server asks before switching to it.
+- ▶️ Optional for hosted setups: `VITE_PLAY_ORIGIN` serves play links and embeds from a second origin. On
+  theprototype.app, play links and embeds now open from play.theprototype.app.
+- 🧱 Installed modules are trusted code and are unchanged — install only modules you trust (see SECURITY.md).
+- ☁️ On theprototype.app: your sign-in renews itself while you use the app and is no longer kept where page code
+  can read it; **Sign out everywhere** ends every session at once; and roles in a room are verified — only the host
+  or an admin can change who may edit, and when the host leaves an admin or editor takes over.
+
+## 1.43.0 — Scatter everywhere: any model, on any object, edited by hand, the same on every device 🌿
+
+Scatter grew up: pack items, prefabs and mixes of models, on any object (not just terrains), filled to a count with
+masks and spacing, then edited one instance at a time — and still only a few hundred bytes to send.
+
+### 🪨 What you can scatter
+
+- **Pack items** (a Nature Kit rock), **prefabs** and **Use as scatter source** on any object, as well as primitives
+  and Library models. A prefab scatters as its look; **To objects** brings the real prefab back, logic and all.
+- 🎲 **Mix models by weight** (three rocks at 50/30/20), with **Tint** (a little colour variation) and **Sink** (push
+  them into the ground).
+- A scatter is its settings + a seed + your hand edits: everyone in the session, and every reload, gets exactly the
+  same instances. **Re-roll** gives a new layout and keeps every instance you edited.
+
+### 🌍 Scatter on any object
+
+- Properties ▸ Scatter ▸ **Add scatter** on any mesh or placed model — moss on a rock, barnacles on a ship. The
+  instances move, turn and scale with it.
+- **Fill** by count or density, keep a **minimum spacing**, and limit it by **slope**, **height** or a **painted
+  terrain layer**.
+
+### ✋ Edit instances
+
+- The Scatter brush has tools now: **Paint, Erase, Rotate, Scale, Relax** and **Select** — click or box-select
+  instances, move/turn/size them with the gizmo, re-roll or delete them. **Affects** limits a tool to one model.
+- 🔁 **Convert both ways**: instances **To objects**, or several copies of one object ▸ **Make scatter**.
+- Terrain paint ▸ **Detail** sets each terrain's paint resolution (64–512).
+
+### 📱 Fast on every device
+
+- Far scatter fades out to stay inside each device's budget (Quest, phone, desktop); nearby instances and every
+  collider stay the same everywhere, so a ball bounces off the same rock on a phone and a PC. Settings ▸ Scene ▸
+  Performance ▸ **Distant scatter**.
+
+### 🔧 Under the hood
+
+- Updated: svelte 5.57.2, vite 8.3.5, vitest 5.0.5, @threlte/extras 9.22.3, three-mesh-bvh 0.9.16, @lucide/svelte
+  1.61.0, iwer 2.7.0, axe-core 4.14.0, prettier 3.9.10, Playwright 1.64.1 (three stays 0.186.1).
+- Dependency updates now arrive automatically, tested by the full e2e battery before they reach a release.
+
 ## 1.42.0 — Together and anywhere: type code together, pop the editor out to a second screen, play on a real table 🤝
 
 Two people can now write the same script at once, the code editor can live on its own monitor, and an Android phone can

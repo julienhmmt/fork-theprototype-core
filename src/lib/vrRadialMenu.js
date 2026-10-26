@@ -7,8 +7,10 @@ import {
 	vrEditMenuOpen,
 	vrSnapMenuOpen,
 	vrToolMode,
-	worldRig
+	worldRig,
+	editorMode
 } from '../stores/sceneStore';
+import { playingHere } from './playHere'; // 60 Q1 (a near-leaf: playSpawn / playMode / stores)
 import { environment, setEnvironment, ENVIRONMENT_PRESETS } from './environment';
 import { simulating, remoteSimulating, toggleSimulation } from './physics';
 import { setMicMode, vrMicMode } from './voiceChat';
@@ -319,6 +321,27 @@ function registerBuiltins() {
 		active: () => get(simulating),
 		disabled: () => !!get(remoteSimulating),
 		action: () => toggleSimulation()
+	});
+
+	// 60 Q1: PLAY HERE — Interact (the headset's Play) from where you stand, facing where you look;
+	// the same entry (or the mode button) brings you back to Edit where you were. The press is paid
+	// on the next XR frame (vr/modes.js), so the dynamic import's microtask costs nothing.
+	registerVRMenuEntry({
+		id: 'playhere',
+		group: 'tools',
+		label: () => (get(playingHere) && get(editorMode) === 'interact' ? 'Back to edit' : 'Play here'),
+		icon: () => (get(playingHere) && get(editorMode) === 'interact' ? 'square' : 'play'),
+		order: 6,
+		closes: true,
+		active: () => get(playingHere),
+		visible: () => get(editorMode) !== 'interact' || get(playingHere),
+		action: () => {
+			if (get(playingHere) && get(editorMode) === 'interact') {
+				void import('./objectActions').then((m) => m.setEditorMode('edit'));
+				return;
+			}
+			void import('./vr/modes.js').then((m) => m.requestVRPlayHere());
+		}
 	});
 
 	// Add ▸ — the desktop Add menu's names; ids resolve in executeVRMenuAction's switch, which spawns

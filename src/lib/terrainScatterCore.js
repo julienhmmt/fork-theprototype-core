@@ -143,13 +143,16 @@ const PATH_RE = /^(?:https?:\/\/)?[\w\-./%~:+@]{1,400}$/;
 
 /** 51 E1: the short note a source row shows (a prefab / an object scattered as its LOOK only) */
 const noteOf = (/** @type {any} */ s) => (typeof s.note === 'string' && s.note ? { note: s.note.slice(0, 160) } : {});
+// 51 union: a prefab's LOOK remembers which prefab it came from, so "To objects" can bring the
+// whole prefab back WITH its logic where that prefab is in the library (the user's 2026-10-21 rule)
+const prefabOf = (/** @type {any} */ s) => (typeof s.prefab === 'string' && HASH_RE.test(s.prefab) ? { prefab: s.prefab } : {});
 
 /** @param {any} s @returns {any} */
 export function sourceOf(s) {
 	if (!s || typeof s !== 'object') return null;
 	if (s.kind === 'primitive' && SCATTER_PRIMITIVES.includes(s.type)) return { kind: 'primitive', type: s.type };
 	if (s.kind === 'library' && typeof s.hash === 'string' && HASH_RE.test(s.hash))
-		return { kind: 'library', hash: s.hash, name: typeof s.name === 'string' ? s.name.slice(0, 120) : '', ...noteOf(s) };
+		return { kind: 'library', hash: s.hash, name: typeof s.name === 'string' ? s.name.slice(0, 120) : '', ...noteOf(s), ...prefabOf(s) };
 	// 51 E1: a pack item, by the same {pack, item, path} a placed kit piece's packRef carries — every
 	// peer fetches it from the pack CDN, nothing travels but the path
 	if (s.kind === 'pack' && typeof s.path === 'string' && PATH_RE.test(s.path) && !s.path.includes('..'))

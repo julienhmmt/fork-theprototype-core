@@ -25,6 +25,8 @@ export const DEBUG_HOOKS = [
 	['kitEntities', () => import('./kit/entityApp.js')],
 	// 34 R3 (D1/D2): behaviours (runtime, behaviourStatus, behavioursDebug)
 	['behaviours', () => import('./behaviours/app.js')],
+	// 69: the sandbox engine (sandboxReady / loadSandbox / sandboxLoadError) — probes on built apps
+	['sandbox', () => import('./sandbox/engine.js')],
 	['meshEdit', () => import('./meshEdit')],
 	['perf', () => import('./perf/recorder')],
 	['perfDetailed', () => import('./perf/detailed')],
@@ -43,6 +45,8 @@ export const DEBUG_HOOKS = [
 	['placementPrefs', () => import('./placementPrefs.js')],
 	['placementDims', () => import('./placementDims.js')],
 	['packCache', () => import('./packCache.js')],
+	// 60 Q6: the local asset cache (OPFS) — index, stats, clear, persist
+	['assetCache', () => import('./assetCache.js')],
 	['placeGhost', () => import('./placeGhost.js')],
 	['vrPlace', () => import('./vr/placeRay.js')],
 	['vrAssetBrowser', () => import('./vr/assetBrowser.js')],
@@ -65,6 +69,8 @@ export const DEBUG_HOOKS = [
 	['perfLiveWire', () => import('./perf/liveWire')],
 	['vrControls', () => import('./vrControls')],
 	['autosave', () => import('./autosave')],
+	// 60 Q4: files shared into the app / opened from the OS (lastLaunch, receiveLaunchFiles, readShareInbox)
+	['launchInbox', () => import('./launchInbox.js')],
 	// 36 B14: named checkpoints / the version timeline (checkpoints, checkpointsDebug, saveCheckpoint…)
 	['checkpoints', () => import('./checkpoints')],
 	['voiceChat', () => import('./voiceChat')],
@@ -387,6 +393,11 @@ export const DEBUG_HOOKS = [
 	['touchSpec', () => import('./touchSpec')],
 	['playMode', () => import('./playMode')],
 	['arTable', () => import('./arTable')],
+	// 60 Q1: Play here
+	['playHere', () => import('./playHere')],
+	// 60 Q5: reference image underlays
+	['underlays', () => import('./underlays')],
+	['underlayPose', () => import('./underlayPose')],
 	// 36-export: the export builder, its stores, the export boot + runtime state
 	['exportBuilder', () => import('./export/exportBuilder.js')],
 	['exportStores', () => import('./export/exportStores.js')],

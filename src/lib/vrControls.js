@@ -227,5 +227,7 @@ export {
 	modeHand,
 	onVRSessionStart,
 	toggleVRMode,
-	vrModeLabelDebug
+	vrModeLabelDebug,
+	requestVRPlayHere,
+	vrPlayHereDebug
 } from './vr/modes.js';

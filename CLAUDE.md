@@ -1,9 +1,14 @@
 # CLAUDE.md — theprototype.app
 
 Collaborative peer-to-peer 3D prototyping app: SvelteKit (static adapter) + Svelte 5 +
-Threlte 8 + three.js, peerjs mesh networking (no server beyond PeerJS signaling), a
+Threlte 8 + three.js, peerjs mesh networking (a session needs only signaling + TURN; the hosted
+site's accounts, cloud saves, assets and community pages are plugins/CDN, never in a session's path), a
 node/flow editor (@xyflow/svelte 0.1.x) driving scene behavior, and a module SDK for
 loadable play content. Everything a user does must be visible to connected peers.
+
+**This file is ~7,000 lines; you are shown only its start.** `CLAUDE-index.md` lists every section, entry and
+sub-entry with its line: grep the index for a word, then read this file from that line. After editing this file
+(or on a merge conflict in the index), run `node scripts/claude-index.cjs`.
 
 ## Architecture map
 
@@ -2667,6 +2672,14 @@ loadable play content. Everything a user does must be visible to connected peers
 2. Never send on a timer after connecting — peerjs silently drops pre-open messages.
    Send in the connection `open` callback (`sendHandshake`) or retry-until-`conn.open`
    (`sendNodes`/`sendAnnotations`/`sendModuleStates` pattern).
+   **`broadcast` skips a conn that is not open**, and an approval DIAL-BACK takes a few
+   hundred ms to open on a fast box and 15 s on a GitHub runner — a room edit in that window
+   used to reach the joiner only if its full-state reply happened to be computed later (the
+   slow GLTF path; the 1.43.2 scatter suites' "B has the terrain" on GitHub). scatter-sync:
+   ROOM_SCOPED broadcasts to a peer in `approvedDialBacks` are HELD (`dialBackQueue.js`,
+   300 msgs / 120 s, overflow abandons the whole queue — the full-state reply still covers
+   it) and flushed, re-gated through `withholdFrom`, at the END of `sendHandshake`.
+   Suite `dialback-sync` (approve + create in one tick).
 3. Each domain needs a full-state reply for late joiners (`get<domain>` in
    `sendHandshake`) and cleanup in `handleDisconnected`.
 4. Key everything by uuid; peers assume the **same app version** (catalogs/builders/
