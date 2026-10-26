@@ -1,5 +1,5 @@
 {
-	"recordedAt": "2026-10-24T15:10:13.838Z",
+	"recordedAt": "2026-10-26T07:45:28.020Z",
 	"settings": {
 		"Theme": {
 			"rows": [
@@ -485,6 +485,7 @@
 		},
 		"Scale": {
 			"rows": [
+				"Both grips scale the world",
 				"Grab style",
 				"Phone selection toolbar",
 				"Pivot point",
@@ -3555,6 +3556,7 @@
 		},
 		"xr": {
 			"rows": [
+				"Both grips scale the world",
 				"Button hints",
 				"Colocation",
 				"Colocation probe",
@@ -4278,6 +4280,7 @@
 		"zoom": {
 			"rows": [
 				"Allow browser pinch zoom",
+				"Both grips scale the world",
 				"High contrast",
 				"Motion",
 				"Node editor opens",
@@ -4290,7 +4293,8 @@
 			"sections": [
 				"Accessibility",
 				"Controls",
-				"Input"
+				"Input",
+				"VR"
 			]
 		},
 		"pan": {
@@ -4386,6 +4390,7 @@
 		},
 		"vr": {
 			"rows": [
+				"Both grips scale the world",
 				"Button hints",
 				"Colocation",
 				"Colocation probe",
@@ -4443,6 +4448,7 @@
 		},
 		"ai": {
 			"rows": [
+				"Both grips scale the world",
 				"Cached downloads",
 				"Colocation probe",
 				"Compress textures (KTX2)",
