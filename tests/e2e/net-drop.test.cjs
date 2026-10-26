@@ -365,8 +365,14 @@ h.run(async () => {
 				window.__drop.holding = true;
 				// @ts-ignore
 				window.__drop.ice('disconnected');
+				// a real drop ends the socket at once (1006, ERR_NETWORK_CHANGED); a graceful close() waits for
+				// the server's close frame, which offline emulation held for 3 s+ on a BUILT app (net-drop-1:
+				// the QUIET premise red on production — B's socket sat CLOSING with peer.open still true), so
+				// peerjs is handed the close event the dropped socket would have fired
 				try {
-					pc.peer._socket._socket?.close();
+					const ws = pc.peer._socket._socket;
+					ws?.close();
+					ws?.onclose?.(new CloseEvent('close', { code: 1006, reason: 'net-drop' }));
 				} catch {}
 			});
 		}
@@ -404,7 +410,8 @@ h.run(async () => {
 			await A.page.evaluate((/** @type {string} */ id) => {
 				/** @type {any} */ let pc;
 				window.__stores.peers.subscribe((/** @type {any} */ v) => (pc = v))();
-				pc.connections[id].peerConnection?.close();
+				// (a conn F-3 or the socket's end already closed is already being redialled)
+				pc.connections[id]?.peerConnection?.close();
 			}, B.id);
 		}
 		const t0 = Date.now();
