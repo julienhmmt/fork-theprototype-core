@@ -1254,15 +1254,19 @@ export class PeerConnection {
 				} else if(data.type == 'drawend') {
 					applyDrawEnd(data);
 				} else if(data.type == 'lockrequest') {
-					applyLockRequest(data);
+					// lock messages act for the CONNECTION (`conn.peer`); the payload's peerId /
+					// from stay on the wire for older peers and are not read (lockTrust.js)
+					applyLockRequest(data, conn.peer);
 				} else if(data.type == 'unlock') {
-					applyUnlock(data);
+					applyUnlock(data, conn.peer);
 				} else if(data.type == 'lockdenied') {
-					applyLockDenied(data);
+					applyLockDenied(data, conn.peer);
 				} else if(data.type == 'lock') {
-					lockGeometry(data.uuid, data.peerId, data.uuids);
+					lockGeometry(data.uuid, conn.peer, data.uuids);
 				} else if(data.type == 'locked') {
-					lockRestore(data.lockeditems);
+					// the host forwards the room's table; anyone else speaks for its own rows,
+					// and only if it may take locks at all (`locked` is on the canApply floor)
+					lockRestore(data.lockeditems, conn.peer, get(sessionHost) === conn.peer, canApply(conn.peer, 'lock'));
 				} else if(data.type == 'userdata') {
 					// F-5: the roster applier UNIONS, so a third peer still linked to someone this host
 					// removed would put them straight back in Users — a removed peer stays out of ours
@@ -1339,7 +1343,7 @@ export class PeerConnection {
 					// which is what every peer before this build did unconditionally.
 					applyRemoteDuplicate(data.sourceUuid, data.uuids, data.name, data.pos, data.transient, data.shareMaterial);
 				} else if(data.type == 'clearscene') {
-					applyClearScene(data.peerId);
+					applyClearScene(conn.peer);
 				} else if(data.type == 'delete') {
 					deleteObject(data.uuid);
 				} else if(data.type == 'color') {
