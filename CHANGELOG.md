@@ -44,6 +44,8 @@ scatter, pull models off your wrist and drop them in, and scale the whole world 
 
 ### 🔧 Fixes
 
+- Someone who joined your room no longer comes back from a network or signaling blip as View-only — their edits kept
+  staying on their own screen while you still saw them as an Editor (hosted site; seen on 1.43.2 and 1.44.0).
 - **On Impact** now fires when an object hits something from any side — a ball thrown at a wall or a target — not only
   when it lands (new **From** option: any side / landing only; On Impact nodes in existing scenes keep landing only).
 - Rotate and Motor nodes spin up from rest when they switch on, and an auto-starting HUD Timer counts down from its full
