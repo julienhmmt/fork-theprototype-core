@@ -25,6 +25,7 @@
 - 🧊 Compressed **(KTX2) textures** load again. Since 1.43.1 the site's security policy stopped the texture decoder, so
   imported models kept full-size textures in GPU memory and "For Quest / web" exports could not be opened back in the
   app. The decoder is rebuilt to run under that policy.
+- Collaboration messages are checked against the sending peer.
 
 ## 1.45.0 — Build in the headset: measure, arrange, paint, scatter, browse assets and shrink the world 🥽
 
