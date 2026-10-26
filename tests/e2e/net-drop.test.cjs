@@ -325,6 +325,9 @@ h.run(async () => {
 					return r ? { myRole: r.myRole, amAdmin: r.amAdmin, theirs: r.roleOf?.(pid) } : null;
 				});
 				safe('viewer', () => S.objectPermissions?.isViewer?.());
+				safe('roomLabelOf(them)', () => S.peerScenes?.roomLabelOf?.(pid));
+				safe('myRoomLabel', () => S.peerScenes?.myRoomLabel?.());
+				safe('toasts', () => (get(S.notifications) ?? []).slice(-4).map((/** @type {any} */ n) => String(n.text ?? n.message ?? n).slice(0, 90)));
 				return out.join('\n      ');
 			}, other)
 			.catch((/** @type {any} */ e) => 'err ' + e);
@@ -381,20 +384,6 @@ h.run(async () => {
 		let cut = false;
 		for (const t = Date.now(); !cut && Date.now() - t < 3000; await A.page.waitForTimeout(150))
 			cut = !(await signalingUp(A)) && !(await signalingUp(B)); // peerjs marks itself down on the socket's close event
-		// net-drop-1: who we are does not change while the signaling link is down. peerjs nulls `peer.id`
-		// on every drop (Peer.disconnect); the cloud roles plugin then counted itself alone, wiped its role
-		// map, and B came back from the heal a VIEWER whose edits never left (deployed builds only — a dev
-		// server has no plugin). Counterfactual: red on v1.44.0 (both read null), green with keepPeerId.
-		const ids = [];
-		for (const p of [A, B])
-			ids.push(
-				await p.page.evaluate(() => {
-					/** @type {any} */ let pc;
-					window.__stores.peers.subscribe((/** @type {any} */ v) => (pc = v))();
-					return pc.peer?.id ?? null;
-				})
-			);
-		h.check(!cut || (ids[0] === A.id && ids[1] === B.id), `${tag} each page still reads its own peer id while the signaling link is down (${ids.join(', ')})`);
 		if (!cut || TRACE)
 			for (const p of [A, B])
 				console.log(
@@ -429,14 +418,35 @@ h.run(async () => {
 					return `sig=${pc.peer?.open ? 1 : 0} rec=${pc.reconnecting.get(pid) ?? '-'} conn=${c ? (c.open ? 'open' : 'neg ' + age(c)) + ' ' + c.connectionId : 'none'} in=${pc.inboundDials?.has(pid) ? 'neg ' + age(pc.inboundDials.get(pid)) : '-'} opened=${pc.openedPeers.has(pid) ? 1 : 0}`;
 				}, id)
 				.catch((/** @type {any} */ e) => 'err ' + String(e?.message ?? e).slice(0, 60));
+		// net-drop-1: who we are does not change while the signaling link is down. peerjs nulls `peer.id`
+		// on every drop (Peer.disconnect) until a reconnect re-registers; the cloud roles plugin then
+		// counted itself alone, wiped its role map, and B came back from the heal a VIEWER whose edits never
+		// left (deployed builds only — a dev server has no plugin). Sampled through the whole drop, since
+		// peerjs's own retries put the id back between failed attempts. Counterfactual: red on v1.44.0.
+		/** @type {string[]} */
+		const idLost = [];
+		const ownIds = async () => {
+			for (const p of [A, B]) {
+				const id = await p.page
+					.evaluate(() => {
+						/** @type {any} */ let pc;
+						window.__stores.peers.subscribe((/** @type {any} */ v) => (pc = v))();
+						return pc.peer?.id ?? null;
+					})
+					.catch(() => 'err');
+				if (id !== p.id && idLost.length < 4) idLost.push(`${p === A ? 'A' : 'B'} read ${id} at ${Date.now() - t0}ms`);
+			}
+		};
+		await ownIds();
 		const watch = async () => {
+			if (Date.now() - t0 < DROP_MS) await ownIds();
 			timeline.push(`${((Date.now() - t0) / 1000).toFixed(1)}s A[${await state(A, B.id)}] B[${await state(B, A.id)}]`);
 			if (!(await inRoster(A, B.id))) lost.push(`A lost B at ${Date.now() - t0}ms`);
 			if (!(await inRoster(B, A.id))) lost.push(`B lost A at ${Date.now() - t0}ms`);
 			if ((await bLocks()) === 0) lost.push(`A dropped B's lock at ${Date.now() - t0}ms`);
 		};
 		// an edit on each side DURING the drop
-		await A.page.waitForTimeout(Math.min(1500, DROP_MS / 3));
+		for (const until = Date.now() + Math.min(1500, DROP_MS / 3); Date.now() < until; ) await ownIds();
 		const duringA = await create(A, 'sphere');
 		const duringB = await create(B, 'cylinder');
 		while (Date.now() - t0 < DROP_MS) {
@@ -444,6 +454,7 @@ h.run(async () => {
 			await A.page.waitForTimeout(500);
 		}
 		h.check(cut, `${tag} premise: the signaling link really was down on both pages (at the cut)`);
+		h.check(idLost.length === 0, `${tag} each page read its own peer id throughout the drop (${idLost.join(', ') || 'always'})`);
 		// ---- the network comes back: lift the shim's hold FIRST, so the app's own `online` retry
 		// (fired by setOffline(false)) reaches the real server rather than the held-down socket
 		for (const p of [A, B]) {
@@ -480,6 +491,7 @@ h.run(async () => {
 		h.check(healedBoth, `${tag} the conn is open both ways again`);
 		h.check((await disconnectToasts(A, toastsA)) === 0 && (await disconnectToasts(B, toastsB)) === 0, `${tag} no "disconnected" toast on either side`);
 		await h.eventually(() => has(B, duringA), (v) => v, `${tag} A's edit made during the drop reaches B`, 15000);
+		if (!TRACE && !(await has(B, duringA))) await wireTrace(tag, "A's edit never reached B");
 		await h.eventually(() => has(A, duringB), (v) => v, `${tag} B's edit made during the drop reaches A`, 15000);
 		if (!TRACE && !(await has(A, duringB))) await wireTrace(tag, "B's edit never reached A");
 		const afterB = await create(B, 'cone');
