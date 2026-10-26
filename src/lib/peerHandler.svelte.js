@@ -37,7 +37,7 @@ import { registerDebugHook } from '$lib/debugHooks';
 import { routePerfLive, perfLivePeerGone } from '$lib/perf/liveWire.js'; // 34 PF: the live perf stream (an import-free leaf)
 import { noteWireError } from '$lib/wireErrors';
 import { composeAdmitNotice, shortPeer } from '$lib/admitNotice';
-import { ICE_DROP_GRACE_MS, LINK_POLL_MS, strikesNeeded, quietPeerError, unavailablePeerId, consentCounters, linkSilence } from '$lib/peerDrop';
+import { ICE_DROP_GRACE_MS, LINK_POLL_MS, strikesNeeded, quietPeerError, unavailablePeerId, consentCounters, linkSilence, keepPeerId } from '$lib/peerDrop';
 import { createDialBackQueue } from '$lib/dialBackQueue'; // scatter-sync: room edits held for an opening approval dial-back
 import { noteWire } from '$lib/sceneBudget';
 import { applyAnnotation, applyAnnotationsSnapshot, sendAnnotations } from '$lib/annotationsHandler';
@@ -380,7 +380,8 @@ export class PeerConnection {
 			// 36-export: an exported game is single-player and opens NO signaling socket — a stub
 			// Peer that never opens (`connect()` answers undefined, which every dial site already
 			// guards, the signaling-down rule), so `$peers.peer.id` and every send stay valid
-			this.peer = exportMode ? /** @type {Peer} */ (offlinePeer(this.myId)) : new Peer(this.myId, options);
+			// net-drop-1: the id stays readable through a signaling drop (peerDrop.keepPeerId)
+			this.peer = exportMode ? /** @type {Peer} */ (offlinePeer(this.myId)) : keepPeerId(new Peer(this.myId, options), this.myId);
 		};
 
 		// 27-F (audit H2): THE recreate ritual, in one place. Four callers had their own
@@ -2156,7 +2157,8 @@ export class PeerConnection {
 	 * Called from the window's timers and when the signaling link comes back.
 	 * @param {string} peerId */
 	reconnectDial(peerId) {
-		if (this.connections[peerId] || !(this.peer.id < peerId)) return;
+		// a Peer off the signaling server cannot dial (its id still reads, keepPeerId): the `open` handler redials
+		if (this.connections[peerId] || this.peer.disconnected || !(this.peer.id < peerId)) return;
 		const conn = this.peer.connect(peerId, dialOptions());
 		if (!conn) return; // the signaling link is down: the next tick (or its return) redials
 		/** @type {any} */ (conn).__dialedAt = Date.now();

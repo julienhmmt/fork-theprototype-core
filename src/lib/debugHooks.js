@@ -48,6 +48,9 @@ export const DEBUG_HOOKS = [
 	// 60 Q6: the local asset cache (OPFS) — index, stats, clear, persist
 	['assetCache', () => import('./assetCache.js')],
 	['placeGhost', () => import('./placeGhost.js')],
+	['vrPlace', () => import('./vr/placeRay.js')],
+	['vrAssetBrowser', () => import('./vr/assetBrowser.js')],
+	['vrHands', () => import('./vr/handInput.js')],
 	['tourVR', () => import('./tours/vrPanel.js')],
 	// 36-share (B13): the recorder + its stores
 	['recording', () => import('./recording/recorder.js')],
@@ -183,6 +186,11 @@ export const DEBUG_HOOKS = [
 	['vrDollhouse', () => import('./vr/dollhouse.js')],
 	['vrWorldSnap', () => import('./vr/worldSnap.js')],
 	['vrSculpt', () => import('./vr/sculpt.js')],
+	// 52 V1/V2: VR measure (the laser tool + its leaf) and the build-tool radial entries (Arrange's runArrange)
+	['vrMeasure', () => import('./vr/measure.js')],
+	['vrMeasureCore', () => import('./vrMeasureCore')],
+	['vrBuildRings', () => import('./vr/buildRings.js')],
+	['align', () => import('./align')],
 	['vrTourTargets', () => import('./vr/tourTargets.js')],
 	['vrPrefs', () => import('./vr/prefs.js')],
 	// 53 (A7): recenter + the lift / recenter counts

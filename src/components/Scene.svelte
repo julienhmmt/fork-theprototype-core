@@ -105,6 +105,7 @@
 	import VRSelectionShell from './play/VRSelectionShell.svelte';
 	// 36 U3b: the VR welcome tour's world-space panel
 	import TourVRPanel from './tours/TourVRPanel.svelte';
+	import VRAssetBrowser from './play/VRAssetBrowser.svelte'; // 52-browser: the wrist Asset Browser
 	// 36 A2: the headset browser's own "Enter VR" offer — decided by us, not threlte's default
 	import { xrOfferMode } from '$lib/xrOffer';
 	import MeasureOverlay from './MeasureOverlay.svelte';
@@ -1515,7 +1516,7 @@
 			if (Date.now() - pinchMenuToggledAt < 250) return;
 			// K1: a sleeve ghost pick/place just handled this trigger — the release
 			// must not fall through to raycastSelect
-			if (vrModuleSelectSwallowed()) return;
+			if (vrModuleSelectSwallowed(xrControllers.indexOf(controller))) return; // 52-browser: per controller
 			// the keyboard is modal on top of any panel (116)
 			if ($vrKeyboardTarget) {
 				const key = raycastKeyboard(xrControllers.indexOf(controller));
@@ -1929,6 +1930,7 @@ position={[0, 2, 3]}
 <VRKeyboard />
 <VRSelectionShell />
 <TourVRPanel />
+<VRAssetBrowser />
 
 <XR
 	offerSession={$xrOfferMode}
