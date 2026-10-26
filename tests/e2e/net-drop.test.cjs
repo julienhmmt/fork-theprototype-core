@@ -17,6 +17,12 @@
 //  2. HARD (a network CHANGE): the same, plus the peer connection is closed outright at the start, so
 //     the B5 reconnect window has to redial — through a signaling server it cannot reach until the
 //     drop ends. The window is ~15.5 s (checks at 0.5/1/2/4/8 s), so a 5 s drop must fit inside it.
+// net-drop-1 (deployed builds): with a cloud ROLES plugin loaded — every Pages deploy, or a dev server run
+// with E2E_CLOUD_PLUGIN=https://theprototype.pages.dev/cloud-plugin.js — the joiner came back from the heal
+// a VIEWER and its edits never left it: peerjs nulls `peer.id` while the signaling socket is down, the
+// plugin read "no id, one peer" as alone and wiped its role map. Two checks hold the fix
+// (peerDrop.keepPeerId): the own id at the cut (no plugin needed; red on v1.44.0) and roles unchanged by
+// the heal (with a plugin; B read viewer on v1.44.0 + the production plugin, 4 B -> A checks red).
 // Counterfactual: NETDROP_MS=20000 outlasts the window — phase 2 goes red (teardown + toast; measured
 // e2e/v10cf). Phase 1 stays green at 20 s, by design: a QUIET drop never breaks the data channel, so it
 // proves the conn carries on, not the window's length.
@@ -324,6 +330,17 @@ h.run(async () => {
 			.catch((/** @type {any} */ e) => 'err ' + e);
 	}
 
+	/** each side's own role and its role for the other, from the rolesInfo bridge (null without a plugin) */
+	async function roles() {
+		const one = (/** @type {any} */ p, /** @type {string} */ other) =>
+			p.page.evaluate((/** @type {string} */ pid) => {
+				/** @type {any} */ let r;
+				window.__stores.cloudHooks?.rolesInfo?.subscribe((/** @type {any} */ v) => (r = v))();
+				return r ? `${r.myRole}/${r.roleOf?.(pid)}` : null;
+			}, other);
+		return { a: await one(A, B.id), b: await one(B, A.id) };
+	}
+
 	/** @param {'quiet' | 'hard'} shape */
 	async function drop(shape) {
 		const tag = shape.toUpperCase() + ` ${DROP_MS / 1000}s drop:`;
@@ -337,6 +354,7 @@ h.run(async () => {
 				pc.connections[id].__th1 = 'before';
 			}, other);
 		}
+		const rolesBefore = await roles();
 		// ---- the network goes away
 		for (const p of [A, B]) await p.page.context().setOffline(true);
 		for (const p of [A, B]) {
@@ -357,6 +375,20 @@ h.run(async () => {
 		let cut = false;
 		for (const t = Date.now(); !cut && Date.now() - t < 3000; await A.page.waitForTimeout(150))
 			cut = !(await signalingUp(A)) && !(await signalingUp(B)); // peerjs marks itself down on the socket's close event
+		// net-drop-1: who we are does not change while the signaling link is down. peerjs nulls `peer.id`
+		// on every drop (Peer.disconnect); the cloud roles plugin then counted itself alone, wiped its role
+		// map, and B came back from the heal a VIEWER whose edits never left (deployed builds only — a dev
+		// server has no plugin). Counterfactual: red on v1.44.0 (both read null), green with keepPeerId.
+		const ids = [];
+		for (const p of [A, B])
+			ids.push(
+				await p.page.evaluate(() => {
+					/** @type {any} */ let pc;
+					window.__stores.peers.subscribe((/** @type {any} */ v) => (pc = v))();
+					return pc.peer?.id ?? null;
+				})
+			);
+		h.check(!cut || (ids[0] === A.id && ids[1] === B.id), `${tag} each page still reads its own peer id while the signaling link is down (${ids.join(', ')})`);
 		if (!cut || TRACE)
 			for (const p of [A, B])
 				console.log(
@@ -428,6 +460,14 @@ h.run(async () => {
 		}
 		h.check(lost.length === 0, `${tag} each peer kept the other in its roster, and B's lock stood, throughout (${lost.slice(0, 2).join(', ') || 'never lost'})`);
 		const healedBoth = (await openTo(A, B.id)) && (await openTo(B, A.id));
+		// with a roles plugin loaded (every deployed build; E2E_CLOUD_PLUGIN on a dev server), the heal
+		// changes nobody's role — on either side
+		const rolesNow = await roles();
+		if (rolesBefore.a || rolesBefore.b)
+			h.check(
+				JSON.stringify(rolesNow) === JSON.stringify(rolesBefore),
+				`${tag} roles unchanged by the heal (before ${JSON.stringify(rolesBefore)}, after ${JSON.stringify(rolesNow)})`
+			);
 		if (TRACE) await wireTrace(tag, 'after the heal');
 		if (!healedBoth) console.log(`  ${tag} timeline (A=${A.id} B=${B.id}; the lower id dials):\n    ` + timeline.join('\n    '));
 		h.check(healedBoth, `${tag} the conn is open both ways again`);
