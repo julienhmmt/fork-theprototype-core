@@ -650,8 +650,8 @@ function mapCmd(argv) {
  *  (c) battery.json `tier1_always` (CI smoke, the network/two-peer core, join/save/edit/play) + `--also`
  *      (the release's focused union suites);
  *  (d) every desk suite with no map entry (new since the map, a modules flight, a node-only suite);
- *  (e) a SHARED file — named in battery.json `tier1_always_files`, or mapped by more than `tier1_shared_share`
- *      of the mapped suites (App.svelte, the stores, the editor shell, helpers.cjs) — pulls its suites in only
+ *  (e) a SHARED file — named in battery.json `tier1_always_files`, or run past the floor by more than
+ *      `tier1_shared_suites` mapped suites (default 16 = HEAVY_K * 2, the line above which the map names heavy users) (App.svelte, the stores, the editor shell, helpers.cjs) — pulls its suites in only
  *      while tier 1 stays under `tier1_cap` of the desk suite-minutes, smallest first; one that would cross
  *      the cap is reported and left to the always-set and tier 2 — except its HEAVY users (the map's
  *      `heavy`), which come along whatever the cap.
@@ -668,7 +668,7 @@ function matchesAny(file, patterns) {
 }
 
 /**
- * @param {DeskBattery & { tier1_always?: string[], tier1_always_files?: string[], tier1_cap?: number, tier1_shared_share?: number }} b
+ * @param {DeskBattery & { tier1_always?: string[], tier1_always_files?: string[], tier1_cap?: number, tier1_shared_suites?: number }} b
  * @param {CoverageMap|null} map @param {Change} change @param {{ also?: string[], requires?: Record<string, string[]> }} [o]
  * @returns {Tiers}
  */
@@ -677,8 +677,8 @@ function selectTiers(b, map, change, o = {}) {
 	const names = new Set(entries.map(([n]) => n));
 	const secsOf = Object.fromEntries(entries);
 	const total = entries.reduce((t, [, s]) => t + s, 0);
-	const cap = b.tier1_cap ?? 0.5;
-	const sharedShare = b.tier1_shared_share ?? 0.4;
+	const cap = b.tier1_cap ?? 0.3;
+	const sharedSuites = b.tier1_shared_suites ?? HEAVY_K * 2;
 	/** @type {Map<string, string[]>} */
 	const why = new Map();
 	const add = (/** @type {string} */ n, /** @type {string} */ reason) => {
@@ -692,7 +692,7 @@ function selectTiers(b, map, change, o = {}) {
 	const users = new Map();
 	for (const s of mapped) for (const f of /** @type {CoverageMap} */ (map).suites[s]) users.set(f, [...(users.get(f) || []), s]);
 	const alwaysFiles = b.tier1_always_files || [];
-	const isShared = (/** @type {string} */ f) => matchesAny(f, alwaysFiles) || (users.get(f) || []).length > sharedShare * mapped.length;
+	const isShared = (/** @type {string} */ f) => matchesAny(f, alwaysFiles) || (users.get(f) || []).length > sharedSuites;
 	// (b) the suites themselves, and what requires a changed support file
 	for (const n of change.added) add(n, 'added');
 	for (const n of change.changedSuites) add(n, 'changed');
@@ -703,7 +703,7 @@ function selectTiers(b, map, change, o = {}) {
 			.filter(([, req]) => req.includes(f))
 			.map(([s]) => s)
 			.filter((s) => names.has(s));
-		if (matchesAny(f, alwaysFiles) || list.length > sharedShare * names.size) shared.push({ file: f, list });
+		if (matchesAny(f, alwaysFiles) || list.length > sharedSuites) shared.push({ file: f, list });
 		else for (const s of list) add(s, `requires ${path.basename(f)}`);
 	}
 	// (c) the always-set, (d) no map entry
@@ -842,12 +842,12 @@ function tiersOf(argv) {
 function tiersSummary(t) {
 	const n = t.tier1.length + t.tier2.length;
 	const min = (/** @type {number} */ s) => Math.round(s / 60);
-	const reasons = { covers: 0, added: 0, changed: 0, requires: 0, always: 0, unmapped: 0, shared: 0 };
+	const reasons = { covers: 0, heavy: 0, added: 0, changed: 0, requires: 0, always: 0, unmapped: 0, shared: 0 };
 	for (const p of t.tier1) {
 		const k = /** @type {keyof typeof reasons} */ (p.why[0].split(' ')[0]);
 		if (k in reasons) reasons[k]++;
 	}
-	return `TIERS ${t.base}..${t.head}: tier 1 = ${t.tier1.length}/${n} suites (${Math.round((100 * t.tier1.length) / (n || 1))} %), ${min(t.secs.tier1)} suite-min; tier 2 = ${t.tier2.length} suites, ${min(t.secs.tier2)} suite-min (battery.json seconds) · tier 1 by ${Object.entries(reasons)
+	return `TIERS ${t.base}..${t.head}: tier 1 = ${t.tier1.length}/${n} suites (${Math.round((100 * t.tier1.length) / (n || 1))} %), ${min(t.secs.tier1)} suite-min (${Math.round((100 * t.secs.tier1) / (t.secs.tier1 + t.secs.tier2 || 1))} %); tier 2 = ${t.tier2.length} suites, ${min(t.secs.tier2)} suite-min (battery.json seconds) · tier 1 by ${Object.entries(reasons)
 		.filter(([, v]) => v)
 		.map(([k, v]) => `${k} ${v}`)
 		.join(', ')}`;
@@ -990,4 +990,4 @@ if (require.main === module) {
 	}
 }
 
-module.exports = { normalise, fingerprints, classify, coverage, e2eFiles, deskEntries, half, buildMap, formatMap, parseMap, selectTiers, lockChanges, suiteRequires, releaseCheck };
+module.exports = { normalise, fingerprints, classify, coverage, e2eFiles, deskEntries, half, buildMap, formatMap, parseMap, selectTiers, readCoverage, changeOf, lockChanges, suiteRequires, releaseCheck };

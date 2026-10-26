@@ -112,12 +112,12 @@ describe('battery-tiers: selection by coverage', () => {
 		expect(tight.shared).toEqual([{ file: 'src/App.svelte', suites: 2, taken: false }]);
 		expect(names(tight.tier1)).not.toContain('context-menu-redesign');
 	});
-	it('a file covered by more than tier1_shared_share of the mapped suites is shared without being listed', () => {
+	it('a file run past the floor by more than tier1_shared_suites suites is shared without being listed', () => {
 		const wide = { ...map, suites: Object.fromEntries(Object.entries(map.suites).map(([s, f]) => [s, s === 'quiet' ? f : [...f, 'src/lib/everywhere.js']])) };
-		const t = selectTiers({ ...b, tier1_cap: 0.2 }, wide, change({ src: ['src/lib/everywhere.js'] }));
+		const t = selectTiers({ ...b, tier1_cap: 0.2, tier1_shared_suites: 4 }, wide, change({ src: ['src/lib/everywhere.js'] }));
 		expect(t.shared[0]).toMatchObject({ file: 'src/lib/everywhere.js', taken: false });
 		// its heaviest users come along whatever the cap
-		const heavy = selectTiers({ ...b, tier1_cap: 0.2 }, { ...wide, heavy: { 'src/lib/everywhere.js': ['paint'] } }, change({ src: ['src/lib/everywhere.js'] }));
+		const heavy = selectTiers({ ...b, tier1_cap: 0.2, tier1_shared_suites: 4 }, { ...wide, heavy: { 'src/lib/everywhere.js': ['paint'] } }, change({ src: ['src/lib/everywhere.js'] }));
 		expect(heavy.tier1.find((p) => p.name === 'paint')?.why).toEqual(['heavy src/lib/everywhere.js']);
 	});
 	it('a changed package pulls the suites that ran it; boot-only and uncovered files are reported, not guessed', () => {
