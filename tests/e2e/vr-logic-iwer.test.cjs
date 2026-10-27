@@ -263,7 +263,8 @@ h.run(async () => {
 		const draws0 = (await dbg()).panelDraws;
 		await B.page.evaluate(([gid, nid]) => window.__stores.nodesHandler.setNodeData(nid, { label: 'Turn rate' }, gid), [ids.box, ids.s]);
 		await h.eventually(async () => (await dbg()).cards.find((c) => c.id === ids.s)?.label, (l) => l === 'Turn rate', "B's rename shows on A's panel", 10000);
-		h.check((await dbg()).panelDraws > draws0, 'the panel repainted for it');
+		// the label is in the layout first; the canvas repaints on the next XR frame (deployed builds: a frame later)
+		await h.eventually(async () => (await dbg()).panelDraws, (n) => n > draws0, 'the panel repainted for it', 5000);
 	}
 
 	// ---- V. a viewer --------------------------------------------------------------------------------------
