@@ -1,5 +1,6 @@
 // 53-reader (A4) — THE AXE GATE. axe-core (via @axe-core/playwright) over the main surfaces: the
-// editor shell, the object list, the Inspector, Settings, the Asset Browser, the profile menu and the phone shell.
+// editor shell, the object list, the Inspector, Settings, the Asset Browser, the profile menu, the docked view
+// tab strip (54 X5) and the phone shell.
 // fix-batch-1 #23: + the profile menu's menu-button keys (Tab passes it, Enter/Space open, Escape returns).
 //
 // It FAILS only on `serious` and `critical` violations. `moderate` and `minor` are LISTED in the
@@ -189,6 +190,31 @@ h.run(async () => {
 	h.check(p4.open && p4.inRow, `profile menu: Space opens it too (${JSON.stringify(p4)})`);
 	await page.keyboard.press('Escape');
 	await h.closePeer(A);
+
+	// ---- 5c. 54 X5: the bottom dock's tab strip — a single tab and a split pair ("A / B"). Each ✕
+	// sat in the tablist as a control (critical aria-required-children); it is a pointer affordance
+	// now and Delete on a focused tab closes it. COUNTERFACTUAL (origin/feat/70-int e8018b38): the
+	// gate is red on aria-required-children and Delete leaves the tab in place.
+	const D = await h.setupPage(browser, 'dock', { context: { viewport: { width: 1440, height: 900 } }, storage: { flowDocked: 'true', explorerDocked: 'true', animationDocked: 'true' } });
+	await h.answerRestore(D).catch(() => {});
+	await D.page.evaluate(async () => {
+		const s = window.__stores;
+		for (const st of [s.flowGraphClose, s.explorerClose, s.animationClose]) {
+			st.set(false);
+			await new Promise((r) => setTimeout(r, 500));
+		}
+		s.bottomDock.activateDock('flow');
+		s.bottomDock.splitDock('flow', 'explorer');
+	});
+	await D.page.waitForFunction(() => !!document.querySelector('.dt-tabs [data-dock-pair]') && !!document.querySelector('.dt-tabs [data-dock-tab="animation"]'), null, { timeout: 20000 }).catch(() => {});
+	await D.page.waitForTimeout(400);
+	await gate(D.page, 'docked view', '.dt-row', 'js:!!document.querySelector(".dt-tabs [data-dock-pair]") && !!document.querySelector(".dt-tabs [data-dock-tab=animation]")');
+	await D.page.evaluate(() => /** @type {HTMLElement} */ (document.querySelector('.dt-tabs [data-dock-tab="animation"]'))?.focus());
+	await D.page.keyboard.press('Delete');
+	await D.page.waitForTimeout(400);
+	const dockAfter = await D.page.evaluate(() => ({ animation: !!document.querySelector('.dt-tabs [data-dock-tab="animation"]'), pair: !!document.querySelector('.dt-tabs [data-dock-pair]') }));
+	h.check(!dockAfter.animation && dockAfter.pair, `docked view: Delete on a focused tab closes that tab only (${JSON.stringify(dockAfter)})`);
+	await h.closePeer(D);
 
 	// ---- 6. the phone shell (Find N6 folded) ---------------------------------------------------
 	const P = await h.setupPage(browser, 'phone', { context: { viewport: { width: 390, height: 896 }, deviceScaleFactor: 2.9, isMobile: true, hasTouch: true } });

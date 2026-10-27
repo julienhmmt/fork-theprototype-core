@@ -1,5 +1,5 @@
 {
-	"recordedAt": "2026-10-26T07:45:28.020Z",
+	"recordedAt": "2026-10-27T09:37:53.574Z",
 	"settings": {
 		"Theme": {
 			"rows": [
@@ -438,6 +438,7 @@
 				"Layout",
 				"Look speed",
 				"Project actions",
+				"Remember windows per screen setup",
 				"Show in edit",
 				"Show touch controls",
 				"UI scale",
@@ -2479,6 +2480,7 @@
 			"rows": [
 				"Allow text selection everywhere",
 				"Allow undocking on touch screens",
+				"Always show tab strip in windows",
 				"Announce new versions",
 				"Custom theme",
 				"Density",
@@ -2495,6 +2497,7 @@
 				"Phone grab handle",
 				"Phone selection toolbar",
 				"Project actions",
+				"Remember windows per screen setup",
 				"Reset tips",
 				"Reset tours",
 				"Show FPS and draw calls",
@@ -3139,6 +3142,7 @@
 			"rows": [
 				"Allow text selection everywhere",
 				"Allow undocking on touch screens",
+				"Always show tab strip in windows",
 				"Announce new versions",
 				"Custom theme",
 				"Density",
@@ -3156,6 +3160,7 @@
 				"Phone grab handle",
 				"Phone selection toolbar",
 				"Project actions",
+				"Remember windows per screen setup",
 				"Reset tips",
 				"Reset tours",
 				"Show FPS and draw calls",
@@ -3186,6 +3191,7 @@
 			"rows": [
 				"Allow text selection everywhere",
 				"Allow undocking on touch screens",
+				"Always show tab strip in windows",
 				"Announce new versions",
 				"Button hints",
 				"Custom theme",
@@ -3207,6 +3213,7 @@
 				"Phone grab handle",
 				"Phone selection toolbar",
 				"Project actions",
+				"Remember windows per screen setup",
 				"Reset panel positions",
 				"Reset tips",
 				"Reset tours",
@@ -4300,6 +4307,7 @@
 		"pan": {
 			"rows": [
 				"Allow text selection everywhere",
+				"Always show tab strip in windows",
 				"Animation: show / bring to front / hide",
 				"Collapse / expand the selected nodes",
 				"Dock resizes the viewport",
