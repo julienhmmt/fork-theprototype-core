@@ -41,6 +41,7 @@ windows. And the Code tab now makes, renames, moves and deletes files and folder
 
 - Renaming a shared file (or renaming / moving a shared folder) now reaches everyone in the session.
 - Saving a shared file no longer leaves an extra copy of its old version in the Library.
+- The dock's tab strip passes the accessibility check, and Delete closes the focused dock tab.
 
 ## 1.45.1 — Fixes: path waypoints, AI connections, object flows, HDRI drops, local objects 🔧
 
