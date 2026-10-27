@@ -85,6 +85,7 @@
 	import { updateOnionSkin } from '$lib/onionSkin';
 	import { startCables, updateCables } from '$lib/audioPatch';
 	import { updateTinyMarkers } from '$lib/tinyMarkers';
+	import { tickAgentMarkers } from '$lib/agentPresence'; // 74 VH3
 	import { cameraPreview, activeOrbit, setOrbitEnabled } from '$lib/cameraPreview';
 	import CameraPreview from './CameraPreview.svelte';
 	import { startEditorNavigation, updateEditorNavigation } from '$lib/editorNavigation';
@@ -451,6 +452,7 @@
 		updateCables(); // 23-A4: patch cables follow their plugs; the routing diff runs here too
 		updateOnionSkin(); // 17-E F6: ghosts at the neighbouring keys (local, off by default)
 		updateTinyMarkers(); // R2: a dot to aim at when an object has no size left
+		tickAgentMarkers(renderer.xr.isPresenting ? renderer.xr.getCamera() : camera.current); // 74 VH3: where an AI agent is working
 		tickModuleProxy(); // 30 P3: a selected module group's proxy box follows its content
 		if (!renderer.xr.isPresenting) updateEditorNavigation(delta, camera.current, $activeOrbit);
 		tickStartView(); // 36 L2: last — a held camera undoes this frame's input before it is drawn

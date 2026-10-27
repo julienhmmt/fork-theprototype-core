@@ -51,6 +51,7 @@ export const DEBUG_HOOKS = [
 	['vrPlace', () => import('./vr/placeRay.js')],
 	['vrAssetBrowser', () => import('./vr/assetBrowser.js')],
 	['vrLogic', () => import('./vr/logicPanel.js')], // 74 VH1
+	['agentPresence', () => import('./agentPresence.js')], // 74 VH3
 	['vrHands', () => import('./vr/handInput.js')],
 	['tourVR', () => import('./tours/vrPanel.js')],
 	// 36-share (B13): the recorder + its stores
