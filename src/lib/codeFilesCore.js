@@ -260,7 +260,7 @@ export function filesTree(input) {
 					key: 'f:' + f.id,
 					label: f.name,
 					...(detail ? { detail } : {}),
-					icon: 'file',
+					icon: extensionOf(f.name) === 'js' ? 'file-code' : extensionOf(f.name) === 'json' ? 'braces' : 'file-text',
 					itemId: f.id,
 					parentId,
 					request: { source: extensionOf(f.name) === 'js' ? 'script' : 'text', ref: { itemId: f.id } }
