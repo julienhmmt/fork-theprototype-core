@@ -52,6 +52,7 @@
 	import { stripScroll } from '$lib/ui/stripScroll.js';
 	import ContextMenu from './ContextMenu.svelte';
 	import Icon from './ui/Icon.svelte';
+	import { tearOffAt } from '$lib/windows/panelPlaces.js';
 
 	// 40 F9: on a phone (with floating windows off) "+" is a sheet listing EVERY window with
 	// a show/hide toggle; with floating windows on, a phone behaves like the desktop.
@@ -249,6 +250,8 @@
 				undockInto(dragged, join);
 				return;
 			}
+			// 70 W4: released outside the browser window — it tears off into a window of its own there
+			if (out && tearOffAt(dragged, e)) return;
 			if (out) {
 				// the W5 seam every panel already consumes — the panel owns its own mode
 				armDockMode(dragged, false);
