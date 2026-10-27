@@ -481,6 +481,8 @@ export const DEBUG_HOOKS = [
 	['panelHost', () => import('./windows/panelHost.js')],
 	['panelLayout', () => import('./windows/panelLayout.js')],
 	['codeSidebars', () => import('./codeSidebars')],
+	// 70 W1: files and folders from the Code tab (create / rename / move / delete, their undo)
+	['codeFiles', () => import('./codeFiles')],
 	['scriptAssets', () => import('./scriptAssets')],
 	['codeTabs', () => import('./codeTabs')],
 	['aiExtensions', () => import('./ai/aiExtensions')],
