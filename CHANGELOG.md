@@ -5,6 +5,43 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## 1.46.0 — Every panel in its own window, and files from the Code tab 🪟
+
+Spread the editor over two monitors: pop out any panel, or a whole dock, into its own window and move tabs between
+windows. And the Code tab now makes, renames, moves and deletes files and folders itself.
+
+### 🪟 Any panel in its own window
+
+- **Pop out any panel**: right-click a dock tab, a sidebar tab or a floating window's header ▸ **Pop out into a new
+  window** — the Explorer, Properties / Configure Scene, the Node editor, Timeline, Animation, UV, Shader and HUD
+  editors, the Profiler, the Debugger, Chat, the AI assistant and Code. Drag the window to any monitor; everything
+  stays live. Or drag a tab out of the browser window and let go.
+- **A whole dock at once**: **Pop out the whole dock** / **Pop out this sidebar** opens one window with every tab.
+- **Tabs between windows**: a window with one panel shows just its name — that name is the tab: drag it, or
+  right-click for **Dock back** / **Move to…**. Drop a second panel on it (or use its **+**) and a tab strip appears;
+  back to one panel, the strip goes. A popped-out dock always shows its tabs (Settings ▸ Interface ▸ **Always show
+  tab strip in windows** shows them everywhere).
+- **One panel, one place**: adding a panel that is open somewhere else moves it there. Drag a tab onto any window's
+  header, or back into the app (left sidebar, right sidebar, bottom dock — or anywhere else to put it back where it
+  was).
+- **Your windows come back**: reload and the windows reopen where they were (per monitor setup). If the browser blocks
+  pop-ups, a bar offers **Open 2 windows** — one click per window. **Bring all windows back** (command palette, or any
+  tab menu) puts everything back in the app. Closing the app's tab closes its windows.
+- Desktop only — phones, touch screens and VR keep one window.
+
+### 📁 Files from the Code tab
+
+- Create, rename, move and delete files and folders from the Code tab (**Project ▸ Files**): **New file** (Script,
+  Note or JSON), **New folder**, rename (F2), move (drag, **Move to**, or Ctrl+X then Ctrl+V), delete (Del, to
+  Deleted). New scripts start from a behaviour template and open in a tab. Undo with Ctrl+Z in the file tree or the
+  toast. Files made here are Explorer files and follow its sharing rules; viewers can only read. Works in the pop-out
+  window too.
+
+### 🔧 Fixes
+
+- Renaming a shared file (or renaming / moving a shared folder) now reaches everyone in the session.
+- Saving a shared file no longer leaves an extra copy of its old version in the Library.
+
 ## 1.45.1 — Fixes: path waypoints, AI connections, object flows, HDRI drops, local objects 🔧
 
 - 🛤️ **Path patrol**: placing waypoints no longer traps the viewport. A **Placing waypoints** box shows while it is on
