@@ -11,7 +11,7 @@
   **Selected ▸ Edit logic** opens the selected object's own flow. Trigger-drag a card to move it; drag from a socket to
   wire it with the laser (green while the types fit, red when they don't); drag from a wired input to pick that wire up
   and move it, or drop it on the empty graph to remove it. Click a card and its values open on a **wrist pad**: − / +
-  for numbers, the VR keyboard for text, ‹ › for choices and colours, plus Rename, Disconnect and Delete. **+ Node**
+  for numbers, the VR keyboard for text, ‹ › for choices and colours, plus Rename, Unwire and Delete. **+ Node**
   adds nodes from the same groups as the desktop palette. Undo / redo, Fit, zoom (the stick) and pan work too, a grip
   carries the panel, and peers on the desktop see every edit live. Viewers get the panel read-only. Groups are
   read-only in VR, and custom, object-flow and sound nodes are still added on the desktop.
