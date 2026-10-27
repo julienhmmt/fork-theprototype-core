@@ -5,6 +5,21 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
+## Next release — Game logic in the headset, and a phone in a shared room 🥽
+
+- 🔀 **Edit game logic in VR**: radial ▸ **Tools ▸ Logic** opens the scene's node graph as a panel in the headset, and
+  **Selected ▸ Edit logic** opens the selected object's own flow. Trigger-drag a card to move it; drag from a socket to
+  wire it with the laser (green while the types fit, red when they don't); drag from a wired input to pick that wire up
+  and move it, or drop it on the empty graph to remove it. Click a card and its values open on a **wrist pad**: − / +
+  for numbers, the VR keyboard for text, ‹ › for choices and colours, plus Rename, Disconnect and Delete. **+ Node**
+  adds nodes from the same groups as the desktop palette. Undo / redo, Fit, zoom (the stick) and pan work too, a grip
+  carries the panel, and peers on the desktop see every edit live. Viewers get the panel read-only. Groups are
+  read-only in VR, and custom, object-flow and sound nodes are still added on the desktop.
+- 📱 **A phone joins a headset's room**: on an Android phone, **More ▸ Join room (AR)** (or the Play menu ▸
+  **Join the room (AR)**). Tap the floor at the point the headsets calibrated on, then a point along the agreed edge
+  (at least 30 cm away), and the phone sees the scene where the headsets do — same room key, same anchored objects.
+  **Recalibrate** redoes the two taps. An unfolded phone's Play menu now offers **Play on a table (AR)** and **Join the room (AR)** too.
+
 ## 1.45.1 — Fixes: path waypoints, AI connections, object flows, HDRI drops, local objects 🔧
 
 - 🛤️ **Path patrol**: placing waypoints no longer traps the viewport. A **Placing waypoints** box shows while it is on
