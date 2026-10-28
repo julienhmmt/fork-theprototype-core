@@ -5,7 +5,7 @@
      per release, newest first. HTML comments like this one are stripped before
      rendering, so maintainer notes stay out of the user-facing window. -->
 
-## Next release — Game logic in the headset, and a phone in a shared room 🥽
+## 1.47.0 — Game logic in the headset, and a phone in a shared room 🥽
 
 - 🔀 **Edit game logic in VR**: radial ▸ **Tools ▸ Logic** opens the scene's node graph as a panel in the headset, and
   **Selected ▸ Edit logic** opens the selected object's own flow. Trigger-drag a card to move it; drag from a socket to
